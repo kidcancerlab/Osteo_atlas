@@ -11,7 +11,7 @@ set.seed(888)
 setwd("~/../lab/Analysis/Ryan/RProjects/CellTypeAnnRefs/")
 
 # Start the graphics device
-pdf("HuOsteoPrimary.pdf")
+pdf("HuOsteoPrimary.pdf", width = 10, height = 10)
 
 # Start with GSE152048
 # Make a list of sample names
