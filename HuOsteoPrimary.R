@@ -11,7 +11,8 @@ set.seed(888)
 setwd("~/../lab/Analysis/Ryan/RProjects/CellTypeAnnRefs/")
 
 # Start the graphics device
-pdf("HuOsteoPrimary.pdf", width = 10, height = 10)
+png("Plots/HuOsteoPrimary%03d.png", width = 720, height = 720,
+  type = "cairo")
 
 # Start with GSE152048
 # Make a list of sample names
@@ -64,7 +65,7 @@ for(i in 1:length(s)) {
           theme(legend.position = "none") +
           ggtitle(str_c(s[i], " basic clustering")))
 }
-rm(x)
+rm (x)
 plot_grid(plotlist = p, ncol = 3)
 
 # Transition to download and process GSE162454
@@ -168,75 +169,75 @@ DimPlot(comb, reduction = "umap", split.by = "src", ncol = 4) +
   ggtitle("Primary Tumors (integrated)")
 
 ## Optimizing UMAP parameters
-p <- list()
-for(i in 1:5) {
-  test <- RunUMAP(comb, reduction = "harmony", dims = 1:30,
-    set.op.mix.ratio = (i-1)*0.25)
-  test <- test %>%
-    FindNeighbors(reduction = "harmony", dims = 1:30) %>%
-    FindClusters()
-  p[[i]] <- DimPlot(test, reduction = "umap", label = T, repel = T) +
-      coord_fixed() +
-      ggtitle(str_c("set.op.mix.ratio = ", (i-1)*0.25)) +
-      theme(legend.position = "none")
-}
-plot_grid(plotlist = p, ncol = 3)
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30,
+#     set.op.mix.ratio = (i-1)*0.25)
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- DimPlot(test, reduction = "umap", label = T, repel = T) +
+#       coord_fixed() +
+#       ggtitle(str_c("set.op.mix.ratio = ", (i-1)*0.25)) +
+#       theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
 
-p <- list()
-for(i in 1:5) {
-  test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
-    n.neighbors = (i * 10))
-  test <- test %>%
-    FindNeighbors(reduction = "harmony", dims = 1:30) %>%
-    FindClusters()
-  p[[i]] <- DimPlot(test, reduction = "umap", label = T, repel = T) +
-      coord_fixed() +
-      ggtitle(str_c("n.neighbors = ", (i * 10))) +
-      theme(legend.position = "none")
-}
-plot_grid(plotlist = p, ncol = 3)
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
+#     n.neighbors = (i * 10))
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- DimPlot(test, reduction = "umap", label = T, repel = T) +
+#       coord_fixed() +
+#       ggtitle(str_c("n.neighbors = ", (i * 10))) +
+#       theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
 
-p <- list()
-for(i in 1:5) {
-  test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
-    n.epochs = (i * 100))
-  test <- test %>%
-    FindNeighbors(reduction = "harmony", dims = 1:30) %>%
-    FindClusters()
-  p[[i]] <- DimPlot(test, reduction = "umap", label = T, repel = T) +
-    coord_fixed() +
-    ggtitle(str_c("n.epochs = ", (i * 100))) +
-    theme(legend.position = "none")
-}
-plot_grid(plotlist = p, ncol = 3)
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
+#     n.epochs = (i * 100))
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- DimPlot(test, reduction = "umap", label = T, repel = T) +
+#     coord_fixed() +
+#     ggtitle(str_c("n.epochs = ", (i * 100))) +
+#     theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
 
-p <- list()
-for(i in 1:5) {
-  test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
-    min.dist = (.00045 * 4 ^ i))
-  test <- test %>%
-    FindNeighbors(reduction = "harmony", dims = 1:30) %>%
-    FindClusters()
-  p[[i]] <- DimPlot(test, reduction = "umap", label = T, repel = T) +
-    coord_fixed() +
-    ggtitle(str_c("min.dist = ", (.00045 * 4 ^ i))) +
-    theme(legend.position = "none")
-}
-plot_grid(plotlist = p, ncol = 3)
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
+#     min.dist = (.00045 * 4 ^ i))
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- DimPlot(test, reduction = "umap", label = T, repel = T) +
+#     coord_fixed() +
+#     ggtitle(str_c("min.dist = ", (.00045 * 4 ^ i))) +
+#     theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
 
-p <- list()
-for(i in 1:5) {
-  test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
-    local.connectivity = (2 ^ i))
-  test <- test %>%
-    FindNeighbors(reduction = "harmony", dims = 1:30) %>%
-    FindClusters()
-  p[[i]] <- DimPlot(test, reduction = "umap", label = T, repel = T) +
-    coord_fixed() +
-    ggtitle(str_c("local.connectivity = ", (2 ^ i))) +
-    theme(legend.position = "none")
-}
-plot_grid(plotlist = p, ncol = 3)
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
+#     local.connectivity = (2 ^ i))
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- DimPlot(test, reduction = "umap", label = T, repel = T) +
+#     coord_fixed() +
+#     ggtitle(str_c("local.connectivity = ", (2 ^ i))) +
+#     theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
 
 # Plot out cell cycle
 comb <- kill_cc(comb)
@@ -273,8 +274,8 @@ plot_grid(plotlist = g, labels = LETTERS[1:length(g)], ncol = 4, nrow = 4)
 # Perform automated cell type assignment
 # Assign cell types (roughly, Human Primary Cell Atlas)
 ref <- celldex::HumanPrimaryCellAtlasData()
-comb_sce <- DietSeurat(comb)
-comb_sce <- as.SingleCellExperiment(comb_sce)
+comb_sce <- DietSeurat(comb) %>%
+  as.SingleCellExperiment()
 
 # Make cell type predictions using SingleR
 comb_pred <- SingleR::SingleR(
@@ -315,9 +316,25 @@ DimPlot(comb, pt.size = 1, label = T, repel = T, split.by = "src", ncol = 4) +
   theme(legend.position = "none") +
   ggtitle("Cell Type Predictions (Blueprint/ENCODE) by sample")
 
-dev.off()
-
 # Save a stopping point - cell type predictions made
 qs::qsave(comb, "PrimaryTumor/comb-pred.qs")
 # Start from this stopping point
 comb <- qs::qread("PrimaryTumor/comb-pred.qs")
+
+# Generate gene marker lists for each cluster
+Idents(comb) <- comb$seurat_clusters
+p <- DimPlot(comb, pt.size = 1, label = T, repel = T) +
+  coord_fixed() +
+  theme(legend.position = "none") +
+  ggtitle("Original Clusters")
+print(p)
+
+if(!file.exists("comb_marks.xlsx")){
+  comb_marks <- FindAllMarkers(comb)
+  xlsx::write.xlsx(comb_marks, "comb_marks.xlsx")
+}
+
+selection <- CellSelector(p)
+tumor <- subset(comb, cells=selection)
+
+dev.off()
