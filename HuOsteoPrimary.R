@@ -329,12 +329,44 @@ p <- DimPlot(comb, pt.size = 1, label = T, repel = T) +
   ggtitle("Original Clusters")
 print(p)
 
-if(!file.exists("comb_marks.xlsx")){
+if (!file.exists("comb_marks.xlsx")){
   comb_marks <- FindAllMarkers(comb)
   xlsx::write.xlsx(comb_marks, "comb_marks.xlsx")
 }
 
-selection <- CellSelector(p)
+# Isolate the clusters that seem most consistent with tumor cells
+if (!file.exists("selection.rds")) {
+  selection <- CellSelector(p)
+  saveRDS(selection, "selection.rds")
+}
+selection <- readRDS("selection.rds")
 tumor <- subset(comb, cells=selection)
+
+DimPlot(tumor, pt.size = 1, label = T, repel = T) +
+  coord_fixed() +
+  theme(legend.position = "none") +
+  ggtitle("Isolated (likely) tumor cells")
+
+# Regress out cell cycle for the tumor cells and replot
+tumor_cc <- kill_cc(tumor, cc_regress = "Y")
+
+DimPlot(tumor_cc, pt.size = 1, label = T, repel = T) +
+  coord_fixed() +
+  theme(legend.position = "none") +
+  ggtitle("Tumor - CC regressed")
+
+tumor_cc2 <- tumor_cc %>%
+    NormalizeData() %>%
+    FindVariableFeatures() %>%
+    ScaleData() %>%
+    RunPCA(verbose = F) %>%
+    FindNeighbors(dims = 1:20) %>%
+    FindClusters(resolution = 0.6) %>%
+    RunUMAP(dims = 1:20)
+
+DimPlot(tumor_cc, pt.size = 1, label = T, repel = T) +
+  coord_fixed() +
+  theme(legend.position = "none") +
+  ggtitle("Tumor - CC regressed")
 
 dev.off()
