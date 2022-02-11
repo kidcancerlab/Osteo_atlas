@@ -8,7 +8,7 @@ library(cowplot)
 library(ggsci)
 
 set.seed(888)
-setwd("~/../lab/Analysis/Ryan/RProjects/CellTypeAnnRefs/")
+# setwd("~/../lab/Analysis/Ryan/RProjects/CellTypeAnnRefs/")
 
 # Start the graphics device
 png("Plots/HuOsteoPrimary%03d.png", width = 720, height = 720,
@@ -25,6 +25,12 @@ path <- c("Conventional", "Conventional", "Conventional",
           "Chondroblastic", "Intraosseous", "Chondroblastic")
 type <- c("Primary", "Primary", "Lung Met", "Primary", "Primary",
           "Lung Met", "Primary", "Primary", "Primary")
+
+# Check if primary tumor directory exists and create if it doesn't
+if(!dir.exists("PrimaryTumor")) {
+  tar_dir <- "PrimaryTumor"
+  dir.create(tar_dir)
+}
 
 # Download, file, and extract the files from GEO
 if(!dir.exists("PrimaryTumor/GSE152048")) {
