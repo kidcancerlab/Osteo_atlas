@@ -50,9 +50,10 @@ rDimPlot <- function(object, label = T, pt.size = 1, ...) {
   return(p)
 }
 
-rFeaturePlot <- function(object, pt.size = 1, order = T, ...) {
+rFeaturePlot <- function(object, features, pt.size = 1, order = T, ...) {
   p <- Seurat::FeaturePlot(
     object = object,
+    features = features,
     pt.size = pt.size,
     order = order,
     cols = (c("lightgoldenrod", "darkred")),
@@ -260,75 +261,75 @@ the way that cells cluster. Bottom line is that the default parameters work pret
 well and are fairly balanced, though tweaking can be helpful in certain situations.
 
 ```{r}
-p <- list()
-for(i in 1:5) {
-  test <- RunUMAP(comb, reduction = "harmony", dims = 1:30,
-    set.op.mix.ratio = (i-1)*0.25)
-  test <- test %>%
-    FindNeighbors(reduction = "harmony", dims = 1:30) %>%
-    FindClusters()
-  p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
-      coord_fixed() +
-      ggtitle(str_c("set.op.mix.ratio = ", (i-1)*0.25)) +
-      theme(legend.position = "none")
-}
-plot_grid(plotlist = p, ncol = 3)
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30,
+#     set.op.mix.ratio = (i-1)*0.25)
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
+#       coord_fixed() +
+#       ggtitle(str_c("set.op.mix.ratio = ", (i-1)*0.25)) +
+#       theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
 
-p <- list()
-for(i in 1:5) {
-  test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
-    n.neighbors = (i * 10))
-  test <- test %>%
-    FindNeighbors(reduction = "harmony", dims = 1:30) %>%
-    FindClusters()
-  p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
-      coord_fixed() +
-      ggtitle(str_c("n.neighbors = ", (i * 10))) +
-      theme(legend.position = "none")
-}
-plot_grid(plotlist = p, ncol = 3)
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
+#     n.neighbors = (i * 10))
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
+#       coord_fixed() +
+#       ggtitle(str_c("n.neighbors = ", (i * 10))) +
+#       theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
 
-p <- list()
-for(i in 1:5) {
-  test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
-    n.epochs = (i * 100))
-  test <- test %>%
-    FindNeighbors(reduction = "harmony", dims = 1:30) %>%
-    FindClusters()
-  p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
-    coord_fixed() +
-    ggtitle(str_c("n.epochs = ", (i * 100))) +
-    theme(legend.position = "none")
-}
-plot_grid(plotlist = p, ncol = 3)
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
+#     n.epochs = (i * 100))
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
+#     coord_fixed() +
+#     ggtitle(str_c("n.epochs = ", (i * 100))) +
+#     theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
 
-p <- list()
-for(i in 1:5) {
-  test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
-    min.dist = (.00045 * 4 ^ i))
-  test <- test %>%
-    FindNeighbors(reduction = "harmony", dims = 1:30) %>%
-    FindClusters()
-  p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
-    coord_fixed() +
-    ggtitle(str_c("min.dist = ", (.00045 * 4 ^ i))) +
-    theme(legend.position = "none")
-}
-plot_grid(plotlist = p, ncol = 3)
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
+#     min.dist = (.00045 * 4 ^ i))
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
+#     coord_fixed() +
+#     ggtitle(str_c("min.dist = ", (.00045 * 4 ^ i))) +
+#     theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
 
-p <- list()
-for(i in 1:5) {
-  test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
-    local.connectivity = (2 ^ i))
-  test <- test %>%
-    FindNeighbors(reduction = "harmony", dims = 1:30) %>%
-    FindClusters()
-  p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
-    coord_fixed() +
-    ggtitle(str_c("local.connectivity = ", (2 ^ i))) +
-    theme(legend.position = "none")
-}
-plot_grid(plotlist = p, ncol = 3)
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
+#     local.connectivity = (2 ^ i))
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
+#     coord_fixed() +
+#     ggtitle(str_c("local.connectivity = ", (2 ^ i))) +
+#     theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
 ```
 
 # Evaluate for cell cycle
@@ -387,6 +388,8 @@ plot_grid(plotlist = g, labels = LETTERS[1:length(g)], ncol = 4, nrow = 4)
 ```
 
 Focus in on a module that defines the tumor cells so that we can isolate them.
+Given the purpose in creating an osteosarcoma signature, we will use an ROC
+statistic to create the DEG list.
 
 ```{r}
 if (!file.exists("selection.rds")) {
@@ -396,7 +399,7 @@ if (!file.exists("selection.rds")) {
 selection <- readRDS("selection.rds")
 tumor <- subset(comb, cells=selection)
 
-Idents(comb) <- comb$orig.ident
+Idents(comb) <- comb$seurat_clusters
 Idents(comb, cells = selection) <- "Tumor"
 
 rDimPlot(comb) +
@@ -405,8 +408,8 @@ rDimPlot(comb) +
 tmarks_roc <- FindMarkers(comb, ident.1 = "Tumor",
   test.use = "roc")
 tmarks_roc_labs <- tmarks_roc[
-  tmarks_roc$power > .7 &
-  abs(tmarks_roc$avg_log2FC) >2, ]
+  tmarks_roc$power > .75 &
+  abs(tmarks_roc$avg_log2FC) >2.2, ]
 
 tmarks_roc_labs$gene <- rownames(tmarks_roc_labs)
 ggplot(tmarks_roc, aes(avg_log2FC, power)) +
@@ -418,7 +421,75 @@ ggplot(tmarks_roc, aes(avg_log2FC, power)) +
 os_sig <- rownames(tmarks_roc_labs[
   tmarks_roc_labs$avg_log2FC > 0, ])
 comb <- AddModuleScore(comb, os_sig, name = "os_score")
-rFeaturePlot(comb, features = comb$os_score1)
+FeaturePlot(comb,
+  features = "os_score1",
+  pt.size = 1,
+  order = T,
+  cols = c("lightgoldenrod", "darkred"),
+  min.cutoff = 1, max.cutoff = 5
+) + coord_fixed()
 ```
 
+After several different criteria strict vs loose for defining the genes
+that should comprise the osteosarcoma signature, it appears that the simplest
+gene list based off of the strictest power/log2FC criteria performs the best.
 
+# Isolate and subcluster the tumor cells
+
+```{r}
+# Normalize and scale tumor dataset
+tumor <- tumor %>%
+  NormalizeData() %>%
+  FindVariableFeatures() %>%
+  ScaleData() %>%
+  RunPCA(verbose = F)
+
+# Run batch-correction/integration using harmony
+tumor <- RunHarmony(tumor, group.by.vars = "src")
+tumor <- tumor %>%
+  RunUMAP(reduction = "harmony", dims = 1:30) %>%
+  FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+  FindClusters()
+
+rDimPlot(tumor) +
+  ggtitle("Subclustered tumor cells")
+
+rDimPlot(tumor, split.by = "src", ncol = 4) +
+  ggtitle("Subclustered tumor cells")
+
+tumor <- kill_cc(tumor)
+rDimPlot(tumor, group.by = "Phase") +
+  ggtitle("Sublustered tumor cells - cell cycle")
+```
+
+# Generate gene set lists that identify each tumor cell cluster
+
+NOTE: Since this is a sub-clustering of cells that are highly 
+related, it would be especially appropriate here to validate our
+sub-clustering with silhouette scoring or similar.
+
+```{r}
+Idents(tumor) <- tumor$seurat_clusters
+
+tumor_marks <- FindAllMarkers(tumor)
+write.xlsx(tumor_marks, "tumor_marks.xlsx")
+
+tumor_marks <- as.tibble(
+  tumor_marks[order(-tumor_marks$avg_log2FC),])
+num_genes <- 20
+
+for(i in levels(Idents(tumor))) {
+  print(paste(
+    "Top", num_genes, "upregulated genes in cluster", i
+  ))
+  print(head(
+    tumor_marks[tumor_marks$cluster == i,], n = num_genes
+  ))
+  print(paste(
+    "Top", num_genes, "upregulated genes in cluster", i
+  ))
+  print(tail(
+    tumor_marks[tumor_marks$cluster == i,], n = num_genes
+  ))
+}
+```
