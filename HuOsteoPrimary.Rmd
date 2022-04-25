@@ -16,18 +16,20 @@ knitr::opts_chunk$set(
 library(rrrSingleCellUtils)
 library(Seurat)
 library(ggplot2)
+library(ggrepel)
 library(tidyverse)
 library(stringr)
 library(harmony)
 library(cowplot)
 library(ggsci)
 
+
 set.seed(888)
 
-font_add("Arial Narrow", "ARIALN.TTF", bold = "ARIALNB.TTF")
-showtext_auto()
+sysfonts::font_add("Arial Narrow", "ARIALN.TTF", bold = "ARIALNB.TTF")
+showtext::showtext_auto()
 
-theme_set(theme_pubr())
+theme_set(ggpubr::theme_pubr())
 
 plot_cols <- c("#D43F3AFF", "#EEA236FF", "#5CB85CFF", "#46B8DAFF",
   "#357EBDFF", "#9632B8FF", "#B8B8B8FF", "#90302DFF", "#A66D04FF",
@@ -118,10 +120,8 @@ for(s in geo1$s) {
     FindNeighbors(dims = 1:20) %>%
     FindClusters(resolution = 0.3) %>%
     RunUMAP(dims = 1:20)
-  p[[s]] <- (rDimPlot(raw[[s]], pt.size = 1, label = T, reduction = "umap") +
-          coord_fixed() +
-          theme(legend.position = "none") +
-          ggtitle(str_c(s[i], " basic clustering")))
+  p[[s]] <- rDimPlot(raw[[s]]) +
+    ggtitle(str_c(s, " basic clustering"))
 }
 rm (x)
 plot_grid(plotlist = p, ncol = 3)
@@ -185,10 +185,8 @@ for(s in geo2$s) {
     FindNeighbors(dims = 1:20) %>%
     FindClusters(resolution = 0.3) %>%
     RunUMAP(dims = 1:20)
-  p[[i]] <- (rDimPlot(raw[[s]], pt.size = 1, label = T, reduction = "umap") +
-          coord_fixed() +
-          theme(legend.position = "none") +
-          ggtitle(str_c(s[i], " basic clustering")))
+  p[[s]] <- rDimPlot(raw[[s]]) +
+    ggtitle(str_c(s, " basic clustering"))
 }
 rm(x)
 plot_grid(plotlist = p, ncol = 3)
@@ -388,6 +386,39 @@ for(f in names(ms)) {
 plot_grid(plotlist = g, labels = LETTERS[1:length(g)], ncol = 4, nrow = 4)
 ```
 
+Focus in on a module that defines the tumor cells so that we can isolate them.
 
+```{r}
+if (!file.exists("selection.rds")) {
+  selection <- CellSelector(p)
+  saveRDS(selection, "selection.rds")
+}
+selection <- readRDS("selection.rds")
+tumor <- subset(comb, cells=selection)
+
+Idents(comb) <- comb$orig.ident
+Idents(comb, cells = selection) <- "Tumor"
+
+rDimPlot(comb) +
+  ggtitle("Isolated (likely) tumor cells")
+
+tmarks_roc <- FindMarkers(comb, ident.1 = "Tumor",
+  test.use = "roc")
+tmarks_roc_labs <- tmarks_roc[
+  tmarks_roc$power > .7 &
+  abs(tmarks_roc$avg_log2FC) >2, ]
+
+tmarks_roc_labs$gene <- rownames(tmarks_roc_labs)
+ggplot(tmarks_roc, aes(avg_log2FC, power)) +
+  geom_point() +
+  geom_label_repel(data = tmarks_roc_labs,
+    aes(label = gene), max.overlaps = 20) +
+  ggtitle("Genes that identify tumor cells")
+
+os_sig <- rownames(tmarks_roc_labs[
+  tmarks_roc_labs$avg_log2FC > 0, ])
+comb <- AddModuleScore(comb, os_sig, name = "os_score")
+rFeaturePlot(comb, features = comb$os_score1)
+```
 
 
