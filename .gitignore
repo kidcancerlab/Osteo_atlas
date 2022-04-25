@@ -51,3 +51,4 @@ vignettes/*.pdf
 # Plots
 *.png
 /Plots/*
+/HuOsteo*/*
