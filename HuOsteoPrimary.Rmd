@@ -480,13 +480,13 @@ num_genes <- 20
 
 for(i in levels(Idents(tumor))) {
   print(paste(
-    "Top", num_genes, "upregulated genes in cluster", i
+    "Top", num_genes, "UPREGULATED genes in cluster", i
   ))
   print(head(
     tumor_marks[tumor_marks$cluster == i,], n = num_genes
   ))
   print(paste(
-    "Top", num_genes, "upregulated genes in cluster", i
+    "Top", num_genes, "DOWNREGULATED genes in cluster", i
   ))
   print(tail(
     tumor_marks[tumor_marks$cluster == i,], n = num_genes
