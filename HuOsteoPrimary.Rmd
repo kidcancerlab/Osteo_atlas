@@ -472,7 +472,7 @@ sub-clustering with silhouette scoring or similar.
 Idents(tumor) <- tumor$seurat_clusters
 
 tumor_marks <- FindAllMarkers(tumor)
-write.xlsx(tumor_marks, "tumor_marks.xlsx")
+xlsx::write.xlsx(tumor_marks, "tumor_marks.xlsx")
 
 tumor_marks <- as.tibble(
   tumor_marks[order(-tumor_marks$avg_log2FC),])
