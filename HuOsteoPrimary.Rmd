@@ -22,7 +22,8 @@ library(stringr)
 library(harmony)
 library(cowplot)
 library(ggsci)
-
+library(enrichR)
+setEnrichrSite("Enrichr")
 
 set.seed(888)
 
@@ -31,26 +32,26 @@ showtext::showtext_auto()
 
 theme_set(ggpubr::theme_pubr())
 
-plot_cols <- c("#D43F3AFF", "#EEA236FF", "#5CB85CFF", "#46B8DAFF",
-  "#357EBDFF", "#9632B8FF", "#B8B8B8FF", "#90302DFF", "#A66D04FF",
-  "#3E7E3EFF", "#097F9AFF", "#2D577FFF", "#6D1D87FF", "#7D7D7DFF",
-  "#FF6E6AFF", "#FFBB70FF", "#79D379FF", "#69D1F3FF", "#68A4E3FF",
-  "#BF6BE2FF", "#CDCDCDFF")
+plot_cols <- c("#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF",
+  "#9632B8FF",  "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF",
+  "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF",
+  "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF")
 
-rDimPlot <- function(object, label = T, pt.size = 1, ...) {
+rDimPlot <- function(object, title, label = T, pt.size = 1, ...) {
   p <- Seurat::DimPlot(
     object = object, 
     label = label, 
     pt.size = pt.size,
     cols = alpha(plot_cols, 0.6),
     ...) +
-    theme(legend.position = "none")
+    ggtitle(title) +
+    theme(legend.position = "none") +
     coord_fixed()
   print(p)
   return(p)
 }
 
-rFeaturePlot <- function(object, features, pt.size = 1, order = T, ...) {
+rFeaturePlot <- function(object, features, title, pt.size = 1, order = T, ...) {
   p <- Seurat::FeaturePlot(
     object = object,
     features = features,
@@ -58,7 +59,10 @@ rFeaturePlot <- function(object, features, pt.size = 1, order = T, ...) {
     order = order,
     cols = (c("lightgoldenrod", "darkred")),
     ...) +
+    ggtitle(title) +
     coord_fixed()
+  print(p)
+  return(p)
 }
 ```
 
@@ -121,8 +125,7 @@ for(s in geo1$s) {
     FindNeighbors(dims = 1:20) %>%
     FindClusters(resolution = 0.3) %>%
     RunUMAP(dims = 1:20)
-  p[[s]] <- rDimPlot(raw[[s]]) +
-    ggtitle(str_c(s, " basic clustering"))
+  p[[s]] <- rDimPlot(raw[[s]], str_c(s, " basic clustering"))
 }
 rm (x)
 plot_grid(plotlist = p, ncol = 3)
@@ -186,8 +189,7 @@ for(s in geo2$s) {
     FindNeighbors(dims = 1:20) %>%
     FindClusters(resolution = 0.3) %>%
     RunUMAP(dims = 1:20)
-  p[[s]] <- rDimPlot(raw[[s]]) +
-    ggtitle(str_c(s, " basic clustering"))
+  p[[s]] <- rDimPlot(raw[[s]], str_c(s, " basic clustering"))
 }
 rm(x)
 plot_grid(plotlist = p, ncol = 3)
@@ -238,14 +240,11 @@ qs::qsave(comb, "PrimaryTumor/comb.qs")
 comb <- qs::qread("PrimaryTumor/comb.qs")
 
 # Plot the integrated samples
-rDimPlot(comb, repel = T) +
-  ggtitle("Primary Tumors (integrated)")
+rDimPlot(comb, "Primary Tumors (integrated)", repel = T)
 
-rDimPlot(comb, group.by = "src") +
-  ggtitle("Primary Tumors (integrated)")
+rDimPlot(comb, "Primary Tumors (integrated)", group.by = "src")
 
-rDimPlot(comb, split.by = "src", ncol = 4) +
-  ggtitle("Primary Tumors (integrated)")
+rDimPlot(comb, "Primary Tumors (integrated)", split.by = "src", ncol = 4)
 ```
 
 ## Interim conclusions
@@ -350,8 +349,7 @@ First, we will use some standard assays to look for canonical markers of osteosa
 feats <- c("COL1A1", "COL1A2", "SATB2")
 
 for(f in feats) {
-  p <- rFeaturePlot(comb, features = f) +
-    ggtitle(f)
+  p <- rFeaturePlot(comb, f, features = f)
   print(p)
 }
 ```
@@ -360,7 +358,7 @@ Next, we will look at the markers that were used in the manuscript that reported
 GSE152048 dataset. I'm not sure that these are the ideal markers, but they are somewhat
 useful, and this allows comparison to the published record.
 
-```{r}
+```{r, fig.height = 8, fig.width = 8}
 ms <- list(
   Osteoblastic = c("RUNX2", "COL1A1", "CDH11", "IBSP"),
   Chondroblastic = c("SOX9", "ACAN", "PTH1R"),
@@ -381,7 +379,7 @@ ms <- list(
 g <- list()
 for(f in names(ms)) {
   comb <- AddModuleScore(comb, ms[[f]], name = f)
-  g[[f]] <- rFeaturePlot(comb, features = str_c(f, "1"))
+  g[[f]] <- rFeaturePlot(comb, f, features = str_c(f, "1"))
 }
 
 plot_grid(plotlist = g, labels = LETTERS[1:length(g)], ncol = 4, nrow = 4)
@@ -402,14 +400,13 @@ tumor <- subset(comb, cells=selection)
 Idents(comb) <- comb$seurat_clusters
 Idents(comb, cells = selection) <- "Tumor"
 
-rDimPlot(comb) +
-  ggtitle("Isolated (likely) tumor cells")
+rDimPlot(comb, "Isolated (likely) tumor cells")
 
 tmarks_roc <- FindMarkers(comb, ident.1 = "Tumor",
   test.use = "roc")
 tmarks_roc_labs <- tmarks_roc[
   tmarks_roc$power > .75 &
-  abs(tmarks_roc$avg_log2FC) >2.2, ]
+  abs(tmarks_roc$avg_log2FC) > 2.2, ]
 
 tmarks_roc_labs$gene <- rownames(tmarks_roc_labs)
 ggplot(tmarks_roc, aes(avg_log2FC, power)) +
@@ -421,13 +418,8 @@ ggplot(tmarks_roc, aes(avg_log2FC, power)) +
 os_sig <- rownames(tmarks_roc_labs[
   tmarks_roc_labs$avg_log2FC > 0, ])
 comb <- AddModuleScore(comb, os_sig, name = "os_score")
-FeaturePlot(comb,
-  features = "os_score1",
-  pt.size = 1,
-  order = T,
-  cols = c("lightgoldenrod", "darkred"),
-  min.cutoff = 1, max.cutoff = 5
-) + coord_fixed()
+FeaturePlot(comb, "OS Signature Score", features = "os_score1",
+  min.cutoff = 1, max.cutoff = 5)
 ```
 
 After several different criteria strict vs loose for defining the genes
@@ -436,7 +428,7 @@ gene list based off of the strictest power/log2FC criteria performs the best.
 
 # Isolate and subcluster the tumor cells
 
-```{r}
+```{r, fig.width = 8, fig.width = 8}
 # Normalize and scale tumor dataset
 tumor <- tumor %>%
   NormalizeData() %>%
@@ -451,15 +443,12 @@ tumor <- tumor %>%
   FindNeighbors(reduction = "harmony", dims = 1:30) %>%
   FindClusters()
 
-rDimPlot(tumor) +
-  ggtitle("Subclustered tumor cells")
+rDimPlot(tumor, "Subclustered tumor cells")
 
-rDimPlot(tumor, split.by = "src", ncol = 4) +
-  ggtitle("Subclustered tumor cells")
+rDimPlot(tumor, "Subclustered tumor cells", split.by = "src", ncol = 4)
 
 tumor <- kill_cc(tumor)
-rDimPlot(tumor, group.by = "Phase") +
-  ggtitle("Sublustered tumor cells - cell cycle")
+rDimPlot(tumor, "Sublustered tumor cells - cell cycle", group.by = "Phase")
 ```
 
 # Generate gene set lists that identify each tumor cell cluster
@@ -473,6 +462,7 @@ Idents(tumor) <- tumor$seurat_clusters
 
 tumor_marks <- FindAllMarkers(tumor)
 xlsx::write.xlsx(tumor_marks, "tumor_marks.xlsx")
+tumor_marks <- xlsx::read.xlsx("tumor_marks.xlsx", 1)
 
 tumor_marks <- as.tibble(
   tumor_marks[order(-tumor_marks$avg_log2FC),])
@@ -491,5 +481,24 @@ for(i in levels(Idents(tumor))) {
   print(tail(
     tumor_marks[tumor_marks$cluster == i,], n = num_genes
   ))
+}
+```
+
+# From the cluster-marker gene lists, identify up- and down-regulated pathways
+
+```{r}
+dbs <- c(
+  "MSigDB_Hallmark_2020",
+  "KEGG_2021_Human",
+  "GO_Biological_Process_2021"
+)
+
+enriched_up <- list()
+enriched_down <- list()
+for(i in levels(Idents(tumor))) {
+  up <- rownames(tumor_marks[tumor_marks$cluster == i & tumor_marks$avg_log2FC > 0.7,])
+  down <- tumor_marks[tumor_marks$cluster == i & tumor_marks$avg_log2FC < 0.7,]
+  enriched_up[[i]] <- enrichr(up, "MSigDB_Hallmark_2020"))
+  enriched_down[[i]] <- enrichr(down, "MSigDB_Hallmark_2020"))
 }
 ```
