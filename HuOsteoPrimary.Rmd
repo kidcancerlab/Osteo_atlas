@@ -490,15 +490,15 @@ for(i in levels(Idents(tumor))) {
 dbs <- c(
   "MSigDB_Hallmark_2020",
   "KEGG_2021_Human",
-  "GO_Biological_Process_2021"
+  "Reactome_2016"
 )
 
 enriched_up <- list()
 enriched_down <- list()
 for(i in levels(Idents(tumor))) {
-  up <- rownames(tumor_marks[tumor_marks$cluster == i & tumor_marks$avg_log2FC > 0.7,])
-  down <- tumor_marks[tumor_marks$cluster == i & tumor_marks$avg_log2FC < 0.7,]
-  enriched_up[[i]] <- enrichr(up, "MSigDB_Hallmark_2020"))
-  enriched_down[[i]] <- enrichr(down, "MSigDB_Hallmark_2020"))
+  up <- tumor_marks$gene[tumor_marks$cluster == i & tumor_marks$avg_log2FC > 0.7]
+  down <- tumor_marks$gene[tumor_marks$cluster == i & tumor_marks$avg_log2FC < 0.7]
+  enriched_up[[paste("Cluster", i)]] <- enrichr(up, dbs)
+  enriched_down[[paste("Cluster", i)]] <- enrichr(down, dbs)
 }
 ```
