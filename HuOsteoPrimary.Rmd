@@ -441,7 +441,9 @@ tumor <- RunHarmony(tumor, group.by.vars = "src")
 tumor <- tumor %>%
   RunUMAP(reduction = "harmony", dims = 1:30) %>%
   FindNeighbors(reduction = "harmony", dims = 1:30) %>%
-  FindClusters()
+  FindClusters(resolution = 0.1)
+
+# *** Need to optimize cluster selection with silhouette scoring***
 
 rDimPlot(tumor, "Subclustered tumor cells")
 
