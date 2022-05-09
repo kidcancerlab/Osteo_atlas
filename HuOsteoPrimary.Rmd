@@ -418,7 +418,7 @@ ggplot(tmarks_roc, aes(avg_log2FC, power)) +
 os_sig <- rownames(tmarks_roc_labs[
   tmarks_roc_labs$avg_log2FC > 0, ])
 comb <- AddModuleScore(comb, os_sig, name = "os_score")
-FeaturePlot(comb, "OS Signature Score", features = "os_score1",
+rFeaturePlot(comb, "OS Signature Score", features = "os_score1",
   min.cutoff = 1, max.cutoff = 5)
 ```
 
@@ -439,9 +439,26 @@ tumor <- tumor %>%
 # Run batch-correction/integration using harmony
 tumor <- RunHarmony(tumor, group.by.vars = "src")
 tumor <- tumor %>%
-  RunUMAP(reduction = "harmony", dims = 1:30) %>%
-  FindNeighbors(reduction = "harmony", dims = 1:30) %>%
-  FindClusters()
+  RunUMAP(reduction = "harmony", dims = 1:20) %>%
+  FindNeighbors(reduction = "harmony", dims = 1:20)
+
+opt <- list(
+  plot = list(),
+  res = c(), 
+  score = c(),
+  clusters = c())
+  
+for(i in 1:12) {
+  opt$res[i] <- 0.05 * i
+  tumor <- FindClusters(tumor, resolution = opt$res[i])
+  opt$plot[[i]] <- rDimPlot(tumor, paste("Resolution", opt$res[i]))
+  opt$score[i] <- silhouette_mean(silhouette_seurat(tumor))
+  opt$clusters[i] <- levels(tumor$seurat_clusters)
+}
+
+plot_grid(plotlist = opt$plot, ncol = 3)
+tumor <- FindClusters(tumor,
+  resolution = opt$res[opt$score == max(opt$score)])
 
 rDimPlot(tumor, "Subclustered tumor cells")
 
@@ -460,10 +477,12 @@ sub-clustering with silhouette scoring or similar.
 ```{r}
 Idents(tumor) <- tumor$seurat_clusters
 
-tumor_marks <- FindAllMarkers(tumor)
-xlsx::write.xlsx(tumor_marks, "tumor_marks.xlsx")
-tumor_marks <- xlsx::read.xlsx("tumor_marks.xlsx", 1)
+if(!exists("tumor_marks.xlsx")) {
+  tumor_marks <- FindAllMarkers(tumor)
+  xlsx::write.xlsx(tumor_marks, "tumor_marks.xlsx")
+}
 
+tumor_marks <- xlsx::read.xlsx("tumor_marks.xlsx", 1)
 tumor_marks <- as.tibble(
   tumor_marks[order(-tumor_marks$avg_log2FC),])
 num_genes <- 20
