@@ -385,9 +385,7 @@ for(f in names(ms)) {
 plot_grid(plotlist = g, labels = LETTERS[1:length(g)], ncol = 4, nrow = 4)
 ```
 
-Focus in on a module that defines the tumor cells so that we can isolate them.
-Given the purpose in creating an osteosarcoma signature, we will use an ROC
-statistic to create the DEG list.
+# Isolate and subcluster the tumor cells
 
 ```{r}
 if (!file.exists("selection.rds")) {
@@ -401,7 +399,13 @@ Idents(comb) <- comb$seurat_clusters
 Idents(comb, cells = selection) <- "Tumor"
 
 rDimPlot(comb, "Isolated (likely) tumor cells")
+```
 
+Focus in on a module that defines the tumor cells so that we can isolate them.
+Given the purpose in creating an osteosarcoma signature, we will use an ROC
+statistic to create the DEG list.
+
+```{r}
 tmarks_roc <- FindMarkers(comb, ident.1 = "Tumor",
   test.use = "roc")
 tmarks_roc_labs <- tmarks_roc[
@@ -442,21 +446,20 @@ tumor <- tumor %>%
   RunUMAP(reduction = "harmony", dims = 1:20) %>%
   FindNeighbors(reduction = "harmony", dims = 1:20)
 
-opt <- list(
-  plot = list(),
-  res = c(), 
-  score = c(),
-  clusters = c())
-  
-for(i in 1:12) {
-  opt$res[i] <- 0.05 * i
+plot <- list()
+opt <- tribble(
+  ~res, ~score, ~clusters
+)
+
+for(i in 1:9) {
+  opt[i, "res"] <- 0.1 * i
   tumor <- FindClusters(tumor, resolution = opt$res[i])
-  opt$plot[[i]] <- rDimPlot(tumor, paste("Resolution", opt$res[i]))
-  opt$score[i] <- silhouette_mean(silhouette_seurat(tumor))
-  opt$clusters[i] <- levels(tumor$seurat_clusters)
+  plot[[i]] <- rDimPlot(tumor, paste("Resolution", opt$res[i]))
+  opt[i, "score"] <- silhouette_mean(silhouette_seurat(tumor))
+  opt[i, "clusters"] <- length(levels(tumor$seurat_clusters))
 }
 
-plot_grid(plotlist = opt$plot, ncol = 3)
+plot_grid(plotlist = plot, ncol = 3)
 tumor <- FindClusters(tumor,
   resolution = opt$res[opt$score == max(opt$score)])
 
@@ -506,18 +509,17 @@ for(i in levels(Idents(tumor))) {
 # From the cluster-marker gene lists, identify up- and down-regulated pathways
 
 ```{r}
-dbs <- c(
-  "MSigDB_Hallmark_2020",
-  "KEGG_2021_Human",
-  "Reactome_2016"
-)
+dbs <- "KEGG_2021_Human"
 
 enriched_up <- list()
 enriched_down <- list()
 for(i in levels(Idents(tumor))) {
   up <- tumor_marks$gene[tumor_marks$cluster == i & tumor_marks$avg_log2FC > 0.7]
   down <- tumor_marks$gene[tumor_marks$cluster == i & tumor_marks$avg_log2FC < 0.7]
-  enriched_up[[paste("Cluster", i)]] <- enrichr(up, dbs)
-  enriched_down[[paste("Cluster", i)]] <- enrichr(down, dbs)
+  # print(paste("Upregulated pathways for cluster", i))
+  # print()
+  
+  enriched_up[[paste("Cluster", i, sep = "_")]] <- enrichr(up, dbs)
+  enriched_down[[paste("Cluster", i, sep = "_")]] <- enrichr(down, dbs)
 }
 ```
