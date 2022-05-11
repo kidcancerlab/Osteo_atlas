@@ -231,6 +231,28 @@ comb <- comb %>%
   FindNeighbors(reduction = "harmony", dims = 1:30) %>%
   FindClusters()
 
+comb <- RunHarmony(comb, group.by.vars = "src")
+comb <- comb %>%
+  RunUMAP(reduction = "harmony", dims = 1:20) %>%
+  FindNeighbors(reduction = "harmony", dims = 1:20)
+
+plot <- list()
+opt <- tribble(
+  ~res, ~score, ~clusters
+)
+
+for(i in 1:9) {
+  opt[i, "res"] <- 0.1 * i
+  tumor <- FindClusters(comb, resolution = opt$res[i])
+  plot[[i]] <- rDimPlot(comb, paste("Resolution", opt$res[i]))
+  opt[i, "score"] <- silhouette_mean(silhouette_seurat(comb))
+  opt[i, "clusters"] <- length(levels(comb$seurat_clusters))
+}
+
+plot_grid(plotlist = plot, ncol = 3)
+tumor <- FindClusters(comb,
+  resolution = opt$res[opt$score == max(opt$score)])
+
 # Save a stopping point - merged and harmony aligned
 qs::qsave(comb, "PrimaryTumor/comb.qs")
 ```
