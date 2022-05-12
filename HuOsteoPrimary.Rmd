@@ -37,18 +37,23 @@ plot_cols <- c("#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF",
   "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF",
   "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF")
 
-rDimPlot <- function(object, title, label = T, pt.size = 1, ...) {
-  p <- Seurat::DimPlot(
-    object = object, 
-    label = label, 
-    pt.size = pt.size,
-    cols = alpha(plot_cols, 0.6),
-    ...) +
-    ggtitle(title) +
-    theme(legend.position = "none") +
-    coord_fixed()
-  print(p)
-  return(p)
+rDimPlot <- function(object, title = "Unlabeled Plot",
+  label = T, pt.size = 1, ...) {
+  if(length(levels(Idents(object))) < 22) {  
+    p <- Seurat::DimPlot(
+      object = object, 
+      label = label, 
+      pt.size = pt.size,
+      cols = alpha(plot_cols, 0.6),
+      ...) +
+      ggtitle(title) +
+      theme(legend.position = "none") +
+      coord_fixed()
+    print(p)
+    return(p)
+  } else {
+    print("Too many identity classes to use this function. Requires <22.")
+  }
 }
 
 rFeaturePlot <- function(object, features, title, pt.size = 1, order = T, ...) {
@@ -243,7 +248,7 @@ opt <- tribble(
 
 for(i in 1:9) {
   opt[i, "res"] <- 0.1 * i
-  tumor <- FindClusters(comb, resolution = opt$res[i])
+  comb <- FindClusters(comb, resolution = opt$res[i])
   plot[[i]] <- rDimPlot(comb, paste("Resolution", opt$res[i]))
   opt[i, "score"] <- silhouette_mean(silhouette_seurat(comb))
   opt[i, "clusters"] <- length(levels(comb$seurat_clusters))
@@ -251,6 +256,9 @@ for(i in 1:9) {
 
 plot_grid(plotlist = plot, ncol = 3)
 tumor <- FindClusters(comb,
+ # resolution = opt$res[opt$score == max(opt$score)])
+# On manual review, I am enforcing a stringency of resolution = 3
+#  due to negative effect of tumor cells on scoring
   resolution = opt$res[opt$score == max(opt$score)])
 
 # Save a stopping point - merged and harmony aligned
@@ -415,7 +423,7 @@ if (!file.exists("selection.rds")) {
   saveRDS(selection, "selection.rds")
 }
 selection <- readRDS("selection.rds")
-tumor <- subset(comb, cells=selection)
+tumor <- subset(comb, cells = selection)
 
 Idents(comb) <- comb$seurat_clusters
 Idents(comb, cells = selection) <- "Tumor"
@@ -483,7 +491,11 @@ for(i in 1:9) {
 
 plot_grid(plotlist = plot, ncol = 3)
 tumor <- FindClusters(tumor,
-  resolution = opt$res[opt$score == max(opt$score)])
+#  resolution = opt$res[opt$score == max(opt$score)])
+# Manually enforcing a resolution of 0.2 based on review of clusters
+# and potential DEGs. Silhouette performs poorly for scoring intratumor
+# heterogeneity.
+  resolution = 0.2)
 
 rDimPlot(tumor, "Subclustered tumor cells")
 
@@ -531,17 +543,19 @@ for(i in levels(Idents(tumor))) {
 # From the cluster-marker gene lists, identify up- and down-regulated pathways
 
 ```{r}
-dbs <- "KEGG_2021_Human"
+dbs <- c("GO_Biological_Process_2021",
+  "TF_Perturbations_Followed_by_Expression",
+  "MSigDB_Hallmark_2020")
 
-enriched_up <- list()
-enriched_down <- list()
-for(i in levels(Idents(tumor))) {
-  up <- tumor_marks$gene[tumor_marks$cluster == i & tumor_marks$avg_log2FC > 0.7]
-  down <- tumor_marks$gene[tumor_marks$cluster == i & tumor_marks$avg_log2FC < 0.7]
-  # print(paste("Upregulated pathways for cluster", i))
-  # print()
-  
-  enriched_up[[paste("Cluster", i, sep = "_")]] <- enrichr(up, dbs)
-  enriched_down[[paste("Cluster", i, sep = "_")]] <- enrichr(down, dbs)
+enriched <- list()
+for (i in levels(Idents(tumor))) {
+  for(d in 1:3) {
+  degs <- tumor_marks$gene[tumor_marks$cluster == i]
+  e <- enrichr(degs, dbs[d])
+  enriched[[paste("Cluster", i, sep = "_")]] <- as_tibble(
+    e[[1]])
+  print(paste("Cluster", i, "top pathways", dbs[d]))
+  print(as_tibble(e[[1]]), n = 20)
+  }
 }
 ```
