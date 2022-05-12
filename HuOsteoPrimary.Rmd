@@ -37,8 +37,7 @@ plot_cols <- c("#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF",
   "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF",
   "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF")
 
-rDimPlot <- function(object, title = "Unlabeled Plot",
-  label = T, pt.size = 1, ...) {
+rDimPlot <- function(object, title, label = T, pt.size = 1, ...) {
   if(length(levels(Idents(object))) < 22) {  
     p <- Seurat::DimPlot(
       object = object, 
