@@ -243,7 +243,7 @@ opt <- tribble(
 
 for(i in 1:9) {
   opt[i, "res"] <- 0.1 * i
-  tumor <- FindClusters(comb, resolution = opt$res[i])
+  comb <- FindClusters(comb, resolution = opt$res[i])
   plot[[i]] <- rDimPlot(comb, paste("Resolution", opt$res[i]))
   opt[i, "score"] <- silhouette_mean(silhouette_seurat(comb))
   opt[i, "clusters"] <- length(levels(comb$seurat_clusters))
@@ -251,6 +251,9 @@ for(i in 1:9) {
 
 plot_grid(plotlist = plot, ncol = 3)
 tumor <- FindClusters(comb,
+ # resolution = opt$res[opt$score == max(opt$score)])
+# On manual review, I am enforcing a stringency of resolution = 3
+#  due to negative effect of tumor cells on scoring
   resolution = opt$res[opt$score == max(opt$score)])
 
 # Save a stopping point - merged and harmony aligned
@@ -531,17 +534,14 @@ for(i in levels(Idents(tumor))) {
 # From the cluster-marker gene lists, identify up- and down-regulated pathways
 
 ```{r}
-dbs <- "KEGG_2021_Human"
+dbs <- "GO_Biological_Process_2021"
 
-enriched_up <- list()
-enriched_down <- list()
+enriched <- list()
 for(i in levels(Idents(tumor))) {
-  up <- tumor_marks$gene[tumor_marks$cluster == i & tumor_marks$avg_log2FC > 0.7]
-  down <- tumor_marks$gene[tumor_marks$cluster == i & tumor_marks$avg_log2FC < 0.7]
-  # print(paste("Upregulated pathways for cluster", i))
-  # print()
-  
-  enriched_up[[paste("Cluster", i, sep = "_")]] <- enrichr(up, dbs)
-  enriched_down[[paste("Cluster", i, sep = "_")]] <- enrichr(down, dbs)
+  degs <- tumor_marks$gene[tumor_marks$cluster == i]
+  e <- enrichr(degs, dbs)
+  enriched[[paste("Cluster", i, sep = "_")]] <- as_tibble(e$GO_Biological_Process_2021)
+  print(paste("Cluster", i, "top pathways"))
+  print(as_tibble(e$GO_Biological_Process_2021), n = 20)
 }
 ```
