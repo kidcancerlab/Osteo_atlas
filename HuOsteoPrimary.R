@@ -11,8 +11,7 @@ set.seed(888)
 # setwd("~/../lab/Analysis/Ryan/RProjects/CellTypeAnnRefs/")
 
 # Start the graphics device
-png("Plots/HuOsteoPrimary%03d.png", width = 720, height = 720,
-  type = "cairo")
+httpgd::hgd()
 
 # Start with GSE152048
 # Make a list of sample names
@@ -37,9 +36,9 @@ if(!dir.exists("PrimaryTumor/GSE152048")) {
   tar_dir <- "PrimaryTumor/GSE152048"
   dir.create(tar_dir)
   geo_pre <- "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE152nnn/GSE152048/suppl/GSE152048_"
-  for(i in seq_len(s)){
-    gse_path <- str_c(geo_pre, s[i], ".matrix.tar.gz")
-    tar_file <- str_c(tar_dir, "/", s[i], ".tar.gz ")
+  for(i in s){
+    gse_path <- str_c(geo_pre, i, ".matrix.tar.gz")
+    tar_file <- str_c(tar_dir, "/", i, ".tar.gz ")
     download.file(gse_path, destfile = tar_file, method = "auto")
     untar(tar_file, exdir = tar_dir)
     file.remove(tar_file)
