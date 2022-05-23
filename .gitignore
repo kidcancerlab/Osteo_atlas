@@ -38,17 +38,17 @@ vignettes/*.pdf
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
+*.html
 
 # R Environment Variables
 .Renviron
 
 # Downloaded data from GEO (code will reconstruct this folder on demand)
-/PrimaryTumor/*
+HuOsteo/PrimaryTumor/*
 
 # Intermediate data files (code will reconstruct these on demand)
 *.qs
 
 # Plots
 *.png
-/Plots/*
-/HuOsteo*/*
+Plots/*

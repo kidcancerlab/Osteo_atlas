@@ -1,0 +1,273 @@
+---
+title: "Human Osteosarcoma Primary - Annotate Tumor Cells"
+subtitle: "Cell type annotation reference assembly"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo=TRUE,
+  dev="svg",
+  fig.width=4,
+  fig.height=4,
+  fig.asp=NULL
+)
+
+library(rrrSingleCellUtils)
+library(Seurat)
+library(ggplot2)
+library(ggrepel)
+library(tidyverse)
+library(stringr)
+library(harmony)
+library(cowplot)
+
+set.seed(888)
+
+sysfonts::font_add("Arial Narrow", "ARIALN.TTF", bold = "ARIALNB.TTF")
+showtext::showtext_auto()
+
+theme_set(ggpubr::theme_pubr())
+
+plot_cols <- c("#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF",
+  "#9632B8FF",  "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF",
+  "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF",
+  "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF")
+
+rDimPlot <- function(object, title = "Unlabeled Plot",
+  label = T, pt.size = 1, ...) {
+  if(length(levels(Idents(object))) < 22) {  
+    p <- Seurat::DimPlot(
+      object = object, 
+      label = label, 
+      pt.size = pt.size,
+      cols = alpha(plot_cols, 0.6),
+      ...) +
+      ggtitle(title) +
+      theme(legend.position = "none") +
+      coord_fixed()
+    print(p)
+    return(p)
+  } else {
+    print("Too many identity classes to use this function. Requires <22.")
+  }
+}
+
+rFeaturePlot <- function(object, features, title, pt.size = 1, order = T, ...) {
+  p <- Seurat::FeaturePlot(
+    object = object,
+    features = features,
+    pt.size = pt.size,
+    order = order,
+    cols = (c("lightgoldenrod", "darkred")),
+    ...) +
+    ggtitle(title) +
+    coord_fixed()
+  print(p)
+  return(p)
+}
+```
+
+# Isolate and subcluster the tumor cells
+
+```{r, fig.width = 8, fig.width = 8}
+# Isolate the tumor cells away from the comb Seurat object
+selection <- readRDS("HuOsteo/selection.rds")
+tumor <- subset(qs::qread("HuOsteo/comb.qs"), cells = selection)
+
+# Normalize and scale tumor dataset
+tumor <- tumor %>%
+  NormalizeData() %>%
+  FindVariableFeatures() %>%
+  ScaleData() %>%
+  RunPCA(verbose = F)
+
+# Run batch-correction/integration using harmony
+tumor <- RunHarmony(tumor, group.by.vars = "src")
+tumor <- tumor %>%
+  RunUMAP(reduction = "harmony", dims = 1:20) %>%
+  FindNeighbors(reduction = "harmony", dims = 1:20)
+
+plot <- list()
+opt <- tribble(
+  ~res, ~score, ~clusters
+)
+
+for(i in 1:9) {
+  opt[i, "res"] <- 0.1 * i
+  tumor <- FindClusters(tumor, resolution = opt$res[i])
+  plot[[i]] <- rDimPlot(tumor, paste("Resolution", opt$res[i]))
+  opt[i, "score"] <- silhouette_mean(silhouette_seurat(tumor))
+  opt[i, "clusters"] <- length(levels(tumor$seurat_clusters))
+}
+
+plot_grid(plotlist = plot, ncol = 3)
+# Manually enforcing a resolution of 0.2 based on review of clusters
+# and potential DEGs. Silhouette performs poorly for scoring intratumor
+# heterogeneity.
+tumor <- FindClusters(tumor, resolution = 0.2)
+
+rDimPlot(tumor, "Subclustered tumor cells")
+
+rDimPlot(tumor, "Subclustered tumor cells", split.by = "src", ncol = 4)
+
+tumor <- kill_cc(tumor)
+rDimPlot(tumor, "Sublustered tumor cells - cell cycle", group.by = "Phase")
+```
+
+# Generate gene set lists that identify each tumor cell cluster
+
+NOTE: Since this is a sub-clustering of cells that are highly 
+related, it would be especially appropriate here to validate our
+sub-clustering with silhouette scoring or similar.
+
+```{r}
+Idents(tumor) <- tumor$seurat_clusters
+
+if(!exists("tumor_marks.xlsx")) {
+  tumor_marks <- FindAllMarkers(tumor)
+  xlsx::write.xlsx(tumor_marks, "tumor_marks.xlsx")
+}
+
+tumor_marks <- xlsx::read.xlsx("tumor_marks.xlsx", 1)
+tumor_marks <- as.tibble(
+  tumor_marks[order(-tumor_marks$avg_log2FC),])
+num_genes <- 20
+
+for(i in levels(Idents(tumor))) {
+  print(paste(
+    "Top", num_genes, "UPREGULATED genes in cluster", i
+  ))
+  print(head(
+    tumor_marks[tumor_marks$cluster == i,], n = num_genes
+  ))
+  print(paste(
+    "Top", num_genes, "DOWNREGULATED genes in cluster", i
+  ))
+  print(tail(
+    tumor_marks[tumor_marks$cluster == i,], n = num_genes
+  ))
+}
+```
+
+# From the cluster-marker gene lists, identify up- and down-regulated pathways
+
+```{r}
+dbs <- c("GO_Biological_Process_2021",
+  "TF_Perturbations_Followed_by_Expression",
+  "MSigDB_Hallmark_2020")
+
+enriched <- list()
+for (i in levels(Idents(tumor))) {
+  for(d in 1:3) {
+  degs <- tumor_marks$gene[tumor_marks$cluster == i]
+  e <- enrichr(degs, dbs[d])
+  enriched[[paste("Cluster", i, sep = "_")]] <- as_tibble(
+    e[[1]])
+  print(paste("Cluster", i, "top pathways", dbs[d]))
+  print(as_tibble(e[[1]]), n = 20)
+  }
+}
+```
+
+# Compare results to those obtained using a pseudobulk procedure
+
+First, generate DEG tables from pseudobulk clusters, treating all cells
+from each cluster from each sample as independent groups of cells/data.
+Then, graph each of those DEG datasets using a volcano plot.
+
+```{r}
+# Create pseudobulk tables
+pseudobulk <- data.frame(gene = rownames(tumor@assays$RNA@counts))
+rownames(pseudobulk) <- pseudobulk$gene
+
+tumor$subcluster <- tumor$seurat_clusters
+for(s in levels(as_factor(tumor$src))) {
+  subtumor <- subset(tumor, subset = src == s)
+  for(i in levels(subtumor$subcluster)) {
+    if(length(which(subtumor$subcluster == i)) > 9) {
+      subclust <- subset (subtumor, subcluster == i)
+      lab <- paste0(s, "-C", i)
+      pseudobulk[lab] <- rowSums(subclust@assays$RNA@counts)
+    } else {
+      print(paste("NOTE: Cluster", i, "from sample", s,
+        "has less than 10 cells. This cluster will be skipped."))
+    }
+  }
+}
+pseudobulk <- pseudobulk[, -1]
+
+coldata <- data.frame(sample = colnames(pseudobulk))
+rownames(coldata) <- coldata$sample
+coldata <- separate(coldata, "sample", c("sample", "condition"), sep = "-C")
+coldata$type <- "single-read"
+coldata <- coldata[, -1]
+
+# Perform differential expression analysis between groups
+ds2_data_sets <- list()
+ds2_tests <- list()
+ds2_results <- list()
+p1 <- list()
+for(i in unique(coldata$condition)) {
+  coldata2 <- coldata
+  coldata2["condition"][coldata2["condition"] == i] <- "target"
+  coldata2["condition"][coldata2["condition"] != "target"] <- "other"
+
+  ds2_data_sets[[i]] <- DESeq2::DESeqDataSetFromMatrix(
+    countData = pseudobulk,
+    colData = coldata2,
+    design = ~ condition
+  )
+
+  ds2_tests[[i]] <- DESeq2::DESeq(ds2_data_sets[[i]])
+  ds2_results[[i]] <- as.data.frame(DESeq2::results(ds2_tests[[i]]))
+
+  ds2_results[[i]] <- ds2_results[[i]][complete.cases(ds2_results[[i]]), ]
+  ds2_results[[i]] <- 
+    ds2_results[[i]][order(-abs(ds2_results[[i]]$log2FoldChange)), ]
+  lab <- head(ds2_results[[i]], n = 15)
+
+  p1[[i]] <- ggplot(ds2_results[[i]], aes(log2FoldChange, -log10(padj))) +
+    geom_point() +
+    geom_label_repel(data = lab,
+      aes(label = rownames(lab)),
+      max.overlaps = 20) +
+    ggtitle(paste("Cluster", i, "genes"))
+  
+  print(p1[[i]])
+}
+```
+
+Identify pathways associated with changes in groups of those genes and plot results.
+
+```{r}
+degs <- list()
+
+for(i in unique(coldata$condition)) {
+  ds2_results[[i]] <- 
+    ds2_results[[i]][order(-ds2_results[[i]]$log2FoldChange), ]
+  degs[[i]] <- AnnotationDbi::select(org.Hs.eg.db::org.Hs.eg.db,
+    keys = rownames(ds2_results[[i]]),
+    columns = "ENTREZID",
+    keytype = "ALIAS"
+  )
+  ds2_results[[i]]$ALIAS <- rownames(ds2_results[[i]])
+  d <- inner_join(ds2_results[[i]], degs[[i]], by = "ALIAS")
+  rownames(d) <- d$ENTREZID
+  ds2_results[[i]] <- as.vector(d$log2FoldChange)
+  names(ds2_results[[i]]) <- d$ENTREZID
+  
+  ego <- clusterProfiler::gseGO(
+    geneList = ds2_results[[i]],
+    OrgDb = org.Hs.eg.db::org.Hs.eg.db,
+    ont = "BP",
+    minGSSize = 100,
+    maxGSSize = 500,
+    pvalueCutoff = 0.05,
+    verbose = FALSE
+  )
+  
+
+}
+```
+
