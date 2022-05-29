@@ -24,7 +24,7 @@ library(ggrepel)
 library(tidyverse)
 library(stringr)
 library(harmony)
-library(cowplot)
+library(patchwork)
 library(ggpubr)
 
 set.seed(888)
@@ -39,7 +39,7 @@ plot_cols <- c("#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF",
   "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF",
   "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF")
 
-rDimPlot <- function(object, title = "Unlabeled Plot",
+rDimPlot <- function(object, title = "Unlabeled Plot", subtitle = NA,
   label = T, pt.size = 1, ...) {
   if(length(levels(Idents(object))) < 22) {
     p <- Seurat::DimPlot(
@@ -48,7 +48,9 @@ rDimPlot <- function(object, title = "Unlabeled Plot",
       pt.size = pt.size,
       cols = alpha(plot_cols, 0.6),
       ...) +
-      ggtitle(title) +
+      labs(
+        title = title,
+        subtitle = subtitle) +
       theme(legend.position = "none") +
       coord_fixed()
     print(p)
@@ -58,7 +60,8 @@ rDimPlot <- function(object, title = "Unlabeled Plot",
   }
 }
 
-rFeaturePlot <- function(object, features, title, pt.size = 1, order = T, ...) {
+rFeaturePlot <- function(object, features, title = "Unlabeled Plot", subtitle = NA,
+  pt.size = 1, order = T, ...) {
   p <- Seurat::FeaturePlot(
     object = object,
     features = features,
@@ -66,7 +69,9 @@ rFeaturePlot <- function(object, features, title, pt.size = 1, order = T, ...) {
     order = order,
     cols = (c("lightgoldenrod", "darkred")),
     ...) +
-    ggtitle(title) +
+    labs(
+      title = title,
+      subtitle = subtitle) +
     coord_fixed()
   print(p)
   return(p)
@@ -106,7 +111,7 @@ for(i in 1:9) {
   opt[i, "clusters"] <- length(levels(tumor$seurat_clusters))
 }
 
-plot_grid(plotlist = plot, ncol = 3)
+wrap_plots(plot, ncol = 3)
 
 # Manually enforcing a resolution of 0.2 based on review of clusters
 # and potential DEGs. Silhouette performs poorly for scoring intratumor
@@ -152,213 +157,196 @@ coldata <- coldata[, -1]
 # Perform differential expression analysis between clusters
 ds2 <- list()
 plots <- list()
-for(c in clusters) {
-  cluster_name <- names(clusters[clusters == c])
-
+for(c in names(clusters)) {
+  cluster_number <- clusters[c]
   coldata_targeted <- coldata
-  coldata_targeted["cluster"][coldata_targeted["cluster"] == c] <- "target"
+  coldata_targeted["cluster"][coldata_targeted["cluster"] == cluster_number] <- "target"
   coldata_targeted["cluster"][coldata_targeted["cluster"] != "target"] <- "other"
 
-  ds2[[cluster_name]]$data_sets <- DESeq2::DESeqDataSetFromMatrix(
+  ds2[[c]]$data_sets <- DESeq2::DESeqDataSetFromMatrix(
     countData = pseudobulk,
     colData = coldata_targeted,
     design = ~ cluster
   )
 
-  ds2[[cluster_name]]$tests <- DESeq2::DESeq(ds2[[cluster_name]]$data_sets)
-  ds2[[cluster_name]]$results <-
-    as.data.frame(DESeq2::results(ds2[[cluster_name]]$tests))
+  ds2[[c]]$tests <- DESeq2::DESeq(ds2[[c]]$data_sets)
+  ds2[[c]]$results <-
+    as.data.frame(DESeq2::results(ds2[[c]]$tests))
 
-  ds2[[cluster_name]]$results <-
-    ds2[[cluster_name]]$results[complete.cases(ds2[[cluster_name]]$results), ]
-  ds2[[cluster_name]]$results <-
-    ds2[[cluster_name]]$results[order(-abs(ds2[[cluster_name]]$results$log2FoldChange)), ]
-  lab <- head(ds2[[cluster_name]]$results, n = 15)
+  ds2[[c]]$results <-
+    ds2[[c]]$results[complete.cases(ds2[[c]]$results), ]
+  ds2[[c]]$results <-
+    ds2[[c]]$results[order(-abs(ds2[[c]]$results$log2FoldChange)), ]
+  labs <- head(ds2[[c]]$results, n = 15)
 
-  plots[[cluster_name]][["pb_ds2"]]$volcano <-
-    ggplot(ds2[[cluster_name]]$results, aes(log2FoldChange, -log10(padj))) +
+  plots[[c]][["pb_ds2"]]$volcano <-
+    ggplot(ds2[[c]]$results, aes(log2FoldChange, -log10(padj))) +
       geom_point() +
-      geom_label_repel(data = lab,
+      geom_label_repel(
+        data = labs,
         aes(label = rownames(lab)),
         max.overlaps = 20) +
-      ggtitle(paste("Cluster", i, "genes"))
+      labs(
+        title = paste(c, "Genes"),
+        subtitle = "pb_ds2 method")
 }
 ```
 
-# Perform GSEA using GO terms for BP, MP, and CC using pseudobulk DESeq2 DEGs
+# Generate DEG lists and volcano plots using Seurat-Wilcox and ROC DE analysis
+```{r}
+Idents(tumor) <- tumor$seurat_clusters
+deg_test <- c("wilcox", "roc")
+scresults <- list()
+for(t in deg_test) {
+  for(c in names(clusters)) {
+    cluster_number <- clusters[c]
+
+    scresults[[t]][[c]]$results <- 
+      FindMarkers(tumor, ident.1 = cluster_number) %>%
+      arrange(-abs(avg_log2FC))
+    labs <- head(scresults[[t]][[c]]$results, n = 15)
+
+    plots[[c]][[t]]$volcano <-
+      ggplot(scresults[[t]][[c]]$results, aes(avg_log2FC, -log10(p_val_adj))) +
+        geom_point() +
+        geom_label_repel(data = labs,
+          aes(label = rownames(labs)),
+          max.overlaps = 20) +
+        labs(
+          title = paste(c, "Genes"),
+          subtitle = paste(t, "method"))
+  }
+}
+```
+
+# Perform GSEA using GO terms for BP, MP, and CC using DEGs
 
 Identify pathways associated with changes in groups of those genes and plot results.
 
 ```{r}
-for(c in clusters) {
-  cluster_name <- names(clusters[clusters == c])
+degs <- list()
 
-  ds2[[cluster_name]]$results <-
-    ds2[[cluster_name]]$results[order(-ds2[[cluster_name]]$results$log2FoldChange), ]
+for(c in names(clusters)) {
+  ds2[[c]]$results <-
+    arrange(ds2[[c]]$results, desc(log2FoldChange))
 
-  degs <- as.vector(ds2[[cluster_name]]$results$log2FoldChange)
-  names(degs) <- rownames(ds2[[cluster_name]]$results)
+  degs[["pb_ds2"]][[c]] <- as.vector(ds2[[c]]$results$log2FoldChange)
+  names(degs[["pb_ds2"]][[c]]) <- rownames(ds2[[c]]$results)
 
-  ego <- clusterProfiler::gseGO(
-    geneList = degs,
-    OrgDb = org.Hs.eg.db::org.Hs.eg.db,
-    ont = "BP",
-    keyType = "SYMBOL",
-    nPermSimple = 10000,
-    eps = 0
-  )
+  for(t in deg_test) {
+    scresults[[t]][[c]]$results <-
+      arrange(scresults[[t]][[c]]$results, desc(avg_log2FC))
 
-  ego <- mutate(ego, p.adjust = -log10(p.adjust))
+    degs[[t]][[c]] <- as.vector(scresults[[t]][[c]]$results$avg_log2FC)
+    names(degs[[t]][[c]]) <- rownames(scresults[[t]][[c]]$results)
+  }
+}
 
-  plots[[cluster_name]]$pb_ds2$GO_BP <- enrichplot::dotplot(ego,
-    x = "NES",
-    showCategory = 15) +
-    ggtitle(paste("GO BioProcesses - cluster", i))
+de_methods <- c("pb_ds2", "wilcox", "roc")
+ont <- tribble(
+  ~code, ~name,
+  "BP", "GO BioProcesses",
+  "MF", "GO MolFunction",
+  "CC", "GO CellComponent"
+)
+ego <- list()
 
-  ego <- clusterProfiler::gseGO(
-    geneList = degs,
-    OrgDb = org.Hs.eg.db::org.Hs.eg.db,
-    ont = "MF",
-    keyType = "SYMBOL",
-    nPermSimple = 10000,
-    eps = 0
-  )
+for(m in de_methods) {
+  for(c in names(clusters)) {
+    for(o in ont$code) {
+    ego[[m]][[c]] <- clusterProfiler::gseGO(
+        geneList = degs[[m]][[c]],
+        OrgDb = org.Hs.eg.db::org.Hs.eg.db,
+        ont = o,
+        keyType = "SYMBOL",
+        nPermSimple = 10000,
+        eps = 0
+      )
 
-  ego <- mutate(ego, p.adjust = -log10(p.adjust))
+      ego[[m]][[c]] <- mutate(ego[[m]][[c]], p.adjust = -log10(p.adjust))
 
-  plots[[cluster_name]]$pb_ds2$GO_MF <- enrichplot::dotplot(ego,
-    x = "NES",
-    showCategory = 15) +
-    ggtitle(paste("GO MolFunction - cluster", i))
-
-  ego <- clusterProfiler::gseGO(
-    geneList = degs,
-    OrgDb = org.Hs.eg.db::org.Hs.eg.db,
-    ont = "CC",
-    keyType = "SYMBOL",
-    nPermSimple = 10000,
-    eps = 0
-  )
-
-  ego <- mutate(ego, p.adjust = -log10(p.adjust))
-
-  plots[[cluster_name]]$pb_ds2$GO_CC <- enrichplot::dotplot(ego,
-    x = "NES",
-    showCategory = 15) +
-    ggtitle(paste("GO CellComponent - cluster", i))
+      plots[[c]][[m]][[o]] <- enrichplot::dotplot(ego[[m]][[c]],
+        x = "NES",
+        showCategory = 15) +
+        labs(
+          title = paste(c, "-", ont[ont$code == o, "name"]),
+          subtitle = paste(m, "method")
+        )
+    }
+  }
 }
 ```
-
-# Generate DEG lists and volcano plots using Seurat-Wilcox DE analysis
-```{r}
-Idents(tumor) <- tumor$seurat_clusters
-wilcox <- list()
-for(c in clusters) {
-  cluster_name <- names(clusters[clusters == c])
-
-  wilcox[[cluster_name]]$results <- FindMarkers(tumor, ident.1 = c) %>%
-    arrange(-abs(avg_log2FC))
-  labs <- head(wilcox[[cluster_name]]$results, n = 15)
-
-  plots[[cluster_name]][["wilcox"]]$volcano <-
-    ggplot(wilcox[[cluster_name]]$results, aes(avg_log2FC, -log10(p_val_adj))) +
-      geom_point() +
-      geom_label_repel(data = lab,
-        aes(label = rownames(lab)),
-        max.overlaps = 20) +
-      ggtitle(paste("Cluster", i, "genes"))
-}
-```
-
-# Perform GSEA on the DEGs from the Seurat-Wilcox DE analysis
-
-```{r}
-
-```
-
-
 
 # Generate plots for presenation/publication
 
 ```{r}
-ggsave("HuOsteo/Plots/tumor-cluster-res-grid.png",
-  plot_grid(plotlist = plot, ncol = 3),
-  height = 10, width = 10, dpi = 96,
-  bg = "white",
-  device = agg_png
-)
+# Export panels of DEG and GSEA analyses for display
+for(c in names(clusters)) {
+  for(m in de_methods) {
+    plots[[c]][[m]]$panel <-
+      (rDimPlot(tumor, "Osteosarcoma Primary Tumor Cells",
+        subtitle = "Seurat-assigned clusters (optimized)") +
+      plots[[c]][[m]]$volcano) /
+      (plots[[c]][[m]]$BP +
+      plots[[c]][[m]]$MF +
+      plots[[c]][[m]]$CC)
 
-
-png(filename = "HuOsteo/Plots/tumor-cluster-res-grid.png",
-  height = 10,
-  width = 10,
-  units = "in",
-  pointsize = 4,
-  type = "cairo-png",
-  bg = "white",
-  res = 96
-)
-print(plot_grid(plotlist = plot, ncol = 3))
-dev.off()
-
-png(filename = "HuOsteo/Plots/tumor-src-grid.png",
-  height = 1200,
-  width = 1200,
-  type = "cairo"
-)
-print(rDimPlot(tumor, "Subclustered tumor cells", split.by = "src", ncol = 4))
-dev.off()
-
-ggsave("HuOsteo/Plots/tumor-clusters.png",
-  rDimPlot(tumor, "Subclustered tumor cells"),
-  height = 4,
-  width = 4,
-  dpi = 300,
-  bg = "white"
-)
-
-
-png(filename = "HuOsteo/Plots/tumor-clusters.png",
-  height = 450,
-  width = 450,
-  type = "cairo"
-)
-print(rDimPlot(tumor, "Subclustered tumor cells"))
-dev.off()
-
-png(filename = "HuOsteo/Plots/tumor-cluster-res-grid.png",
-  height = 450,
-  width = 450,
-  type = "cairo"
-)
-print(rDimPlot(tumor, "Sublustered tumor cells - cell cycle", group.by = "Phase"))
-dev.off()
-
-for(i in unique(coldata$cluster)) {
-  png(filename = paste0("HuOsteo/Plots/volcano-pseudob-tumor-clust-", i, ".png"),
-    width = 600,
-    height = 360,
-    type = "cairo"
-  )
-  print(p1[[i]])
-  dev.off()
+    ggsave(paste0("HuOsteo/Plots/panel-", m, "-", c, ".pdf"),
+      plots[[c]][[m]]$panel,
+      device = "pdf",
+      width = 18,
+      height = 12,
+      units = "in",)
+  }
 }
 
-for(i in unique(coldata$cluster)) {
-  png(filename = paste0("HuOsteo/Plots/gseadot-pseudob-tumor-clust-", i, ".png"),
-    width = 1500, 
-    height = 600,
-    type = "cairo"
-  )
-  print(p2[[i]])
-  dev.off()
-}
+# Rename tumor clusters based on the above results
+tumor <- RenameIdents(tumor,
+  `0` = "Growth - recovery/ribogenesis",
+  `1` = "Growth - actively cycling",
+  `2` = "Growth - massive transcription",
+  `3` = "Growth - massive translation",
+  `4` = "Basal/quiescent",
+  `5` = "Matrix producing/partially differentiated",
+  `6` = "Inflammatory/interactive"
+)
 
-rDimPlot(tumor, "Subclustered tumor cells")
+tumor$assignment <- Idents(tumor)
+plots$assignment <-
+  rDimPlot(tumor, "Osteosarcoma Primary Tumor Cells",
+    subtitle = "Clusters assigned in this analysis",
+    repel = T)
 
-rDimPlot(tumor, "Subclustered tumor cells", split.by = "src", ncol = 4)
+ggsave("HuOsteo/Plots/UMAP-new-labels.pdf",
+  plots$assignment,
+  device = "pdf",
+  width = 6,
+  height = 5,
+  units = "in")
 
+# Create a transcript density plot
+plots$density <- rFeaturePlot(tumor, "nCount_RNA",
+  title = "Transcript Density",
+  subtitle = "Number of counts per cell",
+  max.cutoff = 50000)
+
+ggsave("HuOsteo/Plots/UMAP-count-density.pdf",
+  plots$density,
+  device = "pdf",
+  width = 6,
+  height = 5,
+  units = "in")
+
+# Create a plot of cell cyle predictions
 tumor <- kill_cc(tumor)
-rDimPlot(tumor, "Sublustered tumor cells - cell cycle", group.by = "Phase")
+plots$cell_cycle <- rDimPlot(tumor,
+  title = "Cell Cycle Predictions",
+  subtitle = "Based on transcriptional patterns")
 
+ggsave("HuOsteo/Plots/UMAP-cell-cycle.pdf",
+  plots$cell_cycle,
+  device = "pdf",
+  width = 6,
+  height = 5,
+  units = "in")
 ```

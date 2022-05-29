@@ -51,4 +51,4 @@ HuOsteo/PrimaryTumor/*
 
 # Plots
 *.png
-Plots/*
+HuOsteo/Plots/*
