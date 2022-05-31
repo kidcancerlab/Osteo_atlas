@@ -4,13 +4,18 @@ subtitle: "Cell type annotation reference assembly"
 output: html_document
 ---
 
+This script begins with the output from Primary-CreateData (comb.qs), merges and
+integrates the samples, performs clustering, initial identification of cell subtypes,
+focused on tumor cells vs stromal cells, and returns a file identifying the tumor
+cells (selection.rds).
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
-  echo=TRUE,
-  dev="svg",
-  fig.width=4,
-  fig.height=4,
-  fig.asp=NULL
+  echo = TRUE,
+  dev = "png",
+  fig.width = 6,
+  fig.height = 6,
+  fig.asp = NULL
 )
 
 library(rrrSingleCellUtils)
@@ -21,9 +26,6 @@ library(tidyverse)
 library(stringr)
 library(harmony)
 library(cowplot)
-library(ggsci)
-library(enrichR)
-setEnrichrSite("Enrichr")
 
 set.seed(888)
 
@@ -223,7 +225,11 @@ for(f in names(ms)) {
   g[[f]] <- rFeaturePlot(comb, f, features = str_c(f, "1"))
 }
 
-plot_grid(plotlist = g, labels = LETTERS[1:length(g)], ncol = 4, nrow = 4)
+plot_grid(
+  plotlist = g,
+  labels = LETTERS[seq_len(length(g))],
+  ncol = 4, nrow = 4
+)
 ```
 
 # Isolate and subcluster the tumor cells

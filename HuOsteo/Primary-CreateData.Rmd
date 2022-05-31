@@ -4,13 +4,18 @@ subtitle: "Cell type annotation reference assembly"
 output: html_document
 ---
 
+This script compiles several single cell RNA-seq data sets that are published and
+combines them into a single dataset for downstream use in creating cell type references
+for automated annotation. The primary output file from this script (comb.qs) is used
+in several other scripts as the input to perform clustering and annotation.
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
-  echo=TRUE,
-  dev="svg",
-  fig.width=4,
-  fig.height=4,
-  fig.asp=NULL
+  echo = TRUE,
+  dev = "png",
+  fig.width = 6,
+  fig.height = 6,
+  fig.asp = NULL
 )
 
 library(rrrSingleCellUtils)
@@ -21,9 +26,6 @@ library(tidyverse)
 library(stringr)
 library(harmony)
 library(cowplot)
-library(ggsci)
-library(enrichR)
-setEnrichrSite("Enrichr")
 
 set.seed(888)
 
