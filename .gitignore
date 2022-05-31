@@ -34,6 +34,7 @@ vignettes/*.pdf
 # knitr and R markdown default cache directories
 *_cache/
 /cache/
+*/*.html
 
 # Temporary files created by R markdown
 *.utf8.md
@@ -43,12 +44,11 @@ vignettes/*.pdf
 .Renviron
 
 # Downloaded data from GEO (code will reconstruct this folder on demand)
-/PrimaryTumor/*
+HuOsteo/PrimaryTumor/*
 
 # Intermediate data files (code will reconstruct these on demand)
 *.qs
 
 # Plots
 *.png
-/Plots/*
-/HuOsteo*/*
+*/Plots/*

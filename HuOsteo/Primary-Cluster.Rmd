@@ -1,0 +1,274 @@
+---
+title: "Human Osteosarcoma Primary - Clustering"
+subtitle: "Cell type annotation reference assembly"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo=TRUE,
+  dev="svg",
+  fig.width=4,
+  fig.height=4,
+  fig.asp=NULL
+)
+
+library(rrrSingleCellUtils)
+library(Seurat)
+library(ggplot2)
+library(ggrepel)
+library(tidyverse)
+library(stringr)
+library(harmony)
+library(cowplot)
+library(ggsci)
+library(enrichR)
+setEnrichrSite("Enrichr")
+
+set.seed(888)
+
+sysfonts::font_add("Arial Narrow", "ARIALN.TTF", bold = "ARIALNB.TTF")
+showtext::showtext_auto()
+
+theme_set(ggpubr::theme_pubr())
+
+plot_cols <- c("#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF",
+  "#9632B8FF",  "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF",
+  "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF",
+  "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF")
+
+rDimPlot <- function(object, title = "Unlabeled Plot",
+  label = T, pt.size = 1, ...) {
+  if(length(levels(Idents(object))) < 22) {  
+    p <- Seurat::DimPlot(
+      object = object, 
+      label = label, 
+      pt.size = pt.size,
+      cols = alpha(plot_cols, 0.6),
+      ...) +
+      ggtitle(title) +
+      theme(legend.position = "none") +
+      coord_fixed()
+    print(p)
+    return(p)
+  } else {
+    print("Too many identity classes to use this function. Requires <22.")
+  }
+}
+
+rFeaturePlot <- function(object, features, title, pt.size = 1, order = T, ...) {
+  p <- Seurat::FeaturePlot(
+    object = object,
+    features = features,
+    pt.size = pt.size,
+    order = order,
+    cols = (c("lightgoldenrod", "darkred")),
+    ...) +
+    ggtitle(title) +
+    coord_fixed()
+  print(p)
+  return(p)
+}
+```
+
+# Reload the dataset
+
+This script picks up where the "Primary-CreateData.Rmd" script left off, creating (and
+here reloading) the "comb.qs" object.
+
+```{r}
+# Start from this stopping point - merged and harmony aligned
+comb <- qs::qread("HuOsteo/comb.qs")
+
+# Plot the integrated samples
+rDimPlot(comb, "Primary Tumors (integrated)", repel = T)
+
+rDimPlot(comb, "Primary Tumors (integrated)", group.by = "src")
+
+rDimPlot(comb, "Primary Tumors (integrated)", split.by = "src", ncol = 4)
+```
+
+## Interim conclusions
+
+A broad array of distinct cell types is represented across the different primary
+tumor samples. These subsets appear to be of high enough quality and are appropriate
+for building both an tumor cell and a stromal reference.
+
+# A brief tangent - Optimize UMAP parameters
+
+This code was created to illustrate how different changes in UMAP parameters affect
+the way that cells cluster. Bottom line is that the default parameters work pretty
+well and are fairly balanced, though tweaking can be helpful in certain situations.
+
+```{r}
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30,
+#     set.op.mix.ratio = (i-1)*0.25)
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
+#       coord_fixed() +
+#       ggtitle(str_c("set.op.mix.ratio = ", (i-1)*0.25)) +
+#       theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
+
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
+#     n.neighbors = (i * 10))
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
+#       coord_fixed() +
+#       ggtitle(str_c("n.neighbors = ", (i * 10))) +
+#       theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
+
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
+#     n.epochs = (i * 100))
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
+#     coord_fixed() +
+#     ggtitle(str_c("n.epochs = ", (i * 100))) +
+#     theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
+
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
+#     min.dist = (.00045 * 4 ^ i))
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
+#     coord_fixed() +
+#     ggtitle(str_c("min.dist = ", (.00045 * 4 ^ i))) +
+#     theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
+
+# p <- list()
+# for(i in 1:5) {
+#   test <- RunUMAP(comb, reduction = "harmony", dims = 1:30, 
+#     local.connectivity = (2 ^ i))
+#   test <- test %>%
+#     FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#     FindClusters()
+#   p[[i]] <- rDimPlot(test, reduction = "umap", label = T, repel = T) +
+#     coord_fixed() +
+#     ggtitle(str_c("local.connectivity = ", (2 ^ i))) +
+#     theme(legend.position = "none")
+# }
+# plot_grid(plotlist = p, ncol = 3)
+```
+
+# Evaluate for cell cycle
+
+```{r}
+comb <- kill_cc(comb)
+```
+
+# Begin cell type annotation
+
+Begin the process of identifying the cell types and annotating the samples. We will first
+need to identify the tumor cells and separate them away from the stromal cells so that we
+can focus in on the intratumoral heterogeneity.
+
+First, we will use some standard assays to look for canonical markers of osteosarcoma cells.
+
+```{r}
+feats <- c("COL1A1", "COL1A2", "SATB2")
+
+for(f in feats) {
+  p <- rFeaturePlot(comb, f, features = f)
+  print(p)
+}
+```
+
+Next, we will look at the markers that were used in the manuscript that reported the
+GSE152048 dataset. I'm not sure that these are the ideal markers, but they are somewhat
+useful, and this allows comparison to the published record.
+
+```{r, fig.height = 8, fig.width = 8}
+ms <- list(
+  Osteoblastic = c("RUNX2", "COL1A1", "CDH11", "IBSP"),
+  Chondroblastic = c("SOX9", "ACAN", "PTH1R"),
+  Osteoclast = c("ACP5", "CTSK", "MMP9"),
+  Myeloid = c("CD74", "CD14", "FCGR3A"),
+  TCell = c("CD3E", "IL7R", "CD8A", "CD4", "NKG7"),
+  NKCell = c("NKG7", "GNLY"),
+  NKTCell = c("NKG7", "GNLY", "CD3E"),
+  DCCell = c("CD1C", "FCER1A", "CLEC9A", "CCR7", "CD14", "CD163"),
+  Fibroblast = c("DCN", "COL1A1"),
+  Pericyte = c("RGS5", "ACTA2"),
+  MSC = c("MME", "THY1", "CXCL12", "SFRP2"),
+  Endothelial = c("PECAM1", "VWF"),
+  Myoblast = c("MYL1", "MYLPF"),
+  BCell = c("MS4A1", "CD19", "JCHAIN")
+)
+
+g <- list()
+for(f in names(ms)) {
+  comb <- AddModuleScore(comb, ms[[f]], name = f)
+  g[[f]] <- rFeaturePlot(comb, f, features = str_c(f, "1"))
+}
+
+plot_grid(plotlist = g, labels = LETTERS[1:length(g)], ncol = 4, nrow = 4)
+```
+
+# Isolate and subcluster the tumor cells
+
+```{r}
+if (!file.exists("selection.rds")) {
+  selection <- CellSelector(p)
+  saveRDS(selection, "selection.rds")
+}
+selection <- readRDS("selection.rds")
+Idents(comb) <- comb$seurat_clusters
+Idents(comb, cells = selection) <- "Tumor"
+
+rDimPlot(comb, "Isolated (likely) tumor cells")
+```
+
+Focus in on a module that defines the tumor cells so that we can isolate them.
+Given the purpose in creating an osteosarcoma signature, we will use an ROC
+statistic to create the DEG list.
+
+```{r}
+tmarks_roc <- FindMarkers(comb, ident.1 = "Tumor",
+  test.use = "roc")
+tmarks_roc_labs <- tmarks_roc[
+  tmarks_roc$power > .75 &
+  abs(tmarks_roc$avg_log2FC) > 2.2, ]
+
+tmarks_roc_labs$gene <- rownames(tmarks_roc_labs)
+ggplot(tmarks_roc, aes(avg_log2FC, power)) +
+  geom_point() +
+  geom_label_repel(data = tmarks_roc_labs,
+    aes(label = gene), max.overlaps = 20) +
+  ggtitle("Genes that identify tumor cells")
+
+os_sig <- rownames(tmarks_roc_labs[
+  tmarks_roc_labs$avg_log2FC > 0, ])
+comb <- AddModuleScore(comb, os_sig, name = "os_score")
+rFeaturePlot(comb, "OS Signature Score", features = "os_score1",
+  min.cutoff = 1, max.cutoff = 5)
+```
+
+After several different criteria strict vs loose for defining the genes
+that should comprise the osteosarcoma signature, it appears that the simplest
+gene list based off of the strictest power/log2FC criteria performs the best.
+
+The "selection.rds" file generated here together with the "comb.qs" file generated
+in the "Primary-CreateData.Rmd" script will be used to isolate tumor and stromal
+cells in the "Primary-AnnotateTumor.Rmd" and the "Primary-AnnotateStroma.Rmd" scripts.
