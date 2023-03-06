@@ -317,6 +317,7 @@ plots$assignment <-
     subtitle = "Clusters assigned in this analysis",
     repel = T)
 
+# Save the final curated object
 qs::qsave(tumor, "osteoshark.qs")
 
 ggsave("HuOsteo/Plots/UMAP-new-labels.pdf",
