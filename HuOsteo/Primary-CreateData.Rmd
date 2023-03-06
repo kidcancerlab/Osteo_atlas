@@ -94,14 +94,14 @@ geo1 <- tibble(
 )
 
 # Check if primary tumor directory exists and create if it doesn't
-if(!dir.exists("PrimaryTumor")) {
-  tar_dir <- "PrimaryTumor"
+if(!dir.exists("HuOsteo/PrimaryTumor")) {
+  tar_dir <- "HuOsteo/PrimaryTumor"
   dir.create(tar_dir)
 }
 
 # Download, file, and extract the files from GEO
-if(!dir.exists("PrimaryTumor/GSE152048")) {
-  tar_dir <- "PrimaryTumor/GSE152048"
+if(!dir.exists("HuOsteo/PrimaryTumor/GSE152048")) {
+  tar_dir <- "HuOsteo/PrimaryTumor/GSE152048"
   dir.create(tar_dir)
   geo_pre <- "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE152nnn/GSE152048/suppl/GSE152048_"
   for(s in geo1$s){
@@ -117,7 +117,7 @@ if(!dir.exists("PrimaryTumor/GSE152048")) {
 raw <- c()
 p <- list()
 for(s in geo1$s) {
-  x <- tenx_load_qc(str_c("PrimaryTumor/GSE152048/",
+  x <- tenx_load_qc(str_c("HuOsteo/PrimaryTumor/GSE152048/",
                           s, "/"))
   x <- subset(x, subset = nCount_RNA < geo1$qc[geo1$s == s] & percent.mt <13)
   x$src <- s
@@ -153,8 +153,8 @@ geo2 <- tibble(
 )
 
 # If the raw data from GEO hasn't been downloaded, go get it
-if(!dir.exists("PrimaryTumor/GSE162454")) {
-  tar_dir <- "PrimaryTumor/GSE162454"
+if(!dir.exists("HuOsteo/PrimaryTumor/GSE162454")) {
+  tar_dir <- "HuOsteo/PrimaryTumor/GSE162454"
   dir.create(tar_dir)
   geo_pre <- "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE162nnn/GSE162454/suppl/GSE162454_RAW.tar"
   tar_file <- str_c(tar_dir, "/", "GSE162454.tar.gz ")
@@ -181,7 +181,7 @@ if(!dir.exists("PrimaryTumor/GSE162454")) {
 #   samples
 p <- list()
 for(s in geo2$s) {
-  x <- tenx_load_qc(str_c("PrimaryTumor/GSE162454/",
+  x <- tenx_load_qc(str_c("HuOsteo/PrimaryTumor/GSE162454/",
                           s, "/"))
   x <- subset(x, subset = nCount_RNA < geo2$qc[geo2$s == s] & percent.mt <18)
   x$src <- s
@@ -237,11 +237,6 @@ comb <- comb %>%
   RunUMAP(reduction = "harmony", dims = 1:30) %>%
   FindNeighbors(reduction = "harmony", dims = 1:30) %>%
   FindClusters()
-
-comb <- RunHarmony(comb, group.by.vars = "src")
-comb <- comb %>%
-  RunUMAP(reduction = "harmony", dims = 1:20) %>%
-  FindNeighbors(reduction = "harmony", dims = 1:20)
 
 plot <- list()
 opt <- tribble(
