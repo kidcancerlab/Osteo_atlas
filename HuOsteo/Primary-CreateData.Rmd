@@ -29,15 +29,15 @@ library(cowplot)
 
 set.seed(888)
 
-sysfonts::font_add("Arial Narrow", "ARIALN.TTF", bold = "ARIALNB.TTF")
-showtext::showtext_auto()
-
 theme_set(ggpubr::theme_pubr())
 
-plot_cols <- c("#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF",
-  "#9632B8FF",  "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF",
-  "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF",
-  "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF")
+plot_cols <- c("#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF",
+  "#B8B8B8FF",  "#3E7E3EFF", "#68A4E3FF", "#00f7ff", "#69D1F3FF",
+  "#9632B8FF",  "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF",
+  "#7D7D7DFF", "#6D1D87FF", "#07768f", "#FF6E6AFF", "#FFBB70FF",
+  "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#a5a314", "#0e171a",
+  "#ff0000", "#d81d64", "#8400ff", "#69f369", "#00f7ff",
+  "#69D1F3FF", "#ffd000", "#69f3c5")
 
 rDimPlot <- function(object, title = "Unlabeled Plot",
   label = T, pt.size = 1, ...) {
@@ -82,15 +82,13 @@ clinical data for each sample, as reported in the manuscript.
 ```{r}
 # Make a list of sample names
 geo1 <- tibble(
-  s = c("BC5", "BC6", "BC10", "BC11", "BC16",
-    "BC17", "BC20", "BC21", "BC22"),
-  qc = c(18000, 25000, 25000, 30000, 70000,
-    40000, 70000, 50000, 50000),
+  s = c("BC5", "BC6", "BC11", "BC16", "BC20", "BC21", "BC22"),
+  qc = c(18000, 25000, 30000, 70000,
+         70000, 50000, 50000),
   path = c("Conventional", "Conventional", "Conventional",
-    "Conventional", "Conventional", "Chondroblastic",
-    "Chondroblastic", "Intraosseous", "Chondroblastic"),
-  type = c("Primary", "Primary", "Lung Met", "Primary", "Primary",
-          "Lung Met", "Primary", "Primary", "Primary")
+           "Conventional", "Chondroblastic", "Intraosseous", "Chondroblastic"),
+  type = c("Primary", "Primary", "Primary", "Primary",
+           "Primary", "Primary", "Primary")
 )
 
 # Check if primary tumor directory exists and create if it doesn't
@@ -132,7 +130,7 @@ for(s in geo1$s) {
     FindNeighbors(dims = 1:20) %>%
     FindClusters(resolution = 0.3) %>%
     RunUMAP(dims = 1:20)
-  p[[s]] <- rDimPlot(raw[[s]], str_c(s, " basic clustering"))
+  #p[[s]] <- rDimPlot(raw[[s]], str_c(s, " basic clustering"))
 }
 rm (x)
 plot_grid(plotlist = p, ncol = 3)
@@ -196,7 +194,7 @@ for(s in geo2$s) {
     FindNeighbors(dims = 1:20) %>%
     FindClusters(resolution = 0.3) %>%
     RunUMAP(dims = 1:20)
-  p[[s]] <- rDimPlot(raw[[s]], str_c(s, " basic clustering"))
+  #p[[s]] <- rDimPlot(raw[[s]], str_c(s, " basic clustering"))
 }
 rm(x)
 plot_grid(plotlist = p, ncol = 3)
@@ -212,28 +210,33 @@ integration procedure using harmony.
 ```{r}
 # Isolate samples obtained from primary tumors
 prim <- c()
-raw <- raw[!names(raw) %in% c("BC10", "BC17")]
 
 # Downsample to retain equal numbers of cells across samples (equal representation)
 for(s in names(raw)) {
-  prim[[s]] <- subset(raw[[s]], cells = sample(Cells(raw[[s]]), 1000))
+  prim[[s]] <- subset(raw[[s]], cells = sample(Cells(raw[[s]]), 2000))
 }
 
 # Combine the downsampled datasets into a single seurat object and re-normalize
-comb <- merge(prim[[1]], y = prim[2:length(prim)],
+prim_comb <- merge(prim[[1]], y = prim[2:length(prim)],
   add.cell.ids = names(raw),
   project = "PrimaryReference"
 )
 
-comb <- comb %>%
+prim_comb <- prim_comb %>%
   NormalizeData() %>%
   FindVariableFeatures() %>%
   ScaleData() %>%
   RunPCA(verbose = F)
 
+#save before harmony
+qs::qsave(prim_comb, "Seurat_objects/Primary/prim_comb.qs")
+```
+
+## Run Harmony
+```{r}
 # Run batch-correction/integration using harmony
-comb <- RunHarmony(comb, group.by.vars = "src")
-comb <- comb %>%
+prim_harmony_comb <- RunHarmony(prim_comb, group.by.vars = "src")
+prim_harmony_comb <- prim_harmony_comb %>%
   RunUMAP(reduction = "harmony", dims = 1:30) %>%
   FindNeighbors(reduction = "harmony", dims = 1:30) %>%
   FindClusters()
@@ -245,21 +248,21 @@ opt <- tribble(
 
 for(i in 1:9) {
   opt[i, "res"] <- 0.1 * i
-  comb <- FindClusters(comb, resolution = opt$res[i])
-  plot[[i]] <- rDimPlot(comb, paste("Resolution", opt$res[i]))
-  opt[i, "score"] <- silhouette_mean(silhouette_seurat(comb))
-  opt[i, "clusters"] <- length(levels(comb$seurat_clusters))
+  prim_harmony_comb <- FindClusters(prim_harmony_comb, resolution = opt$res[i])
+  plot[[i]] <- rDimPlot(prim_harmony_comb, paste("Resolution", opt$res[i]))
+  opt[i, "score"] <- silhouette_mean(silhouette_seurat(prim_harmony_comb))
+  opt[i, "clusters"] <- length(levels(prim_harmony_comb$seurat_clusters))
 }
 
 plot_grid(plotlist = plot, ncol = 3)
-tumor <- FindClusters(comb,
+tumor <- FindClusters(prim_harmony_comb,
  # resolution = opt$res[opt$score == max(opt$score)])
 # On manual review, I am enforcing a stringency of resolution = 3
 #  due to negative effect of tumor cells on scoring
   resolution = opt$res[opt$score == max(opt$score)])
 
 # Save a stopping point - merged and harmony aligned
-qs::qsave(comb, "comb.qs")
+qs::qsave(prim_harmony_comb, "Seurat_objects/Primary/prim_harmony_comb.qs")
 ```
 
 The above saved qs object serves as the input for the "Primary-Cluster.Rmd"

@@ -28,10 +28,6 @@ library(patchwork)
 library(ggpubr)
 
 set.seed(888)
-
-sysfonts::font_add("Arial Narrow", "ARIALN.TTF", bold = "ARIALNB.TTF")
-showtext::showtext_auto()
-
 theme_set(theme_pubr())
 
 plot_cols <- c("#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF",
@@ -83,7 +79,8 @@ rFeaturePlot <- function(object, features, title = "Unlabeled Plot", subtitle = 
 ```{r, fig.width = 8, fig.width = 8}
 # Isolate the tumor cells away from the comb Seurat object
 selection <- readRDS("HuOsteo/selection.rds")
-tumor <- subset(qs::qread("HuOsteo/comb.qs"), cells = selection)
+tumor <- subset(qs::qread("Seurat_objects/Primary/prim_harmony_comb.qs"),
+                cells = selection)
 
 # Normalize and scale tumor dataset
 tumor <- tumor %>%
@@ -103,10 +100,12 @@ opt <- tribble(
   ~res, ~score, ~clusters
 )
 
+#colnames(Embeddings(tumor, reduction = "umap"))[1] <- "UMAP_1"
+
 for(i in 1:9) {
   opt[i, "res"] <- 0.1 * i
   tumor <- FindClusters(tumor, resolution = opt$res[i])
-  plot[[i]] <- rDimPlot(tumor, paste("Resolution", opt$res[i]))
+  plot[[i]] <- DimPlot(tumor)        #paste("Resolution", opt$res[i]))
   opt[i, "score"] <- silhouette_mean(silhouette_seurat(tumor))
   opt[i, "clusters"] <- length(levels(tumor$seurat_clusters))
 }
@@ -119,6 +118,7 @@ wrap_plots(plot, ncol = 3)
 tumor <- FindClusters(tumor, resolution = 0.2)
 clusters <- levels(factor(tumor$seurat_clusters))
 names(clusters) <- paste0("Cluster", clusters)
+DimPlot(tumor)
 ```
 
 # Generate DEG lists for each cluster using a pseudobulk procedure
@@ -129,23 +129,28 @@ Then, graph each of those DEG datasets using a volcano plot.
 
 ```{r}
 # Create pseudobulk tables
-pseudobulk <- data.frame(gene = rownames(tumor@assays$RNA@counts))
-rownames(pseudobulk) <- pseudobulk$gene
+# pseudobulk <- data.frame(gene = rownames(tumor@assays$RNA@counts))
+# rownames(pseudobulk) <- pseudobulk$gene
 
-for(s in levels(as_factor(tumor$src))) {
-  subtumor <- subset(tumor, subset = src == s)
-  for(c in clusters) {
-    if(length(which(subtumor$seurat_clusters == c)) > 9) {
-      subclust <- subset (subtumor, seurat_clusters == c)
-      lab <- paste0(s, "-C", c)
-      pseudobulk[lab] <- rowSums(subclust@assays$RNA@counts)
-    } else {
-      print(paste("NOTE: Cluster", c, "from sample", s,
-        "has less than 10 cells. This cluster will be skipped."))
-    }
-  }
-}
-pseudobulk <- pseudobulk[, -1]
+tumor$psudobulk_col <- paste0(tumor$src, "-C", tumor$seurat_clusters)
+
+pseudobulk <- AggregateExpression(tumor,
+                                  group.by = "psudobulk_col",
+                                  slot     = "counts")[[1]]
+
+# for(s in levels(as_factor(tumor$src))) {
+#   subtumor <- subset(tumor, subset = src == s)
+#   for(c in clusters) {
+#     if(length(which(subtumor$seurat_clusters == c)) > 9) {
+#       subclust <- subset (subtumor, seurat_clusters == c)
+#       lab <- paste0(s, "-C", c)
+#       pseudobulk[lab] <- rowSums(subclust@assays$RNA@counts)
+#     } else {
+#       print(paste("NOTE: Cluster", c, "from sample", s,
+#         "has less than 10 cells. This cluster will be skipped."))
+#     }
+#   }
+# }
 
 # Create a separate column data table as required for generating DESeq2 input
 coldata <- data.frame(sample = colnames(pseudobulk))
@@ -166,8 +171,7 @@ for(c in names(clusters)) {
   ds2[[c]]$data_sets <- DESeq2::DESeqDataSetFromMatrix(
     countData = pseudobulk,
     colData = coldata_targeted,
-    design = ~ cluster
-  )
+    design = ~ cluster)
 
   ds2[[c]]$tests <- DESeq2::DESeq(ds2[[c]]$data_sets)
   ds2[[c]]$results <-
@@ -178,21 +182,24 @@ for(c in names(clusters)) {
   ds2[[c]]$results <-
     ds2[[c]]$results[order(-abs(ds2[[c]]$results$log2FoldChange)), ]
   labs <- head(ds2[[c]]$results, n = 15)
+  labs$genes <- rownames(labs)
 
   plots[[c]][["pb_ds2"]]$volcano <-
     ggplot(ds2[[c]]$results, aes(log2FoldChange, -log10(padj))) +
       geom_point() +
       geom_label_repel(
         data = labs,
-        aes(label = rownames(lab)),
+        aes(label = genes),
         max.overlaps = 20) +
       labs(
         title = paste(c, "Genes"),
         subtitle = "pb_ds2 method")
 }
+
 ```
 
 # Generate DEG lists and volcano plots using Seurat-Wilcox and ROC DE analysis
+Gives the differentially expressed genes
 ```{r}
 Idents(tumor) <- tumor$seurat_clusters
 deg_test <- c("wilcox", "roc")
@@ -205,12 +212,13 @@ for(t in deg_test) {
       FindMarkers(tumor, ident.1 = cluster_number) %>%
       arrange(-abs(avg_log2FC))
     labs <- head(scresults[[t]][[c]]$results, n = 15)
+    labs$genes <- rownames(labs)
 
     plots[[c]][[t]]$volcano <-
       ggplot(scresults[[t]][[c]]$results, aes(avg_log2FC, -log10(p_val_adj))) +
         geom_point() +
         geom_label_repel(data = labs,
-          aes(label = rownames(labs)),
+          aes(label = genes),
           max.overlaps = 20) +
         labs(
           title = paste(c, "Genes"),
@@ -279,24 +287,25 @@ for(m in de_methods) {
 
 # Generate plots for presenation/publication
 
+This part is not working
+
 ```{r}
 # Export panels of DEG and GSEA analyses for display
 for(c in names(clusters)) {
   for(m in de_methods) {
     plots[[c]][[m]]$panel <-
-      (rDimPlot(tumor, "Osteosarcoma Primary Tumor Cells",
-        subtitle = "Seurat-assigned clusters (optimized)") +
+      (DimPlot(tumor) +
       plots[[c]][[m]]$volcano) /
       (plots[[c]][[m]]$BP +
       plots[[c]][[m]]$MF +
       plots[[c]][[m]]$CC)
 
-    ggsave(paste0("HuOsteo/Plots/panel-", m, "-", c, ".pdf"),
+    ggsave(paste0("Plots/Primary/panel-", m, "-", c, ".pdf"),
       plots[[c]][[m]]$panel,
       device = "pdf",
       width = 18,
       height = 12,
-      units = "in",)
+      units = "in")
   }
 }
 
@@ -318,9 +327,9 @@ plots$assignment <-
     repel = T)
 
 # Save the final curated object
-qs::qsave(tumor, "osteoshark.qs")
+qs::qsave(tumor, "Seurat_objects/Primary/osteoshark.qs")
 
-ggsave("HuOsteo/Plots/UMAP-new-labels.pdf",
+ggsave("Plots/Primary/UMAP-new-labels.pdf",
   plots$assignment,
   device = "pdf",
   width = 6,
@@ -333,7 +342,7 @@ plots$density <- rFeaturePlot(tumor, "nCount_RNA",
   subtitle = "Number of counts per cell",
   max.cutoff = 50000)
 
-ggsave("HuOsteo/Plots/UMAP-count-density.pdf",
+ggsave("Plots/Primary/UMAP-count-density.pdf",
   plots$density,
   device = "pdf",
   width = 6,
@@ -346,7 +355,7 @@ plots$cell_cycle <- rDimPlot(tumor,
   title = "Cell Cycle Predictions",
   subtitle = "Based on transcriptional patterns")
 
-ggsave("HuOsteo/Plots/UMAP-cell-cycle.pdf",
+ggsave("Plots/Primary/UMAP-cell-cycle.pdf",
   plots$cell_cycle,
   device = "pdf",
   width = 6,

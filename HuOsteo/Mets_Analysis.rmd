@@ -1,0 +1,178 @@
+---
+title: "Human Osteosarcoma Metastastic"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  dev = "png",
+  fig.width = 6,
+  fig.height = 6,
+  fig.asp = NULL
+)
+
+library(rrrSingleCellUtils)
+library(Seurat)
+library(ggplot2)
+library(ggrepel)
+library(tidyverse)
+library(stringr)
+library(harmony)
+library(cowplot)
+
+set.seed(444)
+```
+
+
+## Loading Mets data from a publication
+
+```{r cars}
+met_list1 <- tibble(
+  sample_name = c("BC10", "BC17"),
+  sample_type = c("Lung_Met", "Lung_Met")
+)
+
+# Check if primary tumor directory exists and create if it doesn't
+if(!dir.exists("HuOsteo/MetsTumor")) {
+  tar_dir <- "HuOsteo/MetsTumor"
+  dir.create(tar_dir)
+}
+
+# Download, file, and extract the files from GEO
+if(!dir.exists("HuOsteo/MetsTumor/GSE152048")) {
+  tar_dir <- "HuOsteo/MetsTumor/GSE152048"
+  dir.create(tar_dir)
+  geo_pre <- "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE152nnn/GSE152048/suppl/GSE152048_"   #nolint
+  for (sample_name in met_list1$sample_name){
+    gse_path <- str_c(geo_pre, sample_name, ".matrix.tar.gz")
+    tar_file <- str_c(tar_dir, "/", sample_name, ".tar.gz ")
+    download.file(gse_path, destfile = tar_file, method = "auto")
+    untar(tar_file, exdir = tar_dir)
+    file.remove(tar_file)
+  }
+}
+
+# Create a vector of normalized Seurat objects for all GSE152048 samples
+sobj_mets_list <- list()
+
+#Seurat object list
+for(i in seq_len(nrow(met_list1))) {
+    s_name <- met_list1$sample_name[[i]]
+    sample_path <- "HuOsteo/MetsTumor/GSE152048/"
+    sobj_mets_list[[s_name]] <-
+          tenx_load_qc(paste0(path_10x    = sample_path, s_name, "/"),
+                              violin_plot = FALSE)   %>%
+    process_seurat()
+    sobj_mets_list[[s_name]]$sample_name <- met_list1$sample_name[i]
+    sobj_mets_list[[s_name]]$sample_type <- met_list1$sample_type[i]
+}
+
+```
+
+## Loading more Mets dataset from our reservoir
+```{r}
+#can add more sample if needed from the reservior by just adding the name
+mets_list <- data.frame(sample_id   = c("S0058/outs",
+                                        "S0059/outs"),
+                        sample_type = c("Lung_Met",
+                                        "Lung_Met"),
+                        sample_name = c("S0058",
+                                        "S0059")
+)
+
+#path to all the samples in cluster
+all_path <- "/gpfs0/home2/gdrobertslab/lab/Counts/"
+
+#read in using the 10X and put the data into the raw list from previous
+for (i in seq_len(nrow(mets_list))) {
+    s_id <- mets_list$sample_id[[i]]
+    s_name <- mets_list$sample_name[[i]]
+    sample_path <-
+        str_c(all_path, s_id, "/filtered_feature_bc_matrix/")
+    sobj_mets_list[[s_name]] <-
+        tenx_load_qc(path_10x    = sample_path,
+                     mt_pattern  = "^mt-|^MT-",
+                     violin_plot = FALSE) %>%
+    process_seurat()
+    sobj_mets_list[[s_name]]$sample_name <- mets_list$sample_name[i]
+    sobj_mets_list[[s_name]]$sample_type <- mets_list$sample_type[i]
+}
+```
+
+
+## Quality Control, Normalization, Scaling, Process Seurat, Visualization
+```{r}
+#Cutoff and cleaning
+try_cutoff <- tribble(~ feature, ~ min_val, ~ max_val,
+                "nCount_RNA", 0, 30000,
+                "percent.mt", 0, 10)
+
+features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")
+
+#visualize the possible cutoff and adjust accordingly
+feature_hist(sobj_mets_list$S0059, features=features, cutoff_table=try_cutoff)
+
+#Actual cutoff table
+cutoff_table <- tribble(~sample, ~min_nC, ~max_nC, ~mt.percent,
+                          "BC10",   0,     25000,  13,
+                          "BC17",   0,     40000,  13,
+                          "S0058",  0,     30000,  10,
+                          "S0059",  0,     30000,  10)
+
+qc_mets_list <- list()
+#Subset the cutoff sample
+for (i in 1:nrow(cutoff_table)) {                       # nolint
+  sample <- cutoff_table$sample[i]
+  qc_mets_list[[sample]] <- subset(sobj_mets_list[[sample]],
+                                   nCount_RNA > cutoff_table$min_nC[i] &
+                                   nCount_RNA < cutoff_table$max_nC[i] &
+                                   percent.mt < cutoff_table$mt.percent[i])
+}
+
+#Downsampling
+for (sample in names(qc_mets_list)) {
+  qc_mets_list[[sample]] <- subset(qc_mets_list[[sample]],
+                           cells = sample(Cells(qc_mets_list[[sample]]), 2000))
+}
+
+#Merge the list into a seurat object
+sobj_mets <- merge(qc_mets_list$BC10,
+                   y = c(qc_mets_list$BC17,
+                         qc_mets_list$S0058,
+                         qc_mets_list$S0059),
+                   add.cell.id = ls()[1:4],
+                   project = "sobj_mets")  %>%
+            process_seurat()
+
+#Save the object
+qs::qsave(sobj_mets, "Seurat_objects/Metastatic/sobj_mets")
+
+#Visualize in dimplot
+DimPlot(sobj_mets, group.by = "sample_name")
+DimPlot(sobj_mets, split.by = "sample_name", ncol = 2) + coord_fixed()
+```
+
+## Harmony 
+```{r}
+#Run Harmony
+harmony_sobj_mets <- RunHarmony(sobj_mets, group.by.vars = "sample_name")
+
+# harmony_sobj_mets1 <- harmony_sobj_mets %>%
+#                      RunUMAP(reduction = "harmony", dims = 1:30) %>%
+#                      FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+#                      FindClusters()
+
+# DimPlot(harmony_sobj_mets1, group.by = "sample_name")
+
+#Run the process seurat
+harmony_sobj_mets <- harmony_sobj_mets %>%
+                      process_seurat(reduction = "harmony")
+
+#Vizualization
+DimPlot(harmony_sobj_mets, group.by = "sample_name")
+DimPlot(harmony_sobj_mets, split.by = "sample_name", ncol = 2) + coord_fixed()
+
+#Saving the object
+qs::qsave(harmony_sobj_mets, "Seurat_objects/Metastatic/harmony_sobj_mets")
+```

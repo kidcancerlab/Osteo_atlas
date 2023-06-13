@@ -29,15 +29,15 @@ library(cowplot)
 
 set.seed(888)
 
-sysfonts::font_add("Arial Narrow", "ARIALN.TTF", bold = "ARIALNB.TTF")
-showtext::showtext_auto()
-
 theme_set(ggpubr::theme_pubr())
 
-plot_cols <- c("#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF",
-  "#9632B8FF",  "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF",
-  "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF",
-  "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF")
+plot_cols <- c("#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF",
+  "#B8B8B8FF",  "#3E7E3EFF", "#68A4E3FF", "#00f7ff", "#69D1F3FF",
+  "#9632B8FF",  "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF",
+  "#7D7D7DFF", "#6D1D87FF", "#07768f", "#FF6E6AFF", "#FFBB70FF",
+  "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#a5a314", "#0e171a",
+  "#ff0000", "#d81d64", "#8400ff", "#69f369", "#00f7ff",
+  "#69D1F3FF", "#ffd000", "#69f3c5")
 
 rDimPlot <- function(object, title = "Unlabeled Plot",
   label = T, pt.size = 1, ...) {
@@ -80,14 +80,13 @@ here reloading) the "comb.qs" object.
 
 ```{r}
 # Start from this stopping point - merged and harmony aligned
-comb <- qs::qread("HuOsteo/comb.qs")
-
+prim_harmony_comb <- qs::qread("Seurat_objects/Primary/prim_harmony_comb.qs")
 # Plot the integrated samples
-rDimPlot(comb, "Primary Tumors (integrated)", repel = T)
+DimPlot(prim_harmony_comb)
 
-rDimPlot(comb, "Primary Tumors (integrated)", group.by = "src")
+DimPlot(prim_harmony_comb, group.by = "src")
 
-rDimPlot(comb, "Primary Tumors (integrated)", split.by = "src", ncol = 4)
+DimPlot(prim_harmony_comb, split.by = "src", ncol = 4)
 ```
 
 ## Interim conclusions
@@ -177,7 +176,7 @@ well and are fairly balanced, though tweaking can be helpful in certain situatio
 # Evaluate for cell cycle
 
 ```{r}
-comb <- kill_cc(comb)
+comb <- kill_cc(prim_harmony_comb)
 ```
 
 # Begin cell type annotation
@@ -239,11 +238,13 @@ if (!file.exists("selection.rds")) {
   selection <- CellSelector(p)
   saveRDS(selection, "selection.rds")
 }
+
 selection <- readRDS("selection.rds")
 Idents(comb) <- comb$seurat_clusters
 Idents(comb, cells = selection) <- "Tumor"
 
-rDimPlot(comb, "Isolated (likely) tumor cells")
+DimPlot(comb)
+
 ```
 
 Focus in on a module that defines the tumor cells so that we can isolate them.
@@ -255,7 +256,7 @@ tmarks_roc <- FindMarkers(comb, ident.1 = "Tumor",
   test.use = "roc")
 tmarks_roc_labs <- tmarks_roc[
   tmarks_roc$power > .75 &
-  abs(tmarks_roc$avg_log2FC) > 2.2, ]
+  abs(tmarks_roc$avg_log2FC) > 2, ]
 
 tmarks_roc_labs$gene <- rownames(tmarks_roc_labs)
 ggplot(tmarks_roc, aes(avg_log2FC, power)) +
@@ -267,7 +268,8 @@ ggplot(tmarks_roc, aes(avg_log2FC, power)) +
 os_sig <- rownames(tmarks_roc_labs[
   tmarks_roc_labs$avg_log2FC > 0, ])
 comb <- AddModuleScore(comb, os_sig, name = "os_score")
-rFeaturePlot(comb, "OS Signature Score", features = "os_score1",
+
+FeaturePlot(comb, features = "os_score1",
   min.cutoff = 1, max.cutoff = 5)
 ```
 
