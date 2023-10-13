@@ -53,3 +53,10 @@ HuOsteo/PrimaryTumor/*
 # Plots
 *.png
 HuOsteo/Plots/*
+input
+output
+BC5
+HuOsteo/MetsTumor/BC10
+HuOsteo/MetsTumor/BC17
+HuOsteo/MetsTumor/GSE152048/BC17
+HuOsteo/MetsTumor/GSE152048/BC10
