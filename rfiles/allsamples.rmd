@@ -1,0 +1,96 @@
+---
+title: "Human Osteosarcoma Metastastic"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  dev = "png",
+  fig.width = 6,
+  fig.height = 6,
+  fig.asp = NULL
+)
+
+library(rrrSingleCellUtils)
+library(Seurat)
+library(ggrepel)
+library(tidyverse)
+library(stringr)
+library(harmony)
+library(cowplot)
+
+set.seed(444)
+
+```
+
+## Loading Mets data from a publication
+```{r}
+detail_subset <- read_tsv("sample_details.txt", show_col_types = FALSE) %>%
+    filter(tumor_type == "metastatic" &
+           species == "patient" &
+           data_source != "ours" &
+           location == "lung")
+
+# Download, file, and extract the files from GEO
+for (i in 1:nrow(detail_subset)) {                                     #nolint
+    folder <- "Seurat_objects/Patient/metastatic/"
+    sample_name <- detail_subset$sample_name[i]
+    site_link <- detail_subset$site_link[i]
+    entire_path <- str_c(site_link, sample_name, ".matrix.tar.gz")
+    tar_file <- str_c(folder, sample_name, ".tar.gz ")
+    download.file(entire_path, destfile = tar_file, method = "auto")
+    untar(tar_file, exdir = folder)
+    file.remove(tar_file)
+}
+
+sobj_list <- list()
+#Seurat object list
+for (i in seq_len(nrow(detail_subset))) {
+    sample_name <- detail_subset$sample_name[i]
+    folder <- "Seurat_objects/Patient/metastatic/"
+    sobj_list[[sample_name]] <-
+          tenx_load_qc(paste0(path_10x = folder, sample_name, "/"),
+                              violin_plot = FALSE) %>%
+    process_seurat()
+    sobj_list[[sample_name]]$sample_name <- detail_subset$sample_name[i]
+    sobj_list[[sample_name]]$tumor_type <- detail_subset$tumor_type[i]
+    sobj_list[[sample_name]]$data_type <- detail_subset$data_type[i]
+}
+
+```
+
+## Loading more Mets dataset from our reservoir
+```{r}
+detail_subset <- read_tsv("sample_details.txt", show_col_types = FALSE) %>%
+    filter(tumor_type == "metastatic" &
+           species == "patient" &
+           data_source == "ours" &
+           location == "lung")
+
+species_pattern_list <-
+    list(patient = "",
+         xenograft = c("^hg19_", "^mm10_"),
+         mousemodel = "")
+
+species_pattern <- ""
+
+#read in using the 10X and put the data into the raw list from previous
+for (i in seq_len(nrow(detail_subset))) {
+    sample_path <- detail_subset$sample_path[[i]]
+    sample_name <- detail_subset$sample_name[[i]]
+    pattern <- species_pattern_list[[detail_subset$species[[i]]]]
+    path <- "/gpfs0/home2/gdrobertslab/lab/Counts/"
+    full_path <- str_c(path, sample_path, "/filtered_feature_bc_matrix/")
+
+    # loop over pattern
+    sobj_list[[s_name]] <-
+        tenx_load_qc(path_10x = full_path,
+                     species_pattern = pattern,
+                     violin_plot = FALSE)  %>%
+        process_seurat()
+    sobj_list[[species]][[tumor_type]][[sample_name]][[hum/mouse]]$sample_name <- detail_subset$sample_name[i]
+    sobj_list[[sample_name]]$tumor_type <- detail_subset$tumor_type[i]
+    sobj_list[[sample_name]]$data_type <- detail_subset$data_type[i]
+}
+```
