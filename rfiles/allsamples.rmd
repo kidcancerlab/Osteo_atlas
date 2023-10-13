@@ -1,17 +1,9 @@
 ---
-title: "Human Osteosarcoma Metastastic"
+title: "Osteosarcoma"
 output: github_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(
-  echo = TRUE,
-  dev = "png",
-  fig.width = 6,
-  fig.height = 6,
-  fig.asp = NULL
-)
-
 library(rrrSingleCellUtils)
 library(Seurat)
 library(ggrepel)
@@ -19,78 +11,1811 @@ library(tidyverse)
 library(stringr)
 library(harmony)
 library(cowplot)
-
+library(clustree)
 set.seed(444)
-
 ```
 
-## Loading Mets data from a publication
+## Download data from publications online
 ```{r}
+#download from GSE152048
 detail_subset <- read_tsv("sample_details.txt", show_col_types = FALSE) %>%
-    filter(tumor_type == "metastatic" &
-           species == "patient" &
-           data_source != "ours" &
-           location == "lung")
+    filter(data_source == "GSE152048")
 
 # Download, file, and extract the files from GEO
 for (i in 1:nrow(detail_subset)) {                                     #nolint
-    folder <- "Seurat_objects/Patient/metastatic/"
+    folder <- "input/downloads/"
     sample_name <- detail_subset$sample_name[i]
     site_link <- detail_subset$site_link[i]
     entire_path <- str_c(site_link, sample_name, ".matrix.tar.gz")
-    tar_file <- str_c(folder, sample_name, ".tar.gz ")
-    download.file(entire_path, destfile = tar_file, method = "auto")
+    tar_file <- str_c(folder, sample_name, ".tar.gz")
+    system(paste0("wget ", entire_path, " -O ", tar_file))
     untar(tar_file, exdir = folder)
     file.remove(tar_file)
 }
 
-sobj_list <- list()
-#Seurat object list
-for (i in seq_len(nrow(detail_subset))) {
+
+#download from GSE162454
+detail_subset <- read_tsv("sample_details.txt", show_col_types = FALSE) %>%
+    filter(data_source == "GSE162454")
+
+for (i in 1:nrow(detail_subset)) {                                  #nolint
+    folder <- "input/downloads/"
+    tar_file <- str_c(folder, "GSE162454.tar.gz ")
+    site_link <- detail_subset$site_link[i]
     sample_name <- detail_subset$sample_name[i]
-    folder <- "Seurat_objects/Patient/metastatic/"
-    sobj_list[[sample_name]] <-
-          tenx_load_qc(paste0(path_10x = folder, sample_name, "/"),
-                              violin_plot = FALSE) %>%
-    process_seurat()
-    sobj_list[[sample_name]]$sample_name <- detail_subset$sample_name[i]
-    sobj_list[[sample_name]]$tumor_type <- detail_subset$tumor_type[i]
-    sobj_list[[sample_name]]$data_type <- detail_subset$data_type[i]
+    download.file(site_link, destfile = tar_file, method = "auto")
+    untar(tar_file, exdir = folder)
+    file.remove(tar_file)
+    bfile <- str_c(detail_subset$pre[detail_subset$sample_name == sample_name], sample_name, "_barcodes.tsv.gz") #nolint
+    ffile <- str_c(detail_subset$pre[detail_subset$sample_name == sample_name], sample_name, "_features.tsv.gz") #nolint
+    mfile <- str_c(detail_subset$pre[detail_subset$sample_name == sample_name], sample_name, "_matrix.mtx.gz") #nolint
+    samp_dir <- str_c(folder, sample_name)
+    dir.create(samp_dir)
+    file.rename(str_c(folder, "/", bfile),
+      str_c(samp_dir, "/", "barcodes.tsv.gz"))
+    file.rename(str_c(folder, "/", ffile),
+      str_c(samp_dir, "/", "features.tsv.gz"))
+    file.rename(str_c(folder, "/", mfile),
+      str_c(samp_dir, "/", "matrix.mtx.gz"))
+  }
+
+
+
+#download from GSE169396
+detail_subset <- read_tsv("sample_details.txt", show_col_types = FALSE) %>%
+    filter(data_source == "GSE169396")
+
+for (i in 1:nrow(detail_subset)) {                                  #nolint
+    folder <- "input/downloads/"
+    tar_file <- str_c(folder, "GSE169396.tar.gz ")
+    site_link <- detail_subset$site_link[i]
+    sample_name <- detail_subset$sample_name[i]
+    download.file(site_link, destfile = tar_file, method = "auto")
+    untar(tar_file, exdir = folder)
+    file.remove(tar_file)
+    bfile <- str_c(detail_subset$pre[detail_subset$sample_name == sample_name], sample_name, "_barcodes.tsv.gz") #nolint
+    ffile <- str_c(detail_subset$pre[detail_subset$sample_name == sample_name], sample_name, "_features.tsv.gz") #nolint
+    mfile <- str_c(detail_subset$pre[detail_subset$sample_name == sample_name], sample_name, "_matrix.mtx.gz") #nolint
+    samp_dir <- str_c(folder, sample_name)
+    dir.create(samp_dir)
+    file.rename(str_c(folder, "/", bfile),
+      str_c(samp_dir, "/", "barcodes.tsv.gz"))
+    file.rename(str_c(folder, "/", ffile),
+      str_c(samp_dir, "/", "features.tsv.gz"))
+    file.rename(str_c(folder, "/", mfile),
+      str_c(samp_dir, "/", "matrix.mtx.gz"))
+  }
+
+
+
+
+```
+
+## reading dataset from our reservoir and download
+```{r}
+set.seed(75454)
+sample_details <- read_tsv("sample_details.txt", show_col_types = FALSE)
+
+sample_details$sp_pattern <-
+    str_replace(sample_details$sp_pattern, "nothing", "")
+
+#Seurat objects and save individual qs object
+obj <- parallel::mclapply(seq_len(nrow(sample_details)), function(i) {
+    sample_name <- sample_details$sample_name[i]
+    sample_path <- sample_details$sample_path[i]
+    species <- sample_details$species[i]
+    tumor_type <- sample_details$tumor_type[i]
+    data_source <- sample_details$data_source[i]
+    sp_pattern <- sample_details$sp_pattern[i]
+    organism <- sample_details$organism[i]
+    download_path <- "input/downloads/"
+    ours_path <- "/gpfs0/home2/gdrobertslab/lab/Counts/"
+
+    if (data_source == "ours") {
+        path_10x <- paste0(path_10x = ours_path,
+                           sample_path,
+                           "/filtered_feature_bc_matrix/")
+    } else {
+        path_10x <- paste0(path_10x = download_path, sample_name, "/")
+    }
+        sobj <- tenx_load_qc(path_10x = path_10x,
+                             species_pattern = sp_pattern,
+                             violin_plot = FALSE) %>%
+            process_seurat()
+        sobj$sample_name <- sample_details$sample_name[i]
+        sobj$tumor_type <- sample_details$tumor_type[i]
+        sobj$data_type <- sample_details$data_type[i]
+        sobj$model <- sample_details$model[i]
+        sobj$organism <- sample_details$organism[i]
+        sobj$location <- sample_details$location[i]
+        qs::qsave(sobj, str_c("output/seurat_objects/single_sobj", "/",
+                              species, "/",
+                              tumor_type, "/",
+                              sample_name,
+                              organism, ".qs"))
+    return(0)
+}, mc.cores = 10)
+
+
+
+# # individual QC numbers
+# obj <- qs::qread("output/seurat_objects/single_sobj/xenograft/metastatic/S0254mouse.qs") #nolint
+
+# # Cutoff and cleaning
+# try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
+#                       "nCount_RNA", 0,        30000,
+#                       "percent.mt", 0,        15)
+
+# features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")    #nolint
+
+# # visualize the possible cutoff and adjust accordingly
+# feature_hist(sobject = obj,
+#              features = features,                         # nolint
+#              cutoff_table = try_cutoff)
+
+
+#quality control and downsampling and saving the merged sobj
+what <- parallel::mclapply(unique(sample_details$unique), function(item) {
+    tmp_df <- subset(sample_details, subset = (unique == item))
+    temp_list <- list()
+    for (i in seq_len(nrow(tmp_df))) {
+        species <- tmp_df$species[i]
+        tumor_type <- tmp_df$tumor_type[i]
+        sample_name <- tmp_df$sample_name[i]
+        group_obj <- tmp_df$unique[i]
+        organism <- tmp_df$organism[i]
+        sobj <- qs::qread(str_c("output/seurat_objects/single_sobj/",
+                                species, "/",
+                                tumor_type, "/",
+                                sample_name,
+                                organism, ".qs")) %>%
+            subset(nCount_RNA < tmp_df$ncount_max[i] &
+                percent.mt < tmp_df$mt_percent[i])
+            temp_list[[sample_name]] <- sobj
+            temp_list[[sample_name]] <-
+                    subset(x = temp_list[[sample_name]],
+                    cells = sample(Cells(temp_list[[sample_name]]),
+                            min(4000, length(Cells(temp_list[[sample_name]])))))
+    }
+    merged_sobj <- merge(x = temp_list[[1]],
+                                y = temp_list[2:length(temp_list)],
+                                add.cell.id = names(temp_list)) %>%
+                    process_seurat()
+    qs::qsave(merged_sobj, str_c("output/seurat_objects/comb_sobjs/",
+                                    item,
+                                    ".qs"))
+    run_harmony <- RunHarmony(object = merged_sobj,
+                              group.by.vars = c("sample_name", "model"),
+                              theta = c(3, 3))
+    run_harmony <- process_seurat(sobject = run_harmony,
+                                  reduction = "harmony")
+    res_score <- optimize_silhouette(sobject = run_harmony,
+                         test_res = seq(0.1, 0.9, by = 0.1),
+                         summary_plot = FALSE) %>%
+        filter(sil_vals == max(sil_vals)) %>%
+        select(res_vals)
+    run_harmony <- FindClusters(run_harmony,
+                   resolution = res_score)
+    qs::qsave(run_harmony, str_c("output/seurat_objects/harmony_sobjs/",
+                                    item,
+                                    ".qs"))
+    return(item)
+}, mc.cores = 10)
+
+```
+
+```{r}
+
+sobj <- qs::qread("output/seurat_objects/annotated_sobjs/mm_prim.qs")
+
+#silhouette score
+x <- optimize_silhouette(sobject = sobj,
+                         test_res = seq(0.1, 0.9, by = 0.1),
+                         summary_plot = TRUE) %>%
+     filter(sil_vals == max(sil_vals)) %>% select(res_vals)
+
+#clustree
+resolution_range <- seq(from = 0, to = 1, by = 0.1)
+
+har_sobj <- FindClusters(har_sobj,
+                         resolution = resolution_range)
+
+tree <- clustree(har_sobj,
+                 prefix = "RNA_snn_res.")
+
+x <- DimPlot(har_sobj, group.by = "seurat_clusters", label = T, repel = T) + NoLegend()
+
+y <- DimPlot(har_sobj, group.by = "annotations", label = T, repel = T) 
+
+patchwork::wrap_plots(tree, x, y)
+
+
+#recursive cluster
+source("/gpfs0/home2/gdrobertslab/lab/Analysis/Matt/10xRNAatac/test1/recurl.R")
+
+xyz <- recurluster(sobj = sobj, max_level = 2, do_plots = F, parallel = T)
+
+xyz <- process_seurat(xyz)
+
+DimPlot(xyz, group.by = c("clust_1", "annotations", "sample_name"), label = TRUE)
+
+
+devtools::install_github("kidcancerlab/rrrSingleCellUtils", build_vignettes=TRUE)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Cell type annotaton function
+```{r}
+#loading the normal lungblood ref downloaded
+human_lung <- qs::qread("input/downloads/normal_lung.qs")
+
+human_lung$free_annotation <-
+    str_replace_all(human_lung$free_annotation, c("/" = "_",
+                                                  "\\+" = "_plus"))
+
+human_lung$free_annotation <-
+    stringr::str_replace_all(human_lung$free_annotation,
+                              c("Alveolar Epithelial Type 1" = "Alveolar Epithelial",  #nolint
+                                "Alveolar Epithelial Type 2" = "Alveolar Epithelial",  #nolint
+                                "Basophil_Mast 1" = "Basophil_Mast",
+                                "Basophil_Mast 2" = "Basophil_Mast",
+                                "Bronchial Vessel 1" = "Bronchial Vessel",
+                                "Bronchial Vessel 2" = "Bronchial Vessel",
+                                "IGSF21_plus Dendritic" = "Dendritic cells",
+                                "Myeloid Dendritic Type 1" = "Myeloid Dendritic",   #nolint
+                                "Myeloid Dendritic Type 2" = "Myeloid Dendritic",   #nolint
+                                "Natural Killer" = "NK cells",
+                                "Natural Killer T" = "NKT",
+                                "NK cells T" = "NKT",
+                                "CD4_plus Memory/Effector T" = "CD4+ T cells",
+                                "CD4_plus Naive T" = "CD4+ T cells",
+                                "CD8_plus Memory_Effector T" = "CD8+ T cells",
+                                "CD8_plus Naive T" = "CD8+ T cells",
+                                "Proliferating NK_T" = "NKT",
+                                "TREM2_plus Dendritic" = "Dendritic cells",
+                                "Proliferating Macrophage" = "Macrophage",
+                                "Nonclassical Monocyte" = "Monocytes",
+                                "Classical Monocyte" = "Monocytes"))
+
+
+#camilles paper mouse lung
+mouse_lung <- qs::qread("input/downloads/mouse_lung.qs")
+
+mouse_lung$CellType <-
+            str_replace_all(mouse_lung$CellType, c("/" = "_",
+                                                   "\\+" = "_plus",
+                                                   "-" = "_"))
+
+mouse_lung$CellType <-
+    stringr::str_replace_all(mouse_lung$CellType,
+                            c("Col14a1_plus fibroblast" = "Fibroblasts",
+                              "Col13a1_plus fibroblast" = "Fibroblasts",
+                              "AT1" = "AT",
+                              "AT2 1" = "AT",
+                              "AT2 2" = "AT",
+                              "B cell 1" = "B cells",
+                              "B cell 2" = "B cells",
+                              "Cap_a" = "Cap",
+                              "CD4 T cell 1" = "CD4",
+                              "CD4 T cell 2" = "CD4",
+                              "CD8 T cell 1" = "CD8",
+                              "CD8 T cell 2" = "CD8",
+                              "DC1" = "Dendritic cells",
+                              "DC2" = "Dendritic cells",
+                              "gd T cell" = "Tgd",
+                              "Neut 1" = "Neutrophils",
+                              "Neut 2" = "Neutrophils",
+                              "NK cell" = "NK cells",
+                              "Pericyte 1" = "Pericytes",
+                              "Pericyte 2" = "Pericytes",
+                              "Mast Ba2" = "Mast_Basophils",
+                              "Mono" = "Monocytes"))
+
+#function with mouse and human lung
+annotate <- function(sobject,
+                     species = "",
+                     ref,
+                     labels,
+                     aggr_ref = FALSE,
+                     label_type = "label.main",
+                     ...) {
+    if (species == "human") {
+        hpca <- celldex::HumanPrimaryCellAtlasData()
+        huim <- celldex::MonacoImmuneData()
+        hpca$label.main <-
+            stringr::str_replace_all(hpca$label.main,
+                                     c("T_cells" = "T cells",
+                                       "B_cell" = "B cells",
+                                       "NK_cell" = "NK cells",
+                                       "Monocyte" = "Monocytes",
+                                       "DC" = "Dendritic cells"))
+        ref <- list(hpca,
+                    huim)
+        labels <- list(hpca[[label_type]],
+                      huim[[label_type]])
+    } else if (species == "mouse") {
+        mord <- celldex::MouseRNAseqData()
+        moim <- celldex::ImmGenData()
+        moim$label.main <-
+            stringr::str_replace_all(moim$label.main,
+                                    c("B cells, pro" = "B cells",
+                                      "DC" = "Dendritic cells"))
+        ref <- list(mord,
+                    moim)
+        labels <- list(mord[[label_type]],
+                       moim[[label_type]])
+    } else if (species == "human_lung") {
+        hpca <- celldex::HumanPrimaryCellAtlasData()
+        hpca$label.main <-
+            stringr::str_replace_all(hpca$label.main,
+                                     c("T_cells" = "T cells",
+                                       "B_cell" = "B cells",
+                                       "NK_cell" = "NK cells",
+                                       "Monocyte" = "Monocytes",
+                                       "DC" = "Dendritic cells"))
+        huim <- celldex::MonacoImmuneData()
+        ref3 <- GetAssayData(human_lung)
+        ref <- list(hpca,
+                    huim,
+                    ref3)
+        labels <- list(hpca[[label_type]],
+                       huim[[label_type]],
+                       human_lung$free_annotation)
+    } else if (species == "mouse_lung") {
+        mord <- celldex::MouseRNAseqData()
+        moim <- celldex::ImmGenData()
+        ref3 <- GetAssayData(mouse_lung)
+        moim$label.main <-
+            stringr::str_replace_all(moim$label.main,
+                                    c("B cells, pro" = "B cells",
+                                      "DC" = "Dendritic cells"))
+        ref <- list(mord,
+                    moim,
+                    ref3)
+        labels <- list(mord[[label_type]],
+                       moim[[label_type]],
+                       mouse_lung$CellType)
+    }
+    annotation <-
+        SingleR::SingleR(test = Seurat::as.SingleCellExperiment(sobject),
+                         ref = ref,
+                         labels = labels,
+                         aggr.ref = aggr_ref,
+                         ...)
+    sobject$annotations <- annotation$labels
+    sobject$cell_scores <-
+        apply(X = annotation$scores,
+              MARGIN = 1,
+              function(x) max(x, na.rm = TRUE))
+    return(sobject)
 }
 
 ```
 
-## Loading more Mets dataset from our reservoir
+
+## Annotate all the datasets
 ```{r}
-detail_subset <- read_tsv("sample_details.txt", show_col_types = FALSE) %>%
-    filter(tumor_type == "metastatic" &
-           species == "patient" &
-           data_source == "ours" &
-           location == "lung")
+#make table for what ref to use
+refs <- tribble(~sobj,            ~ref,
+               "patient_prim",    "human",
+               "normal_bone",     "human",
+               "patient_mets",    "human_lung",
+               "xeno_prim_human", "human",
+               "xeno_mets_human", "human",
+               "xeno_prim_mouse", "mouse",
+               "xeno_mets_mouse", "mouse",
+               "mm_prim",         "mouse",
+               "mm_mets",         "mouse_lung")
 
-species_pattern_list <-
-    list(patient = "",
-         xenograft = c("^hg19_", "^mm10_"),
-         mousemodel = "")
+#annotate using the function parallelly
+what <- parallel::mclapply(seq_len(nrow(refs)), function(i) {
+    sobj <- refs$sobj[i]
+    ref <- refs$ref[i]
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                              sobj,
+                              ".qs"))
+    ann_sobj <- annotate(sobject = object,
+                         species = ref,
+                         aggr_ref = TRUE)
+    cluster_celltypes <-
+        table(ann_sobj$seurat_clusters, ann_sobj$annotations) %>% 
+        as.data.frame() %>%
+        group_by(Var1) %>%
+        arrange(desc(Freq), .by_group = TRUE) %>%
+        slice_head(n=1)
+    ann_sobj$new <- ann_sobj$seurat_clusters
+    for (item in seq_len(nrow(cluster_celltypes))) {
+        seurat_clust <- cluster_celltypes$Var1[item] %>%
+            as.character()
+        celltype <- cluster_celltypes$Var2[item] %>%
+            as.character()
+        ann_sobj$new <- str_replace_all(string = ann_sobj$new,
+                                        pattern = seurat_clust,
+                                        replacement = celltype)
+    }
+    # wanted_cells <- table(ann_sobj$annotations) %>%
+    #     as.data.frame() %>%
+    #     filter(Freq > 30)
+    # Idents(ann_sobj) <- ann_sobj$annotations
+    # filtered_ann_sobj <- subset(x = ann_sobj,
+    #                             idents = wanted_cells$Var1)
+    qs::qsave(ann_sobj, str_c("output/seurat_objects/harmony_sobjs/",
+                                       sobj,
+                                       ".qs"))
+    print(str_c(ref, " ", "annotated", " ", sobj))
+}, mc.cores = 10)
 
-species_pattern <- ""
+```
 
-#read in using the 10X and put the data into the raw list from previous
-for (i in seq_len(nrow(detail_subset))) {
-    sample_path <- detail_subset$sample_path[[i]]
-    sample_name <- detail_subset$sample_name[[i]]
-    pattern <- species_pattern_list[[detail_subset$species[[i]]]]
-    path <- "/gpfs0/home2/gdrobertslab/lab/Counts/"
-    full_path <- str_c(path, sample_path, "/filtered_feature_bc_matrix/")
 
-    # loop over pattern
-    sobj_list[[s_name]] <-
-        tenx_load_qc(path_10x = full_path,
-                     species_pattern = pattern,
-                     violin_plot = FALSE)  %>%
-        process_seurat()
-    sobj_list[[species]][[tumor_type]][[sample_name]][[hum/mouse]]$sample_name <- detail_subset$sample_name[i]
-    sobj_list[[sample_name]]$tumor_type <- detail_subset$tumor_type[i]
-    sobj_list[[sample_name]]$data_type <- detail_subset$data_type[i]
+## SNVs calling
+```{r}
+#Using snvs to differentiate cancer cells
+#for (item in unique(sample_details$unique)) {
+temp_df <- subset(sample_details, subset = (unique == "patient_mets"))
+sobj <- qs::qread("output/seurat_objects/harmony_sobjs/patient_mets.qs")
+control_celltypes <- c("Dendritic cells", "Macrophage")
+snv_sobjs <- list()
+for (i in seq_len(nrow(temp_df))) {
+    if (sample_name starts_with("S0")) {
+        sample_path <- temp_df$sample_path[i]
+        sample_name <- temp_df$sample_name[i]
+        Idents(sobj) <- sobj$sample_name
+        new_sobj <- subset(sobj, ident = sample_name)
+        normal_clusters <-
+            match_celltype_clusters(sobject = new_sobj,
+                                    normal_celltypes = control_celltypes,
+                                    cluster_col = "seurat_clusters",
+                                    celltype_col = "new")
+        c_b_t <-
+            new_sobj@meta.data %>%
+            select(seurat_clusters) %>%
+            dplyr::rename(cell_group = seurat_clusters) %>%
+            rownames_to_column("cell_barcode") %>%
+            as_tibble()
+        if (sample_path == sample_name) {
+            c_b_t <- c_b_t %>% mutate(bam_file = paste0("/home/gdrobertslab/lab/Counts/", #nolint
+                                                        str_remove(cell_barcode, "_.*"),   #nolint
+                                                        "/possorted_genome_bam.bam"),    #nolint
+                                        cell_barcode = str_remove(cell_barcode, ".+_"))    #nolint
+        } else {
+            c_b_t <- c_b_t %>% mutate(bam_file = paste0("/home/gdrobertslab/lab/Counts/",   #nolint
+                                                        str_remove(cell_barcode, "_.*"),  #nolint
+                                                        "/outs/possorted_genome_bam.bam"),   #nolint
+                                        cell_barcode = str_remove(cell_barcode, ".+_"))    #nolint
+        }
+        snp_tree <-
+            get_snp_tree(cellid_bam_table = c_b_t,
+                            ploidy = "GRCh37",
+                            ref_fasta = "/home/gdrobertslab/lab/GenRef/10x-human/fasta/genome.fa",     #nolint
+                            min_depth = 5,
+                            temp_dir = "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/snv_calling/temp_dir",   #nolint
+                            sbatch_base = "new_sobj",
+                            slurm_base = "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/snv_calling/slurm_base",   #nolint
+                            min_sites_covered = 1000,
+                            cleanup = FALSE)
+        png(str_c("output/snv_calling/snv_trees/",
+                    sample_name, ".png")
+            width = 2500,
+            height = 2500,
+            res = 300)
+        plot(snp_tree)
+        dev.off()
+
+        snp_sobj <-
+            label_tree_groups(sobject = new_sobj,
+                                dist_tree = snp_tree,
+                                group_col_name = "seurat_clusters",
+                                normal_groups = normal_clusters,
+                                cut_n_groups = 2)
+        
+        snv_sobjs[[sample_name]] <- snp_sobj
+
+        png("testTwoSobjOutput2.png",
+            width = 7000,
+            height = 2500,
+            res = 300)
+        DimPlot(object = snp_sobj,
+                group.by = c("snp_tumor_call",
+                                "new"),
+                label = TRUE,
+                repel = TRUE) +
+            NoLegend()
+        dev.off()
+
+    } else {
+        print(str_c(sample_name, " does not have a bam file"))
+    }
 }
+
+
+
+file.exists("allsamples.rmd")                                                                                    
+[1] FALSE
+> file.exists("Rfiles/allsamples.rmd")
+
+file.notexists   
+
+
+sobj <- qs::qread("output/seurat_objects/harmony_sobjs/patient_mets.qs")
+
+Idents(sobj) <- sobj$new
+
+DimPlot(sobj, split.by = "sample_name", label = T, ncol = 2) +
+    patchwork::plot_annotation(title =  "patient_mets")
+
+
+DimPlot(sobj, group.by = c("seurat_clusters", "new"), label = T, ncol = 2) +
+    patchwork::plot_annotation(title =  "patient_mets")
+
+
+normal_clusters <-
+    match_celltype_clusters(sobject = sobj,
+                            normal_celltypes = control_celltypes,
+                            cluster_col = "seurat_clusters",
+                            celltype_col = "new")
+
+c_b_t <-
+    sobj@meta.data %>%
+    select(seurat_clusters) %>%
+    dplyr::rename(cell_group = seurat_clusters) %>%
+    rownames_to_column("cell_barcode") %>%
+    as_tibble() %>%
+    mutate(bam_file = paste0("/home/gdrobertslab/lab/Counts/",
+                             str_remove(cell_barcode, "_.*"),
+                             "/outs/possorted_genome_bam.bam"),
+           cell_barcode = str_remove(cell_barcode, ".+_"))
+
+snp_tree <-
+    get_snp_tree(cellid_bam_table = c_b_t,
+                 ploidy = "GRCh37",
+                 ref_fasta = "/home/gdrobertslab/lab/GenRef/10x-human/fasta/genome.fa",
+                 min_depth = 5,
+                 temp_dir = "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/snv_calling/temp_dir",
+                 sbatch_base = "sobj",
+                 slurm_base = "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/snv_calling/slurm_base",
+                 min_sites_covered = 1000,
+                 cleanup = FALSE)
+
+
+````
+
+
+
+## Split cancer vs the stroma - here
+label potential tumor cell and then split the object, run harmony and save
+
+```{r}
+refs <- tribble(~sobj,            ~split,   ~has_multiomics,
+               "patient_prim",    "yes",    "no",
+               "normal_bone",     "no",     "no",
+               "patient_mets",    "yes",    "yes",
+               "xeno_prim_human", "no",     "yes",
+               "xeno_mets_human", "no",     "no",
+               "xeno_prim_mouse", "no",     "yes",
+               "xeno_mets_mouse", "no",     "no",
+               "mm_prim",         "yes",    "no",
+               "mm_mets",         "yes",    "no")
+
+cancer_celltypes <- list(patient_prim = c("iPS_cells",
+                                         "MSC",
+                                         "Neurons",
+                                         "Smooth_muscle_cells",
+                                         "Tissue_stem_cells",
+                                         "Fibroblasts",
+                                         "Chondrocytes",
+                                         "Osteoblasts"),
+                        normal_bone = c(),
+                        patient_mets = c("Myofibroblast",
+                                         "MSC",
+                                         "Neurons",
+                                         "Tissue_stem_cells",
+                                         "Osteoblasts",
+                                         "Fibromyocyte",
+                                         "Chondrocytes",
+                                         "iPS_cells",
+                                         "Pericyte",
+                                         "Smooth_muscle_cells",
+                                         "Airway Smooth Muscle",
+                                         "Alveolar Fibroblast",
+                                         "Adventitial Fibroblast"),
+                        xeno_prim_human = c(),
+                        xeno_mets_human = c(),
+                        xeno_prim_mouse = c(),
+                        xeno_mets_mouse = c(),
+                        mm_prim = c("Fibroblasts"),
+                        mm_mets = c("Fibroblasts"))
+
+tumor_vs_stroma <- parallel::mclapply(seq_len(nrow(refs)), function(item) {
+    sobj <- refs$sobj[item]
+    split <- refs$split[item]
+    multiomics <- refs$has_multiomics[item]
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                              sobj,
+                              ".qs"))
+    for (cell in cancer_celltypes[[sobj]]) {
+        object$annotations <- str_replace_all(string = object$annotations,
+                                              pattern = cell,
+                                              replacement = "cancer_cells")}
+    qs::qsave(object, str_c("output/seurat_objects/annotated_sobjs/",
+                            sobj,
+                            ".qs"))
+    if (split == "yes") {
+        normal_cells <- table(object$annotations) %>%
+        as.data.frame() %>%
+        filter(Var1 != "cancer_cells")
+        Idents(object) <- object$annotations
+        normal_obj <- subset(x = object,
+                             idents = normal_cells$Var1) %>%
+            process_seurat()
+        normal_obj <- RunHarmony(object = normal_obj,
+                                 group.by.vars = "sample_name")
+        normal_obj <- normal_obj %>%
+            process_seurat(reduction = "harmony")
+        qs::qsave(normal_obj, str_c("output/seurat_objects/tumor_vs_stroma/",   #nolint
+                                    sobj,
+                                    "_normal",
+                                    ".qs"))
+        Idents(object) <- object$annotations
+        cancer_obj <- subset(x = object,
+                             idents = "cancer_cells")
+        if (multiomics == "yes") {
+            cancer_obj <- RunHarmony(object = cancer_obj,
+                                     group.by.vars = c("sample_name", "model", "data_type"),  #nolint
+                                     theta = c(3, 3, 3))
+        } else {
+            cancer_obj <- RunHarmony(object = cancer_obj,
+                                     group.by.vars = c("sample_name", "model"),
+                                     theta = c(3, 3))
+        }
+        cancer_obj <- cancer_obj %>%
+            process_seurat(reduction = "harmony",
+                           resolution = 0.05)
+        qs::qsave(cancer_obj, str_c("output/seurat_objects/tumor_vs_stroma/",  #nolint
+                                    sobj,
+                                    "_tumor",
+                                    ".qs"))
+    } else {
+        qs::qsave(object, str_c("output/seurat_objects/tumor_vs_stroma/",
+                                sobj,
+                                ".qs"))
+    }
+    print(str_c(sobj, " labelled with cancer cells and subsetted"))
+}, mc.cores = parallelly::availableCores())
+
+
+```
+
+## DEGs and GSEA plot
+
+```{r}
+mm_prim_tumor <- qs::qread("output/seurat_objects/tumor_vs_stroma/mm_prim_tumor.qs")
+
+DimPlot(mm_prim_tumor, group.by = c("sample_name", "seurat_clusters", "annotations"))
+
+run_degs <- function(sobject,
+                     group_by = "",
+                     prefix = "") {
+    if (group_by == "seurat_clusters") {
+        sobject$pseudobulk_col <- stringr::str_c(sobject$sample_name,
+                                 "-",
+                                 sobject$seurat_clusters)
+    } else if (group_by == "annotations") {
+        sobject$annotations <-
+            stringr::str_replace_all(sobject$annotations, " ", "")
+        sobject$pseudobulk_col <- stringr::str_c(sobject$sample_name,
+                                 "-",
+                                 sobject$annotations)
+    }
+    pseudobulk <- Seurat::AggregateExpression(object = sobject,
+                                      group.by = "pseudobulk_col",
+                                      slot = "counts")[[1]]
+    deseq_coldata <- data.frame(pseudobulk_group = colnames(pseudobulk))
+    rownames(deseq_coldata) <- deseq_coldata$pseudobulk_group
+    deseq_coldata <- tidyr::separate(data = deseq_coldata,
+                          col = "pseudobulk_group",
+                          into = c("sample_name", "group"),
+                          sep = "-")
+    deseq_coldata$type <- "single-read"
+    deseq_coldata <- deseq_coldata[, -1]
+    if (group_by == "seurat_clusters") {
+        deseq_group <- levels(factor(sobject$seurat_clusters))
+        names(deseq_group) <- paste0(prefix, "_Cluster_", deseq_group) #nolint
+    } else if (group_by == "annotations") {
+        deseq_group <- levels(factor(sobject$annotations))
+        names(deseq_group) <- paste0(prefix, "_Celltype_", deseq_group) #nolint
+    }
+    degs_output <- list()
+    for (group in names(deseq_group)) {
+        interested_group <- deseq_group[group]
+        other_group <- deseq_coldata
+        other_group$group[other_group$group == interested_group] <- "target"  #nolint
+        other_group$group[other_group$group != "target"] <- "other"         #nolint
+        degs_output[[group]] <-
+            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk,
+                                           colData = other_group,
+                                           design = ~ group) %>%
+            DESeq2::DESeq() %>%
+            DESeq2::results() %>%
+            as.data.frame() %>%
+            dplyr::arrange(desc(log2FoldChange)) %>%
+            tibble::rownames_to_column("gene") %>%
+            na.omit()
+    }
+    return(degs_output)
+}
+
+
+run_gsea <- function(degs_result,
+                     category = "",
+                     subcategory = "",
+                     species = "") {
+    gsea_ref <- msigdbr::msigdbr(species = species,
+                                 category = category,
+                                 subcategory = subcategory) %>%
+        split(x = .$gene_symbol, f = .$gs_name)
+
+    gsea_output <- list()
+    for (item in names(degs_result)) {
+        gsea_input <- as.vector(degs_result[[item]]$log2FoldChange)
+        names(gsea_input) <- degs_result[[item]]$gene
+
+        output <- fgsea::fgseaMultilevel(gsea_ref,
+                                         gsea_input,
+                                         minSize = 10,
+                                         maxSize = 500,
+                                         nPerm = 1000)
+        gsea_output[[item]] <- output %>%
+            dplyr::arrange(desc(NES)) %>%
+            filter(padj < 0.05) %>%
+            na.omit()
+    }
+    return(gsea_output)
+}
+
+#maybe write a tsv of the output
+
+````
+
+## Plots
+
+```{r}
+
+# theme_roberts <- function(axis_font_size = 5,
+#                           axis_title_font_size = 8,
+#                           facet_font_size = 5,
+#                           font_name = "Arial",
+#                           legend_key_size = "0.2",
+#                           legend_text_font_size = 5,
+#                           legend_title_font_size = 6,
+#                           subtitle_font_size = 6,
+#                           title_font_size = 10) {
+#     list(ggpubr::theme_pubr(base_family = font_name) +
+#          ggplot2::theme(
+#             axis.text = ggplot2::element_text(size = axis_font_size),
+#             axis.title = ggplot2::element_text(size = axis_title_font_size),
+#             plot.title = ggplot2::element_text(size = title_font_size,
+#                                                face = "bold",
+#                                                hjust = 0.5),
+#             strip.text = ggplot2::element_text(size = facet_font_size,
+#                                                face = "bold"),
+#             plot.subtitle = ggplot2::element_text(hjust = 0.5,
+#                                                   size = subtitle_font_size),
+#             legend.text = ggplot2::element_text(size = legend_text_font_size),
+#             legend.title = ggplot2::element_text(size = legend_title_font_size,
+#                                                  face = "bold"),
+#             strip.background = ggplot2::element_blank(),
+#             legend.key.size = ggplot2::unit(0.2, "cm")
+#             ),
+#     ggplot2::scale_color_manual(values = plot_cols))
+# }
+
+two_way_plot <- function(data, x_col = "z_score") {
+    lab4plot <-
+        tibble(y = c(-3, 3),
+               x = c(0.2, 0.2),
+               label = c("Downregulated", "Upregulated"))
+
+    plot_name <-
+        ggplot() +
+        geom_bar(data = data,
+                 aes(x = -1 * order,
+                     y = get(x_col),
+                     fill = get(x_col) > 0),
+                 stat = "identity",
+                 alpha = 0.8) +
+        coord_flip() +
+        geom_hline(yintercept = 0,
+                    color = "black",
+                    linewidth = 0.5) +
+        geom_text(data = data,
+                    aes(x = -1 * order,
+                        y = y_pos,
+                        hjust = justify_y,
+                        label = pathway),
+                    size = 1) +
+        geom_text(data = lab4plot,
+                  aes(x = x,
+                      y = y,
+                      label = label),
+                  fontface = "bold",
+                  size = 2) +
+        scale_fill_manual(values = plot_cols,
+                          name = paste0(x_col, " > 0")) +
+        theme(strip.background = element_rect(color = "white",
+                                              fill = "white"),
+              legend.position = "none",
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              panel.border = element_blank(),
+              axis.line.x = element_line(color = "black"),
+              axis.line.y = element_blank(),
+              axis.title.x = element_text(size = 7),
+              axis.ticks.y = element_blank(),
+              plot.title = element_text(size = 10, face = "bold"),
+              axis.text.y = element_blank(),
+              axis.text.x = element_text(size = 7)) +
+        labs(title = data$sample[1],
+             y = "NES",
+             x = "") +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        ylim(-6, 6)
+
+    return(plot_name)
+}
+
+
+degs_result <- run_degs(sobject = mm_prim_tumor,
+                        group_by = "seurat_clusters",
+                        prefix = "mm_prim_tumor")
+
+
+gsea_result <- run_gsea(degs_result = degs_result,
+                        category = "C2",
+                        subcategory = "CP:KEGG",
+                        species = "mouse")
+
+
+for (item in names(gsea_result)) {
+    top5up_down <- rbind(gsea_result[[item]] %>%
+                            filter(NES > 0) %>%
+                            slice_head(n = 5),
+                         gsea_result[[item]] %>%
+                            filter(NES < 0) %>%
+                            slice_tail(n = 5)) %>%
+                    dplyr::select(pathway,
+                                    NES,
+                                    size,
+                                    padj) %>%
+                    arrange(desc(NES)) %>%
+                    mutate(pathway = as.factor(pathway) %>%
+                            str_wrap(80) %>%
+                            fct_reorder(NES),
+                       sample = item,
+                       order = 1:n(),
+                       justify_y = if_else(NES > 0, 1, 0),
+                       y_pos = if_else(NES > 0, -0.1, 0.1))
+    pdf(paste0("output/plots/mousemodel/gsea/gsea_",
+                   item,
+                   "_barplots.pdf"),
+            width = 4,
+            height = 3)
+        print(two_way_plot(top5up_down, x_col = "NES"))
+        dev.off()
+}
+
+```
+
+
+## SNV Calling
+```{r}
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+## Differentially Expressed Genes (DEGs)
+Just do with the cluster I have for now 
+```{r}
+sobj <- tribble(~obj,                 ~species,
+                "patient_prim_tumor", "human",
+                "patient_mets_tumor", "human",
+                "xeno_prim_human",    "human",
+                "xeno_mets_human",    "human",
+                "mm_mets_tumor",      "mouse",
+                "mm_prim_tumor",      "mouse")
+
+x <- parallel::mclapply(seq_len(nrow(sobj)), function(i) {
+    item <- sobj$obj[i]
+    species <- sobj$species[i]
+    object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                                item,
+                                ".qs"))
+    object$pseudobulk_col <- str_c(object$sample_name,
+                                 "-C",
+                                 object$seurat_clusters)
+    pseudobulk <- AggregateExpression(object = object,
+                                      group.by = "pseudobulk_col",
+                                      slot = "counts")[[1]]
+    deseq_coldata <- data.frame(sample = colnames(pseudobulk))
+    rownames(deseq_coldata) <- deseq_coldata$sample
+    deseq_coldata <- separate(data = deseq_coldata,
+                          col = "sample",
+                          into = c("sample", "cluster"),
+                          sep = "-C")
+    deseq_coldata$type <- "single-read"
+    deseq_coldata <- deseq_coldata[, -1]
+    clusters <- levels(factor(object$seurat_clusters))
+    names(clusters) <- paste0("Cluster", clusters)
+
+#DESeq run
+    deseq <- list()
+    deseq_plots <- list()
+    top15_deg <- list()
+    degs <- list()
+    for (c in names(clusters)) {
+        cluster_number <- clusters[c]
+        coldata_targeted <- deseq_coldata
+        coldata_targeted$cluster[coldata_targeted$cluster == cluster_number] <- "target"  #nolint
+        coldata_targeted$cluster[coldata_targeted$cluster != "target"] <- "other"         #nolint
+        deseq[[c]]$data_sets <-
+            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk,
+                                           colData = coldata_targeted,
+                                           design = ~ cluster)
+        deseq[[c]]$tests <- DESeq2::DESeq(deseq[[c]]$data_sets)
+        deseq[[c]]$results <- as.data.frame(DESeq2::results(deseq[[c]]$tests))
+        deseq[[c]]$results <- deseq[[c]]$results[complete.cases(deseq[[c]]$results), ]   #nolint
+        deseq[[c]]$results <-
+            deseq[[c]]$results[order(-abs(deseq[[c]]$results$log2FoldChange)), ]
+        top15_deg[[c]] <- as.data.frame(head(deseq[[c]]$results, n = 15))
+        top15_deg[[c]]$genes <- rownames(top15_deg[[c]])
+        deseq_plots[[c]]$volcano <-
+            ggplot(deseq[[c]]$results,
+                   aes(log2FoldChange,
+                   -log10(padj),
+                   color = padj < 0.05)) +
+            geom_point() +
+            geom_label_repel(data = top15_deg[[c]],
+                            aes(label = genes),
+                            max.overlaps = 20) +
+            labs(title = paste(c, "Genes"),
+                 subtitle = "pb_ds2 method")
+        qs::qsave(deseq, str_c("output/deseq/tumor/",
+                          item,
+                          ".qs"))
+        print(str_c("DESeq done for ", item))
+
+#degs generation
+        deseq[[c]]$results <-
+            arrange(deseq[[c]]$results, desc(log2FoldChange))
+        degs[[c]] <-
+            as.vector(deseq[[c]]$results$log2FoldChange)
+        names(degs[[c]]) <-
+            rownames(deseq[[c]]$results)
+        qs::qsave(degs, str_c("output/degs/tumor/",
+                          item,
+                          ".qs"))
+        print(str_c("DEGs done for ", item))
+    }
+    return(x)
+}, mc.cores = parallelly::availableCores())
+
+```
+
+
+
+
+## GSEA analysis
+
+```{r}
+
+cat_tib <- tribble(~category, ~subcat,   ~cat_expl,
+                    "C2",      "CP:KEGG", "KEGG paths",
+                    "H",         NULL,    "Hallmark paths",
+                    "C5",        "GO",    "Gene ontology",
+                    "C8",        NULL,    "Cell type signature")
+
+
+        for (i in seq_len(nrow(cat_tib))){
+            if (species == "human") {
+                kegg_ref <- msigdbr::msigdbr(species = "Homo sapiens",
+                                            category = cat_tib$category[i],
+                                            subcategory = cat_tib$subcat[i]) %>%
+                    split(x = .$gene_symbol, f = .$gs_name)
+            } else {
+                kegg_ref <- msigdbr::msigdbr(species = "Mus musculus",
+                                            category = cat_tib$category[i],
+                                            subcategory = cat_tib$subcat[i]) %>%
+                    split(x = .$gene_symbol, f = .$gs_name)
+            }
+            result <- fgsea::fgseaMultilevel(kegg_ref,
+                                            degs[[c]],
+                                            minSize = 15,
+                                            maxSize = 500,
+                                            nPerm = 1000)
+            result <- result %>%
+                arrange(desc(NES)) %>%
+                filter(padj < 0.0001) %>%
+                na.omit() %>%
+                mutate(cluster = item,
+                    category = cat_tib$category[i],
+                    cat_expl = cat_tib$cat_expl[i])
+            top5_up <- result %>% slice_head(n = 5)
+            top5_down <- result %>% slice_tail(n = 5)
+            temp_top5 <- rbind(top5_up, top5_down)
+            temp_top5 <- temp_top5 %>%
+                        dplyr::select(pathway, NES)
+        }
+
+
+
+result <- mutate(result, p.adjust = -log10(p.adjust))
+
+x <- enrichplot::dotplot(object = result,
+                            x = "NES",
+                            showCategory = 10)
+
+collapsedPathways <- collapsePathways(result[order(pval)][padj < 0.01],
+                                      examplePathways, exampleRanks)
+mainPathways <- fgseaRes[pathway %in% collapsedPathways$mainPathways][
+                         order(-NES), pathway]
+plotGseaTable(temp_top5, NES)
+
+
+```
+
+
+
+
+
+
+
+## Some qualitative analysis for each sobject type
+
+```{r}
+human_stem <- read_table("input/downloads/human_stem.tab")
+
+rownames(human_stem) <- human_stem[[1]]
+
+human_stem <- CreateSeuratObject(human_stem)
+
+# first column into rownames
+#read
+sobj <-
+        qs::qread("output/seurat_objects/tumor_vs_stroma/mm_prim_tumor.qs")
+
+sobj <- RunHarmony(sobj,
+                   group.by.vars = c("sample_name", "model", "data_type"),
+                   theta = c(3, 3, 3))
+
+#theta = 3,3 looks optimal, need to explore sigma and other factors
+
+rrrSingleCellUtils::optimize_silhouette(sobj)
+
+
+sobj <- sobj %>% process_seurat(reduction = "harmony",
+                                resolution = 0.05)
+
+table(sobj$tumor_vs_normal)
+table(sobj$annotations)
+
+table(sobj$annotations, sobj$seurat_clusters)
+
+DimPlot(object = sobj,
+        group.by = c("data_type", "seurat_clusters", "sample_name"),
+        label = TRUE,
+        repel = TRUE,
+        label.size = 3)
+
+
+
+#cancer marker
+FeaturePlot(object = sobj,
+            features = c("COL1A1", "COL1A2", "SATB2", "COL3A1"),
+            label = TRUE)
+
+FeaturePlot(object = sobj,
+            features = c("Col1a1", "Col1a2", "Satb2", "Col3a1", "Mki67"),
+            label = TRUE)
+
+#active dividing cell marker or stem cell
+FeaturePlot(object = sobj,
+            features = c("PCNA", "MCM2", "MKI67", "PLK1"),
+            label = TRUE)
+
+FeaturePlot(object = sobj,
+            features = c("Pcna", "Mcm2", "Mki67", "Plk1"),
+            label = TRUE)
+
+#fibroblast markers
+FeaturePlot(object = sobj,
+            features = c("LOXL1", "LUM", "COL5A1", "FBLN1", "FBLN2"),
+            label = TRUE)
+
+FeaturePlot(object = sobj,
+            features = c("Loxl1", "Lum", "Col5a1", "Fbln1", "Fbln2"),
+            label = TRUE)
+
+# Treg and MDSCs
+DotPlot(object = patient_prim,
+        group.by = "annotations",
+        features = c("CD33", "CD14", "FOXP3", "LY6C", "LY6G"),
+        scale = FALSE)
+
+plots <- list()
+theta_val <- c(1, 2, 3, 4, 5, 6, 9, 14, 20)
+plots <- parallel::mclapply((theta_val), function(i) {
+    harmony_obj <- RunHarmony(object = sobj,
+                          group.by.vars = "sample_name",
+                          Theta = i)
+    harmony_obj <- harmony_obj %>% process_seurat(reduction = "harmony")
+    # plot_sample <- DimPlot(harmony_obj, group.by = "sample_name") +
+    #                     labs(title = paste0("theta = ", i))
+    plot_cluster <- DimPlot(harmony_obj) +
+                        labs(title = paste0("theta = ", i))
+    #return(plot_sample)
+    return(plot_cluster)
+}, mc.cores = 10)
+
+plot_grid(plotlist = plots, ncol = 3)
+
+
+plots <- list()
+theta_val <- c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
+plots <- parallel::mclapply((theta_val), function(i) {
+    harmony_obj <- RunHarmony(object = obj,
+                          group.by.vars = "sample_name")
+    harmony_obj <- harmony_obj %>% process_seurat(reduction = "harmony")
+    harmony_obj <- FindClusters(harmony_obj, resolution = i)
+    plot_cluster <- DimPlot(harmony_obj,
+                            group.by = "annotations",
+                            label = TRUE,
+                            repel = TRUE) +
+                    labs(title = paste0("resolution = ", i))
+    return(plot_cluster)
+}, mc.cores = 10)
+
+plot_grid(plotlist = plots, ncol = 3)
+
+
+```
+
+
+
+
+
+
+
+## Trying to find a good clustering setup
+resolution = 0.2 for findclusters seems to work better
+could use harmony iLISI cLISI
+
+```{r}
+sobject <-
+        qs::qread("output/seurat_objects/harmony_sobjs/mm_mets.qs")
+
+
+ComBat()
+
+
+
+
+
+
+
+
+subsets <- subset(x = sobject,
+                  idents = c("0", "3", "6", "7", "8", "12")) %>% 
+           process_seurat()
+
+DimPlot(sobject,
+        group.by = c("seurat_clusters", "sample_name"),
+        label=T)
+
+harmony_subset <- RunHarmony(object = subsets,
+                            group.by.vars = "sample_name")
+
+harmony_subset <- process_seurat(harmony_subset,
+                                 reduction = "harmony")
+
+DimPlot(harmony_subset,
+        group.by = c("seurat_clusters", "sample_name"),
+        label=T)
+
+harmony_subset <- annotate(sobject = harmony_subset,
+                           species = "human",
+                           aggr_ref = TRUE)
+
+DimPlot(harmony_subset,
+        group.by = c("seurat_clusters", "annotations"),
+        label=T)
+
+#second subset
+subset2 <- subset(x = harmony_subset,
+                  idents = c("0", "1", "2", "3", "4", "6", "7", "8", "10")) %>%
+           process_seurat()
+
+DimPlot(subset2,
+        group.by = c("seurat_clusters", "sample_name"),
+        label=T)
+
+harmony_subset2 <- RunHarmony(object = subset2,
+                            group.by.vars = "sample_name")
+
+harmony_subset2 <- process_seurat(harmony_subset2,
+                                 reduction = "harmony")
+
+DimPlot(harmony_subset2,
+        group.by = c("annotations", "sample_name"),
+        label=T,
+        repel = T,
+        cells.highlight = )
+
+
+
+
+
+cancer <- c("COL1A1", "COL1A2", "SATB2", "COL3A1")
+
+
+#cancer marker
+FeaturePlot(object = harmony_subset2,
+            features = c("COL1A1", "COL1A2", "SATB2", "COL3A1"),
+            label = TRUE)
+
+#active dividing cell marker
+FeaturePlot(object = patient_prim,
+            features = c("PCNA", "MCM2", "MKI67", "PLK1"),
+            label = TRUE)
+
+#fibroblast markers
+FeaturePlot(object = patient_prim,
+            features = c("LOXL1", "LUM", "COL5A1", "FBLN1", "FBLN2"),
+            label = TRUE)
+
+
+
+FeaturePlot(object = sobject,
+            features = c("Loxl1", "Lum", "Col5a1", "Fbln1", "Fbln2"),
+            label = TRUE)
+
+
+FeaturePlot(object = sobject,
+            features = c("Col1a1", "Col1a2", "Satb2", "Col3a1", "Mki67"),
+            label = TRUE)
+
+FeaturePlot(object = harmony_subset2,
+            features = c("PCNA", "MCM2", "MKI67", "PLK1"),
+            label = TRUE)
+
+FeaturePlot(object = sobject,
+            features = c("Pcna", "Mcm2", "Mki67", "Plk1"),
+            label = TRUE)
+
+
+
+kill_cc(sobject)
+
+
+
+DimPlot(sobject, group.by = c("sample_name", "cell_dex", "data_type"), label = TRUE)
+
+FeaturePlot(object = subsets,
+            features = c("COL1A1", "COL1A2", "SATB2", "COL3A1"),
+            label = TRUE)
+
+DimPlot(sobject, group.by = c("sample_name", "cell_dex"), label = TRUE, repel = TRUE)
+
+
+
+DimPlot(object = sobject,
+        group.by = "free_annotation",
+        split.by = "sample_name",
+        label = TRUE,
+        ncol = 3,
+        repel = TRUE) +
+    NoLegend()
+
+table(sobject$cell_dex) %>% as.data.frame()
+
+
+
+
+
+subsets <- subset(x = patient_mets,
+                  idents = c("0", "4", "14", "2", "10", "19", "13", "9", "3"))
+
+subsets <- subsets %>% process_seurat()
+
+
+
+
+fibroblast_markers <- c("LOXL1", "LUM", "COL5A1", "FBLN1", "FBLN2")
+
+fibroblast_markers <- c("Loxl1", "Lum", "Col5a1", "Fbln1", "Fbln2")
+
+
+
+
+
+
+
+I am here, need to see what annotation all these cells in the subset get.....I suspect they would be fibroblasts and osteoblasts and stem cells
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+DimPlot(patient_mets, split.by = "sample_name", label = T, ncol = 2)
+
+DimPlot(patient_mets, group.by = "sample_name")
+
+DimPlot(patient_mets, label =T)
+
+patient_mets <- FindClusters(patient_mets, resolution = 0.9)
+
+fibroblast_markers <- c("LOXL1", "LUM", "COL5A1", "FBLN1", "FBLN2")
+
+cancer_features <- c("COL1A1", "COL1A2", "SATB2", "COL6A1", "S100A11",
+                     "S100A10", "PRDX2", "PSMD4", "MIF", "COL6A3", "COL3A1")
+
+james_marker <- c("KRT8", "KRT19")
+
+Idents(patient_mets) <- harmony_sobjs$seurat_clusters
+
+comb <- kill_cc(patient_mets)
+
+harmony <- RunHarmony(object = patient_mets,
+                      group.by.vars = c("sample_name", "data_type"),
+                      theta = c(3, 3))
+
+harmony <- harmony %>% 
+    process_seurat(reduction = "harmony")
+
+
+
+FeaturePlot(harmony, features = c("COL1A1", "COL1A2", "SATB2", "COL3A1"))
+
+#reference
+lungblood_refobj <- qs::qread("input/downloads/lungblood_refobj.qs")
+
+
+
+comb_ref <-
+    SingleR::SingleR(test = as.SingleCellExperiment(patient_mets),
+                     ref = GetAssayData(lungblood_refobj),
+                     labels = lungblood_refobj$free_annotation,
+                     aggr.ref = TRUE)
+
+patient_mets$free_annotation <- comb_ref$labels
+patient_mets$cell_scores <- apply(X = comb_ref$scores,
+                                        MARGIN = 1,
+                                        function(x) max(x, na.rm = TRUE))
+
+DimPlot(object = harmony,
+        group.by = "free_annotation",
+        split.by = "sample_name",
+        label = TRUE,
+        ncol = 3,
+        repel = TRUE) +
+    NoLegend()
+
+
+DimPlot(harmony, group.by = c("free_annotation", "sample_name"), label = TRUE) + NoLegend()
+
+FeaturePlot(harmony, )
+
+
+table(patient_mets$free_annotation)
+
+#use singleR ref maybe
+hpca <- celldex::HumanPrimaryCellAtlasData()
+
+celldex_ref <-
+    SingleR::SingleR(test = as.SingleCellExperiment(patient_mets),
+                     ref = hpca,
+                     labels = hpca$label.main,
+                     aggr.ref = TRUE)
+
+patient_mets$cell_dex <- celldex_ref$labels
+
+DimPlot(object = patient_mets,
+        group.by = "cell_dex",
+        repel = TRUE,
+        label = TRUE) + NoLegend()
+
+table(patient_mets$cell_dex)
+
+Idents(patient_mets) <- patient_mets$cell_dex
+
+#tumor
+tumor_sobj <- subset(patient_mets,
+                     idents = c("Osteoblasts", "Tissue_stem_cells", "MSC")) %>%
+              process_seurat()
+
+patient_mets <- RenameIdents(object = patient_mets,
+                             `Osteoblasts` = "cancer",
+                             `Tissue_stem_cells` = "cancer",
+                             `MSC` = "cancer")
+
+unique(Idents(patient_mets))
+
+var_normal <- table(patient_mets$cell_dex) %>%
+              as.data.frame() %>%
+              filter(Var1 != "cancer") %>%
+              filter(Freq > 20)
+
+Idents(patient_mets) <- patient_mets$cell_dex
+
+normal_sobj <- subset(patient_mets,
+                     idents == var_normal$Var1)
+
+
+
+#tumor
+tumor_sobj <- subset(patient_mets,
+                     idents = c("0", "2", "11")) %>%
+              process_seurat()
+
+tumor_sobj <- RunHarmony(tumor_sobj, group.by.vars = "sample_name")
+
+tumor_sobj <- tumor_sobj %>% process_seurat(reduction = "harmony")
+
+tumor_sobj <- FindClusters(tumor_sobj, resolution = 0.9)
+
+DimPlot(tumor_sobj, group.by = "sample_name", label = T)
+
+FeaturePlot(object = tumor_sobj,
+           features = cancer_features)
+
+DimPlot(object = tumor_sobj,
+        group.by = c("cell_dex", "sample_name"),
+        label = TRUE)
+
+
+```
+
+
+## patient_mets
+```{r patient mets}
+set.seed(3456)
+patient_mets <-
+        qs::qread("output/seurat_objects/comb_sobjs/mm_mets.qs")
+
+
+recurlustered <-
+    recurluster(patient_mets,
+                do_plots = FALSE,
+                parallel = TRUE)
+
+
+
+recurlustered <- recurlustered %>% process_seurat()
+
+DimPlot(recurlustered, group.by = "clust_3", label = T, cols = sample(rainbow(n=200))) + NoLegend()
+
+DimPlot(patient_mets, group.by = "sample_name")
+
+hpca <- celldex::HumanPrimaryCellAtlasData()
+
+celldex_ref <-
+    SingleR::SingleR(test = as.SingleCellExperiment(patient_mets),
+                     ref = hpca,
+                     labels = hpca$label.main,
+                     aggr.ref = TRUE)
+
+patient_mets$cell_dex <- celldex_ref$labels
+
+DimPlot(object = patient_mets,
+        group.by = "cell_dex",
+        label = TRUE)
+
+DimPlot(object = patient_mets,
+        group.by = "cell_dex",
+        split.by = "sample_name",
+        ncol = 3,
+        repel = TRUE,
+        label = TRUE) +
+    NoLegend()
+
+# split the cancer vs the normal cells
+cell_subset <- table(patient_mets$cell_dex) %>% 
+    as.data.frame() %>%
+    filter(Freq > 30)
+
+Idents(patient_mets) <- patient_mets$cell_dex
+
+patient_mets <- subset(x = patient_mets,
+                       idents = cell_subset$Var1)
+
+DimPlot(object = patient_mets,
+        group.by = "cell_dex",
+        label = TRUE)
+
+#I think CMP, MSC, Neurons, osteoblasts, and tissue stem cells are cancer
+table(patient_mets$cell_dex)
+
+tumor_idents <- c("MSC",
+                  "Neurons",
+                  "CMP",
+                  "Osteoblasts",
+                  "Tissue_stem_cells")
+
+Idents(patient_mets) <- patient_mets$cell_dex
+
+#subset out tumor
+tumor <- subset(x = patient_mets,
+                idents = tumor_idents) %>% 
+    process_seurat()
+
+DimPlot(object = tumor,
+        group.by = "cell_dex")
+
+DimPlot(object = tumor,
+        group.by = "sample_name")
+
+harmony_tumor <- RunHarmony(object = tumor,
+                            group.by.vars = c("sample_name", "data_type"),
+                            theta = c(3, 3))
+
+harmony_tumor <- harmony_tumor %>%
+    process_seurat(reduction = "harmony")
+
+DimPlot(object = harmony_tumor,
+        group.by = "seurat_clusters")
+
+DimPlot(object = harmony_tumor,
+        group.by = "sample_name")
+
+#subset out the stroma idents
+stroma_idents <- table(patient_mets$cell_dex) %>% 
+    as.data.frame() %>%
+    filter(!Var1 %in% tumor_idents)
+
+Idents(patient_mets) <- patient_mets$cell_dex
+
+stroma <- subset(x = patient_mets,
+                idents = stroma_idents$Var1) %>% 
+    process_seurat()
+
+#run harmony
+harmony_stroma <- RunHarmony(object = stroma,
+                            group.by.vars = c("data_type", "sample_name"))
+
+harmony_stroma <- harmony_stroma %>%
+    process_seurat(reduction = "harmony")
+
+DimPlot(object = harmony_stroma,
+        split.by = "sample_name",
+        group.by = "cell_dex",
+        ncol = 3,
+        repel = TRUE,
+        label = TRUE)
+
+DimPlot(object = harmony_stroma,
+        group.by = c("cell_dex", "sample_name"),
+        label = TRUE)
+
+DimPlot(object = harmony_stroma,
+        group.by = "sample_name")
+
+
+
+```
+
+
+
+
+
+
+
+```{r}
+#run Harmony
+harmony_both <- RunHarmony(object = patient_mets,
+                           group.by.vars = c("data_type", "sample_name"),
+                           theta = c(3, 3))
+
+harmony_both <- harmony_both %>% process_seurat(reduction = "harmony")
+
+DimPlot(harmony_both, group.by = "cell_dex", label = TRUE, repel = TRUE)
+
+
+DimPlot(object = harmony_both,
+        group.by = "cell_dex",
+        split.by = "sample_name",
+        ncol = 3,
+        repel = TRUE,
+        label = TRUE) +
+    NoLegend()
+
+
+DimPlot(object = harmony_patient_mets,
+        group.by = "cell_dex",
+        repel = TRUE,
+        label = TRUE) +
+    NoLegend()
+
+table(harmony_patient_mets$cell_dex)
+
+tumor_idents <- c("CMP",
+                  "iPS_cells",
+                  "MSC",
+                  "Osteoblasts",
+                  "Tissue_stem_cells")
+
+#"CMP", "Embryonic_stem_cells", "GMP", "Hepatocytes", "iPS_cells", "MSC",
+#"Neuroepithelial_cell", "Neurons", "Osteoblasts", "Tissue_stem_cells"
+Idents(harmony_both) <- harmony_both$cell_dex
+
+cancer_cells <- subset(x = harmony_both,
+                       idents = tumor_idents)
+
+table(cancer_cells$cell_dex)
+
+DimPlot(object = cancer_cells, group.by = c("cell_dex", "sample_name"))
+
+DimPlot(object = cancer_cells,
+        group.by = "cell_dex",
+        split.by = "sample_name",
+        repel = TRUE,
+        label = TRUE,
+        ncol = 2) +
+    NoLegend()
+
+DimPlot(object = cancer_cells,
+        group.by = "sample_name",
+        repel = TRUE,
+        label = TRUE) +
+    NoLegend()
+```
+
+
+
+
+```{r}
+harmony_cancer_samplename <- RunHarmony(object = cancer_cells,
+                                   group.by.vars = c("cell_dex", "data_type"))
+
+harmony_cancer_samplename <- harmony_cancer_samplename %>%
+    process_seurat(reduction = "harmony")
+
+harmony_cancer_datatyppe <- RunHarmony(object = cancer_cells,
+                                   group.by.vars = "data_type")
+
+harmony_cancer_datatyppe <- harmony_cancer_datatyppe %>%
+    process_seurat(reduction = "harmony")
+
+DimPlot(object = harmony_cancer_samplename, group.by = c("cell_dex", "sample_name"), label = TRUE)
+
+DimPlot(object = harmony_cancer_datatyppe, group.by = "sample_name")
+
+DimPlot(object = harmony_cancer_cells,
+        split.by = "cell_dex",
+        group.by = "sample_name",
+        repel = TRUE,
+        label = TRUE,
+        ncol = 3) +
+    NoLegend()
+
+DimPlot(object = harmony_cancer_cells,
+        repel = TRUE,
+        label = TRUE) +
+    NoLegend()
+
+
+plots <- list()
+theta_val <- c(1, 2, 3, 4, 5, 6, 9, 10, 20, 45, 65, 100)
+plots <- parallel::mclapply((theta_val), function(i) {
+    harmony_obj <- RunHarmony(object = cancer_cells,
+                          group.by.vars = "sample_name",
+                          Theta = i,
+                          lambda = 0.8,
+                          tau = )
+    harmony_obj <- harmony_obj %>% process_seurat(reduction = "harmony")
+    temp_plot <- DimPlot(harmony_obj, group.by = "sample_name") +
+                        labs(title = paste0("theta = ", i))
+    #  temp_plot
+    return(temp_plot)
+}, mc.cores = 10)
+
+plot_grid(plotlist = plots, ncol = 3)
+
+
+
+
+#normal cells
+normal_cell_names <- table(harmony_patient_mets$cell_dex) %>%
+    as.data.frame() %>%
+    filter(Var1 != unique(cancer_cells$cell_dex))
+
+normal_cells <- subset(x = harmony_patient_mets,
+                       idents != tumor_idents)
+
+
+
+
+non_tumor_cells <- table(harmony_sobj_mets$free_annotation) %>%
+      as.data.frame() %>%
+      filter(Var1 != "cancer") %>%
+      filter(Freq > 10)
+```
+
+
+```{r}
+patient_mets <-
+        qs::qread("output/seurat_objects/comb_sobjs/patient_mets.qs")
+
+plots <- list()
+theta_val <- c(1, 2, 3, 5, 10, 20, 45, 65, 100)
+lambda_val <- c(NULL, 0.1, 0.3, 0.7, 0.9, 1, 2, 5, 10)
+sigma_val <- c(0.1, 0.3, 0.7, 1, 3, 5)
+tau_val <- c(0, 1, 3, 5, 20, 30)
+plots <- parallel::mclapply((tau_val), function(i) {
+    harmony_obj <- RunHarmony(object = patient_mets,
+                          group.by.vars = "sample_name",
+                          Theta = 45,
+                           tau = i)
+    harmony_obj <- harmony_obj %>% process_seurat(reduction = "harmony")
+    temp_plot <- DimPlot(harmony_obj, group.by = "sample_name") +
+                        labs(title = paste0("theta45,", "tau = ", i))
+    #  temp_plot
+    return(temp_plot)
+}, mc.cores = 10)
+
+plot_grid(plotlist = plots, ncol = 3)
+
+harmony_obj <- RunHarmony(object = patient_mets,
+                          group.by.vars = "sample_name",
+                          Theta = 45,
+                          )
+
+harmony_obj <- harmony_obj %>% process_seurat(reduction = "harmony")
+
+DimPlot(harmony_obj, group.by = "sample_name")
+
+
+FeaturePlot(object = harmony_obj,
+           features = cancer_features)
+
+
 ```
