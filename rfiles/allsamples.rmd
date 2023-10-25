@@ -13,6 +13,7 @@ library(harmony)
 library(cowplot)
 library(clustree)
 set.seed(444)
+
 ```
 
 ## Download data from publications online
@@ -137,20 +138,20 @@ obj <- parallel::mclapply(seq_len(nrow(sample_details)), function(i) {
 }, mc.cores = 10)
 
 
-# # individual QC numbers
-# obj <- qs::qread("output/seurat_objects/single_sobj/xenograft/metastatic/S0254mouse.qs") #nolint
+# individual QC numbers
+obj <- qs::qread("output/seurat_objects/single_sobj/patient/metastatic/SC072human.qs") #nolint
 
-# # Cutoff and cleaning
-# try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
-#                       "nCount_RNA", 0,        30000,
-#                       "percent.mt", 0,        15)
+# Cutoff and cleaning
+try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
+                      "nCount_RNA", 0,        30000,
+                      "percent.mt", 0,        15)
 
-# features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")    #nolint
+features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")    #nolint
 
-# # visualize the possible cutoff and adjust accordingly
-# feature_hist(sobject = obj,
-#              features = features,                         # nolint
-#              cutoff_table = try_cutoff)
+# visualize the possible cutoff and adjust accordingly
+feature_hist(sobject = obj,
+             features = features,                         # nolint
+             cutoff_table = try_cutoff)
 
 #quality control and downsampling and saving the merged sobj
 what <- parallel::mclapply(unique(sample_details$unique), function(item) {
@@ -166,14 +167,17 @@ what <- parallel::mclapply(unique(sample_details$unique), function(item) {
                                 species, "/",
                                 tumor_type, "/",
                                 sample_name,
-                                organism, ".qs")) %>%
-            subset(nCount_RNA < tmp_df$ncount_max[i] &
-                percent.mt < tmp_df$mt_percent[i])
-            temp_list[[sample_name]] <- sobj
-            temp_list[[sample_name]] <-
-                    subset(x = temp_list[[sample_name]],
-                    cells = sample(Cells(temp_list[[sample_name]]),
-                            min(4000, length(Cells(temp_list[[sample_name]])))))
+                                organism, ".qs"))
+        sobj <- auto_subset(sobject = sobj,
+                            sd_down = 2,
+                            sd_up = 3,
+                            make_plots = FALSE,
+                            features = c("nCount_RNA", "percent.mt"))
+        temp_list[[sample_name]] <- sobj
+        temp_list[[sample_name]] <-
+                subset(x = temp_list[[sample_name]],
+                cells = sample(Cells(temp_list[[sample_name]]),
+                        min(4000, length(Cells(temp_list[[sample_name]])))))
     }
     merged_sobj <- merge(x = temp_list[[1]],
                                 y = temp_list[2:length(temp_list)],
@@ -191,7 +195,8 @@ what <- parallel::mclapply(unique(sample_details$unique), function(item) {
                          test_res = seq(0.1, 0.9, by = 0.1),
                          summary_plot = FALSE) %>%
         filter(sil_vals == max(sil_vals)) %>%
-        select(res_vals)
+        slice_head(n=1) %>%
+        dplyr::select(res_vals)
     run_harmony <- FindClusters(run_harmony,
                    resolution = res_score)
     qs::qsave(run_harmony, str_c("output/seurat_objects/harmony_sobjs/",
@@ -199,6 +204,7 @@ what <- parallel::mclapply(unique(sample_details$unique), function(item) {
                                     ".qs"))
     return(item)
 }, mc.cores = 10)
+
 
 ```
 
@@ -404,6 +410,9 @@ what <- parallel::mclapply(seq_len(nrow(refs)), function(i) {
     print(str_c(ref, " ", "annotated", " ", sobj))
 }, mc.cores = 10)
 
+
+
+
 ```
 
 
@@ -502,6 +511,116 @@ file.exists("allsamples.rmd")
 ````
 
 
+
+
+## TRY Invisible algorithm
+```{r}
+# Load required libraries and source functions
+invisible(lapply(c("dplyr","Seurat","HGNChelper","openxlsx","copykat",
+                   "copykatRcpp","ggplot2", "SCEVAN","yaGST","cowplot",
+                   "Rcpp", "Rclusterpp", "parallel","biomaRt","logger",
+                   "httr", "jsonlite", "readr","future"),
+                 library,
+                 character.only = !0))
+
+invisible(lapply(c("https://raw.githubusercontent.com/kris-nader/scTherapy/main/R/identify_mal_norm.R",
+		   "https://raw.githubusercontent.com/kris-nader/scTherapy/main/R/identify_subclones.R",
+		   "https://raw.githubusercontent.com/kris-nader/scTherapy/main/R/predict_compounds.R"),source))
+
+run_ensemble <- function(seurat_object, disease = "",
+                         known_normal_cells = "",
+                         custom_marker="https://raw.githubusercontent.com/kris-nader/TBD/main/sctype_aml_cellmarker20_cosmic.xlsx",   #nolint
+                         genome_cp = "hg20",
+                         plot = FALSE,
+                         organism ="human") {
+    if (is.null(seurat_object)) {
+        stop("Argument 'seurat_object' is missing")
+    }
+    if (!inherits(seurat_object, "Seurat")) {
+        stop("Argument 'seurat_object' must be a Seurat object")
+    }
+    check <- openxlsx::read.xlsx(custom_marker)
+    sctype_e <- FALSE
+    if (disease %in% unique(check$tissueType)) {
+        sctype_e <- TRUE
+        seurat_object <- run_sctype(seurat_object,
+                                    known_tissue_type = disease,
+                                    plot = FALSE,
+                                    custom_marker_file = custom_marker,
+                                    name = "sctype_malignant_healthy")
+        seurat_object <- run_SCEVAN(seurat_object,
+                                    known_normal_cells = known_normal_cells,
+                                    plot = FALSE,
+                                    organism_ = organism)
+    }
+    ncores <- ifelse(Sys.info()["sysname"] != "Windows", max(1, parallel::detectCores() - 2), 1)
+    seurat_object <- run_copyKat(seurat_object,
+                                known_normal_cells = known_normal_cells,
+                                plot = FALSE,
+                                genome = genome_cp,
+                                ncores = ncores)
+    if (!sctype_e) {
+        print("SCEVAN:PRED")
+        seurat_object <- run_SCEVAN(seurat_object,
+                                    known_normal_cells = known_normal_cells,
+                                    all_pred = FALSE,
+                                    plot = FALSE)
+    }
+    seurat_object1 <- seurat_object
+    if (sctype_e) {
+        seurat_object1@meta.data[which(seurat_object1@meta.data$sctype_malignant_healthy == "Unknown"),
+                                "sctype_malignant_healthy"] <- "malignant"
+        temp <- data.frame(copyKat_output = seurat_object1@meta.data$copyKat_output,
+                        SCEVAN_output = seurat_object1@meta.data$SCEVAN_output,
+                        sctype_malignant_healthy = seurat_object1@meta.data$sctype_malignant_healthy)
+        rownames(temp) <- rownames(seurat_object1@meta.data)
+
+        majority <- apply(temp, 1, function(x) {
+        levels_x <- unique(x)
+        freq_x <- tabulate(match(x, levels_x))
+        levels_x[which.max(freq_x)]
+        })
+        seurat_object1@meta.data$ensemble_output <- majority
+        text_ <- paste("New metadata added:", "ensemble_output")
+        print(text_)
+    } else {
+        seurat_object1@meta.data$sctype_malignant_healthy <- "NA"
+        temp <- data.frame(copyKat_output = seurat_object1@meta.data$copyKat_output,
+                        SCEVAN_output = seurat_object1@meta.data$SCEVAN_output)
+        rownames(temp) <- rownames(seurat_object1@meta.data)
+        colnames(temp) <- c("copyKat_output", "SCEVAN_output")
+        
+        temp$ensemble_output <- ifelse(temp$SCEVAN_output == temp$copyKat_output,
+                                    temp$copyKat_output,
+                                    "malignant")
+        seurat_object1@meta.data$ensemble_output[rownames(temp)] <- temp[rownames(temp), "ensemble_output"]
+        text_ <- paste("New metadata added:", "ensemble_output")
+        print(text_)
+    }
+    return(seurat_object1)
+}
+
+
+sobj <- qs::qread("output/seurat_objects/annotated_sobjs/patient_mets.qs")
+
+DimPlot(sobj, group.by = c("new", "seurat_clusters", "sample_name"))
+
+sobj <- run_sctype(sobj, known_tissue_type="Immune system", plot=TRUE)
+
+norm_cells=get_normal_cells(sobj,c("Macrophages"))
+
+sobj <- run_ensemble(sobj,
+                    disease="Cancer",
+                    known_normal_cells=norm_cells,
+                    #genome_cp = "mm10",
+                    #organism = "mouse",
+                    plot=FALSE)
+
+visualize_ensemble_step(sobj)
+
+```
+
+
 ## Split cancer vs the stroma - here
 label potential tumor cell and then split the object, run harmony and save
 
@@ -517,28 +636,16 @@ refs <- tribble(~sobj,            ~split,   ~has_multiomics,
                "mm_prim",         "yes",    "no",
                "mm_mets",         "yes",    "no")
 
-cancer_celltypes <- list(patient_prim = c("iPS_cells",
-                                         "MSC",
-                                         "Neurons",
-                                         "Smooth_muscle_cells",
-                                         "Tissue_stem_cells",
-                                         "Fibroblasts",
-                                         "Chondrocytes",
-                                         "Osteoblasts"),
+sobj <- qs::qread("output/seurat_objects/harmony_sobjs/patient_mets.qs")
+DimPlot(sobj, group.by = c("new", "seurat_clusters"))
+
+
+cancer_celltypes <- list(patient_prim = c( "MSC",
+                                           "Chondrocytes"),
                         normal_bone = c(),
                         patient_mets = c("Myofibroblast",
                                          "MSC",
-                                         "Neurons",
-                                         "Tissue_stem_cells",
-                                         "Osteoblasts",
-                                         "Fibromyocyte",
-                                         "Chondrocytes",
-                                         "iPS_cells",
-                                         "Pericyte",
-                                         "Smooth_muscle_cells",
-                                         "Airway Smooth Muscle",
-                                         "Alveolar Fibroblast",
-                                         "Adventitial Fibroblast"),
+                                         "Osteoblasts"),
                         xeno_prim_human = c(),
                         xeno_mets_human = c(),
                         xeno_prim_mouse = c(),
@@ -553,32 +660,52 @@ tumor_vs_stroma <- parallel::mclapply(seq_len(nrow(refs)), function(item) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
                               sobj,
                               ".qs"))
+    Idents(object) <- object$new
     for (cell in cancer_celltypes[[sobj]]) {
-        object$annotations <- str_replace_all(string = object$annotations,
+        object$new <- str_replace_all(string = object$new,
                                               pattern = cell,
                                               replacement = "cancer_cells")}
     qs::qsave(object, str_c("output/seurat_objects/annotated_sobjs/",
                             sobj,
                             ".qs"))
+    object <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
+                              sobj,
+                              ".qs"))
     if (split == "yes") {
-        normal_cells <- table(object$annotations) %>%
-        as.data.frame() %>%
-        filter(Var1 != "cancer_cells")
-        Idents(object) <- object$annotations
+        normal_cells <- table(object$new) %>%
+            as.data.frame() %>%
+            filter(Var1 != "cancer_cells")
+        Idents(object) <- object$new
         normal_obj <- subset(x = object,
                              idents = normal_cells$Var1) %>%
             process_seurat()
-        normal_obj <- RunHarmony(object = normal_obj,
-                                 group.by.vars = "sample_name")
+        if (multiomics == "yes") {
+            normal_obj <- RunHarmony(object = normal_obj,
+                                     group.by.vars = c("sample_name", "model", "data_type"),  #nolint
+                                     theta = c(3, 3, 3))
+        } else {
+            normal_obj <- RunHarmony(object = normal_obj,
+                                     group.by.vars = c("sample_name", "model"),
+                                     theta = c(3, 3))
+        }
+        res_normal <- optimize_silhouette(sobject = normal_obj,
+                                         test_res = seq(0.1, 0.9, by = 0.1),
+                                         summary_plot = FALSE) %>%
+            filter(sil_vals == max(sil_vals)) %>%
+            slice_head(n=1) %>%
+            dplyr::select(res_vals)
         normal_obj <- normal_obj %>%
-            process_seurat(reduction = "harmony")
+            process_seurat(reduction = "harmony",
+                           resolution = res_normal)
         qs::qsave(normal_obj, str_c("output/seurat_objects/tumor_vs_stroma/",   #nolint
                                     sobj,
                                     "_normal",
                                     ".qs"))
-        Idents(object) <- object$annotations
+        
+        Idents(object) <- object$new
         cancer_obj <- subset(x = object,
-                             idents = "cancer_cells")
+                             idents = "cancer_cells") %>%
+            process_seurat()
         if (multiomics == "yes") {
             cancer_obj <- RunHarmony(object = cancer_obj,
                                      group.by.vars = c("sample_name", "model", "data_type"),  #nolint
@@ -588,9 +715,15 @@ tumor_vs_stroma <- parallel::mclapply(seq_len(nrow(refs)), function(item) {
                                      group.by.vars = c("sample_name", "model"),
                                      theta = c(3, 3))
         }
+        # res_cancer <- optimize_silhouette(sobject = cancer_obj,
+        #                                  test_res = seq(0.1, 0.9, by = 0.1),
+        #                                  summary_plot = FALSE) %>%
+        #     filter(sil_vals == max(sil_vals)) %>%
+        #     slice_head(n=1) %>%
+        #     dplyr::select(res_vals)
         cancer_obj <- cancer_obj %>%
             process_seurat(reduction = "harmony",
-                           resolution = 0.05)
+                           resolution = 0.1)
         qs::qsave(cancer_obj, str_c("output/seurat_objects/tumor_vs_stroma/",  #nolint
                                     sobj,
                                     "_tumor",
@@ -604,14 +737,34 @@ tumor_vs_stroma <- parallel::mclapply(seq_len(nrow(refs)), function(item) {
 }, mc.cores = parallelly::availableCores())
 
 
+#Checkups to make sure the outputs make sense
+annotated <- qs::qread("output/seurat_objects/annotated_sobjs/patient_mets.qs")
+x <- DimPlot(annotated,
+             group.by = c("sample_name", "new", "data_type"),
+             repel = T,
+             label = T)
+
+tumor <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
+y <- DimPlot(tumor,
+             group.by = c("seurat_clusters", "new", "data_type"),
+             repel = T,
+             label = T)
+
+stroma <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_normal.qs")
+z <- DimPlot(stroma,
+             group.by = c("seurat_clusters", "new", "data_type"),
+             repel = T,
+             label = T)
+
+plots <- list(x, y)
+
+patchwork::wrap_plots(x, y, ncol = 2)
+
 ```
 
 ## DEGs and GSEA plot
 
 ```{r}
-mm_prim_tumor <- qs::qread("output/seurat_objects/harmony_sobjs/patient_mets.qs")
-
-DimPlot(mm_prim_tumor, group.by = c("sample_name", "seurat_clusters", "new"))
 
 run_degs <- function(sobject,
                      group_by = "",
@@ -785,9 +938,19 @@ two_way_plot <- function(data, x_col = "z_score") {
 }
 
 
-degs_result <- run_degs(sobject = mm_prim_tumor,
+
+combined <- qs::qread("output/seurat_objects/harmony_sobjs/mm_prim.qs")
+
+DimPlot(combined, group.by = c("sample_name", "seurat_clusters", "new"), label = T, ncol = 2, repel = T)
+
+patient_mets_tumor <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
+
+DimPlot(patient_mets_tumor, group.by = c("sample_name", "seurat_clusters", "data_type"), label = T, ncol = 2, repel = T)
+
+
+degs_result <- run_degs(sobject = mm_prim,
                         group_by = "seurat_clusters",
-                        prefix = "mm_prim_tumor")
+                        prefix = "patient_prim_tumor")
 
 gsea_result <- run_gsea(degs_result = degs_result,
                         category = "C2",
@@ -827,5 +990,29 @@ for (item in names(gsea_result)) {
 
 
 
+```{r}
 
+patient_mets <- qs::qread("output/seurat_objects/harmony_sobjs/patient_mets.qs")
+
+DimPlot(patient_mets, group.by = c("sample_name", "seurat_clusters", "new", "data_type"), label = T, ncol = 2)
+
+for(c in names(clusters)) {
+  for(m in de_methods) {
+    plots[[c]][[m]]$panel <-
+      (DimPlot(tumor) +
+      plots[[c]][[m]]$volcano) /
+      (plots[[c]][[m]]$BP +
+      plots[[c]][[m]]$MF +
+      plots[[c]][[m]]$CC)
+
+    ggsave(paste0("Plots/Primary/panel-", m, "-", c, ".pdf"),
+      plots[[c]][[m]]$panel,
+      device = "pdf",
+      width = 18,
+      height = 12,
+      units = "in")
+  }
+}
+
+```
 
