@@ -138,20 +138,20 @@ obj <- parallel::mclapply(seq_len(nrow(sample_details)), function(i) {
 }, mc.cores = 10)
 
 
-# individual QC numbers
-obj <- qs::qread("output/seurat_objects/single_sobj/patient/metastatic/SC072human.qs") #nolint
+# # individual QC numbers
+# obj <- qs::qread("output/seurat_objects/single_sobj/patient/metastatic/SC072human.qs") #nolint
 
-# Cutoff and cleaning
-try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
-                      "nCount_RNA", 0,        30000,
-                      "percent.mt", 0,        15)
+# # Cutoff and cleaning
+# try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
+#                       "nCount_RNA", 0,        30000,
+#                       "percent.mt", 0,        15)
 
-features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")    #nolint
+# features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")    #nolint
 
-# visualize the possible cutoff and adjust accordingly
-feature_hist(sobject = obj,
-             features = features,                         # nolint
-             cutoff_table = try_cutoff)
+# # visualize the possible cutoff and adjust accordingly
+# feature_hist(sobject = obj,
+#              features = features,                         # nolint
+#              cutoff_table = try_cutoff)
 
 #quality control and downsampling and saving the merged sobj
 what <- parallel::mclapply(unique(sample_details$unique), function(item) {
@@ -601,9 +601,48 @@ run_ensemble <- function(seurat_object, disease = "",
 }
 
 
-sobj <- qs::qread("output/seurat_objects/annotated_sobjs/patient_mets.qs")
+ensamble_table <- tribble(~sobj,           ~species,
+                        "patient_prim",    "human",
+                        "patient_mets",    "human",
+                        "mm_prim",         "mouse",
+                        "mm_mets",         "mouse",)
 
-DimPlot(sobj, group.by = c("new", "seurat_clusters", "sample_name"))
+
+tumor_ensamble <- parallel::mclapply(seq_len(nrow(ensamble_table)), function(item) {
+    sobj <- ensamble_table$sobj[item]
+    species <- ensamble_table$species[item]
+    object <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
+                              sobj,
+                              ".qs"))
+    object <- run_sctype(object, known_tissue_type="Immune system", plot=TRUE)
+    norm_cells=get_normal_cells(object, c("Macrophages"))
+    if (species == "human") {
+        object <- run_ensemble(object,
+                            disease="Cancer",
+                            known_normal_cells=norm_cells,
+                            #genome_cp = "mm10",
+                            #organism = "mouse",
+                            plot=FALSE)
+    } else {
+        object <- run_ensemble(object,
+                            disease="Cancer",
+                            known_normal_cells=norm_cells,
+                            genome_cp = "mm10",
+                            organism = "mouse",
+                            plot=FALSE)
+    }
+    plots <- visualize_ensemble_step(object)
+    ggsave(str_c("output/plots/", sobj, "_ensamble.pdf"),
+            width = 20,
+            height = 15,
+            plot = plots)
+}, mc.cores = parallelly::availableCores())
+
+
+
+sobj <- qs::qread("output/seurat_objects/annotated_sobjs/mm_prim.qs")
+
+DimPlot(sobj, group.by = c("new", "sample_name"))
 
 sobj <- run_sctype(sobj, known_tissue_type="Immune system", plot=TRUE)
 
@@ -612,11 +651,50 @@ norm_cells=get_normal_cells(sobj,c("Macrophages"))
 sobj <- run_ensemble(sobj,
                     disease="Cancer",
                     known_normal_cells=norm_cells,
-                    #genome_cp = "mm10",
-                    #organism = "mouse",
+                    genome_cp = "mm10",
+                    organism = "mouse",
                     plot=FALSE)
-
 visualize_ensemble_step(sobj)
+
+
+
+
+
+# Load example dataset 
+# You can also upload your own expression matrix: data = read.table("your.exp.rawdata.txt", header = TRUE, row.names = 1, sep = "\t").
+data <- read_zip("https://raw.githubusercontent.com/kris-nader/scTherapy/main/sample_x_exp.rawdata.txt.zip")
+patient_sample = CreateSeuratObject(counts = data)	
+   
+# simple filtering
+patient_sample[["percent.mt"]] = PercentageFeatureSet(patient_sample, pattern = "^MT-")
+patient_sample = subset(patient_sample, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+
+# normalize data
+patient_sample = NormalizeData(patient_sample, normalization.method = "LogNormalize", scale.factor = 10000)
+patient_sample = FindVariableFeatures(patient_sample, selection.method = "vst", nfeatures = 2000)
+
+# scale and PCA
+patient_sample = ScaleData(patient_sample, features = rownames(patient_sample))
+patient_sample = RunPCA(patient_sample, features = VariableFeatures(object = patient_sample))
+
+# check number of PC (optional)
+ElbowPlot(patient_sample)
+
+# Cluster and visualize
+patient_sample = FindNeighbors(patient_sample, dims = 1:10)
+patient_sample = FindClusters(patient_sample, resolution = 0.8)
+patient_sample = RunUMAP(patient_sample, dims = 1:10)
+DimPlot(patient_sample, reduction = "umap")
+
+patient_sample=run_sctype(sobj,known_tissue_type="Immune system",plot=TRUE)
+
+# please note that this step is time consuming (~10 minutes for example data), consider running on faster multi-core Linux or MacOS-based PC to speed up this process
+norm_cells=get_normal_cells(patient_sample,c("Macrophages"))
+
+patient_sample=run_ensemble(patient_sample,disease="AML",known_normal_cells=norm_cells,plot=FALSE, genome_cp = "mm10",
+                    organism = "mouse")
+
+visualize_ensemble_step(patient_sample)
 
 ```
 
@@ -636,16 +714,14 @@ refs <- tribble(~sobj,            ~split,   ~has_multiomics,
                "mm_prim",         "yes",    "no",
                "mm_mets",         "yes",    "no")
 
-sobj <- qs::qread("output/seurat_objects/harmony_sobjs/patient_mets.qs")
-DimPlot(sobj, group.by = c("new", "seurat_clusters"))
-
+sobj <- qs::qread("output/seurat_objects/harmony_sobjs/mm_prim.qs")
+DimPlot(sobj, group.by = c("seurat_clusters", "new"))
 
 cancer_celltypes <- list(patient_prim = c( "MSC",
                                            "Chondrocytes"),
                         normal_bone = c(),
                         patient_mets = c("Myofibroblast",
-                                         "MSC",
-                                         "Osteoblasts"),
+                                         "MSC"),
                         xeno_prim_human = c(),
                         xeno_mets_human = c(),
                         xeno_prim_mouse = c(),
@@ -736,29 +812,150 @@ tumor_vs_stroma <- parallel::mclapply(seq_len(nrow(refs)), function(item) {
     print(str_c(sobj, " labelled with cancer cells and subsetted"))
 }, mc.cores = parallelly::availableCores())
 
+````
 
+## Umap plots
+````{r}
 #Checkups to make sure the outputs make sense
-annotated <- qs::qread("output/seurat_objects/annotated_sobjs/patient_mets.qs")
+
+umaps_group <- 
+    tribble(~sobj,            ~species,   ~combine,
+            "patient_prim",    "human",    "alone",
+            "patient_mets",    "human",    "alone",
+            "xeno_prim",       "both",    "comb_prim",
+            "xeno_mets",       "both",    "comb_mets",
+            "mm_prim",         "mouse",    "alone",
+            "mm_mets",         "mouse",    "alone")
+
+
+for (item in seq_len(nrow(umaps_group))) {
+    sobj_name <- umaps_group$sobj[item]
+    combine <- umaps_group$combine[item]
+    species <- umaps_group$species[item]
+    if (combine == "alone") {
+        sobject <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
+                            sobj_name,
+                            ".qs"))
+        x <- DimPlot(sobject,
+                    group.by = "new",
+                    repel = T,
+                    label = T,
+                     label.size = 3) +
+                #theme_roberts() +
+                ggtitle("Tumor and Stromal cells") +
+                theme(legend.text = element_text(size = 7))
+                      #,legend.position = "top")
+
+        tumor <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                            sobj_name,
+                            "_tumor.qs"))
+        y <- DimPlot(tumor,
+                    group.by = "seurat_clusters",
+                    repel = T,
+                    label = T,
+                    label.size = 3) +
+                    #theme_roberts() +
+                ggtitle("Tumor cells reclustering") +
+                theme(legend.text = element_text(size = 7))
+                      #,legend.position = "top")
+
+        stroma <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                            sobj_name,
+                            "_normal.qs"))
+        z <- DimPlot(stroma,
+                    group.by = "new",
+                    repel = T,
+                    label = T,
+                    label.size = 3) +
+                    #theme_roberts() +
+                ggtitle("Stromal cells reclustering") +
+                theme(legend.text = element_text(size = 7))
+                      #,legend.position = "top")
+
+        plots <- list(x, y, z)
+        plot <- patchwork::wrap_plots(plots) + 
+                patchwork::plot_annotation(title = str_c("Umap of ", sobj_name),
+                                           theme = theme(plot.title = element_text(hjust = 0.5,
+                                                                                   size = 20,
+                                                                                   face = "bold")))  #nolint
+        ggsave(str_c("output/plots/umaps/", sobj_name, "_umap.pdf"),
+            width = 15,
+            height = 5,
+            plot = plot)
+    } else {
+        first_obj <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
+                                    sobj_name,
+                                    "_human.qs"))
+        x <- DimPlot(first_obj,
+                    group.by = "seurat_clusters",
+                    repel = T,
+                    label = T,
+                    label.size = 3) +
+                ggtitle("Tumor cells") +
+                theme(legend.text = element_text(size = 7))
+                      #,legend.position = "top")
+
+        second_obj <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
+                                    sobj_name,
+                                    "_mouse.qs"))
+        y <- DimPlot(second_obj,
+                    group.by = "new",
+                    repel = T,
+                    label = T,
+                    label.size = 3) +
+                ggtitle("Stromal cells") +
+                theme(legend.text = element_text(size = 7))
+                      #,legend.position = "top")
+        plots <- list(x, y)
+        plot <- patchwork::wrap_plots(plots) + 
+                patchwork::plot_annotation(title = str_c("Umap of ", sobj_name),
+                                           theme = theme(plot.title = element_text(hjust = 0.5,
+                                                                                   size = 20,
+                                                                                   face = "bold")))  #nolint
+        ggsave(str_c("output/plots/umaps/", sobj_name, "_umap.pdf"),
+            width = 12,
+            height = 6,
+            plot = plot)
+    }
+    print(str_c("Done plotting for ", sobj_name))
+}
+
+
+annotated <- qs::qread("output/seurat_objects/annotated_sobjs/patient_prim.qs")
 x <- DimPlot(annotated,
-             group.by = c("sample_name", "new", "data_type"),
+             group.by =  "new",
              repel = T,
-             label = T)
+             label = T) +
+        theme_roberts() +
+        ggtitle("Tumor and Stromal cells")
 
-tumor <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
+
+tumor <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_prim_tumor.qs")
 y <- DimPlot(tumor,
-             group.by = c("seurat_clusters", "new", "data_type"),
+             group.by = "seurat_clusters",
              repel = T,
-             label = T)
+             label = T) +
+        theme_roberts() +
+        ggtitle("Tumor cells reclustering")
 
-stroma <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_normal.qs")
+stroma <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_prim_normal.qs")
 z <- DimPlot(stroma,
-             group.by = c("seurat_clusters", "new", "data_type"),
+             group.by = "new",
              repel = T,
-             label = T)
+             label = T) +
+        theme_roberts() +
+        ggtitle("Stromal cells reclustering")
 
-plots <- list(x, y)
 
-patchwork::wrap_plots(x, y, ncol = 2)
+plots <- list(x, y, z)
+
+plot <- 
+    patchwork::wrap_plots(plots) + 
+    patchwork::plot_annotation(title = "xyz",
+                        theme = theme(plot.title = element_text(hjust = 0.5)))
+
+
+
 
 ```
 
