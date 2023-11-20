@@ -415,191 +415,8 @@ what <- parallel::mclapply(seq_len(nrow(refs)), function(i) {
 
 ```
 
-
-## SNVs calling
+## Cancer cells vs normal cells using SCEVAN
 ```{r}
-#Using snvs to differentiate cancer cells
-#for (item in unique(sample_details$unique)) {
-temp_df <- subset(sample_details, subset = (unique == "patient_mets"))
-sobj <- qs::qread("output/seurat_objects/harmony_sobjs/patient_mets.qs")
-control_celltypes <- c("Dendritic cells", "Macrophage")
-snv_sobjs <- list()
-for (i in seq_len(nrow(temp_df))) {
-    sample_path <- temp_df$sample_path[i]
-    sample_name <- temp_df$sample_name[i]
-    data_type <- temp_df$data_type[i]
-    Idents(sobj) <- sobj$sample_name
-    new_sobj <- subset(sobj, ident = sample_name)
-    if (grepl("^S0", sample_name)) {
-        normal_clusters <-
-            match_celltype_clusters(sobject = new_sobj,
-                                    normal_celltypes = control_celltypes,
-                                    cluster_col = "seurat_clusters",
-                                    celltype_col = "new")
-        c_b_t <-
-            new_sobj@meta.data %>%
-            select(seurat_clusters) %>%
-            dplyr::rename(cell_group = seurat_clusters) %>%
-            rownames_to_column("cell_barcode") %>%
-            as_tibble()
-
-        bamfile_name <- if_else(data_type == "three_prime",
-                                "possorted_genome_bam.bam",
-                                "gex_possorted_bam.bam")
-
-        c_b_t <- c_b_t %>%
-            mutate(bam_file = paste0("/home/gdrobertslab/lab/Counts/",
-                                     sample_path,
-                                     "/",
-                                     bamfile_name),
-                   cell_barcode = str_remove(cell_barcode, ".+_"))
-
-        snp_tree <-
-            get_snp_tree(cellid_bam_table = c_b_t,
-                            ploidy = "GRCh37",
-                            ref_fasta = "/home/gdrobertslab/lab/GenRef/10x-human/fasta/genome.fa",     #nolint
-                            min_depth = 5,
-                            temp_dir = paste0("output/snv_calling/temp_dir/",
-                                              sample_name),
-                            sbatch_base = "new_sobj",
-                            slurm_base = paste0("output/snv_calling/slurmOut/",   #nolint
-                                                sample_name),
-                            min_sites_covered = 1000,
-                            cleanup = FALSE)
-        png(str_c("output/snv_calling/snv_trees/",
-                    sample_name, ".png"),
-            width = 2500,
-            height = 2500,
-            res = 300)
-        plot(snp_tree)
-        dev.off()
-
-        snp_sobj <-
-            label_tree_groups(sobject = new_sobj,
-                                dist_tree = snp_tree,
-                                group_col_name = "seurat_clusters",
-                                normal_groups = normal_clusters,
-                                cut_n_groups = 2)
-        
-        snv_sobjs[[sample_name]] <- snp_sobj
-
-        umap_plot <- DimPlot(object = snp_sobj,
-                group.by = c("snp_tumor_call",
-                             "new"),
-                label = TRUE,
-                repel = TRUE) +
-            NoLegend()
-        ggsave(str_c("output/snv_calling/", sample_name, "_umap.pdf"),
-        width = 4,
-        height = 3,
-        plot = umap_plot)
-
-    } else {
-        print(str_c(sample_name, " does not have a bam file"))
-    }
-}
-
- dist_tree <-
-        calc_tree(matrix_file = "output/snv_calling/temp_dir/S0058/distances.tsv",
-                  counts_file = "output/snv_calling/temp_dir/S0058/distances_tot_count.tsv",
-                  min_sites = 5)
-
-file.exists("allsamples.rmd")                                                                                    
-[1] FALSE
-> file.exists("Rfiles/allsamples.rmd")
-
-````
-
-
-
-
-## TRY Invisible algorithm
-```{r}
-# Load required libraries and source functions
-invisible(lapply(c("dplyr","Seurat","HGNChelper","openxlsx","copykat",
-                   "copykatRcpp","ggplot2", "SCEVAN","yaGST","cowplot",
-                   "Rcpp", "Rclusterpp", "parallel","biomaRt","logger",
-                   "httr", "jsonlite", "readr","future"),
-                 library,
-                 character.only = !0))
-
-invisible(lapply(c("https://raw.githubusercontent.com/kris-nader/scTherapy/main/R/identify_mal_norm.R",
-		   "https://raw.githubusercontent.com/kris-nader/scTherapy/main/R/identify_subclones.R",
-		   "https://raw.githubusercontent.com/kris-nader/scTherapy/main/R/predict_compounds.R"),source))
-
-run_ensemble <- function(seurat_object, disease = "",
-                         known_normal_cells = "",
-                         custom_marker="https://raw.githubusercontent.com/kris-nader/TBD/main/sctype_aml_cellmarker20_cosmic.xlsx",   #nolint
-                         genome_cp = "hg20",
-                         plot = FALSE,
-                         organism ="human") {
-    if (is.null(seurat_object)) {
-        stop("Argument 'seurat_object' is missing")
-    }
-    if (!inherits(seurat_object, "Seurat")) {
-        stop("Argument 'seurat_object' must be a Seurat object")
-    }
-    check <- openxlsx::read.xlsx(custom_marker)
-    sctype_e <- FALSE
-    if (disease %in% unique(check$tissueType)) {
-        sctype_e <- TRUE
-        seurat_object <- run_sctype(seurat_object,
-                                    known_tissue_type = disease,
-                                    plot = FALSE,
-                                    custom_marker_file = custom_marker,
-                                    name = "sctype_malignant_healthy")
-        seurat_object <- run_SCEVAN(seurat_object,
-                                    known_normal_cells = known_normal_cells,
-                                    plot = FALSE,
-                                    organism_ = organism)
-    }
-    ncores <- ifelse(Sys.info()["sysname"] != "Windows", max(1, parallel::detectCores() - 2), 1)
-    seurat_object <- run_copyKat(seurat_object,
-                                known_normal_cells = known_normal_cells,
-                                plot = FALSE,
-                                genome = genome_cp,
-                                ncores = ncores)
-    if (!sctype_e) {
-        print("SCEVAN:PRED")
-        seurat_object <- run_SCEVAN(seurat_object,
-                                    known_normal_cells = known_normal_cells,
-                                    all_pred = FALSE,
-                                    plot = FALSE)
-    }
-    seurat_object1 <- seurat_object
-    if (sctype_e) {
-        seurat_object1@meta.data[which(seurat_object1@meta.data$sctype_malignant_healthy == "Unknown"),
-                                "sctype_malignant_healthy"] <- "malignant"
-        temp <- data.frame(copyKat_output = seurat_object1@meta.data$copyKat_output,
-                        SCEVAN_output = seurat_object1@meta.data$SCEVAN_output,
-                        sctype_malignant_healthy = seurat_object1@meta.data$sctype_malignant_healthy)
-        rownames(temp) <- rownames(seurat_object1@meta.data)
-
-        majority <- apply(temp, 1, function(x) {
-        levels_x <- unique(x)
-        freq_x <- tabulate(match(x, levels_x))
-        levels_x[which.max(freq_x)]
-        })
-        seurat_object1@meta.data$ensemble_output <- majority
-        text_ <- paste("New metadata added:", "ensemble_output")
-        print(text_)
-    } else {
-        seurat_object1@meta.data$sctype_malignant_healthy <- "NA"
-        temp <- data.frame(copyKat_output = seurat_object1@meta.data$copyKat_output,
-                        SCEVAN_output = seurat_object1@meta.data$SCEVAN_output)
-        rownames(temp) <- rownames(seurat_object1@meta.data)
-        colnames(temp) <- c("copyKat_output", "SCEVAN_output")
-        
-        temp$ensemble_output <- ifelse(temp$SCEVAN_output == temp$copyKat_output,
-                                    temp$copyKat_output,
-                                    "malignant")
-        seurat_object1@meta.data$ensemble_output[rownames(temp)] <- temp[rownames(temp), "ensemble_output"]
-        text_ <- paste("New metadata added:", "ensemble_output")
-        print(text_)
-    }
-    return(seurat_object1)
-}
-
 
 ensamble_table <- tribble(~sobj,           ~species,
                         "patient_prim",    "human",
@@ -607,94 +424,18 @@ ensamble_table <- tribble(~sobj,           ~species,
                         "mm_prim",         "mouse",
                         "mm_mets",         "mouse",)
 
-
 tumor_ensamble <- parallel::mclapply(seq_len(nrow(ensamble_table)), function(item) {
     sobj <- ensamble_table$sobj[item]
     species <- ensamble_table$species[item]
     object <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
                               sobj,
                               ".qs"))
-    object <- run_sctype(object, known_tissue_type="Immune system", plot=TRUE)
-    norm_cells=get_normal_cells(object, c("Macrophages"))
-    if (species == "human") {
-        object <- run_ensemble(object,
-                            disease="Cancer",
-                            known_normal_cells=norm_cells,
-                            #genome_cp = "mm10",
-                            #organism = "mouse",
-                            plot=FALSE)
-    } else {
-        object <- run_ensemble(object,
-                            disease="Cancer",
-                            known_normal_cells=norm_cells,
-                            genome_cp = "mm10",
-                            organism = "mouse",
-                            plot=FALSE)
-    }
-    plots <- visualize_ensemble_step(object)
-    ggsave(str_c("output/plots/", sobj, "_ensamble.pdf"),
-            width = 20,
-            height = 15,
-            plot = plots)
+    count_mtx <- object@assays$RNA@counts
+    results <- SCEVAN::pipelineCNA(count_mtx,
+                                   organism = species)
+    object <- Seurat::AddMetaData(object, metadata = results)
 }, mc.cores = parallelly::availableCores())
 
-
-
-sobj <- qs::qread("output/seurat_objects/annotated_sobjs/mm_prim.qs")
-
-DimPlot(sobj, group.by = c("new", "sample_name"))
-
-sobj <- run_sctype(sobj, known_tissue_type="Immune system", plot=TRUE)
-
-norm_cells=get_normal_cells(sobj,c("Macrophages"))
-
-sobj <- run_ensemble(sobj,
-                    disease="Cancer",
-                    known_normal_cells=norm_cells,
-                    genome_cp = "mm10",
-                    organism = "mouse",
-                    plot=FALSE)
-visualize_ensemble_step(sobj)
-
-
-
-
-
-# Load example dataset 
-# You can also upload your own expression matrix: data = read.table("your.exp.rawdata.txt", header = TRUE, row.names = 1, sep = "\t").
-data <- read_zip("https://raw.githubusercontent.com/kris-nader/scTherapy/main/sample_x_exp.rawdata.txt.zip")
-patient_sample = CreateSeuratObject(counts = data)	
-   
-# simple filtering
-patient_sample[["percent.mt"]] = PercentageFeatureSet(patient_sample, pattern = "^MT-")
-patient_sample = subset(patient_sample, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
-
-# normalize data
-patient_sample = NormalizeData(patient_sample, normalization.method = "LogNormalize", scale.factor = 10000)
-patient_sample = FindVariableFeatures(patient_sample, selection.method = "vst", nfeatures = 2000)
-
-# scale and PCA
-patient_sample = ScaleData(patient_sample, features = rownames(patient_sample))
-patient_sample = RunPCA(patient_sample, features = VariableFeatures(object = patient_sample))
-
-# check number of PC (optional)
-ElbowPlot(patient_sample)
-
-# Cluster and visualize
-patient_sample = FindNeighbors(patient_sample, dims = 1:10)
-patient_sample = FindClusters(patient_sample, resolution = 0.8)
-patient_sample = RunUMAP(patient_sample, dims = 1:10)
-DimPlot(patient_sample, reduction = "umap")
-
-patient_sample=run_sctype(sobj,known_tissue_type="Immune system",plot=TRUE)
-
-# please note that this step is time consuming (~10 minutes for example data), consider running on faster multi-core Linux or MacOS-based PC to speed up this process
-norm_cells=get_normal_cells(patient_sample,c("Macrophages"))
-
-patient_sample=run_ensemble(patient_sample,disease="AML",known_normal_cells=norm_cells,plot=FALSE, genome_cp = "mm10",
-                    organism = "mouse")
-
-visualize_ensemble_step(patient_sample)
 
 ```
 
@@ -799,7 +540,7 @@ tumor_vs_stroma <- parallel::mclapply(seq_len(nrow(refs)), function(item) {
         #     dplyr::select(res_vals)
         cancer_obj <- cancer_obj %>%
             process_seurat(reduction = "harmony",
-                           resolution = 0.1)
+                           resolution = 0.05)
         qs::qsave(cancer_obj, str_c("output/seurat_objects/tumor_vs_stroma/",  #nolint
                                     sobj,
                                     "_tumor",
@@ -819,19 +560,19 @@ tumor_vs_stroma <- parallel::mclapply(seq_len(nrow(refs)), function(item) {
 #Checkups to make sure the outputs make sense
 
 umaps_group <- 
-    tribble(~sobj,            ~species,   ~combine,
-            "patient_prim",    "human",    "alone",
-            "patient_mets",    "human",    "alone",
-            "xeno_prim",       "both",    "comb_prim",
-            "xeno_mets",       "both",    "comb_mets",
-            "mm_prim",         "mouse",    "alone",
-            "mm_mets",         "mouse",    "alone")
+    tribble(~sobj,            ~title,                ~combine,
+            "patient_prim",    "Patient Primary",    "alone",
+            "patient_mets",    "Patient Metastatic",    "alone",
+            "xeno_prim",       "Xenograft Primary",    "comb_prim",
+            "xeno_mets",       "Xenograft Metastatic",    "comb_mets",
+            "mm_prim",         "Mouse Primary",          "alone",
+            "mm_mets",         "Mouse Metastatic",    "alone")
 
 
 for (item in seq_len(nrow(umaps_group))) {
     sobj_name <- umaps_group$sobj[item]
     combine <- umaps_group$combine[item]
-    species <- umaps_group$species[item]
+    title <- umaps_group$title[item]
     if (combine == "alone") {
         sobject <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
                             sobj_name,
@@ -840,11 +581,13 @@ for (item in seq_len(nrow(umaps_group))) {
                     group.by = "new",
                     repel = T,
                     label = T,
-                     label.size = 3) +
-                #theme_roberts() +
+                    shuffle= T,
+                    cols = c(plot_cols, sample(rainbow(1000)))) +
+                NoLegend() +
+                coord_fixed() +
                 ggtitle("Tumor and Stromal cells") +
                 theme(legend.text = element_text(size = 7))
-                      #,legend.position = "top")
+
 
         tumor <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                             sobj_name,
@@ -853,11 +596,14 @@ for (item in seq_len(nrow(umaps_group))) {
                     group.by = "seurat_clusters",
                     repel = T,
                     label = T,
-                    label.size = 3) +
-                    #theme_roberts() +
+                    shuffle= T,
+                    #label.size = 4,
+                    cols = c(plot_cols, sample(rainbow(1000)))) +
+                NoLegend() +
+                #coord_fixed() +
                 ggtitle("Tumor cells reclustering") +
                 theme(legend.text = element_text(size = 7))
-                      #,legend.position = "top")
+
 
         stroma <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                             sobj_name,
@@ -866,19 +612,22 @@ for (item in seq_len(nrow(umaps_group))) {
                     group.by = "new",
                     repel = T,
                     label = T,
-                    label.size = 3) +
-                    #theme_roberts() +
+                    shuffle= T,
+                    label.size = 4,
+                    cols = c(plot_cols, sample(rainbow(1000)))) +
+                NoLegend() +
+                coord_fixed() +
                 ggtitle("Stromal cells reclustering") +
                 theme(legend.text = element_text(size = 7))
-                      #,legend.position = "top")
+
 
         plots <- list(x, y, z)
         plot <- patchwork::wrap_plots(plots) + 
-                patchwork::plot_annotation(title = str_c("Umap of ", sobj_name),
+                patchwork::plot_annotation(title = str_c("UMAP for ", title),
                                            theme = theme(plot.title = element_text(hjust = 0.5,
                                                                                    size = 20,
-                                                                                   face = "bold")))  #nolint
-        ggsave(str_c("output/plots/umaps/", sobj_name, "_umap.pdf"),
+                                                                                   face = "bold")))
+        ggsave(str_c("output/plots/umaps/", sobj_name, "_umap.png"),
             width = 15,
             height = 5,
             plot = plot)
@@ -890,10 +639,13 @@ for (item in seq_len(nrow(umaps_group))) {
                     group.by = "seurat_clusters",
                     repel = T,
                     label = T,
-                    label.size = 3) +
+                    shuffle= T,
+                    label.size = 4,
+                    cols = c(plot_cols, sample(rainbow(1000)))) +
+                NoLegend() +
+                coord_fixed() +
                 ggtitle("Tumor cells") +
                 theme(legend.text = element_text(size = 7))
-                      #,legend.position = "top")
 
         second_obj <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
                                     sobj_name,
@@ -902,19 +654,23 @@ for (item in seq_len(nrow(umaps_group))) {
                     group.by = "new",
                     repel = T,
                     label = T,
-                    label.size = 3) +
+                    shuffle= T,
+                    label.size = 4,
+                    cols = c(plot_cols, sample(rainbow(1000)))) +
+                NoLegend() +
+                coord_fixed() +
                 ggtitle("Stromal cells") +
                 theme(legend.text = element_text(size = 7))
-                      #,legend.position = "top")
+
         plots <- list(x, y)
         plot <- patchwork::wrap_plots(plots) + 
-                patchwork::plot_annotation(title = str_c("Umap of ", sobj_name),
+                patchwork::plot_annotation(title = str_c("UMAP for ", title),
                                            theme = theme(plot.title = element_text(hjust = 0.5,
                                                                                    size = 20,
-                                                                                   face = "bold")))  #nolint
-        ggsave(str_c("output/plots/umaps/", sobj_name, "_umap.pdf"),
-            width = 12,
-            height = 6,
+                                                                                   face = "bold")))
+        ggsave(str_c("output/plots/umaps/", sobj_name, "_umap.png"),
+            width = 15,
+            height = 5,
             plot = plot)
     }
     print(str_c("Done plotting for ", sobj_name))
@@ -1051,34 +807,6 @@ run_gsea <- function(degs_result,
 
 ```{r}
 
-# theme_roberts <- function(axis_font_size = 5,
-#                           axis_title_font_size = 8,
-#                           facet_font_size = 5,
-#                           font_name = "Arial",
-#                           legend_key_size = "0.2",
-#                           legend_text_font_size = 5,
-#                           legend_title_font_size = 6,
-#                           subtitle_font_size = 6,
-#                           title_font_size = 10) {
-#     list(ggpubr::theme_pubr(base_family = font_name) +
-#          ggplot2::theme(
-#             axis.text = ggplot2::element_text(size = axis_font_size),
-#             axis.title = ggplot2::element_text(size = axis_title_font_size),
-#             plot.title = ggplot2::element_text(size = title_font_size,
-#                                                face = "bold",
-#                                                hjust = 0.5),
-#             strip.text = ggplot2::element_text(size = facet_font_size,
-#                                                face = "bold"),
-#             plot.subtitle = ggplot2::element_text(hjust = 0.5,
-#                                                   size = subtitle_font_size),
-#             legend.text = ggplot2::element_text(size = legend_text_font_size),
-#             legend.title = ggplot2::element_text(size = legend_title_font_size,
-#                                                  face = "bold"),
-#             strip.background = ggplot2::element_blank(),
-#             legend.key.size = ggplot2::unit(0.2, "cm")
-#             ),
-#     ggplot2::scale_color_manual(values = plot_cols))
-# }
 
 two_way_plot <- function(data, x_col = "z_score") {
     lab4plot <-
@@ -1098,13 +826,14 @@ two_way_plot <- function(data, x_col = "z_score") {
         geom_hline(yintercept = 0,
                     color = "black",
                     linewidth = 0.5) +
-        geom_text(data = data,
+        geom_text(data = data,                #text for pathways names
                     aes(x = -1 * order,
                         y = y_pos,
                         hjust = justify_y,
                         label = pathway),
-                    size = 1) +
-        geom_text(data = lab4plot,
+                        size = 1.3,
+                        fontface = "bold") +
+        geom_text(data = lab4plot,    #text for upregulated/downregulated
                   aes(x = x,
                       y = y,
                       label = label),
@@ -1122,7 +851,7 @@ two_way_plot <- function(data, x_col = "z_score") {
               axis.line.y = element_blank(),
               axis.title.x = element_text(size = 7),
               axis.ticks.y = element_blank(),
-              plot.title = element_text(size = 10, face = "bold"),
+              plot.title = element_text(size = 7, face = "bold"),    #title of the plot
               axis.text.y = element_blank(),
               axis.text.x = element_text(size = 7)) +
         labs(title = data$sample[1],
@@ -1136,23 +865,29 @@ two_way_plot <- function(data, x_col = "z_score") {
 
 
 
+
 combined <- qs::qread("output/seurat_objects/harmony_sobjs/mm_prim.qs")
 
 DimPlot(combined, group.by = c("sample_name", "seurat_clusters", "new"), label = T, ncol = 2, repel = T)
 
-patient_mets_tumor <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
+patient_prim_tumor <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_prim_tumor.qs")
 
-DimPlot(patient_mets_tumor, group.by = c("sample_name", "seurat_clusters", "data_type"), label = T, ncol = 2, repel = T)
+patient_prim_tumor <- optimize_silhouette(patient_prim_tumor)
+
+patient_prim_tumor <- process_seurat(patient_prim_tumor, resolution = 0.1)
+
+DimPlot(patient_prim_tumor, group.by = c("sample_name", "data_type", "seurat_clusters"), label = T, ncol = 3, repel = T, shuffle = T)
 
 
-degs_result <- run_degs(sobject = mm_prim,
+
+degs_result <- run_degs(sobject = patient_prim_tumor,
                         group_by = "seurat_clusters",
                         prefix = "patient_prim_tumor")
 
 gsea_result <- run_gsea(degs_result = degs_result,
                         category = "C2",
                         subcategory = "CP:KEGG",
-                        species = "mouse")
+                        species = "human")
 
 
 for (item in names(gsea_result)) {
@@ -1168,20 +903,80 @@ for (item in names(gsea_result)) {
                                     padj) %>%
                     arrange(desc(NES)) %>%
                     mutate(pathway = as.factor(pathway) %>%
+                            str_replace_all("_", " ") %>%
                             str_wrap(80) %>%
                             fct_reorder(NES),
                        sample = item,
                        order = 1:n(),
                        justify_y = if_else(NES > 0, 1, 0),
                        y_pos = if_else(NES > 0, -0.1, 0.1))
-    pdf(paste0("output/plots/mousemodel/gsea/gsea_",
+    plot_name <- print(two_way_plot(top5up_down, x_col = "NES"))
+    ggsave(str_c("output/plots/patient/gsea/gsea_",
                    item,
-                   "_barplots.pdf"),
+                   "_barplots.png"),
             width = 4,
-            height = 3)
-        print(two_way_plot(top5up_down, x_col = "NES"))
-        dev.off()
+            height = 3,
+            plot = plot_name)
 }
+
+
+a <- DimPlot(patient_prim_tumor,
+            group.by = "seurat_clusters",
+            label = T,
+            #ncol = 3,
+            repel = T,
+            shuffle = T,
+            cols = c(plot_cols, sample(rainbow(1000)))) +
+    NoLegend() +
+    coord_fixed() +
+    ggtitle("Seurat Clusters") +
+    theme(legend.text = element_text(size = 7))
+
+b <- DimPlot(patient_prim_tumor,
+            group.by = "sample_name",
+            label = T,
+            #ncol = 3,
+            repel = T,
+            shuffle = T,
+            cols = c(plot_cols, sample(rainbow(1000)))) +
+    NoLegend() +
+    coord_fixed() +
+    ggtitle("Integration by Sample") +
+    theme(legend.text = element_text(size = 7))
+
+tumor <- RenameIdents(patient_prim_tumor,
+    `0` = "Growth - metabolism and recovery",
+    `1` = "Matrix producing",
+    `2` = "Growth - actively cycling",
+    `3` = "Growth - metabolism and recovery",
+    `4` = "Inflammatory/interactive",
+    `5` = "Basal/Quiscent",
+    `6` = "Basal/Quiscent"
+)
+
+c <- DimPlot(tumor,
+            #group.by = "sample_name",
+            label = T,
+            #ncol = 3,
+            repel = T,
+            cols = c(plot_cols, sample(rainbow(1000)))) +
+    NoLegend() +
+    coord_fixed() +
+    ggtitle("Clonal Celltype Assignment") +
+    theme(legend.text = element_text(size = 7))
+
+
+plots <- list(a, b, c)
+plot <- patchwork::wrap_plots(plots) + 
+        patchwork::plot_annotation(title = str_c("UMAP for "),
+                                    theme = theme(plot.title = element_text(hjust = 0.5,
+                                                                            size = 20,
+                                                                            face = "bold")))
+ggsave("output/plots/umaps/prim_cancer_celltypes.png",
+            width = 15,
+            height = 5,
+            plot = plot)
+
 
 ```
 
@@ -1191,7 +986,7 @@ for (item in names(gsea_result)) {
 
 patient_mets <- qs::qread("output/seurat_objects/harmony_sobjs/patient_mets.qs")
 
-DimPlot(patient_mets, group.by = c("sample_name", "seurat_clusters", "new", "data_type"), label = T, ncol = 2)
+DimPlot(patient_mets, group.by = c("sample_name", "seurat_clusters", "new"), label = T, shuffle = T)
 
 for(c in names(clusters)) {
   for(m in de_methods) {
@@ -1213,3 +1008,343 @@ for(c in names(clusters)) {
 
 ```
 
+
+## Stromal analysis
+```{r}
+normal_lungs <- qs::qread("input/downloads/normal_lung.qs")
+
+normal_lungs$free_annotation <-
+    str_replace_all(normal_lungs$free_annotation, c("/" = "_",
+                                                  "\\+" = "_plus"))
+
+normal_lungs$free_annotation <-
+    stringr::str_replace_all(normal_lungs$free_annotation,
+                              c("Alveolar Epithelial Type 1" = "Alveolar Epithelial",  #nolint
+                                "Alveolar Epithelial Type 2" = "Alveolar Epithelial",  #nolint
+                                "Basophil_Mast 1" = "Basophil_Mast",
+                                "Basophil_Mast 2" = "Basophil_Mast",
+                                "Bronchial Vessel 1" = "Bronchial Vessel",
+                                "Bronchial Vessel 2" = "Bronchial Vessel",
+                                "IGSF21_plus Dendritic" = "Dendritic cells",
+                                "Myeloid Dendritic Type 1" = "Myeloid Dendritic",   #nolint
+                                "Myeloid Dendritic Type 2" = "Myeloid Dendritic",   #nolint
+                                "Natural Killer" = "NK cells",
+                                "Natural Killer T" = "NKT",
+                                "NK cells T" = "NKT",
+                                "CD4_plus Memory/Effector T" = "CD4+ T cells",
+                                "CD4_plus Naive T" = "CD4+ T cells",
+                                "CD8_plus Memory_Effector T" = "CD8+ T cells",
+                                "CD8_plus Naive T" = "CD8+ T cells",
+                                "Proliferating NK_T" = "NKT",
+                                "TREM2_plus Dendritic" = "Dendritic cells",
+                                "Proliferating Macrophage" = "Macrophage",
+                                "Nonclassical Monocyte" = "Monocytes",
+                                "Classical Monocyte" = "Monocytes"))
+
+#looks like there is no mitochondrial genes in the normal cells
+#So need to remove the mitochondrial reads from the tumor associated too
+for (item in rownames(normal_lungs)) {
+  if (stringr::str_detect(item, "^CYTB") == TRUE) {
+      print(item)
+  }
+}
+
+for (item in rownames(normal_lungs)) {
+  if (stringr::str_detect(item, "^RP[SL][[:digit:]]") == TRUE) {
+      print(item)
+  }
+}
+
+normal_lungs <- normal_lungs %>% process_seurat()
+
+#set the idents
+normal_lungs$sample_name <- normal_lungs$channel
+
+normal_lungs$new <- normal_lungs$free_annotation
+
+#Tumor associated lung cells
+tumor_associated <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_normal.qs")
+
+#gives the rownames with the MT- genes
+mt_genes_rows <- grep("^MT-", rownames(tumor_associated))
+nonmt_genes_rows <- grep("MT-", rownames(tumor_associated), invert = TRUE)
+
+FeaturePlot(tumor_associated, features = abc)
+FeaturePlot(normal_lungs, features = abc)
+
+tumor_associated <- tumor_associated[nonmt_genes_rows, ]
+
+for (item in rownames(tumor_associated)) {
+  if (stringr::str_detect(item, "MT-") == TRUE) {
+      print(item)
+  }
+}
+
+#insert a column for the each seurat object for DEGs
+normal_lungs@meta.data$type <- "normal"
+tumor_associated@meta.data$type <- "tumor_associated"
+
+#combine the seurat objects for DEGS by pseudobluk
+sobj_comb <- merge(x = normal_lungs,
+                   y = tumor_associated,
+                   add.cell.id = c("normal", "tumor_associated"),
+                   project = "sobj_comb")
+
+
+#set the idents for the subsetting
+Idents(sobj_comb) <- sobj_comb$new
+
+#make a table of cell types you want from the tumor_associated
+cellinfo <- table(tumor_associated$new) %>%
+            as.data.frame() %>%
+            filter(Freq > 10)
+
+cellinfo$Var1 %>% as.character()
+celltypes <- c("Alveolar Epithelial", "Bronchial Vessel",
+                "CD4_plus Memory_Effector T",
+                "Dendritic cells", "Macrophage",
+                 "Plasma", "Vascular Smooth Muscle")
+
+#subset the object with the cells you are interested in
+Idents(sobj_comb) <- sobj_comb$new
+
+subset_sobj_comb <- subset(sobj_comb,
+                    idents = celltypes) %>%
+            process_seurat(resolution = 0.1)
+
+#visualize in dimplot
+DimPlot(subset_sobj_comb, group.by = c("type", "new"))
+
+harmony_sobj_comb <- harmony::RunHarmony(subset_sobj_comb,
+                                group.by.vars = c("sample_name", "type"))
+
+harmony_sobj_comb <- harmony_sobj_comb %>%
+    process_seurat(reduction = "harmony",
+                   resolution = 0.1)
+
+DimPlot(harmony_sobj_comb, group.by = c("new", "sample_name", "type")) + coord_fixed()
+
+combined <- DimPlot(harmony_sobj_comb,
+                    group.by = "new",
+                    repel = T,
+                    label = T,
+                    cols = c(plot_cols, sample(rainbow(1000)))) +
+                NoLegend() +
+                #coord_fixed() +
+                ggtitle("Combined with Celltypes") +
+                theme(legend.text = element_text(size = 7))
+
+Idents(harmony_sobj_comb) <- harmony_sobj_comb$type
+
+split <- DimPlot(harmony_sobj_comb,
+                    group.by = "type",
+                    #split.by = "type",
+                    label = TRUE,
+                    cols = c(plot_cols, sample(rainbow(1000))),
+                    shuffle = TRUE) +
+            #NoLegend() +
+            #coord_fixed() +
+            ggtitle("Split by Type") +
+            theme(legend.text = element_text(size = 10))
+                    # coord_fixed() +
+                    # ggtitle("UMAP for Normal and Tumor Associated Lung") +
+                    # theme(plot.title = element_text(hjust = 0.5,
+                    #                                 size = 20))
+
+plots <- list(combined, split)
+plot <- patchwork::wrap_plots(plots) + 
+        patchwork::plot_annotation(title = str_c("UMAP for Normal and Tumor-Assocaited Lung"),
+                                    theme = theme(plot.title = element_text(hjust = 0.5,
+                                                                            size = 20,
+                                                                            face = "bold")))
+
+ggsave(str_c("output/plots/umaps/normal_stromal.png"),
+            width = 13,
+            height = 5,
+            plot = plot)
+
+calc_logfc <- function(sobj,
+                       group_var,
+                       group_1,
+                       group_2,
+                       epsilon = 1,
+                       assay = "SCT") {
+    all_obs_exp <-
+        AverageExpression(sobj,
+                          group.by = group_var,
+                          assays = assay)[[1]] %>%
+        as.data.frame()
+
+    log_fc <-
+        tibble(log_fc = log2((all_obs_exp[[group_1]] + epsilon) /
+                             (all_obs_exp[[group_2]] + epsilon)),
+               gene = rownames(all_obs_exp))
+
+    return(log_fc)
+}
+
+watch this video for deseq in celltype level..
+https://www.youtube.com/watch?v=04gB2owLKus&t=636s
+
+Idents(harmony_sobj_comb) <- harmony_sobj_comb$new
+
+degs_results <- list()
+
+# for (celltypes in unique(harmony_sobj_comb$new)) {
+#     df <- subset(x = harmony_sobj_comb,
+#                 idents = celltypes)
+#     Idents(df) <- df$type
+#     temp <- FindMarkers(object = df,
+#                         ident.1 = "tumor_associated",
+#                         ident.2 = "normal",
+#                         logfc.threshold = 0) %>%
+#     arrange(desc(avg_log2FC)) %>%
+#     rownames_to_column(var = "gene") %>%
+#     dplyr::pull(avg_log2FC, name = gene)
+#     celltypes <- gsub(" ", "", celltypes)
+#     celltypes <- gsub("/", "_", celltypes)
+#     celltypes <- gsub("+", "", celltypes)
+#     degs_results[[celltypes]] <- temp
+# }
+
+
+looks like all the of th resilts forom this analysis seem to have the same pathways upregulated. Something is wrong. Maybe the genee MT. 
+
+Also, what is shuffle? RYan told me about?
+Shuffle = TRUE in dimplot
+
+for (celltypes in unique(harmony_sobj_comb$new)) {
+    Idents(harmony_sobj_comb) <- harmony_sobj_comb$new
+    df <- subset(x = harmony_sobj_comb,
+                idents = celltypes)
+    Idents(df) <- df$type
+    degs_result <-
+       calc_logfc(df,
+                  group_var = "type",
+                  group_1 = "tumor_associated",
+                  group_2 = "normal",
+                  epsilon = 1,
+                  assay = "RNA") %>%
+        arrange(desc(log_fc)) %>%
+        #rownames_to_column(var = "gene") %>%
+        dplyr::pull(log_fc, name = gene)
+    celltypes <- gsub(" ", "", celltypes)
+    celltypes <- gsub("/", "_", celltypes)
+    celltypes <- gsub("+", "", celltypes)
+    degs_results[[celltypes]] <- degs_result
+}
+
+gsea_ref <- msigdbr::msigdbr(species = "Homo sapiens",
+                             category = "C2",
+                             subcategory = "CP:KEGG") %>%
+    split(x = .$gene_symbol, f = .$gs_name)
+
+
+gsea_outputs <- list()
+
+for (item in names(degs_results)) {
+    gsea_output <- fgsea::fgseaMultilevel(gsea_ref,
+                                        degs_results[[item]],
+                                        minSize = 10,
+                                        maxSize = 500,
+                                        nPerm = 1000)
+    gsea_outputs[[item]] <- gsea_output
+}
+
+for (item in names(gsea_outputs)) {
+    top5up_down <- rbind(gsea_outputs[[item]] %>%
+                            filter(NES > 0) %>%
+                            slice_head(n = 5),
+                         gsea_outputs[[item]] %>%
+                            filter(NES < 0) %>%
+                            slice_tail(n = 5)) %>%
+                    dplyr::select(pathway,
+                                    NES,
+                                    size,
+                                    padj) %>%
+                    arrange(desc(NES)) %>%
+                    mutate(pathway = as.factor(pathway) %>%
+                            str_replace_all("_", " ") %>%
+                            str_wrap(80) %>%
+                            fct_reorder(NES),
+                       sample = item,
+                       order = 1:n(),
+                       justify_y = if_else(NES > 0, 1, 0),
+                       y_pos = if_else(NES > 0, -0.1, 0.1))
+        plot_name <- two_way_plot(top5up_down, x_col = "NES")
+        ggsave(str_c("output/plots/patient/gsea/gsea_",
+                   item,
+                   "_barplots.png"),
+            width = 4,
+            height = 3,
+            plot = plot_name)
+
+}
+
+Idents(harmony_sobj_comb) <- harmony_sobj_comb$type
+
+normal <- subset(harmony_sobj_comb, idents = "normal") %>% 
+    FeaturePlot(features = abc)
+
+subset(harmony_sobj_comb, idents = "tumor_associated") %>% 
+    FeaturePlot(features = abc)
+
+abc <- gsea_outputs$Macrophage$leadingEdge[1] %>% unlist()
+adherens <- gsea_outputs$Macrophage$leadingEdge[3] %>% unlist()
+
+sub_by_cell_type <-
+    harmony_sobj_comb %>%
+    subset(new == "Macrophage")
+
+averageexp <-
+    sub_by_cell_type %>%
+    AverageExpression(features = adherens,
+    group.by = c("sample_name"))
+
+annot <-
+    sub_by_cell_type@meta.data %>%
+    select(type, new, sample_name) %>%
+    distinct() %>%
+    as_tibble() %>%
+    mutate(label = sample_name) %>%
+    select(-new, -sample_name) %>%
+    column_to_rownames("label")
+
+heatmap <- pheatmap::pheatmap(as.matrix(averageexp[[1]]),
+                            annotation_col = annot,
+                            cluster_cols = FALSE,
+                            scale = "row",
+                            color = viridis::viridis(n=256, alpha=1, begin=0, end=1, option = "viridis"),
+                            fontsize = 8)
+
+ggsave("output/plots/patient/heatmaps/macrophage_adh_heatmap.png",
+            width = 10,
+            height = 5,
+            plot = heatmap)
+
+
+sub_by_cell_type <-
+    harmony_sobj_comb %>%
+    subset(new == "Vascular Smooth Muscle" |
+            new == "Plasma" |
+            new == "Alveolar Epithelial")
+
+averageexp <-
+    sub_by_cell_type %>%
+    AverageExpression(features = abc,
+    group.by = c("new", "sample_name"))
+
+annot <-
+    sub_by_cell_type@meta.data %>%
+    select(type, new, sample_name) %>%
+    distinct() %>%
+    as_tibble() %>%
+    mutate(label = paste(new, sample_name, sep = "_")) %>%
+    select(-new, -sample_name) %>%
+    column_to_rownames("label")
+
+pheatmap::pheatmap(as.matrix(averageexp[[1]]),
+                   annotation_col = annot,
+                   cluster_cols = FALSE)
+
+````
