@@ -422,7 +422,7 @@ ensamble_table <- tribble(~sobj,           ~species,
                         "patient_prim",    "human",
                         "patient_mets",    "human",
                         "mm_prim",         "mouse",
-                        "mm_mets",         "mouse",)
+                        "mm_mets",         "mouse")
 
 tumor_ensamble <- parallel::mclapply(seq_len(nrow(ensamble_table)), function(item) {
     sobj <- ensamble_table$sobj[item]
@@ -434,8 +434,10 @@ tumor_ensamble <- parallel::mclapply(seq_len(nrow(ensamble_table)), function(ite
     results <- SCEVAN::pipelineCNA(count_mtx,
                                    organism = species)
     object <- Seurat::AddMetaData(object, metadata = results)
+    qs::qsave(object, str_c("output/seurat_objects/annotated_sobjs/",
+                              sobj,
+                              ".qs"))
 }, mc.cores = parallelly::availableCores())
-
 
 ```
 
@@ -553,10 +555,11 @@ tumor_vs_stroma <- parallel::mclapply(seq_len(nrow(refs)), function(item) {
     print(str_c(sobj, " labelled with cancer cells and subsetted"))
 }, mc.cores = parallelly::availableCores())
 
-````
+```
 
-## Umap plots
-````{r}
+## Umap
+
+```{r}
 #Checkups to make sure the outputs make sense
 
 umaps_group <- 
@@ -801,12 +804,11 @@ run_gsea <- function(degs_result,
 
 #maybe write a tsv of the output
 
-````
+```
 
 ## Plots
 
 ```{r}
-
 
 two_way_plot <- function(data, x_col = "z_score") {
     lab4plot <-
@@ -864,60 +866,57 @@ two_way_plot <- function(data, x_col = "z_score") {
 }
 
 
+tumor_list <- c("patient_prim_tumor",
+                "patient_mets_tumor",
+                "mm_prim_tumor",
+                "mm_mets_tumor",
+                "xeno_prim_human",
+                "xeno_mets__human")
 
-
-combined <- qs::qread("output/seurat_objects/harmony_sobjs/mm_prim.qs")
-
-DimPlot(combined, group.by = c("sample_name", "seurat_clusters", "new"), label = T, ncol = 2, repel = T)
-
-patient_prim_tumor <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_prim_tumor.qs")
-
-patient_prim_tumor <- optimize_silhouette(patient_prim_tumor)
-
-patient_prim_tumor <- process_seurat(patient_prim_tumor, resolution = 0.1)
-
-DimPlot(patient_prim_tumor, group.by = c("sample_name", "data_type", "seurat_clusters"), label = T, ncol = 3, repel = T, shuffle = T)
-
-
-
-degs_result <- run_degs(sobject = patient_prim_tumor,
+gsea <- parallel::mclapply((tumor_list), function(sobj_name) {
+    sobj <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                            sobj_name,
+                            ".qs"))
+    degs_result <- run_degs(sobject = sobj,
                         group_by = "seurat_clusters",
-                        prefix = "patient_prim_tumor")
-
-gsea_result <- run_gsea(degs_result = degs_result,
+                        prefix = sobj_name)
+    gsea_result <- run_gsea(degs_result = degs_result,
                         category = "C2",
                         subcategory = "CP:KEGG",
                         species = "human")
 
+    for (item in names(gsea_result)) {
+        top5up_down <- rbind(gsea_result[[item]] %>%
+                                filter(NES > 0) %>%
+                                slice_head(n = 5),
+                            gsea_result[[item]] %>%
+                                filter(NES < 0) %>%
+                                slice_tail(n = 5)) %>%
+                        dplyr::select(pathway,
+                                        NES,
+                                        size,
+                                        padj) %>%
+                        arrange(desc(NES)) %>%
+                        mutate(pathway = as.factor(pathway) %>%
+                                str_replace_all("_", " ") %>%
+                                str_wrap(80) %>%
+                                fct_reorder(NES),
+                        sample = item,
+                        order = 1:n(),
+                        justify_y = if_else(NES > 0, 1, 0),
+                        y_pos = if_else(NES > 0, -0.1, 0.1))
+        plot_name <- print(two_way_plot(top5up_down, x_col = "NES"))
+        ggsave(str_c("output/gsea/tumor/",
+                    sobj_name,
+                    "/",
+                    item,
+                    "_barplots.png"),
+                width = 4,
+                height = 3,
+                plot = plot_name)
+    }
+}, mc.cores = parallelly::availableCores())
 
-for (item in names(gsea_result)) {
-    top5up_down <- rbind(gsea_result[[item]] %>%
-                            filter(NES > 0) %>%
-                            slice_head(n = 5),
-                         gsea_result[[item]] %>%
-                            filter(NES < 0) %>%
-                            slice_tail(n = 5)) %>%
-                    dplyr::select(pathway,
-                                    NES,
-                                    size,
-                                    padj) %>%
-                    arrange(desc(NES)) %>%
-                    mutate(pathway = as.factor(pathway) %>%
-                            str_replace_all("_", " ") %>%
-                            str_wrap(80) %>%
-                            fct_reorder(NES),
-                       sample = item,
-                       order = 1:n(),
-                       justify_y = if_else(NES > 0, 1, 0),
-                       y_pos = if_else(NES > 0, -0.1, 0.1))
-    plot_name <- print(two_way_plot(top5up_down, x_col = "NES"))
-    ggsave(str_c("output/plots/patient/gsea/gsea_",
-                   item,
-                   "_barplots.png"),
-            width = 4,
-            height = 3,
-            plot = plot_name)
-}
 
 
 a <- DimPlot(patient_prim_tumor,
@@ -981,96 +980,52 @@ ggsave("output/plots/umaps/prim_cancer_celltypes.png",
 ```
 
 
-
-```{r}
-
-patient_mets <- qs::qread("output/seurat_objects/harmony_sobjs/patient_mets.qs")
-
-DimPlot(patient_mets, group.by = c("sample_name", "seurat_clusters", "new"), label = T, shuffle = T)
-
-for(c in names(clusters)) {
-  for(m in de_methods) {
-    plots[[c]][[m]]$panel <-
-      (DimPlot(tumor) +
-      plots[[c]][[m]]$volcano) /
-      (plots[[c]][[m]]$BP +
-      plots[[c]][[m]]$MF +
-      plots[[c]][[m]]$CC)
-
-    ggsave(paste0("Plots/Primary/panel-", m, "-", c, ".pdf"),
-      plots[[c]][[m]]$panel,
-      device = "pdf",
-      width = 18,
-      height = 12,
-      units = "in")
-  }
-}
-
-```
-
-
 ## Stromal analysis
 ```{r}
-normal_lungs <- qs::qread("input/downloads/normal_lung.qs")
+human_lung <- qs::qread("input/downloads/human_lung.qs")
+human_bone <- qs::qread("output/seurat_objects/annotated_sobjs/normal_bone.qs")
+mouse_lung <- qs::qread("input/downloads/mouse_lung.qs")
 
-normal_lungs$free_annotation <-
-    str_replace_all(normal_lungs$free_annotation, c("/" = "_",
-                                                  "\\+" = "_plus"))
+DimPlot(human_lung, group.by = "free_annotation")
 
-normal_lungs$free_annotation <-
-    stringr::str_replace_all(normal_lungs$free_annotation,
-                              c("Alveolar Epithelial Type 1" = "Alveolar Epithelial",  #nolint
-                                "Alveolar Epithelial Type 2" = "Alveolar Epithelial",  #nolint
-                                "Basophil_Mast 1" = "Basophil_Mast",
-                                "Basophil_Mast 2" = "Basophil_Mast",
-                                "Bronchial Vessel 1" = "Bronchial Vessel",
-                                "Bronchial Vessel 2" = "Bronchial Vessel",
-                                "IGSF21_plus Dendritic" = "Dendritic cells",
-                                "Myeloid Dendritic Type 1" = "Myeloid Dendritic",   #nolint
-                                "Myeloid Dendritic Type 2" = "Myeloid Dendritic",   #nolint
-                                "Natural Killer" = "NK cells",
-                                "Natural Killer T" = "NKT",
-                                "NK cells T" = "NKT",
-                                "CD4_plus Memory/Effector T" = "CD4+ T cells",
-                                "CD4_plus Naive T" = "CD4+ T cells",
-                                "CD8_plus Memory_Effector T" = "CD8+ T cells",
-                                "CD8_plus Naive T" = "CD8+ T cells",
-                                "Proliferating NK_T" = "NKT",
-                                "TREM2_plus Dendritic" = "Dendritic cells",
-                                "Proliferating Macrophage" = "Macrophage",
-                                "Nonclassical Monocyte" = "Monocytes",
-                                "Classical Monocyte" = "Monocytes"))
+#need mouse and human bones data too see the link in matt chat
+stromal_normal_table <- tribble(~stromal,              ~normal,
+                                "patient_prim_normal", "human_bone",
+                                "patient_mets_normal", "human_lung",
+                                "mm_prim_normal",      "mouse_bone",
+                                "mm_mets_normal",      "mouse_lung",
+                                "xeno_prim_mouse",     "mouse_bone",
+                                "xeno_mets_mouse",     "mouse_lung")
 
-#looks like there is no mitochondrial genes in the normal cells
+
+#looks like there is no mitochondrial (MT-) genes in the human_lung cells
+#mouse_lung has mt genes
 #So need to remove the mitochondrial reads from the tumor associated too
-for (item in rownames(normal_lungs)) {
-  if (stringr::str_detect(item, "^CYTB") == TRUE) {
+for (item in rownames(human_lung)) {
+  if (stringr::str_detect(item, "^MT-") == TRUE) {
       print(item)
   }
 }
 
-for (item in rownames(normal_lungs)) {
-  if (stringr::str_detect(item, "^RP[SL][[:digit:]]") == TRUE) {
+for (item in rownames(mouse_lung)) {
+  if (stringr::str_detect(item, "^mt-") == TRUE) {
       print(item)
   }
 }
 
-normal_lungs <- normal_lungs %>% process_seurat()
-
-#set the idents
-normal_lungs$sample_name <- normal_lungs$channel
-
-normal_lungs$new <- normal_lungs$free_annotation
+for (item in rownames(human_lung)) {
+  if (stringr::str_detect(item, "^MT[SL][[:digit:]]") == TRUE) {
+      print(item)
+  }
+}
 
 #Tumor associated lung cells
 tumor_associated <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_normal.qs")
 
 #gives the rownames with the MT- genes
 mt_genes_rows <- grep("^MT-", rownames(tumor_associated))
-nonmt_genes_rows <- grep("MT-", rownames(tumor_associated), invert = TRUE)
 
-FeaturePlot(tumor_associated, features = abc)
-FeaturePlot(normal_lungs, features = abc)
+nonmt_genes_rows <- grep("MT-", rownames(tumor_associated), invert = TRUE)
 
 tumor_associated <- tumor_associated[nonmt_genes_rows, ]
 
@@ -1081,7 +1036,7 @@ for (item in rownames(tumor_associated)) {
 }
 
 #insert a column for the each seurat object for DEGs
-normal_lungs@meta.data$type <- "normal"
+human_lung@meta.data$type <- "normal"
 tumor_associated@meta.data$type <- "tumor_associated"
 
 #combine the seurat objects for DEGS by pseudobluk
@@ -1347,4 +1302,4 @@ pheatmap::pheatmap(as.matrix(averageexp[[1]]),
                    annotation_col = annot,
                    cluster_cols = FALSE)
 
-````
+```
