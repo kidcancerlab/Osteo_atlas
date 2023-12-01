@@ -424,6 +424,12 @@ ensamble_table <- tribble(~sobj,           ~species,
                         "mm_prim",         "mouse",
                         "mm_mets",         "mouse")
 
+library(devtools)
+install_github("miccec/yaGST", force = T)
+install_github("AntonioDeFalco/SCEVAN")
+library(SCEVAN)
+library("yaGST")
+
 tumor_ensamble <- parallel::mclapply(seq_len(nrow(ensamble_table)), function(item) {
     sobj <- ensamble_table$sobj[item]
     species <- ensamble_table$species[item]
@@ -865,57 +871,134 @@ two_way_plot <- function(data, x_col = "z_score") {
     return(plot_name)
 }
 
+tumor_list <- tribble(~sobj_name,           ~species,
+                    "patient_prim_tumor",    "human",
+                    "patient_mets_tumor",    "human",
+                    "mm_prim_tumor",         "mouse",
+                    "mm_mets_tumor",         "mouse",
+                    "xeno_prim_human",       "human",
+                    "xeno_mets__human",      "human")
 
-tumor_list <- c("patient_prim_tumor",
-                "patient_mets_tumor",
-                "mm_prim_tumor",
-                "mm_mets_tumor",
-                "xeno_prim_human",
-                "xeno_mets__human")
+theme_set(theme_classic(base_size = 20) +
+            theme(axis.title.y = element_text(margin = margin(0, 20, 0, 0),
+                                              size = rel(1),
+                                              color = "black"),
+                  axis.title.x = element_text(hjust = 0.5,
+                                              margin = margin(20, 0, 0, 0),
+                                              size = rel(1),
+                                              color = "black"),
+                  plot.title = element_text(hjust = 0.5)))
 
-gsea <- parallel::mclapply((tumor_list), function(sobj_name) {
+
+cat_tib <- tribble(
+  ~category, ~subcat,   ~cat_expl, 
+  "C2",      "CP:KEGG", "KEGG",
+  "C5",        "MF",    "GOMF",
+  "C5",        "BP",    "GOBP",
+  "C5",        "CC",    "GOCC")
+
+gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
+    sobj_name <- tumor_list$sobj_name[item]
+    species <- tumor_list$species[item]
     sobj <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                             sobj_name,
                             ".qs"))
+    volc_plot <- list()
+    gsea_plot <- list()
+    panel_plot <- list()
+    gsea_result <- list()
+
+    dimplot <- DimPlot(sobj,
+                       group.by = "seurat_clusters",
+                       label = T,
+                       cols = c(plot_cols, sample(rainbow(1000))),
+                       shuffle = T) +
+                coord_fixed()
+
     degs_result <- run_degs(sobject = sobj,
                         group_by = "seurat_clusters",
                         prefix = sobj_name)
-    gsea_result <- run_gsea(degs_result = degs_result,
-                        category = "C2",
-                        subcategory = "CP:KEGG",
-                        species = "human")
 
-    for (item in names(gsea_result)) {
-        top5up_down <- rbind(gsea_result[[item]] %>%
-                                filter(NES > 0) %>%
-                                slice_head(n = 5),
-                            gsea_result[[item]] %>%
-                                filter(NES < 0) %>%
-                                slice_tail(n = 5)) %>%
-                        dplyr::select(pathway,
-                                        NES,
-                                        size,
-                                        padj) %>%
-                        arrange(desc(NES)) %>%
-                        mutate(pathway = as.factor(pathway) %>%
-                                str_replace_all("_", " ") %>%
-                                str_wrap(80) %>%
-                                fct_reorder(NES),
-                        sample = item,
-                        order = 1:n(),
-                        justify_y = if_else(NES > 0, 1, 0),
-                        y_pos = if_else(NES > 0, -0.1, 0.1))
-        plot_name <- print(two_way_plot(top5up_down, x_col = "NES"))
+    for (item in names(degs_result)) {
+        logfc_cutoff <- 0.6
+        degs_result[[item]]$diffexpressed <- "NO"
+        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange > logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "UP"
+        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange < -1 * logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "DOWN"
+        degs_result[[item]]$delabel[degs_result[[item]]$diffexpressed != "NO"] <- degs_result[[item]]$gene[degs_result[[item]]$diffexpressed != "NO"]
+
+        volc_plot[[item]] <- ggplot(data=degs_result[[item]],
+                            aes(x=log2FoldChange,
+                                y=-log10(pvalue),
+                                color = diffexpressed,
+                                label = delabel)) + 
+            geom_vline(xintercept = c(-1 * logfc_cutoff, logfc_cutoff), col = "gray", linetype = "dashed") + 
+            geom_hline(yintercept = c(0.05), col = "gray", linetype = "dashed") +
+            geom_point(size = 2) +
+            scale_color_manual(values = c(plot_cols[1], "grey", plot_cols[2]),
+                               labels = c("Downregulated", "Not Significant", "Upregulated"),
+                               name = "") +
+            geom_text_repel()
+    }
+
+    for (i in seq_len(nrow(cat_tib))){
+        category <- cat_tib$category[i]
+        sub_cat <- cat_tib$subcat[i]
+        cat_expl <- cat_tib$cat_expl[i]
+        gsea_result <- run_gsea(degs_result = degs_result,
+                                category = category,
+                                subcategory = sub_cat,
+                                species = species)
+
+        for (item in names(gsea_result)) {
+            top5up_down <- rbind(gsea_result[[item]] %>%
+                                    filter(NES > 0) %>%
+                                    slice_head(n = 5),
+                                gsea_result[[item]] %>%
+                                    filter(NES < 0) %>%
+                                    slice_tail(n = 5)) %>%
+                            dplyr::select(pathway,
+                                            NES,
+                                            size,
+                                            padj) %>%
+                            arrange(desc(NES)) %>%
+                            mutate(pathway = as.factor(pathway) %>%
+                                    str_replace_all("_", " ") %>%
+                                    str_wrap(80) %>%
+                                    fct_reorder(NES),
+                            sample = item,
+                            order = 1:n(),
+                            justify_y = if_else(NES > 0, 1, 0),
+                            y_pos = if_else(NES > 0, -0.1, 0.1))
+            gsea_plot[[cat_expl]][[item]] <- print(two_way_plot(top5up_down, x_col = "NES"))
+        }
+    }
+
+    for (clusters in names(volc_plot)) {
+        plots <- list(dimplot +
+                        volc_plot[[clusters]] +
+                        gsea_plot$KEGG[[clusters]] +
+                        gsea_plot$GOMF[[clusters]] +
+                        gsea_plot$GOBP[[clusters]] +
+                        gsea_plot$GOCC[[clusters]])
+
+        panel_plot <- patchwork::wrap_plots(plots) +
+                        patchwork::plot_annotation(title = str_c("Panel Plot for ", item, " ", clusters),
+                                                    theme = theme(plot.title = element_text(hjust = 0.5,
+                                                                                            size = 20,
+                                                                                            face = "bold")))
+
         ggsave(str_c("output/gsea/tumor/",
                     sobj_name,
                     "/",
-                    item,
-                    "_barplots.png"),
-                width = 4,
-                height = 3,
-                plot = plot_name)
+                    clusters,
+                    "panel.png"),
+                width = 15,
+                height = 10,
+                plot = panel_plot)
     }
+
 }, mc.cores = parallelly::availableCores())
+
 
 
 
@@ -982,11 +1065,72 @@ ggsave("output/plots/umaps/prim_cancer_celltypes.png",
 
 ## Stromal analysis
 ```{r}
-human_lung <- qs::qread("input/downloads/human_lung.qs")
-human_bone <- qs::qread("output/seurat_objects/annotated_sobjs/normal_bone.qs")
-mouse_lung <- qs::qread("input/downloads/mouse_lung.qs")
+human_lung <- qs::qread("input/downloads/human_lung.qs")  #no mtgenes
+human_bone <- qs::qread("output/seurat_objects/annotated_sobjs/normal_bone.qs")  #has mt_percent
+mouse_lung <- qs::qread("input/downloads/mouse_lung.qs")  #has mt. percent
 
 DimPlot(human_lung, group.by = "free_annotation")
+
+
+data1 <- read.csv("input/downloads/FilteredCounts10x.csv", row.names = 1)   #no mt. genes
+
+sobj <- CreateSeuratObject(data1)
+
+# Cutoff and cleaning
+try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
+                      "nCount_RNA", 0,        30000,
+                      "percent.mt", 0,        15)
+
+features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")    #nolint
+
+# visualize the possible cutoff and adjust accordingly
+feature_hist(sobject = sobj,
+             features = features,                         # nolint
+             cutoff_table = try_cutoff)
+
+sobj <- sobj %>%
+        subset(nCount_RNA < 30000) %>%
+        process_seurat()
+
+DimPlot(sobj)
+
+mord <- celldex::MouseRNAseqData()
+moim <- celldex::ImmGenData()
+celldex_ref <-
+    SingleR::SingleR(test = as.SingleCellExperiment(sobj),
+                     ref = list(mord,
+                                moim),
+                     labels = list(mord$label.main,
+                                   moim$label.main),
+                     aggr.ref = TRUE)
+
+
+
+moim$label.main <-
+    stringr::str_replace_all(moim$label.main,
+                            c("B cells, pro" = "B cells",
+                                "DC" = "Dendritic cells"))
+ref <- list(mord,
+            moim)
+labels <- list(mord[[label_type]],
+                moim[[label_type]])
+
+
+sobj_ann <- annotate(sobject = sobj,
+                 species = "mouse",
+                 aggr_ref = TRUE)
+
+
+
+hpca <- celldex::HumanPrimaryCellAtlasData()
+
+celldex_ref <-
+    SingleR::SingleR(test = as.SingleCellExperiment(tumor_sobj_harmony),
+                     ref = hpca,
+                     labels = hpca$label.main,
+                     aggr.ref = TRUE)
+
+tumor_sobj_harmony$cell_dex <- celldex_ref$labels
 
 #need mouse and human bones data too see the link in matt chat
 stromal_normal_table <- tribble(~stromal,              ~normal,
@@ -1163,10 +1307,6 @@ degs_results <- list()
 # }
 
 
-looks like all the of th resilts forom this analysis seem to have the same pathways upregulated. Something is wrong. Maybe the genee MT. 
-
-Also, what is shuffle? RYan told me about?
-Shuffle = TRUE in dimplot
 
 for (celltypes in unique(harmony_sobj_comb$new)) {
     Idents(harmony_sobj_comb) <- harmony_sobj_comb$new
