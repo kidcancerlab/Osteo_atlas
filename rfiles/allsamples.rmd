@@ -799,7 +799,7 @@ run_gsea <- function(degs_result,
                                          gsea_input,
                                          minSize = 10,
                                          maxSize = 500,
-                                         nPerm = 1000)
+                                         nPermSimple = 10000)
         gsea_output[[item]] <- output %>%
             dplyr::arrange(desc(NES)) %>%
             filter(padj < 0.05) %>%
@@ -871,6 +871,31 @@ two_way_plot <- function(data, x_col = "z_score") {
     return(plot_name)
 }
 
+# topup_down_path <- function(gsea_result) {
+#     for (item in names(gsea_result)) {
+#         top5up_down <- rbind(gsea_result[[item]] %>%
+#                 filter(NES > 0) %>%
+#                 slice_head(n = 7),
+#             gsea_result[[item]] %>%
+#                 filter(NES < 0) %>%
+#                 slice_tail(n = 7)) %>%
+#         dplyr::select(pathway,
+#                         NES,
+#                         size,
+#                         padj) %>%
+#         arrange(desc(NES)) %>%
+#         mutate(pathway = as.factor(pathway) %>%
+#                 str_replace_all("_", " ") %>%
+#                 str_wrap(80) %>%
+#                 fct_reorder(NES),
+#         sample = item,
+#         order = 1:n(),
+#         justify_y = if_else(NES > 0, 1, 0),
+#         y_pos = if_else(NES > 0, -0.1, 0.1))
+#     }
+# }
+
+
 tumor_list <- tribble(~sobj_name,           ~species,
                     "patient_prim_tumor",    "human",
                     "patient_mets_tumor",    "human",
@@ -881,21 +906,22 @@ tumor_list <- tribble(~sobj_name,           ~species,
 
 theme_set(theme_classic(base_size = 20) +
             theme(axis.title.y = element_text(margin = margin(0, 20, 0, 0),
-                                              size = rel(1),
+                                              size = 6,
                                               color = "black"),
                   axis.title.x = element_text(hjust = 0.5,
                                               margin = margin(20, 0, 0, 0),
-                                              size = rel(1),
+                                              size = 6,
                                               color = "black"),
-                  plot.title = element_text(hjust = 0.5)))
+                  plot.title = element_text(hjust = 0.5),
+                  legend.text = element_text(size = 6)))
 
 
 cat_tib <- tribble(
-  ~category, ~subcat,   ~cat_expl, 
-  "C2",      "CP:KEGG", "KEGG",
-  "C5",        "MF",    "GOMF",
-  "C5",        "BP",    "GOBP",
-  "C5",        "CC",    "GOCC")
+    ~category, ~subcat,   ~cat_expl, 
+    "C2",      "CP:KEGG", "KEGG",
+    "C5",        "MF",    "GOMF",
+    "C5",        "BP",    "GOBP",
+    "C5",        "CC",    "GOCC")
 
 gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
     sobj_name <- tumor_list$sobj_name[item]
@@ -912,34 +938,34 @@ gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
                        group.by = "seurat_clusters",
                        label = T,
                        cols = c(plot_cols, sample(rainbow(1000))),
-                       shuffle = T) +
-                coord_fixed()
+                       shuffle = T)
 
+#DEGS analysis
     degs_result <- run_degs(sobject = sobj,
                         group_by = "seurat_clusters",
                         prefix = sobj_name)
 
     for (item in names(degs_result)) {
+#label the genes as up and down regulated
         logfc_cutoff <- 0.6
-        degs_result[[item]]$diffexpressed <- "NO"
-        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange > logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "UP"
-        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange < -1 * logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "DOWN"
-        degs_result[[item]]$delabel[degs_result[[item]]$diffexpressed != "NO"] <- degs_result[[item]]$gene[degs_result[[item]]$diffexpressed != "NO"]
+        degs_result[[item]]$diffexpressed <- "Not Significant"
+        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange > logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "Upregulated"
+        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange < -1 * logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "Downregulated"
 
+#make the volcano plot
         volc_plot[[item]] <- ggplot(data=degs_result[[item]],
                             aes(x=log2FoldChange,
                                 y=-log10(pvalue),
-                                color = diffexpressed,
-                                label = delabel)) + 
+                                color = diffexpressed)) + 
             geom_vline(xintercept = c(-1 * logfc_cutoff, logfc_cutoff), col = "gray", linetype = "dashed") + 
             geom_hline(yintercept = c(0.05), col = "gray", linetype = "dashed") +
             geom_point(size = 2) +
             scale_color_manual(values = c(plot_cols[1], "grey", plot_cols[2]),
-                               labels = c("Downregulated", "Not Significant", "Upregulated"),
                                name = "") +
-            geom_text_repel()
+            geom_text_repel(aes(label = gene))
     }
 
+#GSEA analysis
     for (i in seq_len(nrow(cat_tib))){
         category <- cat_tib$category[i]
         sub_cat <- cat_tib$subcat[i]
@@ -950,12 +976,13 @@ gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
                                 species = species)
 
         for (item in names(gsea_result)) {
+            top5_up_down <- top_up_down_pathways(gsea_result)
             top5up_down <- rbind(gsea_result[[item]] %>%
                                     filter(NES > 0) %>%
-                                    slice_head(n = 5),
+                                    slice_head(n = 7),
                                 gsea_result[[item]] %>%
                                     filter(NES < 0) %>%
-                                    slice_tail(n = 5)) %>%
+                                    slice_tail(n = 7)) %>%
                             dplyr::select(pathway,
                                             NES,
                                             size,
@@ -969,17 +996,18 @@ gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
                             order = 1:n(),
                             justify_y = if_else(NES > 0, 1, 0),
                             y_pos = if_else(NES > 0, -0.1, 0.1))
-            gsea_plot[[cat_expl]][[item]] <- print(two_way_plot(top5up_down, x_col = "NES"))
+            gsea_plot[[cat_expl]][[item]] <- two_way_plot(top5up_down, x_col = "NES")
         }
     }
 
+#make panel plots
     for (clusters in names(volc_plot)) {
         plots <- list(dimplot +
-                        volc_plot[[clusters]] +
-                        gsea_plot$KEGG[[clusters]] +
-                        gsea_plot$GOMF[[clusters]] +
-                        gsea_plot$GOBP[[clusters]] +
-                        gsea_plot$GOCC[[clusters]])
+                    volc_plot[[clusters]] +
+                    gsea_plot$KEGG[[clusters]] +
+                    gsea_plot$GOMF[[clusters]] +
+                    gsea_plot$GOBP[[clusters]] +
+                    gsea_plot$GOCC[[clusters]])
 
         panel_plot <- patchwork::wrap_plots(plots) +
                         patchwork::plot_annotation(title = str_c("Panel Plot for ", item, " ", clusters),
@@ -987,16 +1015,16 @@ gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
                                                                                             size = 20,
                                                                                             face = "bold")))
 
+#save the plots
         ggsave(str_c("output/gsea/tumor/",
                     sobj_name,
                     "/",
                     clusters,
                     "panel.png"),
-                width = 15,
-                height = 10,
+                width = 10,
+                height = 8,
                 plot = panel_plot)
     }
-
 }, mc.cores = parallelly::availableCores())
 
 
