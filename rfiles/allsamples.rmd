@@ -12,6 +12,7 @@ library(stringr)
 library(harmony)
 library(cowplot)
 library(clustree)
+library(data.table)
 set.seed(444)
 ```
 
@@ -138,14 +139,15 @@ obj <- parallel::mclapply(seq_len(nrow(sample_details)), function(i) {
 
 
 # # individual QC numbers
-# obj <- qs::qread("output/seurat_objects/single_sobj/patient/metastatic/SC072human.qs") #nolint
+# obj <- qs::qread("output/seurat_objects/single_sobj/patient/metastatic/SC073human.qs") #nolint
 
 # # Cutoff and cleaning
 # try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
 #                       "nCount_RNA", 0,        30000,
 #                       "percent.mt", 0,        15)
 
-# features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")    #nolint
+# #features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")    #nolint
+# features <- "nCount_RNA"
 
 # # visualize the possible cutoff and adjust accordingly
 # feature_hist(sobject = obj,
@@ -172,12 +174,23 @@ what <- parallel::mclapply(unique(sample_details$unique), function(item) {
         #                     sd_up = 3,
         #                     make_plots = FALSE,
         #                     features = c("nCount_RNA", "percent.mt"))
-
-        temp_list[[sample_name]] <- sobj
-        temp_list[[sample_name]] <-
-                subset(x = temp_list[[sample_name]],
-                cells = sample(Cells(temp_list[[sample_name]]),
-                        min(4000, length(Cells(temp_list[[sample_name]])))))
+        sobj <- subset(sobj, 
+                       nCount_RNA > 500 &
+                       nCount_RNA < tmp_df$ncount_max[i] &
+                       percent.mt < tmp_df$mt_percent[i])
+        Hmeta_data <- sobj@meta.data %>%
+            as.data.table
+        counts <- Hmeta_data[, .N, by = "sample_name"]
+        if (counts$N >= 300) {
+            set.seed(1237)
+            temp_list[[sample_name]] <- sobj
+            temp_list[[sample_name]] <-
+                    subset(x = temp_list[[sample_name]],
+                    cells = sample(Cells(temp_list[[sample_name]]),
+                            min(5000, length(Cells(temp_list[[sample_name]])))))
+        } else {
+            print(str_c(sample_name, " has less than 300 cells, hence discarded"))
+        }
     }
     merged_sobj <- merge(x = temp_list[[1]],
                                 y = temp_list[2:length(temp_list)],
@@ -205,6 +218,37 @@ what <- parallel::mclapply(unique(sample_details$unique), function(item) {
     return(item)
 }, mc.cores = parallelly::availableCores())
 
+
+#Count cells per sample and group
+refs <- tribble(~sobj,            ~ref,
+               "patient_prim",    "human",
+               "normal_bone",     "human",
+               "patient_mets",    "human_lung",
+               "xeno_prim_human", "human",
+               "xeno_mets_human", "human",
+               "xeno_prim_mouse", "mouse",
+               "xeno_mets_mouse", "mouse",
+               "mm_prim",         "mouse",
+               "mm_mets",         "mouse_lung")
+
+
+#count the number of cells per sample per group
+library(data.table)
+counts <- list()
+
+for (i in seq_len(nrow(refs))) {
+    sobj <- refs$sobj[i]
+    ref <- refs$ref[i]
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                              sobj,
+                              ".qs"))
+    #DimPlot(object)
+    #extract meta data
+    Hmeta_data <- object@meta.data %>%
+        as.data.table
+    counts[[sobj]] <- Hmeta_data[, .N, by = "sample_name"] %>% 
+        arrange(desc(N))
+}
 
 ```
 
@@ -371,6 +415,27 @@ refs <- tribble(~sobj,            ~ref,
                "xeno_mets_mouse", "mouse",
                "mm_prim",         "mouse",
                "mm_mets",         "mouse_lung")
+
+
+
+library(data.table)
+counts <- list()
+
+for (i in seq_len(nrow(refs))) {
+    sobj <- refs$sobj[i]
+    ref <- refs$ref[i]
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                              sobj,
+                              ".qs"))
+    #DimPlot(object)
+    #extract meta data
+    Hmeta_data <- object@meta.data %>%
+        as.data.table
+    counts[[sobj]] <- Hmeta_data[, .N, by = "sample_name"]
+}
+#count number of cells per sample/seurat obj, to see if everything looks right
+
+
 
 #annotate using the function parallelly
 what <- parallel::mclapply(seq_len(nrow(refs)), function(i) {
@@ -1555,6 +1620,7 @@ subset_file <- filter(all_samples_csv, sample_name %in% dir_list)
 #write.csv(subset_file, "subset_file.csv")
 
 for (item in seq_len(nrow(subset_file))) {
+    group <- subset_file$unique[item]
     sample_name <- subset_file$sample_name[item]
     object <- Read10X_h5(filename = str_c("/gpfs0/home2/gdrobertslab/lab/ExternalData/Patel_lab/",
                                           sample_name,
@@ -1563,6 +1629,13 @@ for (item in seq_len(nrow(subset_file))) {
                                #min.cells = 500,
                                #min.features = 0
     sobj[["percent.mt"]] <- PercentageFeatureSet(sobj, pattern = "^MT-")
+    sobj$unique <- subset_file$unique[item]
+    sobj$sample_name <- subset_file$sample_name[item]
+    sobj$tumor_type <- subset_file$tumor_type[item]
+    sobj$data_type <- subset_file$data_type[item]
+    sobj$model <- subset_file$model[item]
+    sobj$organism <- subset_file$organism[item]
+    sobj$location <- subset_file$location[item]
 
     qs::qsave(x = sobj,
               file = str_c("input/saint_jude/",
@@ -1570,52 +1643,66 @@ for (item in seq_len(nrow(subset_file))) {
                            ".qs"))
 }
 
+for (item in unique(subset_file$unique)){
+    tmp_df <- subset(subset_file, subset = (unique == item))
+    temp_list <- list()
+    for (i in seq_len(nrow(tmp_df))) {
+        sample_name <- subset_file$sample_name[i]
+        ncount_max <- subset_file$ncount_max[i]
+        mt_percent <- subset_file$mt_percent[i]
 
-noqc_list <- list()
-qc_list <- list()
-
-for (item in seq_len(nrow(subset_file))) {
-    sample_name <- subset_file$sample_name[item]
-    ncount_max <- subset_file$ncount_max[item]
-    mt_percent <- subset_file$mt_percent[item]
-    sobj <- qs::qread(str_c("input/saint_jude/",
+        sobj <- qs::qread(str_c("input/saint_jude/",
                            sample_name,
                            ".qs"))
-    noqc_list[[sample_name]] <- sobj
-    
-    qc_list[[sample_name]] <- subset(sobj,
-                            nCount_RNA > 1000 &
-                            nCount_RNA < sample_details$ncount_max[i] &
-                            percent.mt < sample_details$mt_percent[i])
+
+        sobj <- subset(sobj,
+                    nCount_RNA > 500 &
+                    nCount_RNA < subset_file$ncount_max[i] &
+                    percent.mt < subset_file$mt_percent[i])
+        Hmeta_data <- sobj@meta.data %>%
+                as.data.table
+        counts <- Hmeta_data[, .N, by = "sample_name"]
+        if (counts$N >= 300) {
+            temp_list[[sample_name]] <- sobj
+        } else {
+            print(str_c(sample_name, " has less than 300 cells, hence discarded"))
+        }
+    }
+    merged_sobj <- merge(x = temp_list[[1]],
+                            y = temp_list[2:length(temp_list)],
+                            add.cell.id = names(temp_list)) %>%
+                process_seurat()
+    qs::qsave(merged_sobj, str_c("output/seurat_objects/st_jude/",
+                                    item,
+                                    ".qs"))
 }
 
-noqc_merged <- merge(x = noqc_list[[1]],
-                            y = noqc_list[2:length(noqc_list)]) %>%
-                process_seurat()
+counts <- list()
+for (item in unique(subset_file$unique)){
+    sobj <- qs::qread(str_c("output/seurat_objects/st_jude/",
+                            item,
+                            ".qs"))
+    Hmeta_data <- sobj@meta.data %>%
+                as.data.table
+    counts[[item]] <- Hmeta_data[, .N, by = "sample_name"]
+}
 
-qc_list[[sample_name]] <- subset(noqc_merged[[sample_name]],
-                            nCount_RNA > 1000 &
-                            nCount_RNA < sample_details$ncount_max[i] &
-                            percent.mt < sample_details$mt_percent[i])
-qc_merged <- merge(x = qc_list[[1]],
-                            y = qc_list[2:length(qc_list)],
-                            add.cell.id = names(qc_list)) %>%
-                process_seurat()
-    
+library(data.table)
+counts <- list()
 
-
-    temp_list[[item]] <- sobj 
-
-    merged_sobj <- merge(x = temp_list[[1]],
-                                y = temp_list[2:length(temp_list)],
-                                add.cell.id = names(temp_list)) %>%
-                    process_seurat()
-
-
-qc_list[[sample_name]] <- subset(sobj_list[[sample_name]],
-                              nCount_RNA < sample_details$ncount_max[i] &
-                              percent.mt < sample_details$mt_percent[i])
-
+for (i in seq_len(nrow(refs))) {
+    sobj <- refs$sobj[i]
+    ref <- refs$ref[i]
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                              sobj,
+                              ".qs"))
+    #DimPlot(object)
+    #extract meta data
+    Hmeta_data <- object@meta.data %>%
+        as.data.table
+    counts[[sobj]] <- Hmeta_data[, .N, by = "sample_name"] %>% 
+        arrange(desc(N))
+}
 
 # individual QC numbers
 obj <- qs::qread("output/seurat_objects/single_sobj/patient/primary/OS_1human.qs") #nolint
