@@ -1620,14 +1620,17 @@ subset_file <- filter(all_samples_csv, sample_name %in% dir_list)
 #write.csv(subset_file, "subset_file.csv")
 
 for (item in seq_len(nrow(subset_file))) {
-    group <- subset_file$unique[item]
-    sample_name <- subset_file$sample_name[item]
+    sample_name <- subset_file$sample_name[i]
+    species <- subset_file$species[i]
+    tumor_type <- subset_file$tumor_type[i]
+    data_source <- subset_file$data_source[i]
+    sp_pattern <- subset_file$sp_pattern[i]
+    organism <- subset_file$organism[i]
     object <- Read10X_h5(filename = str_c("/gpfs0/home2/gdrobertslab/lab/ExternalData/Patel_lab/",
                                           sample_name,
                                           "/filtered_feature_bc_matrix.h5"))
     sobj <- CreateSeuratObject(counts = object)
-                               #min.cells = 500,
-                               #min.features = 0
+
     sobj[["percent.mt"]] <- PercentageFeatureSet(sobj, pattern = "^MT-")
     sobj$unique <- subset_file$unique[item]
     sobj$sample_name <- subset_file$sample_name[item]
@@ -1639,33 +1642,47 @@ for (item in seq_len(nrow(subset_file))) {
 
     qs::qsave(x = sobj,
               file = str_c("input/saint_jude/",
+                        #    species, "/",
+                        #    tumor_type, "/",
                            sample_name,
                            ".qs"))
 }
 
+
 for (item in unique(subset_file$unique)){
     tmp_df <- subset(subset_file, subset = (unique == item))
     temp_list <- list()
+    nCount_min <- 500
     for (i in seq_len(nrow(tmp_df))) {
-        sample_name <- subset_file$sample_name[i]
-        ncount_max <- subset_file$ncount_max[i]
-        mt_percent <- subset_file$mt_percent[i]
+        sample_name <- tmp_df$sample_name[i]
+        ncount_max <- tmp_df$ncount_max[i]
+        mt_percent <- tmp_df$mt_percent[i]
 
         sobj <- qs::qread(str_c("input/saint_jude/",
                            sample_name,
                            ".qs"))
-
-        sobj <- subset(sobj,
-                    nCount_RNA > 500 &
-                    nCount_RNA < subset_file$ncount_max[i] &
-                    percent.mt < subset_file$mt_percent[i])
+        
         Hmeta_data <- sobj@meta.data %>%
                 as.data.table
         counts <- Hmeta_data[, .N, by = "sample_name"]
-        if (counts$N >= 300) {
+
+        counts_after <- Hmeta_data %>%
+            filter(nCount_RNA > nCount_min &
+                   nCount_RNA < tmp_df$ncount_max[i] &
+                   percent.mt < tmp_df$mt_percent[i]) %>%
+            nrow()
+
+        if (counts_after >= 300) {
+            sobj <- subset(sobj,
+                           nCount_RNA > nCount_min &
+                           nCount_RNA < tmp_df$ncount_max[i] &
+                           percent.mt < tmp_df$mt_percent[i])
             temp_list[[sample_name]] <- sobj
         } else {
-            print(str_c(sample_name, " has less than 300 cells, hence discarded"))
+            print(str_c(sample_name,
+                        " has ",
+                        counts_after,
+                        " cells which is less than 300, hence discarded"))
         }
     }
     merged_sobj <- merge(x = temp_list[[1]],
@@ -1677,32 +1694,19 @@ for (item in unique(subset_file$unique)){
                                     ".qs"))
 }
 
+
 counts <- list()
 for (item in unique(subset_file$unique)){
     sobj <- qs::qread(str_c("output/seurat_objects/st_jude/",
                             item,
                             ".qs"))
+    DimPlot(sobj)
     Hmeta_data <- sobj@meta.data %>%
                 as.data.table
-    counts[[item]] <- Hmeta_data[, .N, by = "sample_name"]
-}
-
-library(data.table)
-counts <- list()
-
-for (i in seq_len(nrow(refs))) {
-    sobj <- refs$sobj[i]
-    ref <- refs$ref[i]
-    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
-                              sobj,
-                              ".qs"))
-    #DimPlot(object)
-    #extract meta data
-    Hmeta_data <- object@meta.data %>%
-        as.data.table
-    counts[[sobj]] <- Hmeta_data[, .N, by = "sample_name"] %>% 
+    counts[[item]] <- Hmeta_data[, .N, by = "sample_name"] %>% 
         arrange(desc(N))
 }
+
 
 # individual QC numbers
 obj <- qs::qread("output/seurat_objects/single_sobj/patient/primary/OS_1human.qs") #nolint
