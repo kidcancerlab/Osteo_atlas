@@ -904,14 +904,14 @@ two_way_plot <- function(data, x_col = "z_score") {
                         y = y_pos,
                         hjust = justify_y,
                         label = pathway),
-                        size = 1.3,
+                        size = 2,
                         fontface = "bold") +
         geom_text(data = lab4plot,    #text for upregulated/downregulated
                   aes(x = x,
                       y = y,
                       label = label),
                   fontface = "bold",
-                  size = 2) +
+                  size = 2.5) +
         scale_fill_manual(values = plot_cols,
                           name = paste0(x_col, " > 0")) +
         theme(strip.background = element_rect(color = "white",
@@ -955,18 +955,22 @@ theme_set(theme_classic(base_size = 20) +
                   plot.title = element_text(hjust = 0.5),
                   legend.text = element_text(size = 6)))
 
+#GSEA Miltilevel
+cat_tib <- tribble(
+    ~category, ~subcat,   ~cat_expl, 
+    "C2",      "CP:KEGG", "KEGG",
+    #"C5",        "MF",    "GOMF",
+    #"C5",        "BP",    "GOBP",
+    #"C5",        "CC",    "GOCC",
+    "H",         NULL,     "Hallmark_paths",
+    "C3",      "TFT:GTRD", "Transcription_factor_targets",
+    "C6",       NULL,      "Oncogenic_signature")
 
-# cat_tib <- tribble(
-#     ~category, ~subcat,   ~cat_expl, 
-#     "C2",      "CP:KEGG", "KEGG",
-#     "C5",        "MF",    "GOMF",
-#     "C5",        "BP",    "GOBP",
-#     "C5",        "CC",    "GOCC")
-
-cat_tib <- tribble(~category, ~cat_expl,
-                  "BP",       "GOBP",
-                  "MF",       "GOMF",
-                  "CC",       "GOCC")
+#Clusterprofiler GSEA
+# cat_tib <- tribble(~category, ~cat_expl,
+#                   "BP",       "GOBP",
+#                   "MF",       "GOMF",
+#                   "CC",       "GOCC")
 
 gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
     sobj_name <- tumor_list$sobj_name[item]
@@ -989,8 +993,8 @@ gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
 
 #DEGS analysis
     degs_result <- run_degs(sobject = sobj,
-                        group_by = "seurat_clusters",
-                        prefix = sobj_name)
+                            group_by = "seurat_clusters",
+                            prefix = sobj_name)
 
     for (item in names(degs_result)) {
 #label the genes as up and down regulated
@@ -1009,85 +1013,93 @@ gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
             geom_point(size = 2) +
             scale_color_manual(values = c(plot_cols[1], "grey", plot_cols[2]),
                                name = "") +
-            geom_text_repel(aes(label = gene))
+            geom_text_repel(aes(label = gene)) #+
+            #ggtitle(item)
     }
 
 #GSEA analysis for the matt's two way bar plots
-    # for (i in seq_len(nrow(cat_tib))){
-    #     category <- cat_tib$category[i]
-    #     sub_cat <- cat_tib$subcat[i]
-    #     cat_expl <- cat_tib$cat_expl[i]
-    #     gsea_result <- run_gsea(degs_result = degs_result,
-    #                             category = category,
-    #                             subcategory = sub_cat,
-    #                             species = species)
-
-    #     for (item in names(gsea_result)) {
-    #         top5_up_down <- top_up_down_pathways(gsea_result)
-    #         top5up_down <- rbind(gsea_result[[item]] %>%
-    #                                 filter(NES > 0) %>%
-    #                                 slice_head(n = 7),
-    #                             gsea_result[[item]] %>%
-    #                                 filter(NES < 0) %>%
-    #                                 slice_tail(n = 7)) %>%
-    #                         dplyr::select(pathway,
-    #                                         NES,
-    #                                         size,
-    #                                         padj) %>%
-    #                         arrange(desc(NES)) %>%
-    #                         mutate(pathway = as.factor(pathway) %>%
-    #                                 str_replace_all("_", " ") %>%
-    #                                 str_wrap(80) %>%
-    #                                 fct_reorder(NES),
-    #                         sample = item,
-    #                         order = 1:n(),
-    #                         justify_y = if_else(NES > 0, 1, 0),
-    #                         y_pos = if_else(NES > 0, -0.1, 0.1))
-    #         gsea_plot[[cat_expl]][[item]] <- two_way_plot(top5up_down, x_col = "NES")
-    #     }
-    # }
-
-#GSEA analysis for clusterprofiler dotplots
-    for (clusters in names(degs_result)) {
-        degs[[clusters]] <-
-            as.vector(degs_result[[clusters]]$log2FoldChange)
-        names(degs[[clusters]]) <- degs_result[[clusters]]$gene
-
-        for (i in seq_len(nrow(cat_tib))){
+    for (i in seq_len(nrow(cat_tib))){
         category <- cat_tib$category[i]
+        sub_cat <- cat_tib$subcat[i]
         cat_expl <- cat_tib$cat_expl[i]
-            gsea_input[[clusters]] <- clusterProfiler::gseGO(geneList = degs[[clusters]],
-                                                            OrgDb = org.Hs.eg.db::org.Hs.eg.db,
-                                                            ont = category,
-                                                            keyType = "SYMBOL")
-            gsea_input[[clusters]] <- mutate(gsea_input[[clusters]],
-                                             p.adjust = -log10(p.adjust))
+        gsea_result <- run_gsea(degs_result = degs_result,
+                                category = category,
+                                subcategory = sub_cat,
+                                species = species)
 
-    #make a dotplot
-        gsea_plot[[category]][[clusters]] <-
-            enrichplot::dotplot(object = gsea_input[[clusters]],
-                                x = "NES",
-                                showCategory = 10) +
-                            labs(title = str_c(clusters, "-", category))
+        for (item in names(gsea_result)) {
+            rows <- gsea_result[[item]] %>% 
+                nrow()
+            if (rows >= 1) {
+                top5up_down <- rbind(gsea_result[[item]] %>%
+                                        filter(NES > 0) %>%
+                                        slice_head(n = 7),
+                                    gsea_result[[item]] %>%
+                                        filter(NES < 0) %>%
+                                        slice_tail(n = 7)) %>%
+                                dplyr::select(pathway,
+                                                NES,
+                                                size,
+                                                padj) %>%
+                                arrange(desc(NES)) %>%
+                                mutate(pathway = as.factor(pathway) %>%
+                                            str_replace_all("_", " ") %>%
+                                            str_wrap(80) %>%
+                                            fct_reorder(NES),
+                                       sample = item,
+                                       order = seq_len(n()),
+                                       justify_y = if_else(NES > 0, 1, 0),
+                                       y_pos = if_else(NES > 0, -0.1, 0.1))
+                gsea_plot[[cat_expl]][[item]] <- two_way_plot(top5up_down, x_col = "NES")
+            } else {
+                print(str_c("No Pathways up or down in ", item, " for ", cat_expl))
+            }
         }
     }
+
+# #GSEA analysis for clusterprofiler dotplots
+#     for (clusters in names(degs_result)) {
+#         degs[[clusters]] <-
+#             as.vector(degs_result[[clusters]]$log2FoldChange)
+#         names(degs[[clusters]]) <- degs_result[[clusters]]$gene
+
+#         for (i in seq_len(nrow(cat_tib))){
+#         category <- cat_tib$category[i]
+#         cat_expl <- cat_tib$cat_expl[i]
+#             gsea_input[[clusters]] <- clusterProfiler::gseGO(geneList = degs[[clusters]],
+#                                                             OrgDb = org.Hs.eg.db::org.Hs.eg.db,
+#                                                             ont = category,
+#                                                             keyType = "SYMBOL")
+#             gsea_input[[clusters]] <- mutate(gsea_input[[clusters]],
+#                                              p.adjust = -log10(p.adjust))
+
+#     #make a dotplot
+#         gsea_plot[[category]][[clusters]] <-
+#             enrichplot::dotplot(object = gsea_input[[clusters]],
+#                                 x = "NES",
+#                                 showCategory = 10) +
+#                             labs(title = str_c(clusters, "-", category))
+#         }
+#     }
 
 #make panel plots
     for (clusters in names(volc_plot)) {
     ##plots for multilevelGSEA or matts two way plot
-        # plots <- list(dimplot +
-        #             volc_plot[[clusters]] +
-        #             gsea_plot$KEGG[[clusters]] +
-        #             gsea_plot$GOMF[[clusters]] +
-        #             gsea_plot$GOBP[[clusters]] +
-        #             gsea_plot$GOCC[[clusters]])
-    
+        plots <- gridExtra::grid.arrange(dimplot,
+                    gsea_plot$KEGG[[clusters]],
+                    gsea_plot$Hallmark_paths[[clusters]],
+                    volc_plot[[clusters]],
+                    gsea_plot$Oncogenic_signature[[clusters]],
+                    gsea_plot$Transcription_factor_targets[[clusters]],
+                    nrow = 2,
+                    top = clusters)
+
     #plot for Ryans gseaGO plots
-        plots <- (dimplot +
-                    volc_plot[[clusters]])/
-                    (gsea_plot$BP[[clusters]] +
-                    gsea_plot$MF[[clusters]] +
-                    gsea_plot$CC[[clusters]])
+        # plots <- (dimplot +
+        #             volc_plot[[clusters]])/
+        #             (gsea_plot$BP[[clusters]] +
+        #             gsea_plot$MF[[clusters]] +
+        #             gsea_plot$CC[[clusters]])
 
         # panel_plot <- patchwork::wrap_plots(plots) +
         #                 patchwork::plot_annotation(title = str_c("Panel Plot for ", item, " ", clusters),
@@ -1101,13 +1113,13 @@ gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
                     "/",
                     clusters,
                     ".png"),
-                width = 15,
-                height = 10,
+                #width = 15,
+                #height = 10,
                 plot = plots)
     }
 }, mc.cores = parallelly::availableCores())
 
-
+try looking into grid.arrange
 
 #Trial GSEA analysis
 cat_tib <- tribble(~category, ~cat_expl,
