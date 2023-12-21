@@ -881,6 +881,66 @@ run_gsea <- function(degs_result,
 
 ```{r}
 
+#two way dotplot
+two_way_dotplot <- function(data, x_col = "z_score") {
+    lab4plot <-
+        tibble(y = c(-2.5, 2.5),
+               x = c(0.2, 0.2),
+               label = c("Downregulated", "Upregulated"))
+
+    plot_name <-
+        ggplot() +
+        geom_point(data = data,
+                 aes(x = -1 * order,
+                     y = get(x_col),
+                     color = -log10(padj),
+                     size = size),
+                 stat = "identity",
+                 alpha = 0.8) +
+        coord_flip() +
+        # geom_hline(yintercept = 0,
+        #             color = "black",
+        #             linewidth = 0.5) +
+        geom_text(data = data,                #text for pathways names
+                    aes(x = -1 * order,
+                        y = get(x_col) + (y_pos *2),
+                        hjust = justify_y,
+                        label = pathway),
+                        size = 2,
+                        fontface = "bold") +
+        geom_text(data = lab4plot,    #text for upregulated/downregulated
+                  aes(x = x,
+                      y = y,
+                      label = label),
+                  fontface = "bold",
+                  size = 2.5) +
+        scale_fill_manual(values = plot_cols,
+                          name = paste0(x_col, " > 0")) +
+        theme(strip.background = element_rect(color = "white",
+                                              fill = "white"),
+              #legend.position = "none",
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              panel.border = element_blank(),
+              axis.line.x = element_line(color = "black"),
+              axis.line.y = element_blank(),
+              axis.title.x = element_text(size = 7),
+              axis.ticks.y = element_blank(),
+              plot.title = element_text(size = 7, face = "bold"),    #title of the plot
+              axis.text.y = element_blank(),
+              axis.text.x = element_text(size = 7)) +
+        labs(title = data$sample[1],
+             y = "NES",
+             x = "") +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        ylim(-6, 6) +
+        scale_color_gradient(low = "pink", high = "darkred")
+
+    return(plot_name)
+}
+
+
+
 two_way_plot <- function(data, x_col = "z_score") {
     lab4plot <-
         tibble(y = c(-3, 3),
@@ -1072,6 +1132,8 @@ gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
 #                                                             keyType = "SYMBOL")
 #             gsea_input[[clusters]] <- mutate(gsea_input[[clusters]],
 #                                              p.adjust = -log10(p.adjust))
+
+
 
 #     #make a dotplot
 #         gsea_plot[[category]][[clusters]] <-
