@@ -1117,6 +1117,9 @@ gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
         }
     }
 
+two_way_dotplot(top5up_down, x= "NES")
+
+
 # #GSEA analysis for clusterprofiler dotplots
 #     for (clusters in names(degs_result)) {
 #         degs[[clusters]] <-
@@ -1806,6 +1809,281 @@ todo for monday
 4) Get rid of sobj which have less than 500 cells automatically
 
 you can just print out tables with the cell numbers 
+
+
+```
+
+
+
+
+
+## Regulons analysis
+```{r}
+### 5. Loading Data
+# 5.1 Loading data from seurat object
+seuratobject <- pbmc3k.SeuratData::pbmc3k %>% 
+    process_seurat() %>%
+    subset(seurat_annotations == c("Naive CD4 T",
+                                   "Memory CD4 T",
+                                   "CD14+ Mono",
+                                   "NK",
+                                   "B",
+                                   "CD8 T"))
+
+DimPlot(seuratobject, group.by = "seurat_annotations")
+exprMat <- GetAssayData(seuratobject, assay='RNA', slot='counts')
+exprMat <- as.matrix(exprMat)
+
+# cell information
+Idents(seuratobject) <- seuratobject$seurat_annotations
+cellInfo <- data.frame(CellType=Idents(seuratobject))
+cbind(table(cellInfo$CellType))
+
+saveRDS(cellInfo, file="input/downloads/SCENIC/cellInfo.Rds")
+
+#color assign for celltypes for plots
+colVars <- list(CellType = c("Naive CD4 T" = "forestgreen",
+                             "Memory CD4 T" = "darkorange",
+                             "CD14+ Mono" = "magenta4",
+                             "NK" = "red3",
+                             "B" = "skyblue", 
+                             "CD8 T" = "hotpink"))
+
+colVars$CellType <- colVars$CellType[intersect(names(colVars$CellType), cellInfo$CellType)]
+
+saveRDS(colVars, file="input/downloads/SCENIC/colVars.Rds")
+
+plot.new(); legend(0,1, fill=colVars$CellType, legend=names(colVars$CellType))
+
+#set the organism
+library(SCENIC)
+org <- "hgnc"
+dbDir <- "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/SCENIC"
+myDatasetTitle <- "SCENIC tutorial"
+data(defaultDbNames)
+dbs <- defaultDbNames[[org]]
+
+scenicoptions <- SCENIC::initializeScenic(org = org,
+                                        dbDir = dbDir,
+                                        dbs = dbs,
+                                        datasetTitle = myDatasetTitle,
+                                        nCores = 10)
+
+motifAnnotations_hgnc <- motifAnnotations
+
+scenicOptions <- SCENIC::initializeScenic(org = org,
+                                        dbDir = dbDir,
+                                        dbs = dbs,
+                                        datasetTitle = myDatasetTitle,
+                                        nCores = 10)
+
+scenicOptions@inputDatasetInfo$cellInfo <- 
+    "input/downloads/SCENIC/cellInfo.Rds"
+
+scenicOptions@inputDatasetInfo$colVars <- 
+    "input/downloads/SCENIC/colVars.Rds"
+
+##### III: Co-expression network
+### 1. Gene filter/selection
+# (Adjust minimum values according to your dataset)
+genesKept <- geneFiltering(exprMat, scenicOptions=scenicOptions,
+                           minCountsPerGene=3*.01*ncol(exprMat),
+                           minSamples=ncol(exprMat)*.01)
+
+# check interesting genes
+interestingGenes <- c("ISG15", "PTEN", "IL16")
+# any missing?
+interestingGenes[which(!interestingGenes %in% genesKept)]
+
+# filter the expression matrix to contain only these 770 genes. 
+# This matrix is now ready for the co-expression analysis.
+exprMat_filtered <- exprMat[genesKept, ]
+dim(exprMat_filtered)
+
+### 2. Correlation
+runCorrelation(exprMat_filtered, scenicOptions)
+
+### 3. Run GENIE3 to infer potential transcription factor targets
+# Optional: add log (if it is not logged/normalized already)
+exprMat_filtered <- log2(exprMat_filtered+1) 
+
+# Run GENIE3
+runGenie3(exprMat_filtered, scenicOptions)
+
+###### IV: Build the gene regulatory network & Identify cell states:
+### Build the gene regulatory network: 
+# 1. Get co-expression modules
+scenicOptions <- runSCENIC_1_coexNetwork2modules(scenicOptions)
+
+# 2. Get regulons (with RcisTarget: TF motif analysis)
+scenicOptions <- runSCENIC_2_createRegulons(scenicOptions,
+                                            coexMethod=c("top5perTarget"))
+
+### Identify cell states: 
+# 3. Score GRN (regulons) in the cells (with AUCell) 
+exprMat_log <- log2(exprMat+1)
+
+scenicOptions <- runSCENIC_3_scoreCells(scenicOptions, exprMat_log)
+
+###### Save the analysis
+saveRDS(scenicOptions, 
+        file="input/downloads/SCENIC/scenicOptions.Rds")
+
+
+# 4. Optional steps:
+# 4.1 Look the results in shinyAPP
+aucellApp <- plotTsne_AUCellApp(scenicOptions, exprMat_log)
+savedSelections <- shiny::runApp(aucellApp)
+
+# 4.2 Binarize the network activity (regulon on/off)
+# scenicOptions@settings$devType="png"
+scenicOptions <- runSCENIC_4_aucell_binarize(scenicOptions)
+
+# 4.3 Cluster cells according to the GRN activity (Optional)
+# 4.3.1 set number of PCs
+nPcs <- c(5) # For demo dataset, # nPcs <- c(5,15,50)
+
+# 4.3.2 Calculates the t-SNE based on the regulon activity
+scenicOptions@settings$seed <- 123 # same seed for all of them
+fileNames <- tsneAUC(scenicOptions, aucType="AUC", nPcs=nPcs, perpl=c(5,15,50))
+fileNames
+
+par(mfrow=c(2,3))
+plotTsne_compareSettings("int/tSNE_AUC_05pcs_05perpl.Rds", scenicOptions, 
+                         showLegend=FALSE, varName="CellType", cex=.5)
+
+plotTsne_compareSettings("int/tSNE_AUC_05pcs_15perpl.Rds", scenicOptions, 
+                         showLegend=FALSE, varName="CellType", cex=.5)
+
+plotTsne_compareSettings("int/tSNE_AUC_05pcs_50perpl.Rds", scenicOptions, 
+                         showLegend=FALSE, varName="CellType", cex=.5)
+
+# 4.3.3 Calculates the t-SNE using only "high-confidence" regulons
+fileNames <- tsneAUC(scenicOptions, aucType="AUC", nPcs=nPcs, perpl=c(5,15,50),
+                     onlyHighConf=TRUE, filePrefix="int/tSNE_oHC")
+fileNames
+
+plotTsne_compareSettings("int/tSNE_oHC_AUC_05pcs_05perpl.Rds", scenicOptions, 
+                         showLegend=FALSE, varName="CellType", cex=.5)
+
+plotTsne_compareSettings("int/tSNE_oHC_AUC_05pcs_15perpl.Rds", scenicOptions, 
+                         showLegend=FALSE, varName="CellType", cex=.5)
+
+plotTsne_compareSettings("int/tSNE_oHC_AUC_05pcs_50perpl.Rds", scenicOptions, 
+                         showLegend=FALSE, varName="CellType", cex=.5)
+
+# 4.3.4 Save defalt t-SNE
+scenicOptions@settings$defaultTsne$aucType <- "AUC"
+scenicOptions@settings$defaultTsne$dims <- 5
+scenicOptions@settings$defaultTsne$perpl <- 15
+saveRDS(scenicOptions, 
+        file="input/downloads/SCENIC/scenicOptions.Rds")
+
+print(tsneFileName(scenicOptions))
+
+### 1. Identify Cell states and their regulators
+## 1.1 Projection the AUC and TF expression onto t-SNEs
+# load data from int fold
+loadInt(scenicOptions)
+aucell_regulonAUC <- loadInt(scenicOptions, "aucell_regulonAUC")
+
+tsneFileName(scenicOptions)
+par(mfrow=c(2,3))
+plotTsne_compareSettings(tsneFileName(scenicOptions), scenicOptions, 
+                         showLegend=TRUE, varName="CellType", cex=.5)
+
+# Show TF expression:
+tSNE_scenic <- readRDS(tsneFileName(scenicOptions))
+AUCell::AUCell_plotTSNE(tSNE_scenic$Y, exprMat, 
+  aucell_regulonAUC[onlyNonDuplicatedExtended(
+    rownames(aucell_regulonAUC))[c("BCLAF1", "MAX", "PHF20", "RFX5", "NFIC")],], 
+  plots="Expression")
+
+# Save AUC as PDF (Export):
+dev.off()
+
+## 1.2 Density plot to detect most likely stable states (high density area)
+library(KernSmooth)
+library(RColorBrewer)
+dens2d <- bkde2D(tSNE_scenic$Y, 1)$fhat
+image(dens2d, col = brewer.pal(9, "YlOrBr"), axes=FALSE)
+contour(dens2d, add = TRUE, nlevels= 5, drawlabels=FALSE)
+
+### 2. Regulon targets
+## Output file: Step2_regulonTargetsInfo
+
+# subset regulonTargetsInfo before exporting it as HTML
+regulonTargetsInfo <- loadInt(scenicOptions, "regulonTargetsInfo")
+tableSubset <- regulonTargetsInfo[TF=="Stat6" & highConfAnnot==TRUE]
+viewMotifs(tableSubset, options=list(pageLength=5)) 
+
+# Targets for intereted TFs
+regulons <- loadInt(scenicOptions, "regulons")
+regulons[c("SPI1", "CEBPD", "CEBPB")]
+
+# Only regulons with 10 genes or more are scored with AUCell
+regulons <- loadInt(scenicOptions, "aucell_regulons")
+head(cbind(onlyNonDuplicatedExtended(names(regulons))))
+
+### 3. Regulon motifs
+# The full list of TF motifs: Step2_MotifEnrichment
+
+# showing motifs for interested TF
+motifEnrichment_selfMotifs_wGenes <- loadInt(scenicOptions, 
+                                    "motifEnrichment_selfMotifs_wGenes")
+tableSubset <- motifEnrichment_selfMotifs_wGenes[highlightedTFs=="Sox9"]
+viewMotifs(tableSubset) 
+
+### 4. combine SCENIC analysis with other analysis tools
+#Regulators for known cell types or clusters
+## 4.1 ComplexHeatmap to show average regulon activity by cell clusters
+library(ComplexHeatmap)
+regulonAUC <- loadInt(scenicOptions, "aucell_regulonAUC")
+regulonAUC <- regulonAUC[onlyNonDuplicatedExtended(rownames(regulonAUC)),]
+regulonActivity_byCellType <- sapply(split(rownames(cellInfo), 
+                cellInfo$CellType),
+                function(cells) rowMeans(getAUC(regulonAUC)[,cells]))
+regulonActivity_byCellType_Scaled <- t(scale(t(regulonActivity_byCellType), 
+                                             center = T, scale=T))
+
+ComplexHeatmap::Heatmap(
+  regulonActivity_byCellType_Scaled, name="Regulon activity")
+
+# topRegulators for each cell type: Relative Activity
+topRegulators <- reshape2::melt(regulonActivity_byCellType_Scaled)
+colnames(topRegulators) <- c("Regulon", "CellType", "RelativeActivity")
+topRegulators <- topRegulators[which(topRegulators$RelativeActivity>0),]
+viewTable(topRegulators)
+
+## 4.2 Binarized data
+minPerc <- .4 # percentage of cells in a cluster with the regulon is active
+binaryRegulonActivity <- loadInt(scenicOptions, "aucell_binary_nonDupl")
+cellInfo_binarizedCells <- cellInfo[which(
+  rownames(cellInfo)%in% colnames(binaryRegulonActivity)),, drop=FALSE]
+regulonActivity_byCellType_Binarized <- sapply(
+  split(rownames(cellInfo_binarizedCells), cellInfo_binarizedCells$CellType), 
+        function(cells) rowMeans(binaryRegulonActivity[,cells, drop=FALSE]))
+binaryActPerc_subset <- regulonActivity_byCellType_Binarized[which(
+  rowSums(regulonActivity_byCellType_Binarized>minPerc)>0),]
+ComplexHeatmap::Heatmap(binaryActPerc_subset, name="Regulon activity", 
+                        col = c("white","pink","red"))
+
+# topRegulators for each cell type: Relative Activity
+topRegulators <- reshape2::melt(regulonActivity_byCellType_Binarized)
+colnames(topRegulators) <- c("Regulon", "CellType", "RelativeActivity")
+topRegulators <- topRegulators[which(topRegulators$RelativeActivity>minPerc),]
+viewTable(topRegulators)
+
+## 4.3 Cell-type specific regulators based on Regulon Specificity Score (RSS)
+regulonAUC <- loadInt(scenicOptions, "aucell_regulonAUC")
+rss <- calcRSS(AUC=getAUC(regulonAUC), cellAnnotation=cellInfo[colnames(
+  regulonAUC), "CellType"])
+rss_for_Plot <- plotRSS(rss)
+
+plotly::ggplotly(rss_for_Plot$plot)
+
+plotRSS_oneSet(rss, setName = "interneurons")
+
 
 
 ```
