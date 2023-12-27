@@ -789,7 +789,7 @@ plot <-
 
 ```
 
-## DEGs and GSEA plot
+## DEGs and GSEA plot functions
 
 ```{r}
 
@@ -903,7 +903,7 @@ two_way_dotplot <- function(data, x_col = "z_score") {
         #             linewidth = 0.5) +
         geom_text(data = data,                #text for pathways names
                     aes(x = -1 * order,
-                        y = get(x_col) + (y_pos *2),
+                        y = get(x_col) + (y_pos *5),
                         hjust = justify_y,
                         label = pathway),
                         size = 2,
@@ -928,7 +928,9 @@ two_way_dotplot <- function(data, x_col = "z_score") {
               axis.ticks.y = element_blank(),
               plot.title = element_text(size = 7, face = "bold"),    #title of the plot
               axis.text.y = element_blank(),
-              axis.text.x = element_text(size = 7)) +
+              axis.text.x = element_text(size = 7),
+              legend.title = element_text(size = 7,
+                                          face = "bold")) +
         labs(title = data$sample[1],
              y = "NES",
              x = "") +
@@ -938,7 +940,6 @@ two_way_dotplot <- function(data, x_col = "z_score") {
 
     return(plot_name)
 }
-
 
 
 two_way_plot <- function(data, x_col = "z_score") {
@@ -976,7 +977,7 @@ two_way_plot <- function(data, x_col = "z_score") {
                           name = paste0(x_col, " > 0")) +
         theme(strip.background = element_rect(color = "white",
                                               fill = "white"),
-              legend.position = "none",
+              #legend.position = "none",
               panel.grid.major = element_blank(),
               panel.grid.minor = element_blank(),
               panel.border = element_blank(),
@@ -986,17 +987,19 @@ two_way_plot <- function(data, x_col = "z_score") {
               axis.ticks.y = element_blank(),
               plot.title = element_text(size = 7, face = "bold"),    #title of the plot
               axis.text.y = element_blank(),
-              axis.text.x = element_text(size = 7)) +
+              axis.text.x = element_text(size = 7),
+              legend.title = element_text(size = 7,
+                                          face = "bold")) +
         labs(title = data$sample[1],
              y = "NES",
              x = "") +
         theme(plot.title = element_text(hjust = 0.5)) +
-        ylim(-6, 6)
+        ylim(-6, 6) 
 
     return(plot_name)
 }
 
-tumor_list <- tribble(~sobj_name,           ~species,
+tumor_list <- dplyr::tribble(~sobj_name,           ~species,
                     "patient_prim_tumor",    "human",
                     "patient_mets_tumor",    "human",
                     "mm_prim_tumor",         "mouse",
@@ -1006,31 +1009,27 @@ tumor_list <- tribble(~sobj_name,           ~species,
 
 theme_set(theme_classic(base_size = 20) +
             theme(axis.title.y = element_text(margin = margin(0, 20, 0, 0),
-                                              size = 6,
-                                              color = "black"),
+                                              size = 10,
+                                              color = "black",
+                                              face = "bold"),
                   axis.title.x = element_text(hjust = 0.5,
                                               margin = margin(20, 0, 0, 0),
-                                              size = 6,
-                                              color = "black"),
-                  plot.title = element_text(hjust = 0.5),
-                  legend.text = element_text(size = 6)))
+                                              size = 10,
+                                              color = "black",
+                                              face = "bold"),
+                  plot.title = element_text(hjust = 0.5,
+                                            size = 10,
+                                            face = "bold"),
+                  legend.text = element_text(size = 8,
+                                             face = "bold")))
 
 #GSEA Miltilevel
-cat_tib <- tribble(
-    ~category, ~subcat,   ~cat_expl, 
-    "C2",      "CP:KEGG", "KEGG",
-    #"C5",        "MF",    "GOMF",
-    #"C5",        "BP",    "GOBP",
-    #"C5",        "CC",    "GOCC",
-    "H",         NULL,     "Hallmark_paths",
-    "C3",      "TFT:GTRD", "Transcription_factor_targets",
-    "C6",       NULL,      "Oncogenic_signature")
-
-#Clusterprofiler GSEA
-# cat_tib <- tribble(~category, ~cat_expl,
-#                   "BP",       "GOBP",
-#                   "MF",       "GOMF",
-#                   "CC",       "GOCC")
+cat_tib <- dplyr::tribble(
+    ~category, ~subcategory,   ~cat_expl,
+    "H",        "NA",          "Hallmark_paths",
+    "C2",      "CP:KEGG",      "KEGG",
+    "C3",      "TFT:GTRD",     "Transcription_factor_targets",
+    "C6",       "NA",          "Oncogenic_signature")
 
 gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
     sobj_name <- tumor_list$sobj_name[item]
@@ -1080,22 +1079,27 @@ gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
 #GSEA analysis for the matt's two way bar plots
     for (i in seq_len(nrow(cat_tib))){
         category <- cat_tib$category[i]
-        sub_cat <- cat_tib$subcat[i]
+        subcategory <- cat_tib$subcategory[i]
         cat_expl <- cat_tib$cat_expl[i]
-        gsea_result <- run_gsea(degs_result = degs_result,
-                                category = category,
-                                subcategory = sub_cat,
-                                species = species)
-
+        if (subcategory == "NA") {
+            gsea_result <- run_gsea(degs_result = degs_result,
+                                    category = category,
+                                    species = species)
+        } else {
+            gsea_result <- run_gsea(degs_result = degs_result,
+                                    category = category,
+                                    subcategory = subcategory,
+                                    species = species)
+        }
         for (item in names(gsea_result)) {
             rows <- gsea_result[[item]] %>% 
                 nrow()
             if (rows >= 1) {
                 top5up_down <- rbind(gsea_result[[item]] %>%
-                                        filter(NES > 0) %>%
+                                        #filter(NES > 0) %>%
                                         slice_head(n = 7),
                                     gsea_result[[item]] %>%
-                                        filter(NES < 0) %>%
+                                        #filter(NES < 0) %>%
                                         slice_tail(n = 7)) %>%
                                 dplyr::select(pathway,
                                                 NES,
@@ -1104,52 +1108,21 @@ gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
                                 arrange(desc(NES)) %>%
                                 mutate(pathway = as.factor(pathway) %>%
                                             str_replace_all("_", " ") %>%
-                                            str_wrap(80) %>%
+                                            str_wrap(65) %>%
                                             fct_reorder(NES),
                                        sample = item,
                                        order = seq_len(n()),
                                        justify_y = if_else(NES > 0, 1, 0),
                                        y_pos = if_else(NES > 0, -0.1, 0.1))
-                gsea_plot[[cat_expl]][[item]] <- two_way_plot(top5up_down, x_col = "NES")
+                gsea_plot[[cat_expl]][[item]] <- two_way_dotplot(top5up_down, x_col = "NES")
             } else {
                 print(str_c("No Pathways up or down in ", item, " for ", cat_expl))
             }
         }
     }
 
-two_way_dotplot(top5up_down, x= "NES")
-
-
-# #GSEA analysis for clusterprofiler dotplots
-#     for (clusters in names(degs_result)) {
-#         degs[[clusters]] <-
-#             as.vector(degs_result[[clusters]]$log2FoldChange)
-#         names(degs[[clusters]]) <- degs_result[[clusters]]$gene
-
-#         for (i in seq_len(nrow(cat_tib))){
-#         category <- cat_tib$category[i]
-#         cat_expl <- cat_tib$cat_expl[i]
-#             gsea_input[[clusters]] <- clusterProfiler::gseGO(geneList = degs[[clusters]],
-#                                                             OrgDb = org.Hs.eg.db::org.Hs.eg.db,
-#                                                             ont = category,
-#                                                             keyType = "SYMBOL")
-#             gsea_input[[clusters]] <- mutate(gsea_input[[clusters]],
-#                                              p.adjust = -log10(p.adjust))
-
-
-
-#     #make a dotplot
-#         gsea_plot[[category]][[clusters]] <-
-#             enrichplot::dotplot(object = gsea_input[[clusters]],
-#                                 x = "NES",
-#                                 showCategory = 10) +
-#                             labs(title = str_c(clusters, "-", category))
-#         }
-#     }
-
 #make panel plots
     for (clusters in names(volc_plot)) {
-    ##plots for multilevelGSEA or matts two way plot
         plots <- gridExtra::grid.arrange(dimplot,
                     gsea_plot$KEGG[[clusters]],
                     gsea_plot$Hallmark_paths[[clusters]],
@@ -1158,19 +1131,6 @@ two_way_dotplot(top5up_down, x= "NES")
                     gsea_plot$Transcription_factor_targets[[clusters]],
                     nrow = 2,
                     top = clusters)
-
-    #plot for Ryans gseaGO plots
-        # plots <- (dimplot +
-        #             volc_plot[[clusters]])/
-        #             (gsea_plot$BP[[clusters]] +
-        #             gsea_plot$MF[[clusters]] +
-        #             gsea_plot$CC[[clusters]])
-
-        # panel_plot <- patchwork::wrap_plots(plots) +
-        #                 patchwork::plot_annotation(title = str_c("Panel Plot for ", item, " ", clusters),
-        #                                             theme = theme(plot.title = element_text(hjust = 0.5,
-        #                                                                                     size = 20,
-        #                                                                                     face = "bold")))
 
 #save the plots
         ggsave(str_c("output/gsea/tumor/",
@@ -1184,116 +1144,11 @@ two_way_dotplot(top5up_down, x= "NES")
     }
 }, mc.cores = parallelly::availableCores())
 
-try looking into grid.arrange
-
-#Trial GSEA analysis
-cat_tib <- tribble(~category, ~cat_expl,
-                  "BP",       "GOBP",
-                  "MF",       "GOMF",
-                  "CC",       "GOCC")
-
-degs <- list()
-gsea_input <- list()
-gsea_plots <- list()
-for (clusters in names(degs_result)) {
-    degs[[clusters]] <-
-        as.vector(degs_result[[clusters]]$log2FoldChange)
-    names(degs[[clusters]]) <- degs_result[[clusters]]$gene
-
-    for (i in seq_len(nrow(cat_tib))){
-    category <- cat_tib$category[i]
-    cat_expl <- cat_tib$cat_expl[i]
-    gsea_input[[clusters]] <- clusterProfiler::gseGO(geneList = degs[[clusters]],
-                                       OrgDb = org.Hs.eg.db::org.Hs.eg.db,
-                                       ont = category,
-                                       keyType = "SYMBOL")
-    gsea_input[[clusters]] <- mutate(gsea_input[[clusters]], p.adjust = -log10(p.adjust))
-
-#make a plot
-    gsea_plots[[clusters]][[category]] <-
-        enrichplot::dotplot(object = gsea_input[[clusters]],
-                            x = "NES",
-                            showCategory = 10) +
-                        labs(title = str_c(clusters, "-", category))
-    }
-}
 
 
+devtools::install_github("drieslab/Giotto@master")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-a <- DimPlot(patient_prim_tumor,
-            group.by = "seurat_clusters",
-            label = T,
-            #ncol = 3,
-            repel = T,
-            shuffle = T,
-            cols = c(plot_cols, sample(rainbow(1000)))) +
-    NoLegend() +
-    coord_fixed() +
-    ggtitle("Seurat Clusters") +
-    theme(legend.text = element_text(size = 7))
-
-b <- DimPlot(patient_prim_tumor,
-            group.by = "sample_name",
-            label = T,
-            #ncol = 3,
-            repel = T,
-            shuffle = T,
-            cols = c(plot_cols, sample(rainbow(1000)))) +
-    NoLegend() +
-    coord_fixed() +
-    ggtitle("Integration by Sample") +
-    theme(legend.text = element_text(size = 7))
-
-tumor <- RenameIdents(patient_prim_tumor,
-    `0` = "Growth - metabolism and recovery",
-    `1` = "Matrix producing",
-    `2` = "Growth - actively cycling",
-    `3` = "Growth - metabolism and recovery",
-    `4` = "Inflammatory/interactive",
-    `5` = "Basal/Quiscent",
-    `6` = "Basal/Quiscent"
-)
-
-c <- DimPlot(tumor,
-            #group.by = "sample_name",
-            label = T,
-            #ncol = 3,
-            repel = T,
-            cols = c(plot_cols, sample(rainbow(1000)))) +
-    NoLegend() +
-    coord_fixed() +
-    ggtitle("Clonal Celltype Assignment") +
-    theme(legend.text = element_text(size = 7))
-
-
-plots <- list(a, b, c)
-plot <- patchwork::wrap_plots(plots) + 
-        patchwork::plot_annotation(title = str_c("UMAP for "),
-                                    theme = theme(plot.title = element_text(hjust = 0.5,
-                                                                            size = 20,
-                                                                            face = "bold")))
-ggsave("output/plots/umaps/prim_cancer_celltypes.png",
-            width = 15,
-            height = 5,
-            plot = plot)
-
-
+magick
 ```
 
 
@@ -1677,6 +1532,11 @@ pheatmap::pheatmap(as.matrix(averageexp[[1]]),
                    cluster_cols = FALSE)
 
 ```
+
+
+
+
+
 
 ## Create metadata for anands
 ```{r}
