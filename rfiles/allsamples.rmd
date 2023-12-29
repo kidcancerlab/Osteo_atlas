@@ -181,7 +181,7 @@ what <- parallel::mclapply(unique(sample_details$unique), function(item) {
         Hmeta_data <- sobj@meta.data %>%
             as.data.table
         counts <- Hmeta_data[, .N, by = "sample_name"]
-        if (counts$N >= 300) {
+        if (counts$N >= 100) {
             set.seed(1237)
             temp_list[[sample_name]] <- sobj
             temp_list[[sample_name]] <-
@@ -1145,10 +1145,6 @@ gsea <- parallel::mclapply(seq_len(nrow(tumor_list)), function(item) {
 }, mc.cores = parallelly::availableCores())
 
 
-
-devtools::install_github("drieslab/Giotto@master")
-
-magick
 ```
 
 
@@ -1396,7 +1392,6 @@ degs_results <- list()
 # }
 
 
-
 for (celltypes in unique(harmony_sobj_comb$new)) {
     Idents(harmony_sobj_comb) <- harmony_sobj_comb$new
     df <- subset(x = harmony_sobj_comb,
@@ -1609,7 +1604,7 @@ for (item in unique(subset_file$unique)){
                    percent.mt < tmp_df$mt_percent[i]) %>%
             nrow()
 
-        if (counts_after >= 300) {
+        if (counts_after >= 100) {
             sobj <- subset(sobj,
                            nCount_RNA > nCount_min &
                            nCount_RNA < tmp_df$ncount_max[i] &
@@ -1646,7 +1641,7 @@ for (item in unique(subset_file$unique)){
 
 
 # individual QC numbers
-obj <- qs::qread("output/seurat_objects/single_sobj/patient/primary/OS_1human.qs") #nolint
+obj <- qs::qread("output/seurat_objects/st_jude/patient_mets.qs") #nolint
 
 # Cutoff and cleaning
 try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
@@ -1662,14 +1657,32 @@ feature_hist(sobject = obj,
 
 
 
-todo for monday
-1)see how many cells are left in total per group when used cutoff of min ncount of 1000 and max of from the table
-2) do this for both our already exisitng samples and all the Saint Judes samples
-3) Find out what min ncount cutoffs works the best to keep most of our cells 
-4) Get rid of sobj which have less than 500 cells automatically
+# Run Liger
+obj <- qs::qread("output/seurat_objects/st_jude/patient_mets.qs") #nolint
 
-you can just print out tables with the cell numbers 
+DimPlot(obj, group.by = "sample_name")
 
+# harmony_sobj <- RunHarmony(obj, group.by.vars = "sample_name")
+# harmony_sobj <- harmony_sobj %>% process_seurat(reduction = "harmony")
+# DimPlot(harmony_sobj, group.by = "sample_name", shuffle = T)
+
+library(rliger)
+object <- sobj@assays$RNA@counts
+
+liger_sobj <- createLiger(object)
+
+
+object <- CreateSeuratObject(object)
+
+object <- object %>%
+    NormalizeData() %>%
+    FindVariableFeatures() %>% 
+    ScaleData(split.by= "orig.ident")
+
+sobj_liger <- optimizeALS(object,
+                                  k = 20,
+                                  lambda = 5,
+                                  split.by = "orig.ident")
 
 ```
 
@@ -1685,29 +1698,34 @@ seuratobject <- pbmc3k.SeuratData::pbmc3k %>%
     process_seurat() %>%
     subset(seurat_annotations == c("Naive CD4 T",
                                    "Memory CD4 T",
-                                   "CD14+ Mono",
                                    "NK",
                                    "B",
                                    "CD8 T"))
 
-DimPlot(seuratobject, group.by = "seurat_annotations")
-exprMat <- GetAssayData(seuratobject, assay='RNA', slot='counts')
-exprMat <- as.matrix(exprMat)
+seuratobject <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
+
+#need to downsample to reduce the time 
+seuratobject <-subset(x = seuratobject,
+                     cells = sample(Cells(seuratobject),
+                        min(3000, length(Cells(seuratobject)))))
+
+DimPlot(seuratobject, group.by = "seurat_clusters")
+
+exprMat <- GetAssayData(seuratobject, assay='RNA', slot='counts') %>% 
+    as.matrix(exprMat)
 
 # cell information
-Idents(seuratobject) <- seuratobject$seurat_annotations
+Idents(seuratobject) <- seuratobject$seurat_clusters
 cellInfo <- data.frame(CellType=Idents(seuratobject))
 cbind(table(cellInfo$CellType))
 
 saveRDS(cellInfo, file="input/downloads/SCENIC/cellInfo.Rds")
 
 #color assign for celltypes for plots
-colVars <- list(CellType = c("Naive CD4 T" = "forestgreen",
-                             "Memory CD4 T" = "darkorange",
-                             "CD14+ Mono" = "magenta4",
-                             "NK" = "red3",
-                             "B" = "skyblue", 
-                             "CD8 T" = "hotpink"))
+colVars <- list(CellType = c("0" = "forestgreen",
+                             "1" = "darkorange",
+                             "2" = "red3",
+                             "3" = "skyblue"))
 
 colVars$CellType <- colVars$CellType[intersect(names(colVars$CellType), cellInfo$CellType)]
 
@@ -1737,10 +1755,10 @@ scenicOptions <- SCENIC::initializeScenic(org = org,
                                         datasetTitle = myDatasetTitle,
                                         nCores = 10)
 
-scenicOptions@inputDatasetInfo$cellInfo <- 
+scenicOptions@inputDatasetInfo$cellInfo <- #cellInfo
     "input/downloads/SCENIC/cellInfo.Rds"
 
-scenicOptions@inputDatasetInfo$colVars <- 
+scenicOptions@inputDatasetInfo$colVars <- #colVars
     "input/downloads/SCENIC/colVars.Rds"
 
 ##### III: Co-expression network
@@ -1751,7 +1769,7 @@ genesKept <- geneFiltering(exprMat, scenicOptions=scenicOptions,
                            minSamples=ncol(exprMat)*.01)
 
 # check interesting genes
-interestingGenes <- c("ISG15", "PTEN", "IL16")
+interestingGenes <- c("ISG15", "PTEN", "IL16", "FOXM1")
 # any missing?
 interestingGenes[which(!interestingGenes %in% genesKept)]
 
@@ -1760,14 +1778,14 @@ interestingGenes[which(!interestingGenes %in% genesKept)]
 exprMat_filtered <- exprMat[genesKept, ]
 dim(exprMat_filtered)
 
-### 2. Correlation
+### 2. Correlation: positive means TF could upregulate the target gene and viceversa
 runCorrelation(exprMat_filtered, scenicOptions)
 
 ### 3. Run GENIE3 to infer potential transcription factor targets
 # Optional: add log (if it is not logged/normalized already)
-exprMat_filtered <- log2(exprMat_filtered+1) 
+exprMat_filtered <- log2(exprMat_filtered+1)
 
-# Run GENIE3
+# Run GENIE3 and find potential TF targets
 runGenie3(exprMat_filtered, scenicOptions)
 
 ###### IV: Build the gene regulatory network & Identify cell states:
@@ -1790,21 +1808,23 @@ saveRDS(scenicOptions,
         file="input/downloads/SCENIC/scenicOptions.Rds")
 
 
+
+
 # 4. Optional steps:
 # 4.1 Look the results in shinyAPP
 aucellApp <- plotTsne_AUCellApp(scenicOptions, exprMat_log)
 savedSelections <- shiny::runApp(aucellApp)
 
 # 4.2 Binarize the network activity (regulon on/off)
-# scenicOptions@settings$devType="png"
-scenicOptions <- runSCENIC_4_aucell_binarize(scenicOptions)
+scenicOptions@settings$devType="png"
+scenicOptions <- runSCENIC_4_aucell_binarize(scenicOptions, exprMat_log)
 
 # 4.3 Cluster cells according to the GRN activity (Optional)
 # 4.3.1 set number of PCs
 nPcs <- c(5) # For demo dataset, # nPcs <- c(5,15,50)
 
 # 4.3.2 Calculates the t-SNE based on the regulon activity
-scenicOptions@settings$seed <- 123 # same seed for all of them
+scenicOptions@settings$seed <- 123    #same seed for all of them
 fileNames <- tsneAUC(scenicOptions, aucType="AUC", nPcs=nPcs, perpl=c(5,15,50))
 fileNames
 
@@ -1856,7 +1876,7 @@ plotTsne_compareSettings(tsneFileName(scenicOptions), scenicOptions,
 tSNE_scenic <- readRDS(tsneFileName(scenicOptions))
 AUCell::AUCell_plotTSNE(tSNE_scenic$Y, exprMat, 
   aucell_regulonAUC[onlyNonDuplicatedExtended(
-    rownames(aucell_regulonAUC))[c("BCLAF1", "MAX", "PHF20", "RFX5", "NFIC")],], 
+    rownames(aucell_regulonAUC))[c("MRPL20", "MAX", "SDF4", "RFX5", "NFIC")],], 
   plots="Expression")
 
 # Save AUC as PDF (Export):
@@ -1945,5 +1965,40 @@ plotly::ggplotly(rss_for_Plot$plot)
 plotRSS_oneSet(rss, setName = "interneurons")
 
 
+
+```
+
+## Liger
+```{r}
+library(rliger)
+
+object <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
+
+# counts<- sobj@assays$RNA@counts
+
+# ifnb_liger <- createLiger(object)
+
+marsh_liger <- rliger::seuratToLiger(objects = sobj, combined.seurat = TRUE, use.idents = T,
+    use.tsne = T, meta.var = "orig.ident", remove.missing = FALSE)
+
+marsh_liger@cell.data$tumor_type <- sobj@meta.data$tumor_type
+marsh_liger@cell.data$data_type <- sobj@meta.data$sobj@meta.data$data_type
+marsh_liger@cell.data$sample_name <- sobj@meta.data$sample_name
+marsh_liger@cell.data$model <- sobj@meta.data$model
+marsh_liger@cell.data$organism <- obj@meta.data$organism
+marsh_liger@cell.data$annotations <- sobj@meta.data$annotations
+
+marsh_liger <- normalize(marsh_liger) %>%
+    selectGenes() %>%
+    scaleNotCenter() %>%
+    optimizeALS(k=20) %>%
+    quantile_norm() %>%
+    louvainCluster(resolution = 0.25) %>%
+    runUMAP(distance = 'cosine',
+            n_neighbors = 30,
+            min_dist = 0.3)
+
+all.plots <- plotByDatasetAndCluster(marsh_liger, axis.labels = c('UMAP 1', 'UMAP 2'), return.plots = T)
+all.plots[[1]] + all.plots[[2]]
 
 ```
