@@ -1552,12 +1552,12 @@ subset_file <- filter(all_samples_csv, sample_name %in% dir_list)
 #write.csv(subset_file, "subset_file.csv")
 
 for (item in seq_len(nrow(subset_file))) {
-    sample_name <- subset_file$sample_name[i]
-    species <- subset_file$species[i]
-    tumor_type <- subset_file$tumor_type[i]
-    data_source <- subset_file$data_source[i]
-    sp_pattern <- subset_file$sp_pattern[i]
-    organism <- subset_file$organism[i]
+    sample_name <- subset_file$sample_name[item]
+    species <- subset_file$species[item]
+    tumor_type <- subset_file$tumor_type[item]
+    data_source <- subset_file$data_source[item]
+    sp_pattern <- subset_file$sp_pattern[item]
+    organism <- subset_file$organism[item]
     object <- Read10X_h5(filename = str_c("/gpfs0/home2/gdrobertslab/lab/ExternalData/Patel_lab/",
                                           sample_name,
                                           "/filtered_feature_bc_matrix.h5"))
@@ -1972,20 +1972,28 @@ plotRSS_oneSet(rss, setName = "interneurons")
 ```{r}
 library(rliger)
 
-object <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
-
+sobj <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
+DimPlot(sobj)
 # counts<- sobj@assays$RNA@counts
 
 # ifnb_liger <- createLiger(object)
 
-marsh_liger <- rliger::seuratToLiger(objects = sobj, combined.seurat = TRUE, use.idents = T,
-    use.tsne = T, meta.var = "orig.ident", remove.missing = FALSE)
+sobj <- RunTSNE(sobj)
+
+Idents(sobj) <- sobj$
+marsh_liger <- rliger::seuratToLiger(objects = sobj,
+                                    combined.seurat = TRUE,
+                                    names = "use-meta",
+                                    meta.var = "sample_name",
+                                    use.idents = T,
+                                    use.tsne = T,
+                                    remove.missing = FALSE)
 
 marsh_liger@cell.data$tumor_type <- sobj@meta.data$tumor_type
-marsh_liger@cell.data$data_type <- sobj@meta.data$sobj@meta.data$data_type
+marsh_liger@cell.data$data_type <- sobj@meta.data$data_type
 marsh_liger@cell.data$sample_name <- sobj@meta.data$sample_name
 marsh_liger@cell.data$model <- sobj@meta.data$model
-marsh_liger@cell.data$organism <- obj@meta.data$organism
+marsh_liger@cell.data$organism <- sobj@meta.data$organism
 marsh_liger@cell.data$annotations <- sobj@meta.data$annotations
 
 marsh_liger <- normalize(marsh_liger) %>%
@@ -2000,5 +2008,35 @@ marsh_liger <- normalize(marsh_liger) %>%
 
 all.plots <- plotByDatasetAndCluster(marsh_liger, axis.labels = c('UMAP 1', 'UMAP 2'), return.plots = T)
 all.plots[[1]] + all.plots[[2]]
+
+
+
+##for Sj data
+objects <- list()
+
+for (item in seq_len(nrow(subset_file))) {
+    sample_name <- subset_file$sample_name[item]
+    species <- subset_file$species[item]
+    tumor_type <- subset_file$tumor_type[item]
+    data_source <- subset_file$data_source[item]
+    sp_pattern <- subset_file$sp_pattern[item]
+    organism <- subset_file$organism[item]
+    object <- Read10X_h5(filename = str_c("/gpfs0/home2/gdrobertslab/lab/ExternalData/Patel_lab/",
+                                          sample_name,
+                                          "/filtered_feature_bc_matrix.h5"))
+    sobj[["percent.mt"]] <- PercentageFeatureSet(sobj, pattern = "^MT-")
+    sobj$unique <- subset_file$unique[item]
+    sobj$sample_name <- subset_file$sample_name[item]
+    sobj$tumor_type <- subset_file$tumor_type[item]
+    sobj$data_type <- subset_file$data_type[item]
+    sobj$model <- subset_file$model[item]
+    sobj$organism <- subset_file$organism[item]
+    sobj$location <- subset_file$location[item]
+    objects[[sample_name]] <- sobj
+
+}
+
+ifnb_liger <- createLiger(list(ctrl = ctrl_dge, stim = stim_dge))
+
 
 ```
