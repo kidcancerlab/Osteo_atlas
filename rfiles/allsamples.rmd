@@ -1692,6 +1692,8 @@ sobj_liger <- optimizeALS(object,
 
 ## Regulons analysis
 ```{r}
+
+
 ### 5. Loading Data
 # 5.1 Loading data from seurat object
 seuratobject <- pbmc3k.SeuratData::pbmc3k %>% 
@@ -1702,9 +1704,161 @@ seuratobject <- pbmc3k.SeuratData::pbmc3k %>%
                                    "B",
                                    "CD8 T"))
 
+sobject <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
+
+#If needed to subset to subset_cell_number cells for quicker run
+Run_GRA <- function(sobject,
+                    idents,
+                    organism,      #organism mouse, human
+                    subset = "no",          #yes or no
+                    subset_cell_number = NA) {
+    #if you want to quickly run a small subset of cells, set subset = "yes" and provide the subset_cell_number for number of cells
+    if (subset == "yes") {
+        sobject <- subset(x = sobject,
+                                        cells = sample(Cells(sobject),
+                                                min(subset_cell_number, length(Cells(sobject)))))
+    } else {
+        sobject <- sobject
+    }
+    exprMat <- SeuratObject::GetAssayData(sobject, assay='RNA', slot='counts') %>% 
+        as.matrix()
+    Idents(sobject) <- idents
+    if (idents == "seurat_clusters") {
+        cellInfo <- data.frame(CellType=Idents(sobject)) %>%
+            dplyr::arrange(CellType)
+    } else {
+        cellInfo <- data.frame(CellType=Idents(sobject))
+    }
+    cols <- c(plot_cols, sample(rainbow(1000)))
+    colVars <- cols[1:length(unique(cellInfo$CellType))]
+    names(colVars) <- unique(cellInfo$CellType)
+
+    #Running SCENIC begins
+    if (organism == "human") {
+        scenicoptions <- SCENIC::initializeScenic(org = "hgnc",
+                                              dbDir = "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/SCENIC/human",
+                                              dbs = SCENIC::defaultDbNames[[org]],
+                                              datasetTitle = "SCENIC tutorial",
+                                              nCores = parallelly::availableCores())   #may not work for ncores
+    } else if (organism == "mouse") {
+        scenicoptions <- SCENIC::initializeScenic(org = "mgi",
+                                              dbDir = "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/SCENIC/mouse",
+                                              dbs = SCENIC::defaultDbNames[[org]],
+                                              datasetTitle = "SCENIC tutorial",
+                                              nCores = parallelly::availableCores())   #may not work for ncores
+    }
+
+    scenicOptions@inputDatasetInfo$cellInfo <- cellInfo
+    scenicOptions@inputDatasetInfo$colVars <- colVars
+
+    ##### III: Co-expression network
+    ### 1. Gene filter/selection
+    genesKept <- SCENIC::geneFiltering(exprMat,
+                                       scenicOptions=scenicOptions,
+                                       minCountsPerGene=3*.01*ncol(exprMat),
+                                       minSamples=ncol(exprMat)*.01)
+    
+    # filter the expression matrix to contain only these genes from geneskept.
+    exprMat_filtered <- exprMat[genesKept, ]
+
+    ### 2. Correlation: positive means TF could upregulate the target gene and viceversa
+    SCENIC::runCorrelation(exprMat_filtered, scenicOptions)
+
+    ### 3. Run GENIE3 to infer potential transcription factor targets
+    # Optional: add log (if it is not logged/normalized already)
+    exprMat_filtered <- log2(exprMat_filtered+1)
+
+    # Run GENIE3 and find potential TF targets
+    SCENIC::runGenie3(exprMat_filtered, scenicOptions)
+
+    ###### IV: Build the gene regulatory network & Identify cell states:
+    ### Build the gene regulatory network: 
+    # 1. Get co-expression modules
+    scenicOptions <- SCENIC::runSCENIC_1_coexNetwork2modules(scenicOptions)
+
+    # 2. Get regulons (with RcisTarget: TF motif analysis)
+    scenicOptions <- SCENIC::runSCENIC_2_createRegulons(scenicOptions,
+                                                coexMethod=c("top5perTarget"))
+
+    ### Identify cell states: 
+    # 3. Score GRN (regulons) in the cells (with AUCell) 
+    exprMat_log <- log2(exprMat+1)
+
+    scenicOptions <- SCENIC::runSCENIC_3_scoreCells(scenicOptions, exprMat_log)
+
+    # 4.2 Binarize the network activity (regulon on/off)
+    scenicOptions@settings$devType = "png"
+    scenicOptions <- SCENIC::runSCENIC_4_aucell_binarize(scenicOptions,
+                                                        exprMat = exprMat_log)
+
+    return(scenicOptions)
+}
+
+scenic_obj <- Run_GRA(sobject = sobject,
+                    idents = "seurat_clusters",
+                    organism = "human",      
+                    subset = "yes",          
+                    subset_cell_number = 100)
+
+
+
+
+### 4. combine SCENIC analysis with other analysis tools
+#Regulators for known cell types or clusters
+## 4.1 ComplexHeatmap to show average regulon activity by cell clusters
+#scenicOptions <- readRDS("output/Regulon_analysis/patient_mets_tumor/scenicOptions.Rds")
+
+library(ComplexHeatmap)
+regulonAUC <- SCENIC::loadInt(scenicOptions, "aucell_regulonAUC")
+regulonAUC <- regulonAUC[SCENIC::onlyNonDuplicatedExtended(rownames(regulonAUC)),]
+regulonActivity_byCellType <- sapply(split(rownames(cellInfo), 
+                cellInfo$CellType),
+                function(cells) rowMeans(AUCell::getAUC(regulonAUC)[ , cells]))
+regulonActivity_byCellType_Scaled <- t(scale(t(regulonActivity_byCellType), 
+                                             center = T, scale=T))
+
+ComplexHeatmap::Heatmap(
+    regulonActivity_byCellType_Scaled, name="Regulon activity")
+
+# topRegulators for each cell type: Relative Activity
+topRegulators <- reshape2::melt(regulonActivity_byCellType_Scaled)
+colnames(topRegulators) <- c("Regulon", "CellType", "RelativeActivity")
+topRegulators <- topRegulators[which(topRegulators$RelativeActivity>0),]
+print(topRegulators)
+
+library(SCENIC)
+
+## 4.2 Binarized data
+minPerc <- .4 # percentage of cells in a cluster with the regulon is active
+binaryRegulonActivity <- loadInt(scenicOptions, "aucell_binary_nonDupl")
+cellInfo_binarizedCells <- cellInfo[which(
+  rownames(cellInfo)%in% colnames(binaryRegulonActivity)),, drop=FALSE]
+regulonActivity_byCellType_Binarized <- sapply(
+  split(rownames(cellInfo_binarizedCells), cellInfo_binarizedCells$CellType), 
+        function(cells) rowMeans(binaryRegulonActivity[,cells, drop=FALSE]))
+binaryActPerc_subset <- regulonActivity_byCellType_Binarized[which(
+  rowSums(regulonActivity_byCellType_Binarized>minPerc)>0),]
+ComplexHeatmap::Heatmap(binaryActPerc_subset, name="Regulon activity", 
+                        col = c("white","pink","red"))
+
+# topRegulators for each cell type: Relative Activity
+topRegulators <- reshape2::melt(regulonActivity_byCellType_Binarized)
+colnames(topRegulators) <- c("Regulon", "CellType", "RelativeActivity")
+topRegulators <- topRegulators[which(topRegulators$RelativeActivity>minPerc),]
+print(topRegulators)
+
+## 4.3 Cell-type specific regulators based on Regulon Specificity Score (RSS)
+regulonAUC <- loadInt(scenicOptions, "aucell_regulonAUC")
+rss <- calcRSS(AUC=AUCell::getAUC(regulonAUC), cellAnnotation=cellInfo[colnames(
+  regulonAUC), "CellType"])
+rss_for_Plot <- plotRSS(rss)
+
+plotly::ggplotly(rss_for_Plot$plot)
+
+
+
 seuratobject <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
 
-#need to downsample to reduce the time 
 seuratobject <-subset(x = seuratobject,
                      cells = sample(Cells(seuratobject),
                         min(3000, length(Cells(seuratobject)))))
@@ -1727,11 +1881,16 @@ colVars <- list(CellType = c("0" = "forestgreen",
                              "2" = "red3",
                              "3" = "skyblue"))
 
+colVars <- c("0" = "forestgreen",
+                             "1" = "darkorange",
+                             "2" = "red3",
+                             "3" = "skyblue")
+
 colVars$CellType <- colVars$CellType[intersect(names(colVars$CellType), cellInfo$CellType)]
 
 saveRDS(colVars, file="input/downloads/SCENIC/colVars.Rds")
 
-plot.new(); legend(0,1, fill=colVars$CellType, legend=names(colVars$CellType))
+plot.new(); legend(0,1, fill=colVars, legend=names(colVars))
 
 #set the organism
 library(SCENIC)
@@ -1808,26 +1967,32 @@ saveRDS(scenicOptions,
         file="input/downloads/SCENIC/scenicOptions.Rds")
 
 
-
+library(SCENIC)
+scenicOptions <- readRDS("output/Regulon_analysis/patient_mets_tumor/scenicOptions.Rds")
 
 # 4. Optional steps:
 # 4.1 Look the results in shinyAPP
-aucellApp <- plotTsne_AUCellApp(scenicOptions, exprMat_log)
-savedSelections <- shiny::runApp(aucellApp)
+# aucellApp <- SCENIC::plotTsne_AUCellApp(scenicOptions, exprMat_log)
+# savedSelections <- shiny::runApp(aucellApp)
 
 # 4.2 Binarize the network activity (regulon on/off)
-scenicOptions@settings$devType="png"
-scenicOptions <- runSCENIC_4_aucell_binarize(scenicOptions, exprMat_log)
+scenicOptions@settings$devType = "png"
+scenicOptions <- SCENIC::runSCENIC_4_aucell_binarize(scenicOptions,
+                                                     exprMat = exprMat_log)
+                                                     #skipBoxplot = TRUE,
+                                                     #skipHeatmaps = TRUE, 
+                                                     #skipTsne = TRUE)
 
 # 4.3 Cluster cells according to the GRN activity (Optional)
 # 4.3.1 set number of PCs
 nPcs <- c(5) # For demo dataset, # nPcs <- c(5,15,50)
 
 # 4.3.2 Calculates the t-SNE based on the regulon activity
-scenicOptions@settings$seed <- 123    #same seed for all of them
-fileNames <- tsneAUC(scenicOptions, aucType="AUC", nPcs=nPcs, perpl=c(5,15,50))
+#scenicOptions@settings$seed <- 123    #same seed for all of them
+fileNames <- SCENIC::tsneAUC(scenicOptions, aucType="AUC", nPcs= nPcs, perpl=c(5,15,50))
 fileNames
 
+library(SCENIC)
 par(mfrow=c(2,3))
 plotTsne_compareSettings("int/tSNE_AUC_05pcs_05perpl.Rds", scenicOptions, 
                          showLegend=FALSE, varName="CellType", cex=.5)
@@ -1839,7 +2004,7 @@ plotTsne_compareSettings("int/tSNE_AUC_05pcs_50perpl.Rds", scenicOptions,
                          showLegend=FALSE, varName="CellType", cex=.5)
 
 # 4.3.3 Calculates the t-SNE using only "high-confidence" regulons
-fileNames <- tsneAUC(scenicOptions, aucType="AUC", nPcs=nPcs, perpl=c(5,15,50),
+fileNames <- SCENIC::tsneAUC(scenicOptions, aucType="AUC", nPcs= nPcs, perpl=c(5,15,50),
                      onlyHighConf=TRUE, filePrefix="int/tSNE_oHC")
 fileNames
 
@@ -1864,23 +2029,27 @@ print(tsneFileName(scenicOptions))
 ### 1. Identify Cell states and their regulators
 ## 1.1 Projection the AUC and TF expression onto t-SNEs
 # load data from int fold
-loadInt(scenicOptions)
-aucell_regulonAUC <- loadInt(scenicOptions, "aucell_regulonAUC")
+SCENIC::loadInt(scenicOptions)
+aucell_regulonAUC <- SCENIC::loadInt(scenicOptions, "aucell_regulonAUC")
 
-tsneFileName(scenicOptions)
+SCENIC::tsneFileName(scenicOptions)
 par(mfrow=c(2,3))
-plotTsne_compareSettings(tsneFileName(scenicOptions), scenicOptions, 
+SCENIC::plotTsne_compareSettings(SCENIC::tsneFileName(scenicOptions), scenicOptions, 
                          showLegend=TRUE, varName="CellType", cex=.5)
 
 # Show TF expression:
-tSNE_scenic <- readRDS(tsneFileName(scenicOptions))
-AUCell::AUCell_plotTSNE(tSNE_scenic$Y, exprMat, 
-  aucell_regulonAUC[onlyNonDuplicatedExtended(
-    rownames(aucell_regulonAUC))[c("MRPL20", "MAX", "SDF4", "RFX5", "NFIC")],], 
+tSNE_scenic <- readRDS(SCENIC::tsneFileName(scenicOptions))
+AUCell::AUCell_plotTSNE(tSNE_scenic$Y, exprMat,
+  aucell_regulonAUC[SCENIC::onlyNonDuplicatedExtended(
+    rownames(aucell_regulonAUC))[c("KLF6", "TBX21", "JUND", "CEBPD", "EOMES")],], 
   plots="Expression")
 
 # Save AUC as PDF (Export):
 dev.off()
+
+
+#scenicOptions <- readRDS("output/Regulon_analysis/patient_mets_tumor/scenicOptions.Rds")
+
 
 ## 1.2 Density plot to detect most likely stable states (high density area)
 library(KernSmooth)
@@ -1893,36 +2062,38 @@ contour(dens2d, add = TRUE, nlevels= 5, drawlabels=FALSE)
 ## Output file: Step2_regulonTargetsInfo
 
 # subset regulonTargetsInfo before exporting it as HTML
-regulonTargetsInfo <- loadInt(scenicOptions, "regulonTargetsInfo")
-tableSubset <- regulonTargetsInfo[TF=="Stat6" & highConfAnnot==TRUE]
-viewMotifs(tableSubset, options=list(pageLength=5)) 
+regulonTargetsInfo <- SCENIC::loadInt(scenicOptions, "regulonTargetsInfo")
+tableSubset <- regulonTargetsInfo[TF=="KLF6" & highConfAnnot==TRUE]
+SCENIC::viewMotifs(tableSubset, options=list(pageLength=5))
 
 # Targets for intereted TFs
-regulons <- loadInt(scenicOptions, "regulons")
-regulons[c("SPI1", "CEBPD", "CEBPB")]
+regulons <- SCENIC::loadInt(scenicOptions, "regulons")
+regulons[c("KLF6", "TBX21", "JUND", "CEBPD", "EOMES")]
 
 # Only regulons with 10 genes or more are scored with AUCell
-regulons <- loadInt(scenicOptions, "aucell_regulons")
-head(cbind(onlyNonDuplicatedExtended(names(regulons))))
+regulons <- SCENIC::loadInt(scenicOptions, "aucell_regulons")
+head(cbind(SCENIC::onlyNonDuplicatedExtended(names(regulons))))
 
 ### 3. Regulon motifs
 # The full list of TF motifs: Step2_MotifEnrichment
 
 # showing motifs for interested TF
-motifEnrichment_selfMotifs_wGenes <- loadInt(scenicOptions, 
+motifEnrichment_selfMotifs_wGenes <- SCENIC::loadInt(scenicOptions, 
                                     "motifEnrichment_selfMotifs_wGenes")
-tableSubset <- motifEnrichment_selfMotifs_wGenes[highlightedTFs=="Sox9"]
-viewMotifs(tableSubset) 
+tableSubset <- motifEnrichment_selfMotifs_wGenes[highlightedTFs=="KLF6"]
+SCENIC::viewMotifs(tableSubset)
 
 ### 4. combine SCENIC analysis with other analysis tools
 #Regulators for known cell types or clusters
 ## 4.1 ComplexHeatmap to show average regulon activity by cell clusters
+#scenicOptions <- readRDS("output/Regulon_analysis/patient_mets_tumor/scenicOptions.Rds")
+
 library(ComplexHeatmap)
-regulonAUC <- loadInt(scenicOptions, "aucell_regulonAUC")
-regulonAUC <- regulonAUC[onlyNonDuplicatedExtended(rownames(regulonAUC)),]
+regulonAUC <- SCENIC::loadInt(scenicOptions, "aucell_regulonAUC")
+regulonAUC <- regulonAUC[SCENIC::onlyNonDuplicatedExtended(rownames(regulonAUC)),]
 regulonActivity_byCellType <- sapply(split(rownames(cellInfo), 
                 cellInfo$CellType),
-                function(cells) rowMeans(getAUC(regulonAUC)[,cells]))
+                function(cells) rowMeans(AUCell::getAUC(regulonAUC)[ , cells]))
 regulonActivity_byCellType_Scaled <- t(scale(t(regulonActivity_byCellType), 
                                              center = T, scale=T))
 
@@ -1933,7 +2104,7 @@ ComplexHeatmap::Heatmap(
 topRegulators <- reshape2::melt(regulonActivity_byCellType_Scaled)
 colnames(topRegulators) <- c("Regulon", "CellType", "RelativeActivity")
 topRegulators <- topRegulators[which(topRegulators$RelativeActivity>0),]
-viewTable(topRegulators)
+print(topRegulators)
 
 ## 4.2 Binarized data
 minPerc <- .4 # percentage of cells in a cluster with the regulon is active
@@ -1952,17 +2123,15 @@ ComplexHeatmap::Heatmap(binaryActPerc_subset, name="Regulon activity",
 topRegulators <- reshape2::melt(regulonActivity_byCellType_Binarized)
 colnames(topRegulators) <- c("Regulon", "CellType", "RelativeActivity")
 topRegulators <- topRegulators[which(topRegulators$RelativeActivity>minPerc),]
-viewTable(topRegulators)
+print(topRegulators)
 
 ## 4.3 Cell-type specific regulators based on Regulon Specificity Score (RSS)
 regulonAUC <- loadInt(scenicOptions, "aucell_regulonAUC")
-rss <- calcRSS(AUC=getAUC(regulonAUC), cellAnnotation=cellInfo[colnames(
+rss <- calcRSS(AUC=AUCell::getAUC(regulonAUC), cellAnnotation=cellInfo[colnames(
   regulonAUC), "CellType"])
 rss_for_Plot <- plotRSS(rss)
 
 plotly::ggplotly(rss_for_Plot$plot)
-
-plotRSS_oneSet(rss, setName = "interneurons")
 
 
 
@@ -2038,5 +2207,22 @@ for (item in seq_len(nrow(subset_file))) {
 
 ifnb_liger <- createLiger(list(ctrl = ctrl_dge, stim = stim_dge))
 
+
+```
+
+```{python}
+import numpy as np
+
+x = [2, 4]
+
+y = np.array([x])
+
+print(y)
+name = "xe", "sad", "dsdf"
+name[0]
+name[1:4]
+
+
+tupp = (3,5,6,7)
 
 ```
