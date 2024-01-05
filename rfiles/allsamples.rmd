@@ -1704,7 +1704,7 @@ seuratobject <- pbmc3k.SeuratData::pbmc3k %>%
                                    "B",
                                    "CD8 T"))
 
-sobject <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_prim_tumor.qs")
+sobject <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
 
 #If needed to subset to subset_cell_number cells for quicker run
 Run_GRA <- function(sobject,
@@ -1736,17 +1736,8 @@ Run_GRA <- function(sobject,
     colVars <- list()
     colVars$CellType <- CellType
     saveRDS(colVars, file="input/downloads/SCENIC/colVars.Rds")
+
     #Running SCENIC begins
-    #data(list = str_c("motifAnnotation_", org), package="RcisTarget")
-
-    if (org == "hgnc") {
-        data(list="motifAnnotations_hgnc", package="RcisTarget")
-        motifAnnotations_hgnc <- motifAnnotations
-    } else if (org == "mgi") {
-        data(list="motifAnnotations_mgi", package="RcisTarget")
-        motifAnnotations_mgi <- motifAnnotations
-    }
-
     scenicOptions <- SCENIC::initializeScenic(org = org,
                                               dbDir = "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/SCENIC",
                                               dbs = SCENIC::defaultDbNames[[org]],
@@ -1796,35 +1787,45 @@ Run_GRA <- function(sobject,
     scenicOptions <- SCENIC::runSCENIC_4_aucell_binarize(scenicOptions,
                                                         exprMat = exprMat_log)
 
-    return(scenicOptions)
-    return(cellInfo)
-    return(colVars)
-    return(exprMat_log)
+    return(list(scenicOptions= scenicOptions,
+                cellInfo = cellInfo,
+                colVars = colVars,
+                exprMat_log = exprMat_log))
 }
 
-if (org == "hgnc") {
-        data(list="motifAnnotations_hgnc", package="RcisTarget")
-        motifAnnotations_hgnc <- motifAnnotations
-    } else if (org == "mgi") {
-        data(list="motifAnnotations_mgi", package="RcisTarget")
-        motifAnnotations_mgi <- motifAnnotations
-    }
+library(SCENIC)
+data(list="motifAnnotations_hgnc", package="RcisTarget")
+motifAnnotations_hgnc <- motifAnnotations
 
+data(list="motifAnnotations_mgi", package="RcisTarget")
+motifAnnotations_mgi <- motifAnnotations
 
-scenicOptions <- Run_GRA(sobject = sobject,
+library(SCENIC)
+GRA_output <- Run_GRA(sobject = sobject,
                         idents = "seurat_clusters",
                         org = "hgnc",      
                         subset = "yes",          
-                        subset_cell_number = 100)
+                        subset_cell_number = 500)
 
+exprMat_log <- GRA_output$exprMat_log
+colVars <- GRA_output$colVars
+cellInfo <- GRA_output$cellInfo
+scenicOptions <- GRA_output$scenicOptions
 
+# 4.3 Cluster cells according to the GRN activity (Optional)
+# 4.3.1 set number of PCs
+nPcs <- c(5) # For demo dataset, # nPcs <- c(5,15,50)
 
+# 4.3.2 Calculates the t-SNE based on the regulon activity
+scenicOptions@settings$seed <- 123    #same seed for all of them
+fileNames <- SCENIC::tsneAUC(scenicOptions, aucType="AUC", nPcs= nPcs, perpl=c(5,15,50))
+fileNames
 
 ### 4. combine SCENIC analysis with other analysis tools
 #Regulators for known cell types or clusters
 ## 4.1 ComplexHeatmap to show average regulon activity by cell clusters
 #scenicOptions <- readRDS("output/Regulon_analysis/patient_mets_tumor/scenicOptions.Rds")
-library(SCENIC)
+
 library(ComplexHeatmap)
 regulonAUC <- SCENIC::loadInt(scenicOptions, "aucell_regulonAUC")
 regulonAUC <- regulonAUC[SCENIC::onlyNonDuplicatedExtended(rownames(regulonAUC)),]
@@ -1834,8 +1835,30 @@ regulonActivity_byCellType <- sapply(split(rownames(cellInfo),
 regulonActivity_byCellType_Scaled <- t(scale(t(regulonActivity_byCellType), 
                                              center = T, scale=T))
 
-ComplexHeatmap::Heatmap(
-    regulonActivity_byCellType_Scaled, name="Regulon activity")
+
+png(filename = "output/Regulon_analysis/patient_mets_tumor/500cells_pprim_allRegulons.png",
+    width = 2000,
+    height = 4000,
+    res = 300)
+ComplexHeatmap::Heatmap(regulonActivity_byCellType_Scaled,
+                       name="Regulon activity",
+                       column_names_gp = grid::gpar(fontsize = 8),
+                       row_names_gp = grid::gpar(fontsize = 8),
+                       cluster_columns = FALSE,
+                       show_row_dend = FALSE)
+dev.off()
+
+x <- pheatmap::pheatmap(regulonActivity_byCellType_Scaled,
+                       name="Regulon activity",
+                       scale="row",
+                       cluster_cols = FALSE,
+                       show_row_dend = FALSE)
+
+ggsave("output/Regulon_analysis/patient_mets_tumor/500cells_pmets_allRegulons.png",
+            width = 6,
+            height = 10,
+            plot = x)
+
 
 # topRegulators for each cell type: Relative Activity
 topRegulators <- reshape2::melt(regulonActivity_byCellType_Scaled)
@@ -1855,8 +1878,24 @@ regulonActivity_byCellType_Binarized <- sapply(
         function(cells) rowMeans(binaryRegulonActivity[,cells, drop=FALSE]))
 binaryActPerc_subset <- regulonActivity_byCellType_Binarized[which(
   rowSums(regulonActivity_byCellType_Binarized>minPerc)>0),]
+
 ComplexHeatmap::Heatmap(binaryActPerc_subset, name="Regulon activity", 
                         col = c("white","pink","red"))
+
+png(filename = "output/Regulon_analysis/patient_mets_tumor/500cells_pprim_topregulons.png",
+    width = 4000,
+    height = 1000,
+    res = 300)
+
+ComplexHeatmap::Heatmap(binaryActPerc_subset,
+                       name="Regulon activity",
+                       column_names_gp = grid::gpar(fontsize = 8),
+                       row_names_gp = grid::gpar(fontsize = 8),
+                       cluster_columns = FALSE,
+                       show_row_dend = FALSE,
+                       col = c("white","pink","red"))
+dev.off()
+
 
 # topRegulators for each cell type: Relative Activity
 topRegulators <- reshape2::melt(regulonActivity_byCellType_Binarized)
@@ -1868,9 +1907,19 @@ print(topRegulators)
 regulonAUC <- loadInt(scenicOptions, "aucell_regulonAUC")
 rss <- calcRSS(AUC=AUCell::getAUC(regulonAUC), cellAnnotation=cellInfo[colnames(
   regulonAUC), "CellType"])
+
 rss_for_Plot <- plotRSS(rss)
 
-plotly::ggplotly(rss_for_Plot$plot)
+ggsave("output/Regulon_analysis/patient_mets_tumor/rssplot.png",
+            #width = 6,
+            #height = 10,
+            plot = rss_for_Plot$plot)
+
+rss_for_Plot$plot
+
+plotly::ggplotly(p = rss_for_Plot$plot,
+                 width = 3000,
+                 height = 30000)
 
 
 
@@ -2010,7 +2059,7 @@ scenicOptions <- SCENIC::runSCENIC_4_aucell_binarize(scenicOptions,
 nPcs <- c(5) # For demo dataset, # nPcs <- c(5,15,50)
 
 # 4.3.2 Calculates the t-SNE based on the regulon activity
-#scenicOptions@settings$seed <- 123    #same seed for all of them
+scenicOptions@settings$seed <- 123    #same seed for all of them
 fileNames <- SCENIC::tsneAUC(scenicOptions, aucType="AUC", nPcs= nPcs, perpl=c(5,15,50))
 fileNames
 
@@ -2346,7 +2395,7 @@ plotly::ggplotly(rss_for_Plot$plot)
 ```{r}
 library(rliger)
 
-sobj <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
+sobj <- qs::qread("output/seurat_objects/comb_sobjs/patient_mets.qs")
 DimPlot(sobj)
 # counts<- sobj@assays$RNA@counts
 
@@ -2354,7 +2403,6 @@ DimPlot(sobj)
 
 sobj <- RunTSNE(sobj)
 
-Idents(sobj) <- sobj$
 marsh_liger <- rliger::seuratToLiger(objects = sobj,
                                     combined.seurat = TRUE,
                                     names = "use-meta",
@@ -2380,10 +2428,27 @@ marsh_liger <- normalize(marsh_liger) %>%
             n_neighbors = 30,
             min_dist = 0.3)
 
+
+
 all.plots <- plotByDatasetAndCluster(marsh_liger, axis.labels = c('UMAP 1', 'UMAP 2'), return.plots = T)
 all.plots[[1]] + all.plots[[2]]
 
+gene_loadings <- plotGeneLoadings(marsh_liger, do.spec.plot = FALSE, return.plots = TRUE)
+gene_loadings[[4]]
 
+cancer_features <- c("COL1A1", "COL1A2", "SATB2", "COL6A1", "S100A11",
+                     "S100A10", "PRDX2", "PSMD4", "MIF", "COL6A3", "COL3A1")
+
+fibroblast_markers <- c("LOXL1", "LUM", "COL5A1", "FBLN1", "FBLN2")
+
+james_marker <- c("KRT8", "KRT19")
+
+proliferation <- c("MKI67", "PCNA", "MCM2")
+
+
+IFIT3 <- plotGene(marsh_liger, "MKI67", axis.labels = c('UMAP 1', 'UMAP 2'), return.plots = TRUE)
+IFITM3 <- plotGene(marsh_liger, "SATB2", axis.labels = c('UMAP 1', 'UMAP 2'), return.plots = TRUE)
+plot_grid(IFIT3[[1]],IFIT3[[2]],IFITM3[[1]],IFITM3[[2]], ncol=2)
 
 ##for Sj data
 objects <- list()
@@ -2416,18 +2481,70 @@ ifnb_liger <- createLiger(list(ctrl = ctrl_dge, stim = stim_dge))
 ```
 
 ```{python}
+import scanpy as sc
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
-x = [2, 4]
+import scvelo as scv #just using for dataset
 
-y = np.array([x])
+import celloracle as co
+from celloracle.applications import Pseudotime_calculator
+from celloracle.applications import Gradient_calculator
+from celloracle.applications import Oracle_development_module
 
-print(y)
-name = "xe", "sad", "dsdf"
-name[0]
-name[1:4]
+adata = scv.datasets.pancreas()
+InstallData("pbmc3k")
+data("pbmc3k.final")
+pbmc3k.final
+
+library(scater)
+library(Seurat)
+library(cowplot)
+sobj <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
+
+pbmc_sce <- srt_to_adata(sobj)
 
 
-tupp = (3,5,6,7)
+sceasy::convertFormat(ad, from="anndata", to="seurat", outFile='file.rds')
+
+pbmc_sce <- Convert(from = pbmc, to = "sce")
+
+
+library(Seurat)
+library(SeuratDisk)
+
+# step 1: Slim down a Seurat object. So you get raw counts, lognorm counts
+
+seu = DietSeurat(
+  sobj,
+  counts = TRUE, # so, raw counts save to adata.raw.X 
+  data = TRUE, # so, log1p counts save to adata.X
+  scale.data = FALSE, # set to false, or else will save to adata.X
+  features = rownames(sobj), # export all genes, not just top highly variable genes
+  assays = "RNA",
+  dimreducs = c("pca","umap"),
+  graphs = c("RNA_nn", "RNA_snn"), # to RNA_nn -> distances, RNA_snn -> connectivities
+  misc = TRUE
+)
+
+# step 2: factor to character, or else your factor will be number in adata 
+i <- sapply(seu@meta.data, is.factor)
+seu@meta.data[i] <- lapply(seu@meta.data[i], as.character)
+
+# step 3: convert 
+SaveH5Seurat(seu, filename = "srt.h5seurat", overwrite = TRUE)
+
+Convert("srt.h5seurat", "srt.h5ad", assay="RNA", overwrite = TRUE)
+
+adata = sc.read_h5ad("srt.h5ad")
+
+
+library(reticulate)
+library(anndata)
+library(sceasy)
+
+library(Seurat)
+library(SeuratData)
 
 ```
