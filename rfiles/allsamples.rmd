@@ -14,145 +14,107 @@ library(cowplot)
 library(clustree)
 library(data.table)
 set.seed(444)
-```
-
-## Download data from publications online
-```{r}
-#download from GSE152048
-detail_subset <- read_tsv("sample_details.txt", show_col_types = FALSE) %>%
-    filter(data_source == "GSE152048")
-
-# Download, file, and extract the files from GEO
-for (i in 1:nrow(detail_subset)) {                                     #nolint
-    folder <- "input/downloads/"
-    sample_name <- detail_subset$sample_name[i]
-    site_link <- detail_subset$site_link[i]
-    entire_path <- str_c(site_link, sample_name, ".matrix.tar.gz")
-    tar_file <- str_c(folder, sample_name, ".tar.gz")
-    system(paste0("wget ", entire_path, " -O ", tar_file))
-    untar(tar_file, exdir = folder)
-    file.remove(tar_file)
-}
-
-
-#download from GSE162454
-detail_subset <- read_tsv("sample_details.txt", show_col_types = FALSE) %>%
-    filter(data_source == "GSE162454")
-
-for (i in 1:nrow(detail_subset)) {                                  #nolint
-    folder <- "input/downloads/"
-    tar_file <- str_c(folder, "GSE162454.tar.gz ")
-    site_link <- detail_subset$site_link[i]
-    sample_name <- detail_subset$sample_name[i]
-    download.file(site_link, destfile = tar_file, method = "auto")
-    untar(tar_file, exdir = folder)
-    file.remove(tar_file)
-    bfile <- str_c(detail_subset$pre[detail_subset$sample_name == sample_name], sample_name, "_barcodes.tsv.gz") #nolint
-    ffile <- str_c(detail_subset$pre[detail_subset$sample_name == sample_name], sample_name, "_features.tsv.gz") #nolint
-    mfile <- str_c(detail_subset$pre[detail_subset$sample_name == sample_name], sample_name, "_matrix.mtx.gz") #nolint
-    samp_dir <- str_c(folder, sample_name)
-    dir.create(samp_dir)
-    file.rename(str_c(folder, "/", bfile),
-      str_c(samp_dir, "/", "barcodes.tsv.gz"))
-    file.rename(str_c(folder, "/", ffile),
-      str_c(samp_dir, "/", "features.tsv.gz"))
-    file.rename(str_c(folder, "/", mfile),
-      str_c(samp_dir, "/", "matrix.mtx.gz"))
-  }
-
-
-
-#download from GSE169396
-detail_subset <- read_tsv("sample_details.txt", show_col_types = FALSE) %>%
-    filter(data_source == "GSE169396")
-
-for (i in 1:nrow(detail_subset)) {                                  #nolint
-    folder <- "input/downloads/"
-    tar_file <- str_c(folder, "GSE169396.tar.gz ")
-    site_link <- detail_subset$site_link[i]
-    sample_name <- detail_subset$sample_name[i]
-    download.file(site_link, destfile = tar_file, method = "auto")
-    untar(tar_file, exdir = folder)
-    file.remove(tar_file)
-    bfile <- str_c(detail_subset$pre[detail_subset$sample_name == sample_name], sample_name, "_barcodes.tsv.gz") #nolint
-    ffile <- str_c(detail_subset$pre[detail_subset$sample_name == sample_name], sample_name, "_features.tsv.gz") #nolint
-    mfile <- str_c(detail_subset$pre[detail_subset$sample_name == sample_name], sample_name, "_matrix.mtx.gz") #nolint
-    samp_dir <- str_c(folder, sample_name)
-    dir.create(samp_dir)
-    file.rename(str_c(folder, "/", bfile),
-      str_c(samp_dir, "/", "barcodes.tsv.gz"))
-    file.rename(str_c(folder, "/", ffile),
-      str_c(samp_dir, "/", "features.tsv.gz"))
-    file.rename(str_c(folder, "/", mfile),
-      str_c(samp_dir, "/", "matrix.mtx.gz"))
-  }
-
-
-
 
 ```
+
 
 ## reading dataset from our reservoir and download
 ```{r}
 set.seed(75454)
-sample_details <- read_tsv("sample_details.txt", show_col_types = FALSE)
 
-sample_details$sp_pattern <-
-    str_replace(sample_details$sp_pattern, "nothing", "")
+all_samples_csv <- read_csv("allsample_details.csv")
+
+all_samples_csv$sp_pattern <-
+    str_replace_all(all_samples_csv$sp_pattern, "nothing", "")
+
+# sj_dir_list <- list.files(path = "/gpfs0/home2/gdrobertslab/lab/ExternalData/Patel_lab/",
+#                       full.names = FALSE)
+
+# NCH_dir_list <- list.files(path = "/gpfs0/home2/gdrobertslab/lab/Counts_2/",
+#                            full.names = FALSE)
+
+# dir_list <- c(sj_dir_list, NCH_dir_list)
+
+# subset_file <- filter(all_samples_csv, sample_name %in% dir_list)
 
 #Seurat objects and save individual qs object
-obj <- parallel::mclapply(seq_len(nrow(sample_details)), function(i) {
-    sample_name <- sample_details$sample_name[i]
-    sample_path <- sample_details$sample_path[i]
-    species <- sample_details$species[i]
-    tumor_type <- sample_details$tumor_type[i]
-    data_source <- sample_details$data_source[i]
-    sp_pattern <- sample_details$sp_pattern[i]
-    organism <- sample_details$organism[i]
-    download_path <- "input/downloads/"
-    ours_path <- "/gpfs0/home2/gdrobertslab/lab/Counts/"
+for (i in seq_len(nrow(all_samples_csv))) {
+    sample_name <- all_samples_csv$sample_name[i]
+    species <- all_samples_csv$species[i]
+    tumor_type <- all_samples_csv$tumor_type[i]
+    data_source <- all_samples_csv$data_source[i]
+    sp_pattern <- all_samples_csv$sp_pattern[i]
+    organism <- all_samples_csv$organism[i]
+    SJ_path <- "/gpfs0/home2/gdrobertslab/lab/ExternalData/Patel_lab/"
+    NCH_path <- "/gpfs0/home2/gdrobertslab/lab/Counts_2/"
+    path_h5 <- NULL
 
-    if (data_source == "ours") {
-        path_10x <- paste0(path_10x = ours_path,
-                           sample_path,
-                           "/filtered_feature_bc_matrix/")
+    #check if the object already exists
+    dir <- str_c("output/seurat_objects/sobj_preprocess")
+    sobject <- str_c(sample_name, "_", organism, ".qs")
+    if (file.exists(str_c(dir, "/", sobject))) {
+        print(str_c(sobject, " already exists"))
     } else {
-        path_10x <- paste0(path_10x = download_path, sample_name, "/")
+        if (data_source == "NCH") {
+            if (file.exists(str_c(NCH_path, sample_name))) {
+                path_h5 <- paste0(path_10x = NCH_path,
+                                        sample_name,
+                                        "/filtered_feature_bc_matrix.h5")
+            } else {
+                print(str_c(sample_name, " folder does not exist and hence cannot make seurat object"))
+            }
+        } else if (data_source == "SJ") {
+            if (file.exists(str_c(NCH_path, sample_name))) {
+                path_h5 <- paste0(path_10x = SJ_path,
+                                        sample_name,
+                                        "/filtered_feature_bc_matrix.h5")
+            } else {
+                print(str_c(sample_name, " folder does not exist and hence cannot make seurat object"))
+            }
+        }
+        if (!is.null(path_h5)) {
+                    # sobj <- rrrSingleCellUtils::tenx_load_qc(h5_file = path_h5,
+                    #                                          species_pattern = sp_pattern,
+                    #                                          violin_plot = FALSE)
+            object <- Read10X_h5(filename = path_h5)
+            sobj <- CreateSeuratObject(counts = object)
+            sobj[["percent.mt"]] <- PercentageFeatureSet(sobj, pattern = "^MT-")
+            sobj$sample_name <- all_samples_csv$sample_name[i]
+            sobj$tumor_type <- all_samples_csv$tumor_type[i]
+            sobj$data_type <- all_samples_csv$data_type[i]
+            sobj$model <- all_samples_csv$model[i]
+            sobj$organism <- all_samples_csv$organism[i]
+            sobj$location <- all_samples_csv$location[i]
+            qs::qsave(sobj, str_c(dir, "/", sobject))
+
+            print(str_c(sobject, " made and saved"))
+        }
     }
-        sobj <- tenx_load_qc(path_10x = path_10x,
-                             species_pattern = sp_pattern,
-                             violin_plot = FALSE) %>%
-            process_seurat()
-        sobj$sample_name <- sample_details$sample_name[i]
-        sobj$tumor_type <- sample_details$tumor_type[i]
-        sobj$data_type <- sample_details$data_type[i]
-        sobj$model <- sample_details$model[i]
-        sobj$organism <- sample_details$organism[i]
-        sobj$location <- sample_details$location[i]
-        qs::qsave(sobj, str_c("output/seurat_objects/single_sobj", "/",
-                              species, "/",
-                              tumor_type, "/",
-                              sample_name,
-                              organism, ".qs"))
-    return(0)
-}, mc.cores = parallelly::availableCores())
+}
 
 
-# # individual QC numbers
-# obj <- qs::qread("output/seurat_objects/single_sobj/patient/metastatic/SC073human.qs") #nolint
 
-# # Cutoff and cleaning
-# try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
-#                       "nCount_RNA", 0,        30000,
-#                       "percent.mt", 0,        15)
+# individual QC numbers
+obj <- qs::qread("/gpfs0/home2/gdrobertslab/lab/Counts_2/") #nolint
 
-# #features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")    #nolint
-# features <- "nCount_RNA"
+# Cutoff and cleaning
+try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
+                      "nCount_RNA", 0,        30000,
+                      "percent.mt", 0,        15)
 
-# # visualize the possible cutoff and adjust accordingly
-# feature_hist(sobject = obj,
-#              features = features,                         # nolint
-#              cutoff_table = try_cutoff)
+#features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")    #nolint
+features <- "nCount_RNA"
+
+# visualize the possible cutoff and adjust accordingly
+feature_hist(sobject = obj,
+             features = features,                         # nolint
+             cutoff_table = try_cutoff)
+
+
+write code to count the numner of cells before filtration and after filtration QC
+
+
+
 
 #quality control and downsampling and saving the merged sobj
 what <- parallel::mclapply(unique(sample_details$unique), function(item) {
@@ -1533,7 +1495,7 @@ pheatmap::pheatmap(as.matrix(averageexp[[1]]),
 
 
 
-## Create metadata for anands
+## Create metadata for Saint Jude
 ```{r}
 all_samples_csv <- read_csv("allsample_details.csv")
 
@@ -2424,11 +2386,13 @@ marsh_liger <- normalize(marsh_liger) %>%
     optimizeALS(k=20) %>%
     quantile_norm() %>%
     louvainCluster(resolution = 0.25) %>%
-    runUMAP(distance = 'cosine',
+    rliger::runUMAP(distance = 'cosine',
             n_neighbors = 30,
             min_dist = 0.3)
 
 
+Run harmony integration on this:::
+look for immune cells markers
 
 all.plots <- plotByDatasetAndCluster(marsh_liger, axis.labels = c('UMAP 1', 'UMAP 2'), return.plots = T)
 all.plots[[1]] + all.plots[[2]]
@@ -2441,14 +2405,17 @@ cancer_features <- c("COL1A1", "COL1A2", "SATB2", "COL6A1", "S100A11",
 
 fibroblast_markers <- c("LOXL1", "LUM", "COL5A1", "FBLN1", "FBLN2")
 
+immune_markers <- c("CD8A", "CD4", "CD3A", "KIR", "GGMB")
+
 james_marker <- c("KRT8", "KRT19")
 
 proliferation <- c("MKI67", "PCNA", "MCM2")
 
 
+
 IFIT3 <- plotGene(marsh_liger, "MKI67", axis.labels = c('UMAP 1', 'UMAP 2'), return.plots = TRUE)
 IFITM3 <- plotGene(marsh_liger, "SATB2", axis.labels = c('UMAP 1', 'UMAP 2'), return.plots = TRUE)
-plot_grid(IFIT3[[1]],IFIT3[[2]],IFITM3[[1]],IFITM3[[2]], ncol=2)
+plot_grid(IFIT3[[1]],IFIT3[[2]],IFIT3[[3]],IFITM3[[1]],IFITM3[[2]],IFIT3[[3]], ncol=2)
 
 ##for Sj data
 objects <- list()
@@ -2472,11 +2439,78 @@ for (item in seq_len(nrow(subset_file))) {
     sobj$organism <- subset_file$organism[item]
     sobj$location <- subset_file$location[item]
     objects[[sample_name]] <- sobj
-
 }
 
 ifnb_liger <- createLiger(list(ctrl = ctrl_dge, stim = stim_dge))
 
+sample_details <- read_tsv("sample_details.txt", show_col_types = FALSE)
+
+sample_details$sp_pattern <-
+    str_replace(sample_details$sp_pattern, "nothing", "")
+
+parallel::mclapply(unique(sample_details$unique), function(item) {
+    tmp_df <- subset(sample_details, subset = (unique == item))
+    temp_list <- list()
+    for (i in seq_len(nrow(tmp_df))) {
+        species <- tmp_df$species[i]
+        tumor_type <- tmp_df$tumor_type[i]
+        sample_name <- tmp_df$sample_name[i]
+        group_obj <- tmp_df$unique[i]
+        organism <- tmp_df$organism[i]
+        sobj <- qs::qread(str_c("output/seurat_objects/single_sobj/",
+                                species, "/",
+                                tumor_type, "/",
+                                sample_name,
+                                organism, ".qs"))
+        # sobj <- auto_subset(sobject = sobj,
+        #                     sd_down = 2,
+        #                     sd_up = 3,
+        #                     make_plots = FALSE,
+        #                     features = c("nCount_RNA", "percent.mt"))
+        sobj <- subset(sobj, 
+                       nCount_RNA > 500 &
+                       nCount_RNA < tmp_df$ncount_max[i] &
+                       percent.mt < tmp_df$mt_percent[i])
+        Hmeta_data <- sobj@meta.data %>%
+            as.data.table
+        counts <- Hmeta_data[, .N, by = "sample_name"]
+        if (counts$N >= 100) {
+            set.seed(1237)
+            temp_list[[sample_name]] <- sobj
+            temp_list[[sample_name]] <-
+                    subset(x = temp_list[[sample_name]],
+                    cells = sample(Cells(temp_list[[sample_name]]),
+                            min(5000, length(Cells(temp_list[[sample_name]])))))
+        } else {
+            print(str_c(sample_name, " has less than 300 cells, hence discarded"))
+        }
+    }
+    merged_sobj <- merge(x = temp_list[[1]],
+                                y = temp_list[2:length(temp_list)],
+                                add.cell.id = names(temp_list)) %>%
+                    process_seurat()
+    run_harmony <- RunHarmony(object = merged_sobj,
+                              group.by.vars = c("sample_name", "model"),
+                              theta = c(3, 3))
+    run_harmony <- process_seurat(sobject = run_harmony,
+                                  reduction = "harmony")
+    res_score <- optimize_silhouette(sobject = run_harmony,
+                         test_res = seq(0.1, 0.9, by = 0.1),
+                         summary_plot = FALSE) %>%
+        filter(sil_vals == max(sil_vals)) %>%
+        slice_head(n=1) %>%
+        dplyr::select(res_vals)
+    run_harmony <- FindClusters(run_harmony,
+                   resolution = res_score)
+    return(item)
+}, mc.cores = parallelly::availableCores())
+
+library(rliger)
+library(SeuratWrappers)
+
+liger_obj <- ScaleData(merged_sobj, split.by = "orig.ident", do.center = FALSE)
+
+liger_obj <- SeuratWrappers::RunOptimizeALS(liger_obj, k = 20, lambda = 5, split.by = "orig.ident")
 
 ```
 
@@ -2546,5 +2580,104 @@ library(sceasy)
 
 library(Seurat)
 library(SeuratData)
+
+```
+
+
+```{r}
+
+seuratobject <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
+DimPlot(seuratobject)
+
+sobj <- subset(x = seuratobject,
+                     cells = sample(Cells(seuratobject),
+                        min(700, length(Cells(seuratobject)))))
+DimPlot(sobj)
+
+library(BITFAM)
+
+
+Run_BITFAM <- function(sobj,
+                       species = "",
+                       idents = "",
+                       plot = "",
+                       scATAC_obj = NA,) {
+    SeuratObject::Idents(sobj) <- idents
+    raw_mtx <- sobj@assays$RNA@counts
+    mtx <- BITFAM_preprocess(raw_data = raw_mtx)
+    res <- BITFAM(data = mtx,
+             species = "human",
+             scATAC_obj = scATAC_obj,
+             ncores = parallelly::availableCores())
+    Z <- BITFAM_activities(res)
+    Z_tsne <- as.data.frame(Rtsne(Z)$Y)
+    colnames(Z_tsne) <- c("tSNE_1", "tSNE_2")
+    Z_tsne$Cell_type <- Idents(sobj)
+    if (plot == "TRUE") {
+        ggplot(Z_tsne, aes(tSNE_1, tSNE_2, color = Cell_type)) + geom_point(size=0.8)
+    } else if (plot == "FALSE") {
+        tsne_plot <- ggplot(Z_tsne, aes(tSNE_1, tSNE_2, color = Cell_type)) + 
+            geom_point(size=0.8)
+        print("type tsne_plot in the R terminal to visualize the plot")
+    }
+
+    cell_type_df <- data.frame()
+    for (item in unique(Idents(sobj))) {
+        cell_type_df[[item]] <- ifelse(Idents(sobj) == "1", 1, 0)
+    }
+
+
+    cell_type_df <- data.frame(C1 = ifelse(sobj$seurat_clusters == "1", 1, 0),
+                                C2 = ifelse(sobj$seurat_clusters == "2", 1, 0),
+                                C3 = ifelse(sobj$seurat_clusters == "3", 1, 0),
+                                C4 = ifelse(sobj$seurat_clusters == "4", 1, 0))
+
+}
+
+
+for (item in unique(Idents(sobj))) {
+    print(item)
+}
+
+
+
+
+raw_mtx <- sobj@assays$RNA@counts
+
+mtx <- BITFAM_preprocess(raw_data = raw_mtx)
+
+res <- BITFAM(data = mtx,
+             species = "human",
+             scATAC_obj = NA,
+             ncores = parallelly::availableCores())
+
+#qs::qsave(res, "res.qs")
+
+Z <- BITFAM_activities(res)
+write.table(Z, file = "BITFAM_out.csv", sep = ",")
+Z_tsne <- as.data.frame(Rtsne(Z)$Y)
+colnames(Z_tsne) <- c("tSNE_1", "tSNE_2")
+
+
+Z_tsne$Cell_type <- sobj$seurat_clusters
+ggplot(Z_tsne, aes(tSNE_1, tSNE_2, color = Cell_type)) + geom_point(size=0.8)
+
+
+cell_type_df <- data.frame(C1 = ifelse(sobj$seurat_clusters == "1", 1, 0),
+                           C2 = ifelse(sobj$seurat_clusters == "2", 1, 0),
+                           C3 = ifelse(sobj$seurat_clusters == "3", 1, 0),
+                           C4 = ifelse(sobj$seurat_clusters == "4", 1, 0))
+
+library(randomForest)
+
+
+
+
+Z <- as.data.frame(Z)
+Z_C1 <- cbind(Z, cell_type_df$C1) 
+colnames(Z_C1)[157] <- "C1"
+Z_C1$C1 <- factor(Z_C1$C1)
+fit_rf <- randomForest(C1~., data = Z_C1)  ## build the RF model 
+C1_tf_top10 <- importance(fit_rf)[order(importance(fit_rf)[, 1], decreasing = T), ][1:10]
 
 ```
