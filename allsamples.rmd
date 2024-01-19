@@ -1,6 +1,9 @@
 ---
-title: "Osteosarcoma"
-output: github_document
+title: "Osteosarcoma scAtlas"
+output: 
+    html_document:
+        code_folding: hide
+always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}
@@ -17,14 +20,15 @@ library(hdf5r)
 library(Rmagic)
 library(scATOMIC)
 library(SCEVAN)
-
+library(knitr)
 ```
 
 ```{r setup2, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
                       cache = TRUE,
-                      include = FALSE,
-                      cache.lazy = FALSE)
+                      cache.lazy = FALSE,
+                      warning = FALSE,
+                      message = FALSE)
 ```
 
 ## Read metadata 
@@ -44,7 +48,7 @@ all_samples_csv <- filter(all_samples_csv,
 ## reading data and make prepreocessed seurat objects
 The code will first look if the h5 files exist in each repo. If exists, the
 seurat object is made and saved. 
-```{r}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
 #Seurat objects and save individual qs object
 for (i in seq_len(nrow(all_samples_csv))) {
     sample_name <- all_samples_csv$sample_name[i]
@@ -108,7 +112,7 @@ for (i in seq_len(nrow(all_samples_csv))) {
 
 
 # Count cells per sample before the QC
-```{r}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 
 single_sobjs <- list.files(path = "output/seurat_objects/sobj_preprocess/",
                           full.names = FALSE)
@@ -121,12 +125,12 @@ for (item in single_sobjs){
     Hmeta_data <- sobj@meta.data %>%
         as.data.table
 
-    counts <- Hmeta_data[, .N, by = c("sample_name", "unique")] %>% 
-        rbind(counts) %>% 
-        arrange(unique)
+    counts <- Hmeta_data[, .N, by = c("sample_name", "unique")] %>%
+        rename(N_cells = N) %>%
+        rbind(counts)
 }
 
-DT::datatable(counts)
+DT::datatable(arrange(counts, unique))
 
 ```
  
@@ -169,12 +173,32 @@ DT::datatable(counts)
 ```
 
 
-# Run QC and create merged Seurat Object
+# Run QC and create merged Seurat Object {.tabset}
 Will apply QC of ncount_min > 500 and number of cells > 200 cells per sample 
 to be included into the merged seurat object per each group of patient_primary,
 patient_metastatic, mouse_primary, mouse_metastatic, xenograft_primary_human,
 xenograft_primary_mouse, xenograft_metastatic_human, and xenograft_metastatic_mouse
-```{r}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+
+plot_my_stuff <- function(object, what) {
+    DimPlot(object,
+            group.by = what,
+            ncol = 1,
+            label = T,
+            repel = T,
+            shuffle = T,
+            cols = c(plot_cols, sample(rainbow(1000)))) +
+        coord_fixed() +
+        NoLegend()
+}
+
+
+BI_clusters <- list()
+BI_method <- list()
+BI_data_source <- list()
+AI_clusters <- list()
+AI_method <- list()
+AI_data_source <- list()
 
 for (group in unique(all_samples_csv$unique)){
     single_sobjs <- list.files(path = "output/seurat_objects/sobj_preprocess/",
@@ -230,45 +254,86 @@ for (group in unique(all_samples_csv$unique)){
         JoinLayers() %>%
         process_seurat()
 
-    non_integrated_dimplot <- DimPlot(merged_sobj,
-                                    group.by = c("sample_name", 
-                                                "method",
-                                                "data_source"),
-                                    shuffle = TRUE,
-                                    ncol = 1) +
-        ggtitle(str_c("Dimplot before harmony int for ", group))
+    BI_clusters[[group]] <- plot_my_stuff(merged_sobj, "sample_name")
+    BI_method[[group]] <- plot_my_stuff(merged_sobj, "method")
+    BI_data_source[[group]] <- plot_my_stuff(merged_sobj, "data_source")
+
+    # non_integrated_dimplot <- DimPlot(merged_sobj,
+    #                                 group.by = c("sample_name", 
+    #                                             "method",
+    #                                             "data_source"),
+    #                                 shuffle = TRUE,
+    #                                 ncol = 1) +
+    #     ggtitle(str_c("Dimplot before harmony ", group))
+
     qs::qsave(merged_sobj, str_c("output/seurat_objects/comb_sobjs/",
                                     group,
                                     ".qs"))
-    print(non_integrated_dimplot)
+    before_integration[[group]] <- non_integrated_dimplot
 
     run_harmony <- harmony::RunHarmony(object = merged_sobj,
                                        group.by.vars = "sample_name")
     harmony_obj <- run_harmony %>% 
         process_seurat(reduction = "harmony")
-    harmony_integrated_dimplot <- DimPlot(merged_sobj,
-                                        group.by = c("sample_name", 
-                                                    "method",
-                                                    "data_source"),
-                                        shuffle = TRUE,
-                                        ncol = 1) +
-        ggtitle(str_c("Dimplot after harmony int for ", group))
+
+    # harmony_integrated_dimplot <- DimPlot(merged_sobj,
+    #                                     group.by = c("sample_name", 
+    #                                                 "method",
+    #                                                 "data_source"),
+    #                                     shuffle = TRUE,
+    #                                     ncol = 1) +
+    #     ggtitle(str_c("Dimplot after harmony ", group))
+
+    AI_clusters[[group]] <- plot_my_stuff(harmony_obj, "sample_name")
+    AI_method[[group]] <- plot_my_stuff(harmony_obj, "method")
+    AI_data_source[[group]] <- plot_my_stuff(harmony_obj, "data_source")
+
     qs::qsave(harmony_obj, str_c("output/seurat_objects/harmony_sobjs/",
                                     group,
                                     ".qs"))
-    print(harmony_integrated_dimplot)
+
+    after_integration[[group]] <- harmony_integrated_dimplot
 }
-
-
 
 ```
 
+## Plots for patient_prim before and after harmony integration
+### Before Integration
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+BI_clusters$patient_prim
+BI_method$patient_prim
+BI_data_source$patient_prim
+```
 
-## Count the number of cells per sample post QC
+### After Integration
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+AI_clusters$patient_prim
+AI_method$patient_prim
+AI_data_source$patient_prim
+```
+
+
+## Plots for patient_mets before and after harmony integration
+### Before Integration
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+BI_clusters$patient_mets
+BI_method$patient_mets
+BI_data_source$patient_mets
+```
+
+### After Integration
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+AI_clusters$patient_mets
+AI_method$patient_mets
+AI_data_source$patient_mets
+```
+
+
+# Count the number of cells per sample post QC
 some of the samples are discarded as the ncountmin was set 500 and number of 
 cells limit was set to 200 cells and above per sample. The upper cutoff was set 
 as 5000 max cells per sample for similar dataset representation 
-```{r}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 counts_afterQC <- tibble()
 
 for (group in unique(all_samples_csv$unique)) {
@@ -280,19 +345,21 @@ for (group in unique(all_samples_csv$unique)) {
     Hmeta_data <- object@meta.data %>%
         as.data.table
     counts_afterQC <- Hmeta_data[, .N, by = c("sample_name", "unique")] %>% 
-        arrange(desc(N)) %>% 
+        rename(N_cells = N) %>%
         rbind(counts_afterQC)
     
 }
 
-DT::datatable(counts_afterQC)
+DT::datatable(arrange(counts_afterQC, unique, desc(N_cells)))
 
 ```
 
 
-## Clustering and setting the right resolution
+# Clustering and setting the right resolution {.tabset}
 used silhouette score and clustree method for right resolution
-```{r}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
+clustrees <- list()
+silhouette_scores <- list()
 
 for (group in unique(all_samples_csv$unique)) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
@@ -304,8 +371,8 @@ for (group in unique(all_samples_csv$unique)) {
                                   resolution = resolution_range)
     tree <- clustree::clustree(clustree_sobj,
                                prefix = "RNA_snn_res.")
-    print(group)
-    print(tree)
+
+    clustrees[[group]] <- tree
 
     if (ncol(object) > 65000) {
         subset_object <- subset(x = object,
@@ -320,12 +387,12 @@ for (group in unique(all_samples_csv$unique)) {
         filter(sil_vals == max(sil_vals)) %>%
         slice_head(n=1) %>%
         dplyr::select(res_vals)
-    
-    print(group)
-    print(res_score)
+
+    silhouette_scores[[group]] <- res_score
+
     res_object <- FindClusters(object,
                               resolution = res_score$res_vals)
-    
+
     qs::qsave(x = res_object, 
               file = str_c("output/seurat_objects/harmony_sobjs/",
                            group,
@@ -333,11 +400,23 @@ for (group in unique(all_samples_csv$unique)) {
 
 }
 
+```
+
+## Clustering patient prim
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+clustrees$patient_prim
+silhouette_scores$patient_mets
 
 ```
 
+## Clustering patient mets
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+clustrees$patient_mets
+silhouette_scores$patient_mets
 
-## Cell type annotaton function
+```
+
+# Cell type annotaton function data compilation
 ```{r}
 #loading the normal lungblood ref downloaded
 human_lung <- qs::qread("input/downloads/normal_lung.qs")
@@ -377,6 +456,7 @@ mouse_lung$CellType <-
             str_replace_all(mouse_lung$CellType, c("/" = "_",
                                                    "\\+" = "_plus",
                                                    "-" = "_"))
+
 
 mouse_lung$CellType <-
     stringr::str_replace_all(mouse_lung$CellType,
@@ -485,13 +565,13 @@ annotate <- function(sobject,
 ```
 
 
-## Annotate all the datasets
+# Annotate all the datasets
 The anotate function was build by compliling publicly available reference 
 comprising of lung, blood, and other primary cells for both human and mouse. 
 Once the clustering resolution was set, we mount each seurat object for
 celltype annotation using the annotate function. Then final celltype is
 assigned by highest number of celltype per each seurat cluster
-```{r}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 for (group in unique(all_samples_csv$unique)) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
                               group,
@@ -524,8 +604,7 @@ for (group in unique(all_samples_csv$unique)) {
 
 # DimPlot(new_ann_sobj, group.by = c("new_annot", "seurat_clusters"), raster=FALSE, shuffle = T)
 
-# cancer_features <- c("COL1A1", "COL1A2", "SATB2", "COL6A1", 
-#                     "PRDX2", "PSMD4", "MIF", "COL6A3", "COL3A1")
+# cancer_features <- c("COL1A1", "COL1A2", "SATB2", "PSMD4", "MIF", "RUNX2")
 
 # fibroblast_markers <- c("LOXL1", "LUM", "COL5A1", "FBLN1", "FBLN2")
 
@@ -539,75 +618,143 @@ for (group in unique(all_samples_csv$unique)) {
 #                                    features = c("percent.mt", "nCount_RNA", "nFeature_RNA"))
 
 
+
+
+
+# for (group in unique(all_samples_csv$unique)) {
+#     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+#                               group,
+#                               ".qs"))
+#     ann_sobj <- annotate(sobject = object,
+#                          species = object$organism[1],
+#                          aggr_ref = TRUE)
+    
+#     Idents(ann_sobj) <- ann_sobj$seurat_clusters
+#     clust_info <- tibble()
+#     #for (cluster in ann_sobj$seurat_clusters) {
+#     parallel::mclapply(ann_sobj$seurat_clusters, function(cluster) {
+#         subset_object <- subset(ann_sobj, ident = cluster)
+#         #DimPlot(subset_object)
+#         subset_object <- process_seurat(subset_object)
+#         harm_obj <- RunHarmony(subset_object,
+#                             group.by.vars = "sample_name")
+#         harm_obj <- harm_obj %>%
+#             process_seurat(reduction = "harmony")
+#         res_score <- optimize_silhouette(sobject = harm_obj,
+#                                     test_res = seq(0.1, 0.9, by = 0.1),
+#                                     summary_plot = FALSE) %>%
+#         filter(sil_vals == max(sil_vals)) %>%
+#         slice_head(n=1) %>%
+#         dplyr::select(res_vals)
+#         harm_obj <- harm_obj %>%
+#             FindClusters(resolution = res_score)
+#         #DimPlot(harm_obj, group.by = c("seurat_clusters", "annotations"))
+#         harm_obj$re_cluster <- str_c(cluster, "_", harm_obj$seurat_clusters)
+#         clust_info <- harm_obj@meta.data %>%
+#             as.data.frame() %>% 
+#             select(re_cluster) %>%
+#             rbind(clust_info)
+#         return(clust_info)
+#     }, mc.cores = parallelly::availableCores())
+#     ann_sobj <- AddMetaData(ann_sobj, metadata = clust_info)
+#     cluster_celltypes <-
+#         table(ann_sobj$re_cluster, ann_sobj$annotations) %>% 
+#         as.data.frame() %>%  
+#         group_by(Var1) %>%
+#         arrange(desc(Freq), .by_group = TRUE) %>%
+#         slice_head(n=1)
+#     ann_sobj$new_annot_clust <- ann_sobj$re_cluster
+#     for (item in seq_len(nrow(cluster_celltypes))) {
+#         seurat_clust <- str_c("^", cluster_celltypes$Var1[item], "$") %>%
+#             as.character()
+#         celltype <- cluster_celltypes$Var2[item] %>%
+#             as.character()
+#         ann_sobj$new_annot_clust <- str_replace_all(string = ann_sobj$new_annot_clust,
+#                                                     pattern = seurat_clust,
+#                                                     replacement = celltype)
+#     }
+# }
+
 ```
 
-## Cancer cells vs normal cells using SCEVAN
+# Cancer cells vs normal cells using SCEVAN {.tabset}
 Single CEll Variational Aneuploidy aNalysis
 When run, the result is in three metadata column:
-class: with tumor vs normal celltype information
+class: with tumor vs normal celltype information (filtered: low quality cells i think)
 subclone: clones numbered like a seurat clusters
-```{r}
-SCEVAN_dimplots <- list()
-SCEVAN_annot <- list()
+SCEVAN starts from the raw count matrix removing irrelevant genes and cells. 
+Identification of a small set of highly confident normal cells.
+Relative gene expression obtained from removal of the baseline inferred from confident normal cells. 
+Edge-preserving nonlinear diffusion filtering of relative gene expression. 
+Segmentation with a variational region-growing algorithm. 
+Identification of normal cells as those in the cluster containing the majority of confident normal cells. 
+Segments are then classified in five copy number states.
+Analysis of subclones including clone tree, pathway activities, but it can be turned off
 
-for (group in unique(all_samples_csv$unique)) {
-    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
-                              group,
-                              ".qs"))
-    if (ncol(object) > 20000) {
-        object <- subset(x = object,
-                                cells = sample(Cells(object),
-                                        min(20000, length(Cells(object)))))
-    } else {
-        object <- object
-    }
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 
-    count_mtx <- object@assays$RNA$counts
-    results <- SCEVAN::pipelineCNA(count_mtx,
-                                   organism = object$organism[1],
-                                   par_cores = parallelly::availableCores())
-    scv_object <- Seurat::AddMetaData(object, metadata = results)
+# scevan_plots <- list()
 
-    SCEVAN_dimplots[[group]] <- DimPlot(scv_object,
-                                        group.by = c("subclone", "class", "new_annot")) +
-        ggtitle(str_c("Dimplot after SCEVAN for ", group))
-    SCEVAN_annot[[group]] <- table(scv_object$class)
+# for (group in unique(all_samples_csv$unique)) {
+#     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+#                               group,
+#                               ".qs"))
+#     if (ncol(object) > 10000) {
+#         object <- subset(x = object,
+#                                 cells = sample(Cells(object),
+#                                         min(10000, length(Cells(object)))))
+#     } else {
+#         object <- object
+#     }
 
-    qs::qsave(scv_object, str_c("output/SCEVAN/",
-                              group,
-                              ".qs"))
+#     count_mtx <- object@assays$RNA$counts
+#     results <- SCEVAN::pipelineCNA(count_mtx,
+#                                    organism = object$organism[1],
+#                                    par_cores = parallelly::availableCores(),
+#                                    plotTree = FALSE,
+#                                    SUBCLONES = FALSE)
+#     scv_object <- Seurat::AddMetaData(object, metadata = results)
 
-}
+#     scevan_plots[[group]] <- plot_my_stuff(scv_object, "class")
 
-print(SCEVAN_dimplots$patient_prim)
-DT::datatable(SCEVAN_annot$patient_prim)
+#     SCEVAN_annot <- table(scv_object$class)
+#     print(SCEVAN_annot)
 
-print(SCEVAN_dimplots$patient_mets)
-DT::datatable(SCEVAN_annot$patient_mets)
+#     qs::qsave(scv_object, str_c("output/SCEVAN/",
+#                               group,
+#                               ".qs"))
 
+# }
 
 ```
 
+## Patient primary
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+# scevan_plots$patient_prim
 
+```
 
-## Cancer cells vs normal cells using scATOMIC
-The runs are made in subset of 20000 cells for each samples
+## Patient mets
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+# scevan_plots$patient_mets
+
+```
+
+# Cancer cells vs normal cells using scATOMIC {.tabset}
 The result comes with the annotation of cell types including for both cancer type 
 and the normal cell types. Also outputs for each cell:
 Classification_confidence: confident, low_confidence on annotation
 pan_cancer_cluster: either cancer or normal
 scATOMIC_pred : celltype annotation
-```{r}
-# I think this library brings sth into the environment because without doing this
-# the run_ATOMIC fucntion wont work
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
 
-sc_ATOMIC_dimplots <- list()
-sc_ATOMIC_annot <- list()
+scATOMIC_plots <- list()
+
 for (group in unique(all_samples_csv$unique)) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
                               group,
                               ".qs"))
-    if (ncol(object) > 20000) {
+    if (ncol(object) > 10000) {
         object <- subset(x = object,
                                 cells = sample(Cells(object),
                                         min(10000, length(Cells(object)))))
@@ -624,26 +771,32 @@ for (group in unique(all_samples_csv$unique)) {
                                               raw_counts = count_mtx, 
                                               min_prop = 0.5 )
     scATOMIC_object <- AddMetaData(object, scATOMIC_results)
-    sc_ATOMIC_dimplots[[group]] <- DimPlot(scATOMIC_object, 
-                                  group.by = c("pan_cancer_cluster", "scATOMIC_pred"),
-                                  ncol = 1) +
-        ggtitle(str_c("Dimplot after scATOMIC for ", group))
-    sc_ATOMIC_annot[[group]] <- table(scATOMIC_results$scATOMIC_pred)
+
+    scATOMIC_plots[[group]] <- plot_my_stuff(scATOMIC_object, "pan_cancer_cluster")
+
+    sc_ATOMIC_annot <- table(scATOMIC_results$scATOMIC_pred)
+    print(sc_ATOMIC_annot)
+
     qs::qsave(scATOMIC_object, str_c("output/scATOMIC/",
                                     group,
                                     ".qs"))
 }
 
-print(sc_ATOMIC_dimplots$patient_mets)
-DT::datatable(sc_ATOMIC_annot$patient_mets)
 
-print(sc_ATOMIC_dimplots$patient_prim)
-DT::datatable(sc_ATOMIC_annot$patient_prim)
+```
+
+## Patient primary
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+scATOMIC_plots$patient_prim
+```
+
+## Patient mets
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+scATOMIC_plots$patient_mets
 ```
 
 
-
-## Split cancer vs the stroma - here
+# Split cancer vs the stroma - here
 label potential tumor cell and then split the seurat object into cancer cells and
 normal cells. The silhouette score was used to cluster the normal cells and 0.1
 resolution was used to cluster the cancer cells (to reduce the excessive) 
@@ -651,8 +804,7 @@ clustering.
 It might be a worthwile to annotate or re run SCEVAN in the cancer cells to filter
 out any normal cells that might have been group as cancer cells.
 
-```{r}
-
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 cancer_celltypes <- list(patient_prim = c( "MSC",
                                            "Chondrocytes",
                                            "Tissue_stem_cells"),
@@ -747,19 +899,14 @@ for (group in unique(all_samples_csv$unique)) {
                                 "_normal",
                                 ".qs"))
     print(str_c(group, " labelled with cancer cells and subsetted"))
+    }
 }
-}
-
-
-
-
 
 ```
 
 
-## Umap
-
-```{r}
+# UMAPS combined and individual {.tabset}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 #Checkups to make sure the outputs make sense
 
 umaps_group <- 
@@ -771,7 +918,11 @@ umaps_group <-
             # "mm_prim",         "Mouse Primary",        "no",
             # "mm_mets",         "Mouse Metastatic",     "no")
 
-comb_plot_list <- list()
+annotated <- list()
+merged <- list()
+just_tumor <- list()
+just_stroma <- list()
+
 
 for (item in seq_len(nrow(umaps_group))) {
     sobj_name <- umaps_group$sobj[item]
@@ -781,110 +932,127 @@ for (item in seq_len(nrow(umaps_group))) {
         object <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
                             sobj_name,
                             ".qs"))
-        x <- DimPlot(object,
-                    group.by = "cancer_normal",
-                    repel = T,
-                    label = T,
-                    shuffle= T,
-                    cols = c(plot_cols, sample(rainbow(1000)))) +
-                NoLegend() +
-                coord_fixed() +
-                ggtitle("Tumor and Stromal cells") +
-                theme(legend.text = element_text(size = 7))
+        annotated[[sobj_name]] <- plot_my_stuff(object, "new_annot")
 
+        merged[[sobj_name]] <- DimPlot(object,
+                            group.by = "cancer_normal",
+                            repel = T,
+                            label = T,
+                            shuffle= T,
+                            cols = c(plot_cols, sample(rainbow(1000)))) +
+                        NoLegend() +
+                        coord_fixed() +
+                        ggtitle("Tumor and Stromal cells") +
+                        theme(legend.text = element_text(size = 7))
 
         tumor <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                             sobj_name,
                             "_cancer.qs"))
-        y <- DimPlot(tumor,
-                    group.by = "seurat_clusters",
-                    repel = T,
-                    label = T,
-                    shuffle= T,
-                    cols = c(plot_cols, sample(rainbow(1000)))) +
-                NoLegend() +
-                coord_fixed() +
-                ggtitle("Tumor cells reclustering") +
-                theme(legend.text = element_text(size = 7))
+        just_tumor[[sobj_name]] <- DimPlot(tumor,
+                            group.by = "seurat_clusters",
+                            repel = T,
+                            label = T,
+                            shuffle= T,
+                            cols = c(plot_cols, sample(rainbow(1000)))) +
+                        NoLegend() +
+                        coord_fixed() +
+                        ggtitle("Tumor cells reclustering") +
+                        theme(legend.text = element_text(size = 7))
 
 
         stroma <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                             sobj_name,
                             "_normal.qs"))
-        z <- DimPlot(stroma,
-                    group.by = "cancer_normal",
-                    repel = T,
-                    label = T,
-                    shuffle= T,
-                    cols = c(plot_cols, sample(rainbow(1000)))) +
-                NoLegend() +
-                coord_fixed() +
-                ggtitle("Stromal cells reclustering") +
-                theme(legend.text = element_text(size = 7))
+        just_stroma[[sobj_name]] <- DimPlot(stroma,
+                            group.by = "cancer_normal",
+                            repel = T,
+                            label = T,
+                            shuffle= T,
+                            cols = c(plot_cols, sample(rainbow(1000)))) +
+                        NoLegend() +
+                        coord_fixed() +
+                        ggtitle("Stromal cells reclustering") +
+                        theme(legend.text = element_text(size = 7))
 
-        plots <- list(x, y, z)
-        plot <- patchwork::wrap_plots(plots, ncol = 1) + 
-                patchwork::plot_annotation(title = str_c("UMAP for ", title),
-                                           theme = theme(plot.title = element_text(hjust = 0.5,
-                                                                                   size = 20,
-                                                                                   face = "bold")))
-        ggsave(filename = str_c("output/plots/umaps/", sobj_name, "_umap.png"))
-                # width = 7,
-                # height = 21,
-                #plot = plot)
+        # plots <- list(x, y, z)
+        # plot <- patchwork::wrap_plots(plots, ncol = 1) + 
+        #         patchwork::plot_annotation(title = str_c("UMAP for ", title),
+        #                                    theme = theme(plot.title = element_text(hjust = 0.5,
+        #                                                                            size = 20,
+        #                                                                            face = "bold")))
+        # ggsave(filename = str_c("output/plots/umaps/", sobj_name, "_umap.png"))
+        #         # width = 7,
+        #         # height = 21,
+        #         #plot = plot)
     } else {
         first_obj <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
                                     sobj_name,
                                     "_human.qs"))
-        x <- DimPlot(first_obj,
-                    group.by = "seurat_clusters",
-                    repel = T,
-                    label = T,
-                    shuffle= T,
-                    cols = c(plot_cols, sample(rainbow(1000)))) +
-                NoLegend() +
-                coord_fixed() +
-                ggtitle("Tumor cells") +
-                theme(legend.text = element_text(size = 7))
+        just_tumor[[sobj_name]] <- DimPlot(first_obj,
+                                group.by = "seurat_clusters",
+                                repel = T,
+                                label = T,
+                                shuffle= T,
+                                cols = c(plot_cols, sample(rainbow(1000)))) +
+                            NoLegend() +
+                            coord_fixed() +
+                            ggtitle("Tumor cells") +
+                            theme(legend.text = element_text(size = 7))
 
         second_obj <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
                                     sobj_name,
                                     "_mouse.qs"))
-        y <- DimPlot(second_obj,
-                    group.by = "new",
-                    repel = T,
-                    label = T,
-                    shuffle= T,
-                    label.size = 4,
-                    cols = c(plot_cols, sample(rainbow(1000)))) +
-                NoLegend() +
-                coord_fixed() +
-                ggtitle("Stromal cells") +
-                theme(legend.text = element_text(size = 7))
+        just_stroma[[sobj_name]] <- DimPlot(second_obj,
+                                    group.by = "new",
+                                    repel = T,
+                                    label = T,
+                                    shuffle= T,
+                                    label.size = 4,
+                                    cols = c(plot_cols, sample(rainbow(1000)))) +
+                                NoLegend() +
+                                coord_fixed() +
+                                ggtitle("Stromal cells") +
+                                theme(legend.text = element_text(size = 7))
 
-        plots <- list(x, y)
-        plot <- patchwork::wrap_plots(plots, ncol=1) + 
-                patchwork::plot_annotation(title = str_c("UMAP for ", title),
-                                           theme = theme(plot.title = element_text(hjust = 0.5,
-                                                                                   size = 20,
-                                                                                   face = "bold")))
-        ggsave(str_c("output/plots/umaps/", sobj_name, "_umap.png"))
-            # width = 15,
-            # height = 5,
-            # plot = plot)
+        # plots <- list(x, y)
+        # plot <- patchwork::wrap_plots(plots, ncol=1) + 
+        #         patchwork::plot_annotation(title = str_c("UMAP for ", title),
+        #                                    theme = theme(plot.title = element_text(hjust = 0.5,
+        #                                                                            size = 20,
+        #                                                                            face = "bold")))
+        # ggsave(str_c("output/plots/umaps/", sobj_name, "_umap.png"))
+        #     # width = 15,
+        #     # height = 5,
+        #     # plot = plot)
         
     }
-    print(plot)
-    print(str_c("Done plotting for ", sobj_name))
+    # print(plot)
+    # print(str_c("Done plotting for ", sobj_name))
 
 }
 
+```
 
+## UMAPS Patient primary
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+annotated$patient_prim
+merged$patient_prim
+just_tumor$patient_prim
+just_stroma$patient_prim
 
 ```
 
-## DEGs and GSEA plot functions
+## UMAPS Patient mets
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+annotated$patient_mets
+merged$patient_mets
+just_tumor$patient_mets
+just_stroma$patient_mets
+```
 
+
+
+# DEGs and GSEA plot functions
 ```{r}
 
 run_degs <- function(sobject,
@@ -970,7 +1138,7 @@ run_gsea <- function(degs_result,
 
 ```
 
-## GSEA Plots function for twoway dotplot and barplot
+# GSEA Plots function for twoway dotplot and barplot
 ```{r}
 
 #two way dotplot
@@ -1093,8 +1261,8 @@ two_way_plot <- function(data, x_col = "z_score") {
 ```
 
 
-## DEGS: Differential expression analysis
-```{r}
+# Differential expression analysis for tumor cells
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 
 theme_set(theme_classic(base_size = 20) +
             theme(axis.title.y = element_text(margin = margin(0, 20, 0, 0),
@@ -1129,34 +1297,28 @@ tumor_list <- dplyr::tribble(~sobj_name,     ~species,
                             # "xeno_prim_human",       "human",
                             # "xeno_mets_human",      "human")
 
+volc_plot <- list()
+gsea_plot <- list()
+gsea_result <- list()
 
 for (group in unique(all_samples_csv$unique)) {
     object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                               group,
                               "_cancer",
                               ".qs"))
-    volc_plot <- list()
-    gsea_plot <- list()
-    panel_plot <- list()
-    gsea_result <- list()
-    gsea_input <- list()
-    degs <- list()
-    dimplot <- DimPlot(object,
-                       group.by = "seurat_clusters",
-                       label = T,
-                       cols = c(plot_cols, sample(rainbow(1000))),
-                       shuffle = T) +
-                NoLegend()
-    degs_result <- run_degs(sobject = object,
+
+    dimplot <- plot_my_stuff(object, "seurat_clusters")
+
+    degs_result[[group]] <- run_degs(sobject = object,
                             group_by = "seurat_clusters",
                             prefix = str_c(group, "_cancer"))
-    for (item in names(degs_result)) {
+    for (item in names(degs_result[[group]])) {
         logfc_cutoff <- 0.6
-        degs_result[[item]]$diffexpressed <- "Not Significant"
-        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange > logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "Upregulated"
-        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange < -1 * logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "Downregulated"
+        degs_result[[group]][[item]]$diffexpressed <- "Not Significant"
+        degs_result[[group]][[item]]$diffexpressed[degs_result[[group]][[item]]$log2FoldChange > logfc_cutoff & degs_result[[group]][[item]]$padj < 0.05] <- "Upregulated"
+        degs_result[[group]][[item]]$diffexpressed[degs_result[[group]][[item]]$log2FoldChange < -1 * logfc_cutoff & degs_result[[group]][[item]]$padj < 0.05] <- "Downregulated"
 #make the volcano plot
-        volc_plot[[item]] <- ggplot(data=degs_result[[item]],
+        volc_plot[[group]][[item]] <- ggplot(data=degs_result[[group]][[item]],
                             aes(x=log2FoldChange,
                                 y=-log10(pvalue),
                                 color = diffexpressed)) + 
@@ -1173,11 +1335,11 @@ for (group in unique(all_samples_csv$unique)) {
         subcategory <- cat_tib$subcategory[i]
         cat_expl <- cat_tib$cat_expl[i]
         if (subcategory == "NA") {
-            gsea_result <- run_gsea(degs_result = degs_result,
+            gsea_result <- run_gsea(degs_result = degs_result[[group]],
                                     category = category,
                                     species = object$organism[1])
         } else {
-            gsea_result <- run_gsea(degs_result = degs_result,
+            gsea_result <- run_gsea(degs_result = degs_result[[group]],
                                     category = category,
                                     subcategory = subcategory,
                                     species = object$organism[1])
@@ -1200,41 +1362,92 @@ for (group in unique(all_samples_csv$unique)) {
                                        order = seq_len(n()),
                                        justify_y = if_else(NES > 0, 1, 0),
                                        y_pos = if_else(NES > 0, -0.1, 0.1))
-                gsea_plot[[cat_expl]][[item]] <- two_way_dotplot(top5up_down, x_col = "NES")
+                gsea_plot[[group]][[cat_expl]][[item]] <- two_way_dotplot(top5up_down, x_col = "NES")
             } else {
                 print(str_c("No Pathways up or down in ", item, " for ", cat_expl))
             }
         }
-    }
-#make panel plots
-    for (clusters in names(volc_plot)) {
-        plots <- gridExtra::grid.arrange(dimplot,
-                    gsea_plot$KEGG[[clusters]],
-                    gsea_plot$Hallmark_paths[[clusters]],
-                    volc_plot[[clusters]],
-                    gsea_plot$Oncogenic_signature[[clusters]],
-                    gsea_plot$Transcription_factor_targets[[clusters]],
-                    #nrow = 2,
-                    top = clusters)
+     }
+# #make panel plots
+#     for (clusters in names(volc_plot)) {
+#         # plots <- gridExtra::grid.arrange(dimplot,
+#         #             gsea_plot$KEGG[[clusters]],
+#         #             gsea_plot$Hallmark_paths[[clusters]],
+#         #             volc_plot[[clusters]],
+#         #             gsea_plot$Oncogenic_signature[[clusters]],
+#         #             gsea_plot$Transcription_factor_targets[[clusters]],
+#         #             ncol = 3,
+#         #             top = clusters)
 
-        ggsave(str_c("output/gsea/tumor/", group, "/", clusters, ".png"),
-                #width = 15,
-                #height = 10,
-                plot = plots)
-        print(plots)
-    }
+#         # ggsave(str_c("output/gsea/tumor/", group, "/", clusters, ".png"),
+#         #         width = 15,
+#         #         height = 10,
+#         #         plot = plots)
+
+#         print(dimplot)
+#         print(gsea_plot$KEGG[[clusters]])
+#         print(gsea_plot$Hallmark_paths[[clusters]])
+#         print(volc_plot[[clusters]])
+#         print(gsea_plot$Oncogenic_signature[[clusters]])
+#         print(gsea_plot$Transcription_factor_targets[[clusters]])
+#     }
 }
-
-
-
-
-
 
 ```
 
+# Patient mets {.tabset}
+
+## Cluster 0
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+#Dimplot
+#volcplot
+#datatable
+DT::datatable(degs_result$patient_mets$patient_mets_cancer_Cluster_0)
+#gsea plots
+
+```
+
+## cluster 2
 
 
 
+
+```{r, eval = FALSE}
+for (group in unique(all_samples_csv$unique)) {
+    object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                              group,
+                              "_cancer",
+                              ".qs"))
+    annot_sobj <- annotate(sobject = object,
+                           species = object$organism[1],
+                           aggr_ref = TRUE)
+    DimPlot(annot_sobj, group.by = c("seurat_clusters", "annotations"))
+
+    cluster_celltypes <-
+        table(annot_sobj$seurat_clusters, annot_sobj$annotations) %>% 
+        as.data.frame() %>%
+        group_by(Var1) %>%
+        arrange(desc(Freq), .by_group = TRUE) %>%
+        slice_head(n=1)
+    annot_sobj$new_annot <- annot_sobj$seurat_clusters
+    for (item in seq_len(nrow(cluster_celltypes))) {
+        seurat_clust <- str_c("^", cluster_celltypes$Var1[item], "$") %>%
+            as.character()
+        celltype <- cluster_celltypes$Var2[item] %>%
+            as.character()
+        annot_sobj$new_annot <- str_replace_all(string = annot_sobj$new_annot,
+                                              pattern = seurat_clust,
+                                              replacement = celltype)
+    }
+    DimPlot(annot_sobj, group.by = c("seurat_clusters", "new_annot", "annotations", "sample_name"), label = T)
+    FeaturePlot(annot_sobj, features = c("MKI67", "SATB2"))
+}
+
+cells_iwant <- table(annot_sobj$annotations) %>% as.data.frame() %>% arrange(desc(Freq)) %>% filter(Freq > 500)
+Idents(annot_sobj) <- annot_sobj$annotations
+filt_annot_sobj <- subset(annot_sobj, idents = cells_iwant$Var1)
+DimPlot(filt_annot_sobj, group.by = c("seurat_clusters", "new_annot", "annotations", "sample_name"), label = T)
+```
 
 
 
@@ -1620,11 +1833,6 @@ pheatmap::pheatmap(as.matrix(averageexp[[1]]),
                    cluster_cols = FALSE)
 
 ```
-
-
-
-
-
 
 
 ## Regulons analysis
