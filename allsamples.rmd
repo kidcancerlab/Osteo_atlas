@@ -39,7 +39,6 @@ all_samples_csv <- read_csv("allsample_details.csv")
 all_samples_csv$sp_pattern <-
     str_replace_all(all_samples_csv$sp_pattern, "nothing", "")
 
-
 #for the sake of presentation, I will just have patient data
 all_samples_csv <- filter(all_samples_csv,
                           unique == "patient_prim" | unique =="patient_mets")
@@ -48,7 +47,7 @@ all_samples_csv <- filter(all_samples_csv,
 ## reading data and make prepreocessed seurat objects
 The code will first look if the h5 files exist in each repo. If exists, the
 seurat object is made and saved. 
-```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE, eval = FALSE}
 #Seurat objects and save individual qs object
 for (i in seq_len(nrow(all_samples_csv))) {
     sample_name <- all_samples_csv$sample_name[i]
@@ -680,7 +679,7 @@ for (group in unique(all_samples_csv$unique)) {
 # Cancer cells vs normal cells using SCEVAN {.tabset}
 Single CEll Variational Aneuploidy aNalysis
 When run, the result is in three metadata column:
-class: with tumor vs normal celltype information (filtered: low quality cells i think)
+class: with tumor (blue) vs normal celltype(green), and (filtered (red): low quality cells i think)
 subclone: clones numbered like a seurat clusters
 SCEVAN starts from the raw count matrix removing irrelevant genes and cells. 
 Identification of a small set of highly confident normal cells.
@@ -693,50 +692,49 @@ Analysis of subclones including clone tree, pathway activities, but it can be tu
 
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 
-# scevan_plots <- list()
+scevan_plots <- list()
 
-# for (group in unique(all_samples_csv$unique)) {
-#     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
-#                               group,
-#                               ".qs"))
-#     if (ncol(object) > 10000) {
-#         object <- subset(x = object,
-#                                 cells = sample(Cells(object),
-#                                         min(10000, length(Cells(object)))))
-#     } else {
-#         object <- object
-#     }
+for (group in unique(all_samples_csv$unique)) {
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                              group,
+                              ".qs"))
+    if (ncol(object) > 10000) {
+        object <- subset(x = object,
+                                cells = sample(Cells(object),
+                                        min(10000, length(Cells(object)))))
+    } else {
+        object <- object
+    }
 
-#     count_mtx <- object@assays$RNA$counts
-#     results <- SCEVAN::pipelineCNA(count_mtx,
-#                                    organism = object$organism[1],
-#                                    par_cores = parallelly::availableCores(),
-#                                    plotTree = FALSE,
-#                                    SUBCLONES = FALSE)
-#     scv_object <- Seurat::AddMetaData(object, metadata = results)
+    count_mtx <- object@assays$RNA$counts
+    results <- SCEVAN::pipelineCNA(count_mtx,
+                                   organism = object$organism[1],
+                                   par_cores = parallelly::availableCores(),
+                                   plotTree = FALSE,
+                                   SUBCLONES = FALSE)
+    scv_object <- Seurat::AddMetaData(object, metadata = results)
 
-#     scevan_plots[[group]] <- plot_my_stuff(scv_object, "class")
+    scevan_plots[[group]] <- plot_my_stuff(scv_object, "class")
 
-#     SCEVAN_annot <- table(scv_object$class)
-#     print(SCEVAN_annot)
+    SCEVAN_annot <- table(scv_object$class)
+    print(SCEVAN_annot)
 
-#     qs::qsave(scv_object, str_c("output/SCEVAN/",
-#                               group,
-#                               ".qs"))
-
-# }
+    qs::qsave(scv_object, str_c("output/SCEVAN/",
+                              group,
+                              ".qs"))
+}
 
 ```
 
 ## Patient primary
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
-# scevan_plots$patient_prim
+scevan_plots$patient_prim
 
 ```
 
 ## Patient mets
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
-# scevan_plots$patient_mets
+scevan_plots$patient_mets
 
 ```
 
@@ -1039,7 +1037,6 @@ annotated$patient_prim
 merged$patient_prim
 just_tumor$patient_prim
 just_stroma$patient_prim
-
 ```
 
 ## UMAPS Patient mets
@@ -1300,25 +1297,30 @@ tumor_list <- dplyr::tribble(~sobj_name,     ~species,
 volc_plot <- list()
 gsea_plot <- list()
 gsea_result <- list()
+dimplots <- list()
+
 
 for (group in unique(all_samples_csv$unique)) {
     object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                               group,
                               "_cancer",
                               ".qs"))
+    volc_plot <- list()
+    gsea_plot <- list()
+    gsea_result <- list()
 
     dimplot <- plot_my_stuff(object, "seurat_clusters")
 
-    degs_result[[group]] <- run_degs(sobject = object,
+    degs_result <- run_degs(sobject = object,
                             group_by = "seurat_clusters",
                             prefix = str_c(group, "_cancer"))
-    for (item in names(degs_result[[group]])) {
+    for (item in names(degs_result)) {
         logfc_cutoff <- 0.6
-        degs_result[[group]][[item]]$diffexpressed <- "Not Significant"
-        degs_result[[group]][[item]]$diffexpressed[degs_result[[group]][[item]]$log2FoldChange > logfc_cutoff & degs_result[[group]][[item]]$padj < 0.05] <- "Upregulated"
-        degs_result[[group]][[item]]$diffexpressed[degs_result[[group]][[item]]$log2FoldChange < -1 * logfc_cutoff & degs_result[[group]][[item]]$padj < 0.05] <- "Downregulated"
+        degs_result[[item]]$diffexpressed <- "Not Significant"
+        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange > logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "Upregulated"
+        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange < -1 * logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "Downregulated"
 #make the volcano plot
-        volc_plot[[group]][[item]] <- ggplot(data=degs_result[[group]][[item]],
+        volc_plot[[item]] <- ggplot(data=degs_result[[item]],
                             aes(x=log2FoldChange,
                                 y=-log10(pvalue),
                                 color = diffexpressed)) + 
@@ -1335,11 +1337,11 @@ for (group in unique(all_samples_csv$unique)) {
         subcategory <- cat_tib$subcategory[i]
         cat_expl <- cat_tib$cat_expl[i]
         if (subcategory == "NA") {
-            gsea_result <- run_gsea(degs_result = degs_result[[group]],
+            gsea_result <- run_gsea(degs_result = degs_result,
                                     category = category,
                                     species = object$organism[1])
         } else {
-            gsea_result <- run_gsea(degs_result = degs_result[[group]],
+            gsea_result <- run_gsea(degs_result = degs_result,
                                     category = category,
                                     subcategory = subcategory,
                                     species = object$organism[1])
@@ -1362,55 +1364,50 @@ for (group in unique(all_samples_csv$unique)) {
                                        order = seq_len(n()),
                                        justify_y = if_else(NES > 0, 1, 0),
                                        y_pos = if_else(NES > 0, -0.1, 0.1))
-                gsea_plot[[group]][[cat_expl]][[item]] <- two_way_dotplot(top5up_down, x_col = "NES")
+                gsea_plot[[cat_expl]][[item]] <- two_way_dotplot(top5up_down, x_col = "NES") +
+                                                    ggtitle(str_c(cat_expl, " for ", item))
             } else {
                 print(str_c("No Pathways up or down in ", item, " for ", cat_expl))
+                gsea_plot[[cat_expl]][[item]] <- ggplot(data = NULL,
+                                                        aes(x = as.factor(1),
+                                                        y = as.factor(1))) +
+                    geom_text(aes(label = str_c("No significant pathways for ", cat_expl)))
             }
         }
-     }
-# #make panel plots
-#     for (clusters in names(volc_plot)) {
-#         # plots <- gridExtra::grid.arrange(dimplot,
-#         #             gsea_plot$KEGG[[clusters]],
-#         #             gsea_plot$Hallmark_paths[[clusters]],
-#         #             volc_plot[[clusters]],
-#         #             gsea_plot$Oncogenic_signature[[clusters]],
-#         #             gsea_plot$Transcription_factor_targets[[clusters]],
-#         #             ncol = 3,
-#         #             top = clusters)
+    }
+#make panel plots
+    for (clusters in names(volc_plot)) {
+        plots <- gridExtra::grid.arrange(dimplot,
+                                        volc_plot[[clusters]],
+                                        gsea_plot$KEGG[[clusters]],
+                                        gsea_plot$Hallmark_paths[[clusters]],
+                                        gsea_plot$Oncogenic_signature[[clusters]],
+                                        gsea_plot$Transcription_factor_targets[[clusters]],
+                                        ncol = 2,
+                                        top = clusters)
 
-#         # ggsave(str_c("output/gsea/tumor/", group, "/", clusters, ".png"),
-#         #         width = 15,
-#         #         height = 10,
-#         #         plot = plots)
+        ggsave(str_c("output/gsea/tumor/", group, "/", clusters, ".png"),
+                width = 15,
+                height = 10,
+                plot = plots)
 
-#         print(dimplot)
-#         print(gsea_plot$KEGG[[clusters]])
-#         print(gsea_plot$Hallmark_paths[[clusters]])
-#         print(volc_plot[[clusters]])
-#         print(gsea_plot$Oncogenic_signature[[clusters]])
-#         print(gsea_plot$Transcription_factor_targets[[clusters]])
-#     }
+        # print(dimplot)
+        # print(gsea_plot$KEGG[[clusters]])
+        # print(gsea_plot$Hallmark_paths[[clusters]])
+        # print(volc_plot[[clusters]])
+        # print(gsea_plot$Oncogenic_signature[[clusters]])
+        # print(gsea_plot$Transcription_factor_targets[[clusters]])
+        # r1 <- dimplot + 
+        #       volc_plot[[clusters]] +
+        #       gsea_plot$KEGG[[clusters]]
+        # r2 <- gsea_plot$Hallmark[[clusters]] +
+        #       gsea_plot$Oncogenic[[clusters]] +
+        #       gsea_plot$TF_targets[[clusters]]
+        # plots <- r1 / r2
+    }
 }
 
 ```
-
-# Patient mets {.tabset}
-
-## Cluster 0
-```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
-#Dimplot
-#volcplot
-#datatable
-DT::datatable(degs_result$patient_mets$patient_mets_cancer_Cluster_0)
-#gsea plots
-
-```
-
-## cluster 2
-
-
-
 
 ```{r, eval = FALSE}
 for (group in unique(all_samples_csv$unique)) {
