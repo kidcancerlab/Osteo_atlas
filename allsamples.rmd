@@ -23,6 +23,7 @@ library(SCEVAN)
 library(knitr)
 ```
 
+
 ```{r setup2, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
                       cache = TRUE,
@@ -30,6 +31,10 @@ knitr::opts_chunk$set(echo = TRUE,
                       warning = FALSE,
                       message = FALSE)
 ```
+
+```{r, child='function_atlas.Rmd'}
+```
+
 
 ## Read metadata 
 ```{r, cache.vars="all_samples_csv"}
@@ -105,8 +110,6 @@ for (i in seq_len(nrow(all_samples_csv))) {
         }
     }
 }
-
-
 ```
 
 
@@ -170,7 +173,6 @@ DT::datatable(arrange(counts, unique))
 # DimPlot(ann_sobj, group.b = "annotations")
 
 ```
-
 
 # Run QC and create merged Seurat Object {.tabset}
 Will apply QC of ncount_min > 500 and number of cells > 200 cells per sample 
@@ -257,31 +259,14 @@ for (group in unique(all_samples_csv$unique)){
     BI_method[[group]] <- plot_my_stuff(merged_sobj, "method")
     BI_data_source[[group]] <- plot_my_stuff(merged_sobj, "data_source")
 
-    # non_integrated_dimplot <- DimPlot(merged_sobj,
-    #                                 group.by = c("sample_name", 
-    #                                             "method",
-    #                                             "data_source"),
-    #                                 shuffle = TRUE,
-    #                                 ncol = 1) +
-    #     ggtitle(str_c("Dimplot before harmony ", group))
-
     qs::qsave(merged_sobj, str_c("output/seurat_objects/comb_sobjs/",
                                     group,
                                     ".qs"))
-    before_integration[[group]] <- non_integrated_dimplot
 
     run_harmony <- harmony::RunHarmony(object = merged_sobj,
                                        group.by.vars = "sample_name")
     harmony_obj <- run_harmony %>% 
         process_seurat(reduction = "harmony")
-
-    # harmony_integrated_dimplot <- DimPlot(merged_sobj,
-    #                                     group.by = c("sample_name", 
-    #                                                 "method",
-    #                                                 "data_source"),
-    #                                     shuffle = TRUE,
-    #                                     ncol = 1) +
-    #     ggtitle(str_c("Dimplot after harmony ", group))
 
     AI_clusters[[group]] <- plot_my_stuff(harmony_obj, "sample_name")
     AI_method[[group]] <- plot_my_stuff(harmony_obj, "method")
@@ -415,191 +400,42 @@ silhouette_scores$patient_mets
 
 ```
 
-# Cell type annotaton function data compilation
-```{r}
-#loading the normal lungblood ref downloaded
-human_lung <- qs::qread("input/downloads/normal_lung.qs")
-
-human_lung$free_annotation <-
-    str_replace_all(human_lung$free_annotation, c("/" = "_",
-                                                  "\\+" = "_plus"))
-
-human_lung$free_annotation <-
-    stringr::str_replace_all(human_lung$free_annotation,
-                              c("Alveolar Epithelial Type 1" = "Alveolar Epithelial",  #nolint
-                                "Alveolar Epithelial Type 2" = "Alveolar Epithelial",  #nolint
-                                "Basophil_Mast 1" = "Basophil_Mast",
-                                "Basophil_Mast 2" = "Basophil_Mast",
-                                "Bronchial Vessel 1" = "Bronchial Vessel",
-                                "Bronchial Vessel 2" = "Bronchial Vessel",
-                                "IGSF21_plus Dendritic" = "Dendritic cells",
-                                "Myeloid Dendritic Type 1" = "Myeloid Dendritic",   #nolint
-                                "Myeloid Dendritic Type 2" = "Myeloid Dendritic",   #nolint
-                                "Natural Killer" = "NK cells",
-                                "Natural Killer T" = "NKT",
-                                "NK cells T" = "NKT",
-                                "CD4_plus Memory/Effector T" = "CD4+ T cells",
-                                "CD4_plus Naive T" = "CD4+ T cells",
-                                "CD8_plus Memory_Effector T" = "CD8+ T cells",
-                                "CD8_plus Naive T" = "CD8+ T cells",
-                                "Proliferating NK_T" = "NKT",
-                                "TREM2_plus Dendritic" = "Dendritic cells",
-                                "Proliferating Macrophage" = "Macrophage",
-                                "Nonclassical Monocyte" = "Monocytes",
-                                "Classical Monocyte" = "Monocytes"))
-
-#camilles paper mouse lung
-mouse_lung <- qs::qread("input/downloads/mouse_lung.qs")
-
-mouse_lung$CellType <-
-            str_replace_all(mouse_lung$CellType, c("/" = "_",
-                                                   "\\+" = "_plus",
-                                                   "-" = "_"))
-
-
-mouse_lung$CellType <-
-    stringr::str_replace_all(mouse_lung$CellType,
-                            c("Col14a1_plus fibroblast" = "Fibroblasts",
-                              "Col13a1_plus fibroblast" = "Fibroblasts",
-                              "AT1" = "AT",
-                              "AT2 1" = "AT",
-                              "AT2 2" = "AT",
-                              "B cell 1" = "B cells",
-                              "B cell 2" = "B cells",
-                              "Cap_a" = "Cap",
-                              "CD4 T cell 1" = "CD4",
-                              "CD4 T cell 2" = "CD4",
-                              "CD8 T cell 1" = "CD8",
-                              "CD8 T cell 2" = "CD8",
-                              "DC1" = "Dendritic cells",
-                              "DC2" = "Dendritic cells",
-                              "gd T cell" = "Tgd",
-                              "Neut 1" = "Neutrophils",
-                              "Neut 2" = "Neutrophils",
-                              "NK cell" = "NK cells",
-                              "Pericyte 1" = "Pericytes",
-                              "Pericyte 2" = "Pericytes",
-                              "Mast Ba2" = "Mast_Basophils",
-                              "Mono" = "Monocytes"))
-
-#function with mouse and human lung
-annotate <- function(sobject,
-                     species = "",
-                     ref,
-                     labels,
-                     aggr_ref = FALSE,
-                     label_type = "label.main",
-                     ...) {
-    if (species == "human") {
-        hpca <- celldex::HumanPrimaryCellAtlasData()
-        huim <- celldex::MonacoImmuneData()
-        hpca$label.main <-
-            stringr::str_replace_all(hpca$label.main,
-                                     c("T_cells" = "T cells",
-                                       "B_cell" = "B cells",
-                                       "NK_cell" = "NK cells",
-                                       "Monocyte" = "Monocytes",
-                                       "DC" = "Dendritic cells"))
-        ref <- list(hpca,
-                    huim)
-        labels <- list(hpca[[label_type]],
-                      huim[[label_type]])
-    } else if (species == "mouse") {
-        mord <- celldex::MouseRNAseqData()
-        moim <- celldex::ImmGenData()
-        moim$label.main <-
-            stringr::str_replace_all(moim$label.main,
-                                    c("B cells, pro" = "B cells",
-                                      "DC" = "Dendritic cells"))
-        ref <- list(mord,
-                    moim)
-        labels <- list(mord[[label_type]],
-                       moim[[label_type]])
-    } else if (species == "human_lung") {
-        hpca <- celldex::HumanPrimaryCellAtlasData()
-        hpca$label.main <-
-            stringr::str_replace_all(hpca$label.main,
-                                     c("T_cells" = "T cells",
-                                       "B_cell" = "B cells",
-                                       "NK_cell" = "NK cells",
-                                       "Monocyte" = "Monocytes",
-                                       "DC" = "Dendritic cells"))
-        huim <- celldex::MonacoImmuneData()
-        ref3 <- GetAssayData(human_lung)
-        ref <- list(hpca,
-                    huim,
-                    ref3)
-        labels <- list(hpca[[label_type]],
-                       huim[[label_type]],
-                       human_lung$free_annotation)
-    } else if (species == "mouse_lung") {
-        mord <- celldex::MouseRNAseqData()
-        moim <- celldex::ImmGenData()
-        ref3 <- GetAssayData(mouse_lung)
-        moim$label.main <-
-            stringr::str_replace_all(moim$label.main,
-                                    c("B cells, pro" = "B cells",
-                                      "DC" = "Dendritic cells"))
-        ref <- list(mord,
-                    moim,
-                    ref3)
-        labels <- list(mord[[label_type]],
-                       moim[[label_type]],
-                       mouse_lung$CellType)
-    }
-    annotation <-
-        SingleR::SingleR(test = Seurat::as.SingleCellExperiment(sobject),
-                         ref = ref,
-                         labels = labels,
-                         aggr.ref = aggr_ref,
-                         ...)
-    sobject$annotations <- annotation$labels
-    sobject$cell_scores <-
-        apply(X = annotation$scores,
-              MARGIN = 1,
-              function(x) max(x, na.rm = TRUE))
-    return(sobject)
-}
-
-```
-
-
-# Annotate all the datasets
+# Annotate all the datasets {.tabset}
 The anotate function was build by compliling publicly available reference 
 comprising of lung, blood, and other primary cells for both human and mouse. 
 Once the clustering resolution was set, we mount each seurat object for
 celltype annotation using the annotate function. Then final celltype is
 assigned by highest number of celltype per each seurat cluster
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
-for (group in unique(all_samples_csv$unique)) {
-    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
-                              group,
-                              ".qs"))
-    ann_sobj <- annotate(sobject = object,
-                         species = object$organism[1],
-                         aggr_ref = TRUE)
-    cluster_celltypes <-
-        table(ann_sobj$seurat_clusters, ann_sobj$annotations) %>% 
-        as.data.frame() %>%
-        group_by(Var1) %>%
-        arrange(desc(Freq), .by_group = TRUE) %>%
-        slice_head(n=1)
-    ann_sobj$new_annot <- ann_sobj$seurat_clusters
-    for (item in seq_len(nrow(cluster_celltypes))) {
-        seurat_clust <- str_c("^", cluster_celltypes$Var1[item], "$") %>%
-            as.character()
-        celltype <- cluster_celltypes$Var2[item] %>%
-            as.character()
-        ann_sobj$new_annot <- str_replace_all(string = ann_sobj$new_annot,
-                                              pattern = seurat_clust,
-                                              replacement = celltype)
-    }
-    qs::qsave(x = ann_sobj, 
-              file = str_c("output/seurat_objects/harmony_sobjs/",
-                                       group,
-                                       ".qs"))
-    print(str_c("Annotated", " ", group))
-}
+# for (group in unique(all_samples_csv$unique)) {
+#     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+#                               group,
+#                               ".qs"))
+#     ann_sobj <- annotate(sobject = object,
+#                          species = object$organism[1],
+#                          aggr_ref = TRUE)
+#     cluster_celltypes <-
+#         table(ann_sobj$seurat_clusters, ann_sobj$annotations) %>% 
+#         as.data.frame() %>%
+#         group_by(Var1) %>%
+#         arrange(desc(Freq), .by_group = TRUE) %>%
+#         slice_head(n=1)
+#     ann_sobj$new_annot <- ann_sobj$seurat_clusters
+#     for (item in seq_len(nrow(cluster_celltypes))) {
+#         seurat_clust <- str_c("^", cluster_celltypes$Var1[item], "$") %>%
+#             as.character()
+#         celltype <- cluster_celltypes$Var2[item] %>%
+#             as.character()
+#         ann_sobj$new_annot <- str_replace_all(string = ann_sobj$new_annot,
+#                                               pattern = seurat_clust,
+#                                               replacement = celltype)
+#     }
+#     qs::qsave(x = ann_sobj, 
+#               file = str_c("output/seurat_objects/harmony_sobjs/",
+#                                        group,
+#                                        ".qs"))
+#     print(str_c("Annotated", " ", group))
+# }
 
 # DimPlot(new_ann_sobj, group.by = c("new_annot", "seurat_clusters"), raster=FALSE, shuffle = T)
 
@@ -616,64 +452,69 @@ for (group in unique(all_samples_csv$unique)) {
 # rrrSingleCellUtils::r_feature_plot(ann_sobj,
 #                                    features = c("percent.mt", "nCount_RNA", "nFeature_RNA"))
 
+singler_annotation <- list()
+anotation_cluster_assignment <- list()
+
+for (group in unique(all_samples_csv$unique)) {
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                              group,
+                              ".qs"))
+    ann_sobj <- annotate(sobject = object,
+                         species = object$organism[1],
+                         aggr_ref = TRUE)
+
+    singler_annotation[[group]] <- plot_my_stuff(ann_sobj, "annotations")
+
+    Idents(ann_sobj) <- ann_sobj$seurat_clusters
+    clust_info <- tibble()
+    for (cluster in unique(ann_sobj$seurat_clusters)) {
+        subset_object <- subset(ann_sobj, ident = cluster)
+        subset_object <- process_seurat(subset_object)
+        harm_obj <- RunHarmony(subset_object,
+                            group.by.vars = "sample_name")
+        harm_obj <- harm_obj %>%
+            process_seurat(reduction = "harmony")
+        harm_obj$re_cluster <- str_c(cluster, ".", harm_obj$seurat_clusters)
+        print(str_c("Done reclustering ", group, " ", cluster))
+        clust_info <- harm_obj@meta.data %>%
+                as.data.frame() %>% 
+                select(re_cluster) %>%
+                rbind(clust_info)
+    }
+    ann_sobj <- AddMetaData(ann_sobj, metadata = clust_info)
+    cluster_celltypes <-
+        table(ann_sobj$re_cluster, ann_sobj$annotations) %>% 
+        as.data.frame() %>%  
+        group_by(Var1) %>%
+        arrange(desc(Freq), .by_group = TRUE) %>%
+        slice_head(n=1)
+    ann_sobj$new_annot_clust <- ann_sobj$re_cluster
+    for (item in seq_len(nrow(cluster_celltypes))) {
+        seurat_clust <- str_c("^", cluster_celltypes$Var1[item], "$") %>%
+            as.character()
+        celltype <- cluster_celltypes$Var2[item] %>%
+            as.character()
+        ann_sobj$new_annot_clust <- str_replace_all(string = ann_sobj$new_annot_clust,
+                                                    pattern = seurat_clust,
+                                                    replacement = celltype)
+    }
+    anotation_cluster_assignment[[group]] <- plot_my_stuff(ann_sobj, "new_annot_clust")
+}
+
+```
 
 
+## Patient prim 
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+singler_annotation$patient_prim
+anotation_cluster_assignment$patient_prim
+```
 
 
-# for (group in unique(all_samples_csv$unique)) {
-#     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
-#                               group,
-#                               ".qs"))
-#     ann_sobj <- annotate(sobject = object,
-#                          species = object$organism[1],
-#                          aggr_ref = TRUE)
-    
-#     Idents(ann_sobj) <- ann_sobj$seurat_clusters
-#     clust_info <- tibble()
-#     #for (cluster in ann_sobj$seurat_clusters) {
-#     parallel::mclapply(ann_sobj$seurat_clusters, function(cluster) {
-#         subset_object <- subset(ann_sobj, ident = cluster)
-#         #DimPlot(subset_object)
-#         subset_object <- process_seurat(subset_object)
-#         harm_obj <- RunHarmony(subset_object,
-#                             group.by.vars = "sample_name")
-#         harm_obj <- harm_obj %>%
-#             process_seurat(reduction = "harmony")
-#         res_score <- optimize_silhouette(sobject = harm_obj,
-#                                     test_res = seq(0.1, 0.9, by = 0.1),
-#                                     summary_plot = FALSE) %>%
-#         filter(sil_vals == max(sil_vals)) %>%
-#         slice_head(n=1) %>%
-#         dplyr::select(res_vals)
-#         harm_obj <- harm_obj %>%
-#             FindClusters(resolution = res_score)
-#         #DimPlot(harm_obj, group.by = c("seurat_clusters", "annotations"))
-#         harm_obj$re_cluster <- str_c(cluster, "_", harm_obj$seurat_clusters)
-#         clust_info <- harm_obj@meta.data %>%
-#             as.data.frame() %>% 
-#             select(re_cluster) %>%
-#             rbind(clust_info)
-#         return(clust_info)
-#     }, mc.cores = parallelly::availableCores())
-#     ann_sobj <- AddMetaData(ann_sobj, metadata = clust_info)
-#     cluster_celltypes <-
-#         table(ann_sobj$re_cluster, ann_sobj$annotations) %>% 
-#         as.data.frame() %>%  
-#         group_by(Var1) %>%
-#         arrange(desc(Freq), .by_group = TRUE) %>%
-#         slice_head(n=1)
-#     ann_sobj$new_annot_clust <- ann_sobj$re_cluster
-#     for (item in seq_len(nrow(cluster_celltypes))) {
-#         seurat_clust <- str_c("^", cluster_celltypes$Var1[item], "$") %>%
-#             as.character()
-#         celltype <- cluster_celltypes$Var2[item] %>%
-#             as.character()
-#         ann_sobj$new_annot_clust <- str_replace_all(string = ann_sobj$new_annot_clust,
-#                                                     pattern = seurat_clust,
-#                                                     replacement = celltype)
-#     }
-# }
-
+## Patient mets
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+singler_annotation$patient_mets
+anotation_cluster_assignment$patient_mets
 ```
 
 # Cancer cells vs normal cells using SCEVAN {.tabset}
@@ -725,6 +566,9 @@ for (group in unique(all_samples_csv$unique)) {
 }
 
 ```
+
+
+
 
 ## Patient primary
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
@@ -780,7 +624,6 @@ for (group in unique(all_samples_csv$unique)) {
                                     ".qs"))
 }
 
-
 ```
 
 ## Patient primary
@@ -805,8 +648,9 @@ out any normal cells that might have been group as cancer cells.
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 cancer_celltypes <- list(patient_prim = c( "MSC",
                                            "Chondrocytes",
-                                           "Tissue_stem_cells"),
-                        normal_bone = c(),
+                                           "Tissue_stem_cells",
+                                           "Neurons",
+                                           ),
                         patient_mets = c("MSC",
                                          "Chondrocytes",
                                          "Tissue_stem_cells",
@@ -1048,93 +892,6 @@ just_stroma$patient_mets
 ```
 
 
-
-# DEGs and GSEA plot functions
-```{r}
-
-run_degs <- function(sobject,
-                     group_by = "",
-                     prefix = "") {
-    if (group_by == "seurat_clusters") {
-        sobject$pseudobulk_col <- stringr::str_c(sobject$sample_name,
-                                 "-",
-                                 sobject$seurat_clusters)
-    } else if (group_by == "annotations") {
-        sobject$annotations <-
-            stringr::str_replace_all(sobject$annotations, " ", "")
-        sobject$pseudobulk_col <- stringr::str_c(sobject$sample_name,
-                                 "-",
-                                 sobject$annotations)
-    }
-    pseudobulk <- Seurat::AggregateExpression(object = sobject,
-                                      group.by = "pseudobulk_col",
-                                      slot = "counts")[[1]]
-    deseq_coldata <- data.frame(pseudobulk_group = colnames(pseudobulk))
-    rownames(deseq_coldata) <- deseq_coldata$pseudobulk_group
-    deseq_coldata <- tidyr::separate(data = deseq_coldata,
-                          col = "pseudobulk_group",
-                          into = c("sample_name", "group"),
-                          sep = "-")
-    deseq_coldata$type <- "single-read"
-    deseq_coldata <- deseq_coldata[, -1]
-    if (group_by == "seurat_clusters") {
-        deseq_group <- levels(factor(sobject$seurat_clusters))
-        names(deseq_group) <- paste0(prefix, "_Cluster_", deseq_group) #nolint
-    } else if (group_by == "annotations") {
-        deseq_group <- levels(factor(sobject$annotations))
-        names(deseq_group) <- paste0(prefix, "_Celltype_", deseq_group) #nolint
-    }
-    degs_output <- list()
-    for (group in names(deseq_group)) {
-        interested_group <- deseq_group[group]
-        other_group <- deseq_coldata
-        other_group$group[other_group$group == interested_group] <- "target"  #nolint
-        other_group$group[other_group$group != "target"] <- "other"         #nolint
-        degs_output[[group]] <-
-            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk,
-                                           colData = other_group,
-                                           design = ~ group) %>%
-            DESeq2::DESeq() %>%
-            DESeq2::results() %>%
-            as.data.frame() %>%
-            dplyr::arrange(desc(log2FoldChange)) %>%
-            tibble::rownames_to_column("gene") %>%
-            na.omit()
-    }
-    return(degs_output)
-}
-
-
-run_gsea <- function(degs_result,
-                     category = "",
-                     subcategory = "",
-                     species = "") {
-    gsea_ref <- msigdbr::msigdbr(species = species,
-                                 category = category,
-                                 subcategory = subcategory) %>%
-        split(x = .$gene_symbol, f = .$gs_name)
-
-    gsea_output <- list()
-    for (item in names(degs_result)) {
-        gsea_input <- as.vector(degs_result[[item]]$log2FoldChange)
-        names(gsea_input) <- degs_result[[item]]$gene
-
-        output <- fgsea::fgseaMultilevel(gsea_ref,
-                                         gsea_input,
-                                         minSize = 10,
-                                         maxSize = 500,
-                                         nPermSimple = 10000)
-        gsea_output[[item]] <- output %>%
-            dplyr::arrange(desc(NES)) %>%
-            filter(padj < 0.05) %>%
-            na.omit()
-    }
-    return(gsea_output)
-}
-
-
-```
-
 # GSEA Plots function for twoway dotplot and barplot
 ```{r}
 
@@ -1258,7 +1015,7 @@ two_way_plot <- function(data, x_col = "z_score") {
 ```
 
 
-# Differential expression analysis for tumor cells
+# Differential expression analysis for tumor cells {.tabset}
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 
 theme_set(theme_classic(base_size = 20) +
@@ -1294,11 +1051,7 @@ tumor_list <- dplyr::tribble(~sobj_name,     ~species,
                             # "xeno_prim_human",       "human",
                             # "xeno_mets_human",      "human")
 
-volc_plot <- list()
-gsea_plot <- list()
-gsea_result <- list()
-dimplots <- list()
-
+panel_plots <- list()
 
 for (group in unique(all_samples_csv$unique)) {
     object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
@@ -1377,7 +1130,7 @@ for (group in unique(all_samples_csv$unique)) {
     }
 #make panel plots
     for (clusters in names(volc_plot)) {
-        plots <- gridExtra::grid.arrange(dimplot,
+        panel_plots[[group]][[clusters]] <- gridExtra::grid.arrange(dimplot,
                                         volc_plot[[clusters]],
                                         gsea_plot$KEGG[[clusters]],
                                         gsea_plot$Hallmark_paths[[clusters]],
@@ -1387,9 +1140,9 @@ for (group in unique(all_samples_csv$unique)) {
                                         top = clusters)
 
         ggsave(str_c("output/gsea/tumor/", group, "/", clusters, ".png"),
-                width = 15,
-                height = 10,
-                plot = plots)
+                width = 12,
+                height = 18,
+                plot = panel_plots[[group]][[clusters]])
 
         # print(dimplot)
         # print(gsea_plot$KEGG[[clusters]])
@@ -1408,6 +1161,21 @@ for (group in unique(all_samples_csv$unique)) {
 }
 
 ```
+
+## Patient primary
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+for (item in names(panel_plots$patient_prim)) {
+    print(panel_plots$patient_prim[[item]])
+}
+```
+
+## patient mets
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+for (item in names(panel_plots$patient_mets)) {
+    print(panel_plots$patient_mets[[item]])
+}
+```
+
 
 ```{r, eval = FALSE}
 for (group in unique(all_samples_csv$unique)) {
