@@ -1,0 +1,255 @@
+
+
+
+# Cell type annotaton function data compilation
+```{r}
+#loading the normal lungblood ref downloaded
+human_lung <- qs::qread("input/downloads/normal_lung.qs")
+
+human_lung$free_annotation <-
+    str_replace_all(human_lung$free_annotation, c("/" = "_",
+                                                  "\\+" = "_plus"))
+
+human_lung$free_annotation <-
+    stringr::str_replace_all(human_lung$free_annotation,
+                              c("Alveolar Epithelial Type 1" = "Alveolar Epithelial",  #nolint
+                                "Alveolar Epithelial Type 2" = "Alveolar Epithelial",  #nolint
+                                "Basophil_Mast 1" = "Basophil_Mast",
+                                "Basophil_Mast 2" = "Basophil_Mast",
+                                "Bronchial Vessel 1" = "Bronchial Vessel",
+                                "Bronchial Vessel 2" = "Bronchial Vessel",
+                                "IGSF21_plus Dendritic" = "Dendritic cells",
+                                "Myeloid Dendritic Type 1" = "Myeloid Dendritic",   #nolint
+                                "Myeloid Dendritic Type 2" = "Myeloid Dendritic",   #nolint
+                                "Natural Killer" = "NK cells",
+                                "Natural Killer T" = "NKT",
+                                "NK cells T" = "NKT",
+                                "CD4_plus Memory/Effector T" = "CD4+ T cells",
+                                "CD4_plus Naive T" = "CD4+ T cells",
+                                "CD8_plus Memory_Effector T" = "CD8+ T cells",
+                                "CD8_plus Naive T" = "CD8+ T cells",
+                                "Proliferating NK_T" = "NKT",
+                                "TREM2_plus Dendritic" = "Dendritic cells",
+                                "Proliferating Macrophage" = "Macrophage",
+                                "Nonclassical Monocyte" = "Monocytes",
+                                "Classical Monocyte" = "Monocytes"))
+
+#camilles paper mouse lung
+mouse_lung <- qs::qread("input/downloads/mouse_lung.qs")
+
+mouse_lung$CellType <-
+            str_replace_all(mouse_lung$CellType, c("/" = "_",
+                                                   "\\+" = "_plus",
+                                                   "-" = "_"))
+
+
+mouse_lung$CellType <-
+    stringr::str_replace_all(mouse_lung$CellType,
+                            c("Col14a1_plus fibroblast" = "Fibroblasts",
+                              "Col13a1_plus fibroblast" = "Fibroblasts",
+                              "AT1" = "AT",
+                              "AT2 1" = "AT",
+                              "AT2 2" = "AT",
+                              "B cell 1" = "B cells",
+                              "B cell 2" = "B cells",
+                              "Cap_a" = "Cap",
+                              "CD4 T cell 1" = "CD4",
+                              "CD4 T cell 2" = "CD4",
+                              "CD8 T cell 1" = "CD8",
+                              "CD8 T cell 2" = "CD8",
+                              "DC1" = "Dendritic cells",
+                              "DC2" = "Dendritic cells",
+                              "gd T cell" = "Tgd",
+                              "Neut 1" = "Neutrophils",
+                              "Neut 2" = "Neutrophils",
+                              "NK cell" = "NK cells",
+                              "Pericyte 1" = "Pericytes",
+                              "Pericyte 2" = "Pericytes",
+                              "Mast Ba2" = "Mast_Basophils",
+                              "Mono" = "Monocytes"))
+
+#function with mouse and human lung
+annotate <- function(sobject,
+                     species = "",
+                     ref,
+                     labels,
+                     aggr_ref = FALSE,
+                     label_type = "label.main",
+                     ...) {
+    if (species == "human") {
+        hpca <- celldex::HumanPrimaryCellAtlasData()
+        huim <- celldex::MonacoImmuneData()
+        hpca$label.main <-
+            stringr::str_replace_all(hpca$label.main,
+                                     c("T_cells" = "T cells",
+                                       "B_cell" = "B cells",
+                                       "NK_cell" = "NK cells",
+                                       "Monocyte" = "Monocytes",
+                                       "DC" = "Dendritic cells"))
+        ref <- list(hpca,
+                    huim)
+        labels <- list(hpca[[label_type]],
+                      huim[[label_type]])
+    } else if (species == "mouse") {
+        mord <- celldex::MouseRNAseqData()
+        moim <- celldex::ImmGenData()
+        moim$label.main <-
+            stringr::str_replace_all(moim$label.main,
+                                    c("B cells, pro" = "B cells",
+                                      "DC" = "Dendritic cells"))
+        ref <- list(mord,
+                    moim)
+        labels <- list(mord[[label_type]],
+                       moim[[label_type]])
+    } else if (species == "human_lung") {
+        hpca <- celldex::HumanPrimaryCellAtlasData()
+        hpca$label.main <-
+            stringr::str_replace_all(hpca$label.main,
+                                     c("T_cells" = "T cells",
+                                       "B_cell" = "B cells",
+                                       "NK_cell" = "NK cells",
+                                       "Monocyte" = "Monocytes",
+                                       "DC" = "Dendritic cells"))
+        huim <- celldex::MonacoImmuneData()
+        ref3 <- GetAssayData(human_lung)
+        ref <- list(hpca,
+                    huim,
+                    ref3)
+        labels <- list(hpca[[label_type]],
+                       huim[[label_type]],
+                       human_lung$free_annotation)
+    } else if (species == "mouse_lung") {
+        mord <- celldex::MouseRNAseqData()
+        moim <- celldex::ImmGenData()
+        ref3 <- GetAssayData(mouse_lung)
+        moim$label.main <-
+            stringr::str_replace_all(moim$label.main,
+                                    c("B cells, pro" = "B cells",
+                                      "DC" = "Dendritic cells"))
+        ref <- list(mord,
+                    moim,
+                    ref3)
+        labels <- list(mord[[label_type]],
+                       moim[[label_type]],
+                       mouse_lung$CellType)
+    }
+    annotation <-
+        SingleR::SingleR(test = Seurat::as.SingleCellExperiment(sobject),
+                         ref = ref,
+                         labels = labels,
+                         aggr.ref = aggr_ref,
+                         ...)
+    sobject$annotations <- annotation$labels
+    sobject$cell_scores <-
+        apply(X = annotation$scores,
+              MARGIN = 1,
+              function(x) max(x, na.rm = TRUE))
+    return(sobject)
+}
+```
+
+# RUN DEGs 
+```{r}
+run_degs <- function(sobject,
+                     group_by = "",
+                     prefix = "") {
+    if (group_by == "seurat_clusters") {
+        sobject$pseudobulk_col <- stringr::str_c(sobject$sample_name,
+                                 "-",
+                                 sobject$seurat_clusters)
+    } else if (group_by == "annotations") {
+        sobject$annotations <-
+            stringr::str_replace_all(sobject$annotations, " ", "")
+        sobject$pseudobulk_col <- stringr::str_c(sobject$sample_name,
+                                 "-",
+                                 sobject$annotations)
+    }
+    pseudobulk <- Seurat::AggregateExpression(object = sobject,
+                                      group.by = "pseudobulk_col",
+                                      slot = "counts")[[1]]
+    deseq_coldata <- data.frame(pseudobulk_group = colnames(pseudobulk))
+    rownames(deseq_coldata) <- deseq_coldata$pseudobulk_group
+    deseq_coldata <- tidyr::separate(data = deseq_coldata,
+                          col = "pseudobulk_group",
+                          into = c("sample_name", "group"),
+                          sep = "-")
+    deseq_coldata$type <- "single-read"
+    deseq_coldata <- deseq_coldata[, -1]
+    if (group_by == "seurat_clusters") {
+        deseq_group <- levels(factor(sobject$seurat_clusters))
+        names(deseq_group) <- paste0(prefix, "_Cluster_", deseq_group) #nolint
+    } else if (group_by == "annotations") {
+        deseq_group <- levels(factor(sobject$annotations))
+        names(deseq_group) <- paste0(prefix, "_Celltype_", deseq_group) #nolint
+    }
+    degs_output <- list()
+    for (group in names(deseq_group)) {
+        interested_group <- deseq_group[group]
+        other_group <- deseq_coldata
+        other_group$group[other_group$group == interested_group] <- "target"  #nolint
+        other_group$group[other_group$group != "target"] <- "other"         #nolint
+        degs_output[[group]] <-
+            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk,
+                                           colData = other_group,
+                                           design = ~ group) %>%
+            DESeq2::DESeq() %>%
+            DESeq2::results() %>%
+            as.data.frame() %>%
+            dplyr::arrange(desc(log2FoldChange)) %>%
+            tibble::rownames_to_column("gene") %>%
+            na.omit()
+    }
+    return(degs_output)
+}
+```
+
+# RUN GSEA
+```{r}
+#' Run Gene Set Enrichment Analysis (GSEA)
+#'
+#' This function performs Gene Set Enrichment Analysis (GSEA) using the fgsea package.
+#' It takes a list of differential expression results and performs GSEA for each result.
+#'
+#' @param degs_result A list of differential expression results.
+#' @param category The category of gene sets to use for enrichment analysis.
+#' @param subcategory The subcategory of gene sets to use for enrichment analysis.
+#' @param species The species for which gene sets are available.
+#'
+#' @return A list of GSEA results for each differential expression result.
+#'
+#'
+#' @examples
+#' degs_result <- list(result1 = data.frame(gene = c("gene1", "gene2", "gene3"),
+#'                                          log2FoldChange = c(1.5, -2.0, 0.8)),
+#'                     result2 = data.frame(gene = c("gene4", "gene5", "gene6"),
+#'                                          log2FoldChange = c(0.9, -1.2, 2.3)))
+#' run_gsea(degs_result, category = "C2", subcategory = "CP:Canonical pathways", species = "Homo sapiens")
+
+run_gsea <- function(degs_result,
+                     category = "",
+                     subcategory = "",
+                     species = "") {
+    gsea_ref <- msigdbr::msigdbr(species = species,
+                                 category = category,
+                                 subcategory = subcategory) %>%
+        split(x = .$gene_symbol, f = .$gs_name)
+
+    gsea_output <- list()
+    for (item in names(degs_result)) {
+        gsea_input <- as.vector(degs_result[[item]]$log2FoldChange)
+        names(gsea_input) <- degs_result[[item]]$gene
+
+        output <- fgsea::fgseaMultilevel(gsea_ref,
+                                         gsea_input,
+                                         minSize = 10,
+                                         maxSize = 500,
+                                         nPermSimple = 10000)
+        gsea_output[[item]] <- output %>%
+            dplyr::arrange(desc(NES)) %>%
+            filter(padj < 0.05) %>%
+            na.omit()
+    }
+    return(gsea_output)
+}
+
+```
