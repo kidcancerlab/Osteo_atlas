@@ -181,18 +181,6 @@ patient_metastatic, mouse_primary, mouse_metastatic, xenograft_primary_human,
 xenograft_primary_mouse, xenograft_metastatic_human, and xenograft_metastatic_mouse
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 
-plot_my_stuff <- function(object, what) {
-    DimPlot(object,
-            group.by = what,
-            ncol = 1,
-            label = T,
-            repel = T,
-            shuffle = T,
-            cols = c(plot_cols, sample(rainbow(1000)))) +
-        coord_fixed() +
-        NoLegend()
-}
-
 
 BI_clusters <- list()
 BI_method <- list()
@@ -275,8 +263,6 @@ for (group in unique(all_samples_csv$unique)){
     qs::qsave(harmony_obj, str_c("output/seurat_objects/harmony_sobjs/",
                                     group,
                                     ".qs"))
-
-    after_integration[[group]] <- harmony_integrated_dimplot
 }
 
 ```
@@ -452,6 +438,7 @@ assigned by highest number of celltype per each seurat cluster
 # rrrSingleCellUtils::r_feature_plot(ann_sobj,
 #                                    features = c("percent.mt", "nCount_RNA", "nFeature_RNA"))
 
+
 singler_annotation <- list()
 anotation_cluster_assignment <- list()
 
@@ -469,11 +456,15 @@ for (group in unique(all_samples_csv$unique)) {
     clust_info <- tibble()
     for (cluster in unique(ann_sobj$seurat_clusters)) {
         subset_object <- subset(ann_sobj, ident = cluster)
-        subset_object <- process_seurat(subset_object)
-        harm_obj <- RunHarmony(subset_object,
-                            group.by.vars = "sample_name")
-        harm_obj <- harm_obj %>%
-            process_seurat(reduction = "harmony")
+        if (ncol(subset_object) > 50) {
+            subset_object <- process_seurat(subset_object)
+            harm_obj <- RunHarmony(subset_object,
+                                group.by.vars = "sample_name")
+            harm_obj <- harm_obj %>%
+                process_seurat(reduction = "harmony")
+        } else {
+            harm_obj <- subset_object
+        }
         harm_obj$re_cluster <- str_c(cluster, ".", harm_obj$seurat_clusters)
         print(str_c("Done reclustering ", group, " ", cluster))
         clust_info <- harm_obj@meta.data %>%
@@ -649,8 +640,7 @@ out any normal cells that might have been group as cancer cells.
 cancer_celltypes <- list(patient_prim = c( "MSC",
                                            "Chondrocytes",
                                            "Tissue_stem_cells",
-                                           "Neurons",
-                                           ),
+                                           "Neurons"),
                         patient_mets = c("MSC",
                                          "Chondrocytes",
                                          "Tissue_stem_cells",
@@ -891,130 +881,6 @@ just_tumor$patient_mets
 just_stroma$patient_mets
 ```
 
-
-# GSEA Plots function for twoway dotplot and barplot
-```{r}
-
-#two way dotplot
-two_way_dotplot <- function(data, x_col = "z_score") {
-    lab4plot <-
-        tibble(y = c(-2.5, 2.5),
-               x = c(0.2, 0.2),
-               label = c("Downregulated", "Upregulated"))
-
-    plot_name <-
-        ggplot() +
-        geom_point(data = data,
-                 aes(x = -1 * order,
-                     y = get(x_col),
-                     color = -log10(padj),
-                     size = size),
-                 stat = "identity",
-                 alpha = 0.8) +
-        coord_flip() +
-        # geom_hline(yintercept = 0,
-        #             color = "black",
-        #             linewidth = 0.5) +
-        geom_text(data = data,                #text for pathways names
-                    aes(x = -1 * order,
-                        y = get(x_col) + (y_pos *5),
-                        hjust = justify_y,
-                        label = pathway),
-                        size = 2,
-                        fontface = "bold") +
-        geom_text(data = lab4plot,    #text for upregulated/downregulated
-                  aes(x = x,
-                      y = y,
-                      label = label),
-                  fontface = "bold",
-                  size = 2.5) +
-        scale_fill_manual(values = plot_cols,
-                          name = paste0(x_col, " > 0")) +
-        theme(strip.background = element_rect(color = "white",
-                                              fill = "white"),
-              #legend.position = "none",
-              panel.grid.major = element_blank(),
-              panel.grid.minor = element_blank(),
-              panel.border = element_blank(),
-              axis.line.x = element_line(color = "black"),
-              axis.line.y = element_blank(),
-              axis.title.x = element_text(size = 7),
-              axis.ticks.y = element_blank(),
-              plot.title = element_text(size = 7, face = "bold"),    #title of the plot
-              axis.text.y = element_blank(),
-              axis.text.x = element_text(size = 7),
-              legend.title = element_text(size = 7,
-                                          face = "bold")) +
-        labs(title = data$sample[1],
-             y = "NES",
-             x = "") +
-        theme(plot.title = element_text(hjust = 0.5)) +
-        ylim(-6, 6) +
-        scale_color_gradient(low = "pink", high = "darkred")
-
-    return(plot_name)
-}
-
-
-two_way_plot <- function(data, x_col = "z_score") {
-    lab4plot <-
-        tibble(y = c(-3, 3),
-               x = c(0.2, 0.2),
-               label = c("Downregulated", "Upregulated"))
-
-    plot_name <-
-        ggplot() +
-        geom_bar(data = data,
-                 aes(x = -1 * order,
-                     y = get(x_col),
-                     fill = get(x_col) > 0),
-                 stat = "identity",
-                 alpha = 0.8) +
-        coord_flip() +
-        geom_hline(yintercept = 0,
-                    color = "black",
-                    linewidth = 0.5) +
-        geom_text(data = data,                #text for pathways names
-                    aes(x = -1 * order,
-                        y = y_pos,
-                        hjust = justify_y,
-                        label = pathway),
-                        size = 2,
-                        fontface = "bold") +
-        geom_text(data = lab4plot,    #text for upregulated/downregulated
-                  aes(x = x,
-                      y = y,
-                      label = label),
-                  fontface = "bold",
-                  size = 2.5) +
-        scale_fill_manual(values = plot_cols,
-                          name = paste0(x_col, " > 0")) +
-        theme(strip.background = element_rect(color = "white",
-                                              fill = "white"),
-              #legend.position = "none",
-              panel.grid.major = element_blank(),
-              panel.grid.minor = element_blank(),
-              panel.border = element_blank(),
-              axis.line.x = element_line(color = "black"),
-              axis.line.y = element_blank(),
-              axis.title.x = element_text(size = 7),
-              axis.ticks.y = element_blank(),
-              plot.title = element_text(size = 7, face = "bold"),    #title of the plot
-              axis.text.y = element_blank(),
-              axis.text.x = element_text(size = 7),
-              legend.title = element_text(size = 7,
-                                          face = "bold")) +
-        labs(title = data$sample[1],
-             y = "NES",
-             x = "") +
-        theme(plot.title = element_text(hjust = 0.5)) +
-        ylim(-6, 6) 
-
-    return(plot_name)
-}
-```
-
-
 # Differential expression analysis for tumor cells {.tabset}
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 
@@ -1124,7 +990,8 @@ for (group in unique(all_samples_csv$unique)) {
                 gsea_plot[[cat_expl]][[item]] <- ggplot(data = NULL,
                                                         aes(x = as.factor(1),
                                                         y = as.factor(1))) +
-                    geom_text(aes(label = str_c("No significant pathways for ", cat_expl)))
+                    geom_text(aes(label = str_c("No pathways for ", cat_expl, " in ", item)),
+                                size = 4)
             }
         }
     }
@@ -1163,17 +1030,29 @@ for (group in unique(all_samples_csv$unique)) {
 ```
 
 ## Patient primary
-```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
-for (item in names(panel_plots$patient_prim)) {
-    print(panel_plots$patient_prim[[item]])
-}
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+# for (item in names(panel_plots$patient_prim)) {
+#     print(panel_plots$patient_prim[[item]])
+# }
+panel_plots$patient_prim$patient_prim_cancer_Cluster_0
+panel_plots$patient_prim$patient_prim_cancer_Cluster_1
+panel_plots$patient_prim$patient_prim_cancer_Cluster_2
+panel_plots$patient_prim$patient_prim_cancer_Cluster_3
+panel_plots$patient_prim$patient_prim_cancer_Cluster_4
 ```
 
 ## patient mets
-```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
-for (item in names(panel_plots$patient_mets)) {
-    print(panel_plots$patient_mets[[item]])
-}
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+# for (item in names(panel_plots$patient_mets)) {
+#     print(panel_plots$patient_mets[[item]])
+# }
+panel_plots$patient_mets$patient_mets_cancer_Cluster_0
+panel_plots$patient_mets$patient_mets_cancer_Cluster_1
+panel_plots$patient_mets$patient_mets_cancer_Cluster_2
+panel_plots$patient_mets$patient_mets_cancer_Cluster_3
+panel_plots$patient_mets$patient_mets_cancer_Cluster_4
+panel_plots$patient_mets$patient_mets_cancer_Cluster_5
+panel_plots$patient_mets$patient_mets_cancer_Cluster_6
 ```
 
 
@@ -1219,7 +1098,7 @@ DimPlot(filt_annot_sobj, group.by = c("seurat_clusters", "new_annot", "annotatio
 
 
 
-## Stromal analysis
+# Stromal analysis
 ```{r, eval = FALSE}
 human_lung <- qs::qread("input/downloads/human_lung.qs")  #no mtgenes
 human_bone <- qs::qread("output/seurat_objects/annotated_sobjs/normal_bone.qs")  #has mt_percent
@@ -1600,7 +1479,7 @@ pheatmap::pheatmap(as.matrix(averageexp[[1]]),
 ```
 
 
-## Regulons analysis
+# Regulons analysis
 ```{r, eval = FALSE}
 
 library(SCENIC)
