@@ -394,9 +394,9 @@ celltype annotation using the annotate function. Then final celltype is
 assigned by highest number of celltype per each seurat cluster
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 # for (group in unique(all_samples_csv$unique)) {
-#     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
-#                               group,
-#                               ".qs"))
+    # object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+    #                           group,
+    #                           ".qs"))
 #     ann_sobj <- annotate(sobject = object,
 #                          species = object$organism[1],
 #                          aggr_ref = TRUE)
@@ -425,7 +425,7 @@ assigned by highest number of celltype per each seurat cluster
 
 # DimPlot(new_ann_sobj, group.by = c("new_annot", "seurat_clusters"), raster=FALSE, shuffle = T)
 
-# cancer_features <- c("COL1A1", "COL1A2", "SATB2", "PSMD4", "MIF", "RUNX2")
+# cancer_features <- c("COL1A1", "COL1A2", "SATB2", "RUNX2")
 
 # fibroblast_markers <- c("LOXL1", "LUM", "COL5A1", "FBLN1", "FBLN2")
 
@@ -433,7 +433,7 @@ assigned by highest number of celltype per each seurat cluster
 
 # proliferation <- c("MKI67", "PCNA", "MCM2")
 
-# FeaturePlot(ann_sobj, features = proliferation)
+# FeaturePlot(object, features = cancer_features)
 
 # rrrSingleCellUtils::r_feature_plot(ann_sobj,
 #                                    features = c("percent.mt", "nCount_RNA", "nFeature_RNA"))
@@ -441,6 +441,7 @@ assigned by highest number of celltype per each seurat cluster
 
 singler_annotation <- list()
 anotation_cluster_assignment <- list()
+feature_plots <- list()
 
 for (group in unique(all_samples_csv$unique)) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
@@ -456,7 +457,7 @@ for (group in unique(all_samples_csv$unique)) {
     clust_info <- tibble()
     for (cluster in unique(ann_sobj$seurat_clusters)) {
         subset_object <- subset(ann_sobj, ident = cluster)
-        if (ncol(subset_object) > 50) {
+        if (ncol(subset_object) > 100) {
             subset_object <- process_seurat(subset_object)
             harm_obj <- RunHarmony(subset_object,
                                 group.by.vars = "sample_name")
@@ -490,6 +491,13 @@ for (group in unique(all_samples_csv$unique)) {
                                                     replacement = celltype)
     }
     anotation_cluster_assignment[[group]] <- plot_my_stuff(ann_sobj, "new_annot_clust")
+    feature_plots[[group]] <- FeaturePlot(ann_sobj,
+                                          features = c("COL1A1", "COL1A2", "SATB2", "RUNX2"))
+    
+    qs::qsave(x = ann_sobj, 
+              file = str_c("output/seurat_objects/harmony_sobjs/",
+                                       group,
+                                       ".qs"))
 }
 
 ```
@@ -499,6 +507,7 @@ for (group in unique(all_samples_csv$unique)) {
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 singler_annotation$patient_prim
 anotation_cluster_assignment$patient_prim
+feature_plots$patient_prim
 ```
 
 
@@ -506,6 +515,7 @@ anotation_cluster_assignment$patient_prim
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 singler_annotation$patient_mets
 anotation_cluster_assignment$patient_mets
+feature_plots$patient_mets
 ```
 
 # Cancer cells vs normal cells using SCEVAN {.tabset}
@@ -557,9 +567,6 @@ for (group in unique(all_samples_csv$unique)) {
 }
 
 ```
-
-
-
 
 ## Patient primary
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
@@ -640,11 +647,13 @@ out any normal cells that might have been group as cancer cells.
 cancer_celltypes <- list(patient_prim = c( "MSC",
                                            "Chondrocytes",
                                            "Tissue_stem_cells",
-                                           "Neurons"),
+                                           "Neurons",
+                                           "Osteoblasts"),
                         patient_mets = c("MSC",
                                          "Chondrocytes",
                                          "Tissue_stem_cells",
-                                         "Osteoblasts"),
+                                         "Osteoblasts",
+                                         "Smooth_muscle_cells"),
                         xeno_prim_human = c(),
                         xeno_mets_human = c(),
                         xeno_prim_mouse = c(),
@@ -656,8 +665,8 @@ for (group in unique(all_samples_csv$unique)) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
                               group,
                               ".qs"))
-    Idents(object) <- object$new_annot
-    object$cancer_normal <- object$new_annot
+    Idents(object) <- object$new_annot_clust
+    object$cancer_normal <- object$new_annot_clust
     for (cell in cancer_celltypes[[group]]) {
         object$cancer_normal <- str_replace_all(string = object$cancer_normal,
                                                 pattern = cell,
@@ -764,7 +773,7 @@ for (item in seq_len(nrow(umaps_group))) {
         object <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
                             sobj_name,
                             ".qs"))
-        annotated[[sobj_name]] <- plot_my_stuff(object, "new_annot")
+        annotated[[sobj_name]] <- plot_my_stuff(object, "new_annot_clust")
 
         merged[[sobj_name]] <- DimPlot(object,
                             group.by = "cancer_normal",
