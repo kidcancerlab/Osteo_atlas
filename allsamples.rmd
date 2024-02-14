@@ -122,7 +122,7 @@ for (i in seq_len(nrow(all_samples_csv))) {
 
 
 # Count cells per sample before the QC
-```{r, fig.width = 10, fig.height = 10, fig.align = "center", eval = FALSE}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 
 single_sobjs <- list.files(path = "output/seurat_objects/sobj_preprocess/",
                           full.names = FALSE)
@@ -146,22 +146,22 @@ DT::datatable(arrange(counts, unique))
 ```
 
 # Test for each individual QC
-```{r, eval = FALSE}
+```{r}
 
-# try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
-#                       "nCount_RNA", 0,        50000,
-#                       "percent.mt", 0,        20)
-# features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")
+try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
+                      "nCount_RNA", 0,        1500,
+                      "percent.mt", 0,        20)
+features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")
 
-# sobj <- qs::qread(str_c("output/seurat_objects/sobj_preprocess/",
-#                         "CCDI0102_16183b",
-#                         "_human.qs"))
+sobj <- qs::qread(str_c("output/seurat_objects/sobj_preprocess/",
+                        "S0041",
+                        "_mouse.qs"))
 
-# feature_hist(sobject = sobj,
-#         features = features,
-#         cutoff_table = try_cutoff) +
-#         ggtitle(str_c("plot for ", 
-#                         sobj$sample_name))
+feature_hist(sobject = sobj,
+        features = features,
+        cutoff_table = try_cutoff) +
+        ggtitle(str_c("plot for ", 
+                        sobj$sample_name))
 
 
 # sobj <- subset(sobj,
@@ -182,19 +182,12 @@ DT::datatable(arrange(counts, unique))
 
 ```
 
-# Run QC and create merged Seurat Object {.tabset}
+# Run QC and create merged Seurat Object
 Will apply QC of ncount_min > 500 and number of cells > 200 cells per sample 
 to be included into the merged seurat object per each group of patient_primary,
 patient_metastatic, mouse_primary, mouse_metastatic, xenograft_primary_human,
 xenograft_primary_mouse, xenograft_metastatic_human, and xenograft_metastatic_mouse
-```{r, fig.width = 10, fig.height = 10, fig.align = "center", eval = FALSE}
-
-BI_clusters <- list()
-BI_method <- list()
-BI_data_source <- list()
-AI_clusters <- list()
-AI_method <- list()
-AI_data_source <- list()
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 
 for (group in unique(all_samples_csv$unique)){
     single_sobjs <- list.files(path = "output/seurat_objects/sobj_preprocess/",
@@ -250,15 +243,11 @@ for (group in unique(all_samples_csv$unique)){
         JoinLayers() %>%
         process_seurat()
 
-    BI_clusters[[group]] <- plot_my_stuff(merged_sobj, "sample_name")
-    BI_method[[group]] <- plot_my_stuff(merged_sobj, "method")
-    BI_data_source[[group]] <- plot_my_stuff(merged_sobj, "data_source")
-
     qs::qsave(merged_sobj, str_c("output/seurat_objects/comb_sobjs/",
                                     group,
                                     ".qs"))
     #run harmony
-    if (group == "mm_prim" || group == "mm_mets") {
+    if (group == "mm_prim" || group == "mm_mets" || group == "normal_bone") {
         run_harmony <- RunHarmony(object = merged_sobj,
                                   group.by.vars = "sample_name",
                                   theta = 3)
@@ -286,16 +275,58 @@ for (group in unique(all_samples_csv$unique)){
         process_seurat(reduction = "harmony",
                        resolution = res_score)
 
-    AI_clusters[[group]] <- plot_my_stuff(harmony_obj, "sample_name")
-    AI_method[[group]] <- plot_my_stuff(harmony_obj, "method")
-    AI_data_source[[group]] <- plot_my_stuff(harmony_obj, "data_source")
-
     qs::qsave(harmony_obj, str_c("output/seurat_objects/harmony_sobjs/",
                                     group,
                                     ".qs"))
 }
 
 ```
+
+
+# Data Integration Plots {.tabset}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+BI_clusters <- list()
+BI_method <- list()
+BI_data_source <- list()
+AI_clusters <- list()
+AI_method <- list()
+AI_data_source <- list()
+
+for (group in unique(all_samples_csv$unique)){
+    before_harmo_obj <- qs::qread(str_c("output/seurat_objects/comb_sobjs/",
+                                        group,
+                                        ".qs"))
+
+    BI_clusters[[group]] <- plot_my_stuff(before_harmo_obj, "sample_name")
+    BI_method[[group]] <- plot_my_stuff(before_harmo_obj, "method")
+    BI_data_source[[group]] <- plot_my_stuff(before_harmo_obj, "data_source")
+
+    harmo_obj <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                                group,
+                                ".qs"))
+    if (ncol(harmo_obj) > 65000) {
+        subset_object <- subset(x = harmo_obj,
+                                cells = sample(Cells(harmo_obj),
+                                        min(65000, length(Cells(harmo_obj)))))
+    } else {
+        subset_object <- harmo_obj
+    }
+    res_score <- optimize_silhouette(sobject = subset_object,
+                                    test_res = seq(0.1, 0.9, by = 0.1),
+                                    summary_plot = FALSE) %>%
+        filter(sil_vals == max(sil_vals)) %>%
+        slice_head(n=1) %>%
+        dplyr::select(res_vals)
+    print(str_c("Optimized resolution for ", group, " is ", res_score$res_vals))
+
+    AI_clusters[[group]] <- plot_my_stuff(harmo_obj, "sample_name")
+    AI_method[[group]] <- plot_my_stuff(harmo_obj, "method")
+    AI_data_source[[group]] <- plot_my_stuff(harmo_obj, "data_source")
+
+}
+
+```
+
 
 ## Plots for patient_prim before and after harmony integration
 ### Before Integration
@@ -547,7 +578,7 @@ for (group in unique(all_samples_csv$unique)) {
     clust_info <- tibble()
     for (cluster in unique(ann_sobj$seurat_clusters)) {
         subset_object <- subset(ann_sobj, ident = cluster)
-        if (ncol(subset_object) > 100) {
+        if (length(unique(subset_object$sample_name)) > 1) {
             subset_object <- process_seurat(subset_object)
             harm_obj <- RunHarmony(subset_object,
                                 group.by.vars = "sample_name")
@@ -657,7 +688,7 @@ for (group in unique(all_samples_csv$unique)) {
     recur_object <- recurluster(sobj = object,
                                 harmony = TRUE,
                                 harmony_factors = "sample_name",
-                                parallel = TRUE,
+                                parallel = FALSE,
                                 do_plots = FALSE,
                                 max_level = 3)
         # JoinLayers() 
