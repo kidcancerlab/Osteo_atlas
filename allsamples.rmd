@@ -23,16 +23,12 @@ library(SCEVAN)
 library(knitr)
 ```
 
-
 ```{r setup2, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
                       cache = TRUE,
                       cache.lazy = FALSE,
                       warning = FALSE,
                       message = FALSE)
-```
-
-```{r, child='function_atlas.Rmd'}
 ```
 
 
@@ -44,8 +40,8 @@ all_samples_csv$sp_pattern <-
     str_replace_all(all_samples_csv$sp_pattern, "nothing", "")
 
 # #for the sake of presentation, I will just have patient data
-# all_samples_csv <- filter(all_samples_csv,
-#                           unique == "patient_prim" | unique =="patient_mets")
+all_samples_csv <- filter(all_samples_csv,
+                          unique == "patient_prim" | unique =="patient_mets")
 
 ```
 
@@ -150,20 +146,20 @@ DT::datatable(arrange(counts, unique))
 # Test for each individual QC
 ```{r, eval = FALSE}
 
-try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
-                      "nCount_RNA", 0,        40000,
-                      "percent.mt", 0,        20)
-features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")
+# try_cutoff <- tribble(~feature,     ~min_val, ~max_val,
+#                       "nCount_RNA", 0,        40000,
+#                       "percent.mt", 0,        20)
+# features <- c("nFeature_RNA", "nCount_RNA", "percent.mt")
 
-sobj <- qs::qread(str_c("output/seurat_objects/sobj_preprocess/",
-                        "S0246",
-                        "_mouse.qs"))
+# sobj <- qs::qread(str_c("output/seurat_objects/sobj_preprocess/",
+#                         "S0246",
+#                         "_mouse.qs"))
 
-feature_hist(sobject = sobj,
-        features = features,
-        cutoff_table = try_cutoff) +
-        ggtitle(str_c("plot for ", 
-                        sobj$sample_name))
+# feature_hist(sobject = sobj,
+#         features = features,
+#         cutoff_table = try_cutoff) +
+#         ggtitle(str_c("plot for ", 
+#                         sobj$sample_name))
 
 
 # sobj <- subset(sobj,
@@ -261,6 +257,7 @@ for (group in unique(all_samples_csv$unique)){
         run_harmony <- RunHarmony(object = merged_sobj,
                                   group.by.vars =c("sample_name", "method", "data_source"),
                                   theta = c(3, 3, 3))
+    }
     #optimize resolution, silhouette score does not work for large dataset
     if (ncol(merged_sobj) > 65000) {
         subset_object <- subset(x = merged_sobj,
@@ -325,7 +322,7 @@ for (group in unique(all_samples_csv$unique)){
         dplyr::select(res_vals)
     print(str_c("Optimized resolution for ", group, " is ", res_score$res_vals))
 
-    AI_clusters[[group]] <- plot_my_stuff(harmo_obj, what = c("sample_name", "model"))
+    AI_clusters[[group]] <- plot_my_stuff(harmo_obj, what = "sample_name")
     AI_method[[group]] <- plot_my_stuff(harmo_obj, "method")
     AI_data_source[[group]] <- plot_my_stuff(harmo_obj, "data_source")
 
@@ -483,7 +480,7 @@ DT::datatable(arrange(counts_afterQC, unique, desc(N_cells)))
 
 # Clustering and setting the right resolution {.tabset}
 used silhouette score and clustree method for right resolution
-```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE, eval = FALSE}
 clustrees <- list()
 silhouette_scores <- list()
 
@@ -529,26 +526,26 @@ for (group in unique(all_samples_csv$unique)) {
 ```
 
 ## Clustering patient prim
-```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", eval = FALSE}
 clustrees$patient_prim
 silhouette_scores$patient_mets
 
 ```
 
 ## Clustering patient mets
-```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", eval = FALSE}
 clustrees$patient_mets
 silhouette_scores$patient_mets
 
 ```
 
-# Annotate all the datasets {.tabset}
+# Annotate all the datasets 
 The anotate function was build by compliling publicly available reference 
 comprising of lung, blood, and other primary cells for both human and mouse. 
 Once the clustering resolution was set, we mount each seurat object for
 celltype annotation using the annotate function. Then final celltype is
 assigned by highest number of celltype per each seurat cluster
-```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", eval  = FALSE}
 
 # DimPlot(new_ann_sobj, group.by = c("new_annot", "seurat_clusters"), raster=FALSE, shuffle = T)
 
@@ -565,12 +562,6 @@ assigned by highest number of celltype per each seurat cluster
 # rrrSingleCellUtils::r_feature_plot(ann_sobj,
 #                                    features = c("percent.mt", "nCount_RNA", "nFeature_RNA"))
 
-singler_annotation <- list()
-anotation_cluster_assignment <- list()
-feature_plots <- list()
-
-plot_my_stuff(y, what = c("sample_name", "data_source", "method", "location"), ncol = 2)
-
 for (group in unique(all_samples_csv$unique)) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
                               group,
@@ -578,8 +569,6 @@ for (group in unique(all_samples_csv$unique)) {
     ann_sobj <- annotate(sobject = object,
                          species = object$organism[1],
                          aggr_ref = TRUE)
-
-    singler_annotation[[group]] <- plot_my_stuff(ann_sobj, what = "annotations")
 
     Idents(ann_sobj) <- ann_sobj$seurat_clusters
     clust_info <- tibble()
@@ -618,10 +607,6 @@ for (group in unique(all_samples_csv$unique)) {
                                                     pattern = seurat_clust,
                                                     replacement = celltype)
     }
-    anotation_cluster_assignment[[group]] <- plot_my_stuff(ann_sobj, "new_annot_clust")
-    feature_plots[[group]] <- FeaturePlot(ann_sobj,
-                                          features = c("COL1A1", "COL1A2", "SATB2", "RUNX2"))
-
     qs::qsave(x = ann_sobj, 
               file = str_c("output/seurat_objects/harmony_sobjs/",
                                        group,
@@ -631,6 +616,29 @@ for (group in unique(all_samples_csv$unique)) {
 
 ```
 
+# Make plots for annotated datasets {.tabset}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+singler_annotation <- list()
+anotation_cluster_assignment <- list()
+feature_plots <- list()
+
+for (group in unique(all_samples_csv$unique)) {
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                              group,
+                              ".qs"))
+    singler_annotation[[group]] <- plot_my_stuff(object, what = "annotations")
+    anotation_cluster_assignment[[group]] <- plot_my_stuff(ann_sobj, "new_annot_clust")
+
+    if (object$organism[1] == "human") {
+        feature_plots[[group]] <- FeaturePlot(ann_sobj,
+                                              features = c("COL1A1", "COL1A2", "SATB2", "RUNX2"))
+    } else {
+        feature_plots[[group]] <- FeaturePlot(ann_sobj,
+                                              features = c("Col1a1", "Col1a2", "Satb2", "Runx2"))
+    }
+}
+
+```
 
 ## Patient prim 
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
@@ -639,7 +647,6 @@ anotation_cluster_assignment$patient_prim
 feature_plots$patient_prim
 ```
 
-
 ## Patient mets
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 singler_annotation$patient_mets
@@ -647,7 +654,7 @@ anotation_cluster_assignment$patient_mets
 feature_plots$patient_mets
 ```
 
-# Cancer cells vs normal cells using SCEVAN {.tabset}
+# Cancer cells vs normal cells using SCEVAN
 Single CEll Variational Aneuploidy aNalysis
 When run, the result is in three metadata column:
 class: with tumor (blue) vs normal celltype(green), and (filtered (red): low quality cells i think)
@@ -661,7 +668,7 @@ Identification of normal cells as those in the cluster containing the majority o
 Segments are then classified in five copy number states.
 Analysis of subclones including clone tree, pathway activities, but it can be turned off
 
-```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE, eval = FALSE}
 
 scevan_plots <- list()
 
@@ -697,25 +704,13 @@ for (group in unique(all_samples_csv$unique)) {
 
 ```
 
-## Patient primary
-```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
-scevan_plots$patient_prim
-
-```
-
-## Patient mets
-```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
-scevan_plots$patient_mets
-
-```
-
-# Cancer cells vs normal cells using scATOMIC {.tabset}
+# Cancer cells vs normal cells using scATOMIC 
 The result comes with the annotation of cell types including for both cancer type 
 and the normal cell types. Also outputs for each cell:
 Classification_confidence: confident, low_confidence on annotation
 pan_cancer_cluster: either cancer or normal
 scATOMIC_pred : celltype annotation
-```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE, eval = FALSE}
 
 scATOMIC_plots <- list()
 
@@ -753,13 +748,33 @@ for (group in unique(all_samples_csv$unique)) {
 
 ```
 
+# SCEVAN and scATOMIC plots {.tabset}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+scevan_plots <- list()
+scATOMIC_plots <- list()
+for (group in unique(all_samples_csv$unique)) {
+    scevan_object <- qs::qread(str_c("output/SCEVAN/",
+                                    group,
+                                    ".qs"))
+    scevan_plots[[group]] <- plot_my_stuff(scevan_object, "class")
+
+    scATOMIC_object <- qs::qread(str_c("output/scATOMIC/",
+                                    group,
+                                    ".qs"))
+    scATOMIC_plots[[group]] <- plot_my_stuff(scATOMIC_object, "pan_cancer_cluster")
+}
+
+```
+
 ## Patient primary
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+scevan_plots$patient_prim
 scATOMIC_plots$patient_prim
 ```
 
 ## Patient mets
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+scevan_plots$patient_mets
 scATOMIC_plots$patient_mets
 ```
 
@@ -772,25 +787,33 @@ clustering.
 It might be a worthwile to annotate or re run SCEVAN in the cancer cells to filter
 out any normal cells that might have been group as cancer cells.
 
-```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", eval = FALSE}
 cancer_celltypes <- list(patient_prim = c( "MSC",
                                            "Chondrocytes",
                                            "Tissue_stem_cells",
                                            "Neurons",
-                                           "Osteoblasts"),
+                                           "Osteoblasts",
+                                           "Erythroblast",
+                                           "Astrocyte",
+                                           "BM"),
                         patient_mets = c("MSC",
                                          "Chondrocytes",
                                          "Tissue_stem_cells",
                                          "Osteoblasts",
-                                         "Smooth_muscle_cells"),
+                                         "Smooth_muscle_cells",
+                                         "Erythroblast",
+                                         "Fibroblasts",
+                                         "Astrocyte",
+                                         "BM"),
                         xeno_prim_human = c(),
                         xeno_mets_human = c(),
                         xeno_prim_mouse = c(),
                         xeno_mets_mouse = c(),
                         mm_prim = c("Fibroblasts",
-                                    "stem_cells",),
+                                    "stem_cells"),
                         mm_mets = c("Fibroblasts",
-                                    "stem_cells",))
+                                    "stem_cells"))
+
 
 for (group in unique(all_samples_csv$unique)) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
@@ -824,7 +847,14 @@ for (group in unique(all_samples_csv$unique)) {
 
         normal_obj <- RunHarmony(object = normal_obj,
                                  group.by.vars = "sample_name")
-        res_normal <- optimize_silhouette(sobject = normal_obj,
+        if (ncol(normal_obj) > 65000) {
+            subset_object <- subset(x = normal_obj,
+                                    cells = sample(Cells(normal_obj),
+                                            min(65000, length(Cells(normal_obj)))))
+        } else {
+            subset_object <- normal_obj
+        }
+        res_normal <- optimize_silhouette(sobject = subset_object,
                                          test_res = seq(0.1, 0.9, by = 0.1),
                                          summary_plot = FALSE) %>%
             filter(sil_vals == max(sil_vals)) %>%
@@ -832,7 +862,7 @@ for (group in unique(all_samples_csv$unique)) {
             dplyr::select(res_vals)
         normal_obj <- normal_obj %>%
             process_seurat(reduction = "harmony",
-                           resolution = res_normal)
+                           resolution = res_normal$res_vals)
         qs::qsave(normal_obj, str_c("output/seurat_objects/tumor_vs_stroma/",
                                     group,
                                     "_normal",
@@ -875,7 +905,6 @@ for (group in unique(all_samples_csv$unique)) {
 }
 
 ```
-
 
 # UMAPS combined and individual {.tabset}
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
@@ -1048,22 +1077,28 @@ cat_tib <- dplyr::tribble(
     "C3",      "TFT:GTRD",     "Transcription_factor_targets",
     "C6",       "NA",          "Oncogenic_signature")
 
-
-tumor_list <- dplyr::tribble(~sobj_name,     ~species,
+object_list <- dplyr::tribble(~sobj_name,              ~species,
                             "patient_prim_cancer",    "human",
                             "patient_mets_cancer",    "human")
                             # "mm_prim_cancer",         "mouse",
                             # "mm_mets_cancer",         "mouse",
-                            # "xeno_prim_human",       "human",
-                            # "xeno_mets_human",      "human")
+                            # "xeno_prim_human",        "human",
+                            # "xeno_mets_human",        "human",
+                            # "patient_prim_normal",    "human",
+                            # "patient_mets_normal",    "human",
+                            # "xeno_prim_mouse",        "mouse",
+                            # "xeno_mets_mouse",        "mouse",
+                            # "mm_prim_normal",         "mouse",
+                            # "mm_mets_normal",         "mouse")
 
 panel_plots <- list()
 
-for (group in unique(all_samples_csv$unique)) {
+for (group in object_list$sobj_name) {
     object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                               group,
-                              "_cancer",
                               ".qs"))
+    object <- JoinLayers(object)
+
     volc_plot <- list()
     gsea_plot <- list()
     gsea_result <- list()
@@ -1073,6 +1108,7 @@ for (group in unique(all_samples_csv$unique)) {
     degs_result <- run_degs(sobject = object,
                             group_by = "seurat_clusters",
                             prefix = str_c(group, "_cancer"))
+
     for (item in names(degs_result)) {
         logfc_cutoff <- 0.6
         degs_result[[item]]$diffexpressed <- "Not Significant"
@@ -1123,15 +1159,19 @@ for (group in unique(all_samples_csv$unique)) {
                                        order = seq_len(n()),
                                        justify_y = if_else(NES > 0, 1, 0),
                                        y_pos = if_else(NES > 0, -0.1, 0.1))
-                gsea_plot[[cat_expl]][[item]] <- two_way_dotplot(top5up_down, x_col = "NES") +
-                                                    ggtitle(str_c(cat_expl, " for ", item))
+                gsea_plot[[cat_expl]][[item]] <- 
+                    local({cat_expl = cat_expl
+                          two_way_dotplot(top5up_down, x_col = "NES") +
+                    ggtitle(str_c(cat_expl, " for ", item))})
             } else {
                 print(str_c("No Pathways up or down in ", item, " for ", cat_expl))
-                gsea_plot[[cat_expl]][[item]] <- ggplot(data = NULL,
-                                                        aes(x = as.factor(1),
-                                                        y = as.factor(1))) +
-                    geom_text(aes(label = str_c("No pathways for ", cat_expl, " in ", item)),
-                                size = 4)
+                gsea_plot[[cat_expl]][[item]] <- 
+                local({cat_expl = cat_expl
+                      ggplot(data = NULL,
+                            aes(x = as.factor(1),
+                            y = as.factor(1))) +
+                        geom_text(aes(label = str_c("No pathways for ", cat_expl, " in ", item)),
+                                  size = 4)})
             }
         }
     }
@@ -1170,7 +1210,7 @@ for (group in unique(all_samples_csv$unique)) {
 ```
 
 ## Patient primary
-```{r, fig.width = 14, fig.height = 20, fig.align = "center", eval = FALSE}
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
 # for (item in names(panel_plots$patient_prim)) {
 #     print(panel_plots$patient_prim[[item]])
 # }
@@ -1179,10 +1219,13 @@ panel_plots$patient_prim$patient_prim_cancer_Cluster_1
 panel_plots$patient_prim$patient_prim_cancer_Cluster_2
 panel_plots$patient_prim$patient_prim_cancer_Cluster_3
 panel_plots$patient_prim$patient_prim_cancer_Cluster_4
+panel_plots$patient_prim$patient_prim_cancer_Cluster_5
+panel_plots$patient_prim$patient_prim_cancer_Cluster_6
+
 ```
 
 ## patient mets
-```{r, fig.width = 14, fig.height = 20, fig.align = "center", eval = FALSE}
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
 # for (item in names(panel_plots$patient_mets)) {
 #     print(panel_plots$patient_mets[[item]])
 # }
@@ -1193,6 +1236,8 @@ panel_plots$patient_mets$patient_mets_cancer_Cluster_3
 panel_plots$patient_mets$patient_mets_cancer_Cluster_4
 panel_plots$patient_mets$patient_mets_cancer_Cluster_5
 panel_plots$patient_mets$patient_mets_cancer_Cluster_6
+panel_plots$patient_mets$patient_mets_cancer_Cluster_7
+panel_plots$patient_mets$patient_mets_cancer_Cluster_8
 ```
 
 
