@@ -37,7 +37,7 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ## Read metadata 
 ```{r, cache.vars="all_samples_csv"}
-all_samples_csv <- read_csv("allsample_details.csv")
+all_samples_csv <- read_tsv("allsample_details.txt")
 
 all_samples_csv$sp_pattern <-
     str_replace_all(all_samples_csv$sp_pattern, "nothing", "")
@@ -53,7 +53,8 @@ The code will first look if the h5 files exist in each repo. If exists, the
 seurat object is made and saved. 
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE, eval = FALSE}
 #Seurat objects and save individual qs object
-for (i in seq_len(nrow(all_samples_csv))) {
+
+parallel::mclapply(seq_len(nrow(all_samples_csv)), function(i){
     sample_name <- all_samples_csv$sample_name[i]
     species <- all_samples_csv$species[i]
     data_source <- all_samples_csv$data_source[i]
@@ -111,6 +112,7 @@ for (i in seq_len(nrow(all_samples_csv))) {
             sobj$method <- all_samples_csv$method[i]
             sobj$unique <- all_samples_csv$unique[i]
             sobj$model <- all_samples_csv$model[i]
+            sobj$CL_or_PDX <- all_samples_csv$CL_or_PDX[i]
 
             if (!is.null(sobj)) {
                 qs::qsave(sobj, str_c(dir, "/", sobject))
@@ -118,7 +120,8 @@ for (i in seq_len(nrow(all_samples_csv))) {
             print(str_c(sobject, " made and saved"))
         }
     }
-}
+}, mc.cores = parallelly::availableCores())
+
 ```
 
 
@@ -190,8 +193,28 @@ to be included into the merged seurat object per each group of patient_primary,
 patient_metastatic, mouse_primary, mouse_metastatic, xenograft_primary_human,
 xenograft_primary_mouse, xenograft_metastatic_human, and xenograft_metastatic_mouse
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center", eval = FALSE}
+#harmony parameers
+harmony_params <-
+    list(patient_prim = list(group_by = c("sample_name", "method", "data_source", "model"), 
+                             theta = c(3, 3, 3, 3)),
+        patient_mets = list(group_by = c("sample_name", "method", "data_source", "model"), 
+                            theta = c(3, 3, 3, 3)),
+        xeno_prim_human = list(group_by = c("sample_name", "method", "data_source", "CL_or_PDX"),
+                               theta = c(7, 7, 7, 7)),
+        xeno_mets_human = list(group_by = c("sample_name", "method", "data_source", "CL_or_PDX"),
+                               theta = c(3, 3, 3, 3)),
+        xeno_prim_mouse = list(group_by = c("sample_name", "method", "data_source", "CL_or_PDX"),
+                                theta = c(7, 7, 7, 7)),
+        xeno_mets_mouse = list(group_by = c("sample_name", "method", "data_source", "CL_or_PDX"),
+                               theta = c(3, 3, 3, 3)),
+        mm_prim = list(group_by = c("sample_name", "model", "location"),
+                       theta = c(3, 3, 3)),   
+        mm_mets = list(group_by = c("sample_name", "model", "location"),
+                       theta = c(3, 3, 3))) 
+
 #run QC and merge seurat objects
-parallel::mclapply(unique(all_samples_csv$unique), function(group) {
+#parallel::mclapply(unique(all_samples_csv$unique), function(group) 
+for (group in unique(all_samples_csv$unique)){
     single_sobjs <- list.files(path = "output/seurat_objects/sobj_preprocess/",
                               full.names = FALSE)
     tmp_df <- subset(all_samples_csv, subset = (unique == group))
@@ -250,42 +273,33 @@ parallel::mclapply(unique(all_samples_csv$unique), function(group) {
                                     group,
                                     ".qs"))
     #run harmony
-    if (group == "mm_prim" || group == "mm_mets" || group == "normal_bone") {
-        run_harmony <- RunHarmony(object = merged_sobj,
-                                  group.by.vars = "sample_name",
-                                  theta = 3)
-    } else if (group == "xeno_prim_human" || group == "xeno_prim_mouse") {
-        run_harmony <- RunHarmony(object = merged_sobj,
-                                  group.by.vars =c("sample_name", "method", "data_source", "location"),
-                                  theta = c(7, 7, 7, 7))
-    } else {
-        run_harmony <- RunHarmony(object = merged_sobj,
-                                  group.by.vars =c("sample_name", "method", "data_source"),
-                                  theta = c(3, 3, 3))
-    }
+    run_harmony <- 
+        RunHarmony(object = merged_sobj,
+                    group.by.vars = harmony_params[[group]]$group_by,
+                    theta = harmony_params[[group]]$theta)
+
     #optimize resolution, silhouette score does not work for large dataset
-    if (ncol(merged_sobj) > 65000) {
-        subset_object <- subset(x = merged_sobj,
-                                cells = sample(Cells(merged_sobj),
-                                        min(65000, length(Cells(merged_sobj)))))
-    } else {
-        subset_object <- merged_sobj
-    }
-    res_score <- optimize_silhouette(sobject = subset_object,
-                                    test_res = seq(0.1, 0.9, by = 0.1),
-                                    summary_plot = FALSE) %>%
+    min_cell_silhouette <- 65000
+    n_cells <- length(Cells(run_harmony))
+    keep_n_cells <- min(min_cell_silhouette, n_cells)
+    set.seed(63249528)
+    res_score <-
+        optimize_silhouette(sobject = run_harmony[, sample(1:n_cells, keep_n_cells)],
+                            test_res = seq(0.1, 0.9, by = 0.1),
+                            summary_plot = FALSE) %>%
         filter(sil_vals == max(sil_vals)) %>%
         slice_head(n=1) %>%
-        dplyr::select(res_vals)
+        dplyr::pull(res_vals)
 
-    harmony_obj <- run_harmony %>% 
+    harmony_obj <- 
+        run_harmony %>% 
         process_seurat(reduction = "harmony",
                        resolution = res_score)
-    plot_my_stuff(harmony_obj, what = c("sample_name", "method", "data_source"))
+
     qs::qsave(harmony_obj, str_c("output/seurat_objects/harmony_sobjs/",
                                     group,
                                     ".qs"))
-}, mc.cores = parallelly::availableCores())
+}
 
 ```
 
@@ -338,20 +352,19 @@ for (group in unique(all_samples_csv$unique)){
     harmo_obj <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
                                 group,
                                 ".qs"))
-    if (ncol(harmo_obj) > 65000) {
-        subset_object <- subset(x = harmo_obj,
-                                cells = sample(Cells(harmo_obj),
-                                        min(65000, length(Cells(harmo_obj)))))
-    } else {
-        subset_object <- harmo_obj
-    }
-    res_score <- optimize_silhouette(sobject = subset_object,
-                                    test_res = seq(0.1, 0.9, by = 0.1),
-                                    summary_plot = FALSE) %>%
+    #optimize resolution, silhouette score does not work for large dataset
+    min_cell_silhouette <- 65000
+    n_cells <- length(Cells(harmo_obj))
+    keep_n_cells <- min(min_cell_silhouette, n_cells)
+    set.seed(63249528)
+    res_score <-
+        optimize_silhouette(sobject = harmo_obj[, sample(1:n_cells, keep_n_cells)],
+                            test_res = seq(0.1, 0.9, by = 0.1),
+                            summary_plot = FALSE) %>%
         filter(sil_vals == max(sil_vals)) %>%
         slice_head(n=1) %>%
-        dplyr::select(res_vals)
-    print(str_c("Optimized resolution for ", group, " is ", res_score$res_vals))
+        dplyr::pull(res_vals)
+    print(str_c("Optimized resolution for ", group, " is ", res_score))
 
     AI_clusters[[group]] <- plot_my_stuff(harmo_obj, what = "sample_name")
     AI_method[[group]] <- plot_my_stuff(harmo_obj, "method")
@@ -482,9 +495,6 @@ AI_method$mm_mets
 AI_data_source$mm_mets  
 ```
 
-
-
-
 # Clustering and setting the right resolution {.tabset}
 used silhouette score and clustree method for right resolution
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE, eval = FALSE}
@@ -504,30 +514,21 @@ for (group in unique(all_samples_csv$unique)) {
 
     clustrees[[group]] <- tree
 
-    if (ncol(object) > 65000) {
-        subset_object <- subset(x = object,
-                                cells = sample(Cells(object),
-                                        min(65000, length(Cells(object)))))
-    } else {
-        subset_object <- object
-    }
-    res_score <- optimize_silhouette(sobject = subset_object,
-                                    test_res = seq(0.1, 0.9, by = 0.1),
-                                    summary_plot = FALSE) %>%
+    #optimize resolution, silhouette score does not work for large dataset
+    min_cell_silhouette <- 65000
+    n_cells <- length(Cells(object))
+    keep_n_cells <- min(min_cell_silhouette, n_cells)
+    set.seed(63249528)
+    res_score <-
+        optimize_silhouette(sobject = object[, sample(1:n_cells, keep_n_cells)],
+                            test_res = seq(0.1, 0.9, by = 0.1),
+                            summary_plot = FALSE) %>%
         filter(sil_vals == max(sil_vals)) %>%
         slice_head(n=1) %>%
-        dplyr::select(res_vals)
+        dplyr::pull(res_vals)
+    print(str_c("Optimized resolution for ", group, " is ", res_score))
 
     silhouette_scores[[group]] <- res_score
-
-    # res_object <- FindClusters(object,
-    #                           resolution = res_score$res_vals)
-
-    # qs::qsave(x = res_object, 
-    #           file = str_c("output/seurat_objects/harmony_sobjs/",
-    #                        group,
-    #                        ".qs"))
-
 }
 
 ```
@@ -803,7 +804,8 @@ cancer_celltypes <- list(patient_prim = c( "MSC",
                                            "Erythroblast",
                                            "Astrocyte",
                                            "BM",
-                                           "Fibroblasts"),
+                                           "Fibroblasts",
+                                           "iPS_cells"),
                         patient_mets = c("MSC",
                                          "Chondrocytes",
                                          "Tissue_stem_cells",
@@ -812,176 +814,132 @@ cancer_celltypes <- list(patient_prim = c( "MSC",
                                          "Erythroblast",
                                          "Fibroblasts",
                                          "Astrocyte",
-                                         "BM"),
+                                         "BM",
+                                         "iPS_cells"),
                         xeno_prim_human = c(),
                         xeno_mets_human = c(),
                         xeno_prim_mouse = c(),
                         xeno_mets_mouse = c(),
+                        normal_bone = c(),
                         mm_prim = c("Fibroblasts",
                                     "Stem cells",
-                                    "Stromal cells"),
+                                    "Stromal cells",
+                                    "Cardiomyocytes"),
                         mm_mets = c("Fibroblasts",
                                     "Stem cells",
-                                    "Stromal cells"))
+                                    "Stromal cells",
+                                    "Cardiomyocytes"))
 
 harmony_params <-
-    list(patient_prim = list(group_by = c("sample_name", "method", "data_source"), 
-                             theta = c(3, 3, 3)),
-         patient_mets = list(c("sample_name", "method", "data_source"), c(3, 3, 3)),
-        xeno_prim_human = list(c("sample_name", "method", "data_source", "location"), c(7, 7, 7, 7)),
-        xeno_mets_human = list(c("sample_name", "method", "data_source", "location"), c(7, 7, 7, 7)),
-        xeno_prim_mouse = list(c("sample_name", "method", "data_source", "location"), c(7, 7, 7, 7)),
-        xeno_mets_mouse = list(c("sample_name", "method", "data_source", "location"), c(7, 7, 7, 7)),
-        mm_prim = list(c("sample_name", "model", "data_source"), c(7, 7, 7)),
-        mm_mets = list(c("sample_name", "model", "data_source"), c(7, 7, 7)))
+    list(patient_prim = list(group_by = c("sample_name", "method", "data_source", "model"), 
+                             theta = c(3, 3, 3, 3)),
+        patient_mets = list(group_by = c("sample_name", "method", "data_source", "model"), 
+                            theta = c(3, 3, 3, 3)),
+        xeno_prim_human = list(group_by = c("sample_name", "method", "data_source", "CL_or_PDX"),
+                               theta = c(7, 7, 7, 7)),
+        xeno_mets_human = list(group_by = c("sample_name", "method", "data_source", "CL_or_PDX"),
+                               theta = c(3, 3, 3, 3)),
+        xeno_prim_mouse = list(group_by = c("sample_name", "method", "data_source", "CL_or_PDX"),
+                                theta = c(7, 7, 7, 7)),
+        xeno_mets_mouse = list(group_by = c("sample_name", "method", "data_source", "CL_or_PDX"),
+                               theta = c(3, 3, 3, 3)),
+        mm_prim = list(group_by = c("sample_name", "model"),
+                       theta = c(12, 12)),
+        mm_mets = list(group_by = c("sample_name", "model"),
+                       theta = c(3, 3)),
+        normal_bone = list(group_by = c("sample_name"),
+                           theta = c(3)))
 
-harmoy_vars <- object$harmony_vars[[1]]
-harmony_vars <- "sample_name,method,data_source,location,model"
-harmony_vec <- stringr::str_split(harmony_vars, ",")[[1]]
-RunHarmony(object = object,
-           group.by.vars = object$harmony_vars[[1]] %>% stringr::str_split()[[1]],
-           theta = c(7, 7, 7, 7))
 
-
-for (group in unique(all_samples_csv$unique)) {
-    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
-                              group,
-                              ".qs"))
-    Idents(object) <- object$new_annot_clust
-    object$cancer_normal <- object$new_annot_clust
-    for (cell in cancer_celltypes[[group]]) {
-        object$cancer_normal <- str_replace_all(string = object$cancer_normal,
-                                                pattern = cell,
-                                                replacement = "cancer_cells")
-    }
+#parallel::mclapply(unique(all_samples_csv$unique), function(group) 
+for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                        group,
+                        ".qs"))
+    #plot_my_stuff(object, "cell_group")
+    Idents(object) <-
+        object$new_annot_clust
+    object$cancer_normal <-
+        if_else(object$new_annot_clust %in% cancer_celltypes[[group]],
+                "cancer_cells",
+                object$new_annot_clust)
+    object$cell_group <-
+        if_else(object$new_annot_clust %in% cancer_celltypes[[group]],
+                "cancer_cells",
+                "normal_cells")
     qs::qsave(object, str_c("output/seurat_objects/annotated_sobjs/",
                             group,
                             ".qs"))
-    object <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
-                              group,
-                              ".qs"))
-    if (group == "patient_prim" || 
-        group == "patient_mets" || 
-        group == "mm_prim" || 
-        group == "mm_mets") {
-        normal_cells <- table(object$cancer_normal) %>%
-            as.data.frame() %>%
-            filter(Var1 != "cancer_cells")
-        Idents(object) <- object$cancer_normal
-        normal_obj <- subset(x = object,
-                             idents = normal_cells$Var1) %>%
-            process_seurat()
-        if (group == "patient_prim" || group == "patient_mets") {
-            normal_obj <- RunHarmony(object = normal_obj,
-                                     group.by.vars = c("sample_name", "method", "data_source"),
-                                     theta = c(3, 3, 3))
-        } else {
-            normal_obj <- RunHarmony(object = normal_obj,
-                                     group.by.vars = c("sample_name", "model"),
-                                     theta = c(3, 3))
-        }
-        if (ncol(normal_obj) > 65000) {
-            subset_object <- subset(x = normal_obj,
-                                    cells = sample(Cells(normal_obj),
-                                            min(65000, length(Cells(normal_obj)))))
-        } else {
-            subset_object <- normal_obj
-        }
-        res_normal <- optimize_silhouette(sobject = subset_object,
-                                         test_res = seq(0.1, 0.9, by = 0.1),
-                                         summary_plot = FALSE) %>%
+
+    for (cell_group_name in c("cancer_cells", "normal_cells")) {
+        s_obj <-
+            subset(x = object,
+                   cell_group == cell_group_name) %>%
+            RunPCA() %>%
+            RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
+                       theta = harmony_params[[group]]$theta)
+
+        #optimize resolution, silhouette score does not work for large dataset
+        min_cell_silhouette <- 65000
+        n_cells <- length(Cells(s_obj))
+        keep_n_cells <- min(min_cell_silhouette, n_cells)
+
+        set.seed(1111451)
+        res_normal <-
+            optimize_silhouette(sobject = s_obj[, sample(1:n_cells, keep_n_cells)],
+                                test_res = seq(0.05, 0.9, by = 0.05),
+                                summary_plot = TRUE) %>%
+            arrange(desc(sil_vals), desc(res_vals)) %>%
             filter(sil_vals == max(sil_vals)) %>%
             slice_head(n=1) %>%
-            dplyr::select(res_vals)
-        normal_obj <- normal_obj %>%
-            process_seurat(reduction = "harmony",
-                           resolution = res_normal$res_vals)
-        #save the normal object
-        qs::qsave(normal_obj, str_c("output/seurat_objects/tumor_vs_stroma/",
-                                    group,
-                                    "_normal",
-                                    ".qs"))
-        #save the normal object metadata with the cell barcodes
-        timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
-        readr::write.tsv(file = normal_obj@meta.data,
-                         filename = str_c("output/metadata/"
-                                        group,
-                                        "_normal",
-                                        timestamp,
-                                        ".tsv"))
+            dplyr::pull(res_vals)
 
-        Idents(object) <- object$cancer_normal
-        cancer_obj <- subset(x = object,
-                             idents = "cancer_cells") %>%
-            #subset(location == "tibia") %>% 
-            process_seurat()
-        if (group == "patient_prim" || group == "patient_mets") {
-            cancer_obj <- RunHarmony(object = cancer_obj,
-                                     group.by.vars = c("sample_name", "method", "data_source"),
-                                     theta = c(3, 3, 3))
-        } else if (group == "mm_prim"){
-            cancer_obj <- RunHarmony(object = cancer_obj,
-                                     group.by.vars = c("sample_name", "model", "data_source"),
-                                     theta = c(7, 7, 7))
-        } else {
-            cancer_obj <- RunHarmony(object = cancer_obj,
-                                     group.by.vars = c("sample_name", "model"),
-                                     theta = c(7, 7))
-        }
-        # res_cancer <- optimize_silhouette(sobject = cancer_obj,
-        #                                  test_res = seq(0.1, 0.9, by = 0.1),
-        #                                  summary_plot = FALSE) %>%
-        #     filter(sil_vals == max(sil_vals)) %>%
-        #     slice_head(n=1) %>%
-        #     dplyr::select(res_vals)
-        cancer_obj <- cancer_obj %>%
+        s_obj <-
+            s_obj %>%
             process_seurat(reduction = "harmony",
-                           resolution = 0.1)
-        qs::qsave(cancer_obj, str_c("output/seurat_objects/tumor_vs_stroma/",  #nolint
-                                    group,
-                                    "_cancer",
-                                    ".qs"))
+                           resolution = res_normal)
+        qs::qsave(s_obj, str_c("output/seurat_objects/tumor_vs_stroma/",  #nolint
+                                group, "_",
+                                cell_group_name,
+                                ".qs"))
+
         #save the cancer object metadata with the cell barcodes
-        timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
-        readr::write.tsv(file = cancer_obj@meta.data,
-                         filename = str_c("output/metadata/",
+        date_time <- 
+            format(Sys.time(), "%Y%m%d_%H%M%S")
+        s_obj$cell_barcodes <- 
+            colnames(s_obj)
+        readr::write_tsv(x = s_obj@meta.data,
+                        file = str_c("output/metadata/",
                                         group,
                                         "_cancer",
-                                        timestamp,
+                                        date_time,
                                         ".tsv"))
-
-    } else  if (group == "xeno_mets_human" ||
-                group == "xeno_prim_human"){
-        qs::qsave(object, str_c("output/seurat_objects/tumor_vs_stroma/",
-                                group,
-                                "_cancer",
-                                ".qs"))
-        #save the cancer object metadata with the cell barcodes
-        timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
-        readr::write_tsv(file = object@meta.data,
-                         filename = str_c("output/metadata/",
-                                        group,
-                                        "_cancer",
-                                        timestamp,
-                                        ".tsv"))
-
-    } else if (
-        group == "xeno_mets_mouse" ||
-        group == "xeno_prim_mouse"){
-        qs::qsave(object, str_c("output/seurat_objects/tumor_vs_stroma/",
-                                group,
-                                "_normal",
-                                ".qs"))
-        #save the normal object metadata with the cell barcodes
-        timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
-        readr::write_tsv(file = 
-    
-    print(str_c(group, " labelled with cancer cells and subsetted"))
     }
+    print(str_c(group, " labelled with cancer_vs_normal cells and subsetted and saved"))
 }
 
+#save the xenograft objects
+for (group in c("xeno_prim_human", "xeno_prim_mouse", "xeno_mets_human", "xeno_mets_mouse")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                        group,
+                        ".qs"))
+    qs::qsave(object, str_c("output/seurat_objects/tumor_vs_stroma/",
+                            group,
+                            ".qs"))
 
-# save metadata with the cell barcodes somewhere here
+    #save the cancer object metadata with the cell barcodes
+    date_time <- 
+        format(Sys.time(), "%Y%m%d_%H%M%S")
+    object$cell_barcodes <- 
+        colnames(object)
+    readr::write_tsv(x = object@meta.data,
+                    file = str_c("output/metadata/",
+                                    group,
+                                    date_time,
+                                    ".tsv"))
+}
 
 ```
 
@@ -1009,106 +967,57 @@ for (item in seq_len(nrow(umaps_group))) {
     combine <- umaps_group$combine[item]
     title <- umaps_group$title[item]
     if (combine == "no") {
-        object <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
+        object <-
+            qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
                             sobj_name,
                             ".qs"))
-        annotated[[sobj_name]] <- plot_my_stuff(object, "new_annot_clust")
-
-        merged[[sobj_name]] <- DimPlot(object,
-                            group.by = "cancer_normal",
-                            repel = T,
-                            label = T,
-                            shuffle= T,
-                            cols = c(plot_cols, sample(rainbow(1000)))) +
-                        NoLegend() +
-                        coord_fixed() +
-                        ggtitle("Tumor and Stromal cells") +
-                        theme(legend.text = element_text(size = 7))
-
-        tumor <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
-                            sobj_name,
-                            "_cancer.qs"))
-        just_tumor[[sobj_name]] <- DimPlot(tumor,
-                            group.by = "seurat_clusters",
-                            repel = T,
-                            label = T,
-                            shuffle= T,
-                            cols = c(plot_cols, sample(rainbow(1000)))) +
-                        NoLegend() +
-                        coord_fixed() +
-                        ggtitle("Tumor cells reclustering") +
-                        theme(legend.text = element_text(size = 7))
-
-
-        stroma <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
-                            sobj_name,
-                            "_normal.qs"))
-        just_stroma[[sobj_name]] <- DimPlot(stroma,
-                            group.by = "cancer_normal",
-                            repel = T,
-                            label = T,
-                            shuffle= T,
-                            cols = c(plot_cols, sample(rainbow(1000)))) +
-                        NoLegend() +
-                        coord_fixed() +
-                        ggtitle("Stromal cells reclustering") +
-                        theme(legend.text = element_text(size = 7))
-
-        # plots <- list(x, y, z)
-        # plot <- patchwork::wrap_plots(plots, ncol = 1) + 
-        #         patchwork::plot_annotation(title = str_c("UMAP for ", title),
-        #                                    theme = theme(plot.title = element_text(hjust = 0.5,
-        #                                                                            size = 20,
-        #                                                                            face = "bold")))
-        # ggsave(filename = str_c("output/plots/umaps/", sobj_name, "_umap.png"))
-        #         # width = 7,
-        #         # height = 21,
-        #         #plot = plot)
-    } else {
-        first_obj <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
-                                    sobj_name,
-                                    "_human.qs"))
-        just_tumor[[sobj_name]] <- DimPlot(first_obj,
-                                group.by = "seurat_clusters",
-                                repel = T,
-                                label = T,
-                                shuffle= T,
-                                cols = c(plot_cols, sample(rainbow(1000)))) +
-                            NoLegend() +
-                            coord_fixed() +
-                            ggtitle("Tumor cells") +
-                            theme(legend.text = element_text(size = 7))
-
-        second_obj <- qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
-                                    sobj_name,
-                                    "_mouse.qs"))
-        just_stroma[[sobj_name]] <- DimPlot(second_obj,
-                                    group.by = "seurat_clusters",
-                                    repel = T,
-                                    label = T,
-                                    shuffle= T,
-                                    label.size = 4,
-                                    cols = c(plot_cols, sample(rainbow(1000)))) +
-                                NoLegend() +
-                                coord_fixed() +
-                                ggtitle("Stromal cells") +
-                                theme(legend.text = element_text(size = 7))
-
-        # plots <- list(x, y)
-        # plot <- patchwork::wrap_plots(plots, ncol=1) + 
-        #         patchwork::plot_annotation(title = str_c("UMAP for ", title),
-        #                                    theme = theme(plot.title = element_text(hjust = 0.5,
-        #                                                                            size = 20,
-        #                                                                            face = "bold")))
-        # ggsave(str_c("output/plots/umaps/", sobj_name, "_umap.png"))
-        #     # width = 15,
-        #     # height = 5,
-        #     # plot = plot)
+        annotated[[sobj_name]] <- 
+            plot_my_stuff(object,
+                          what = "new_annot_clust") +
+                ggtitle("Annotated cell types by cluster")
+        merged[[sobj_name]] <- 
+            plot_my_stuff(object,
+                          what = "cell_group") +
+                ggtitle("Tumor and Stromal cells")
         
-    }
-    # print(plot)
-    # print(str_c("Done plotting for ", sobj_name))
+        #plot the tumor cells
+        tumor <-
+            qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                            sobj_name,
+                            "_cancer_cells.qs"))
+        just_tumor[[sobj_name]] <- 
+            plot_my_stuff(tumor,
+                          what = "seurat_clusters") +
+                ggtitle("Tumor cells reclustering")
 
+        #plot the stromal cells
+        stroma <- 
+            qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                            sobj_name,
+                            "_normal_cells.qs"))
+        just_stroma[[sobj_name]] <- 
+            plot_my_stuff(stroma,
+                          what = "cancer_normal") +
+                ggtitle("Stromal cells reclustering")
+    } else {
+        first_obj <- 
+            qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
+                            sobj_name,
+                            "_human.qs"))
+        just_tumor[[sobj_name]] <-
+            plot_my_stuff(first_obj,
+                          what = "seurat_clusters") +
+                ggtitle("Tumor cells")
+
+        second_obj <- 
+            qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
+                            sobj_name,
+                            "_mouse.qs"))
+        just_stroma[[sobj_name]] <- 
+            plot_my_stuff(second_obj,
+                          what = "seurat_clusters") +
+                ggtitle("Stromal cells")
+    }
 }
 
 ```
@@ -1129,28 +1038,69 @@ just_tumor$patient_mets
 just_stroma$patient_mets
 ```
 
+# calculate the celltype percentage and score per each clusters
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", eval = FALSE}
+object_list <- 
+    c("patient_prim_cancer_cells",
+    "patient_mets_cancer_cells",
+    "mm_prim_cancer_cells",
+    "mm_mets_cancer_cells",
+    "xeno_prim_human",
+    "xeno_mets_human",
+    "patient_prim_normal_cells",
+    "patient_mets_normal_cells",
+    "xeno_prim_mouse",
+    "xeno_mets_mouse",
+    "mm_prim_normal_cells",
+    "mm_mets_normal_cells")
 
-```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
-object_list <- dplyr::tribble(~sobj_name,              ~species,
-                            "patient_prim_cancer",    "human",
-                            "patient_mets_cancer",    "human",
-                            "mm_prim_cancer",         "mouse",
-                            "mm_mets_cancer",         "mouse",
-                            "xeno_prim_human_cancer", "human",
-                            "xeno_mets_human_cancer", "human",
-                            "patient_prim_normal",    "human",
-                            "patient_mets_normal",    "human",
-                            "xeno_prim_mouse",        "mouse",
-                            "xeno_mets_mouse",        "mouse",
-                            "mm_prim_normal",         "mouse",
-                            "mm_mets_normal",         "mouse")
+# Calculate cell type percentage for each object
+for (group in object_list) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                              group,
+                              ".qs"))
+    object$cell_types_string <- "NA"
+    object$med_cellscore_string <- "NA"
+    temp_list <- list()
+    for (clusters in unique(object$seurat_clusters)) {
+        temp_obj <- 
+            subset(x = object,
+                   seurat_clusters == clusters)
+        cell_types_percent <- 
+            table(temp_obj$annotations) %>%
+            as.data.frame() %>%
+            arrange(desc(Freq), .by_group = TRUE) %>%
+            slice_head(n=5) %>%
+            mutate(Percentage = Freq / sum(Freq) * 100) %>%
+            group_by(Var1) %>%
+            mutate(med_cellscore = median(temp_obj$cell_scores[temp_obj$annotations == Var1]) %>% 
+                round(2))
 
+        # Create a string of Var1 and Percentage
+        cell_types_string <- 
+            paste(cell_types_percent$Var1, cell_types_percent$Percentage %>% round(1), sep = ":", collapse = ",")
+        med_cellscore_string <- 
+            paste(cell_types_percent$Var1, cell_types_percent$med_cellscore, sep = ":", collapse = ",")
 
-#write a loop to print the seurat clusters and annotations for each obejct and also percentage of celltypes
-
+        # Append the string to temp_obj metadata
+        temp_list[[`clusters`]]$cell_types_string <-
+            cell_types_string
+        temp_list[[`clusters`]]$med_cellscore_string <-
+            med_cellscore_string
+    }
+    # Append the strings to the main object
+    for (clusters in unique(object$seurat_clusters)) {
+        object$cell_types_string[object$seurat_clusters == clusters] <- temp_list[[`clusters`]]$cell_types_string
+        object$med_cellscore_string[object$seurat_clusters == clusters] <- temp_list[[`clusters`]]$med_cellscore_string
+    }
+    qs::qsave(object, 
+              file = str_c("output/seurat_objects/tumor_vs_stroma/",
+                                       group,
+                                       ".qs"))
+}
 
 ```
-
 
 
 # Differential expression analysis for tumor cells {.tabset}
