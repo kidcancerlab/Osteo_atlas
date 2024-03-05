@@ -210,7 +210,9 @@ harmony_params <-
         mm_prim = list(group_by = c("sample_name", "model", "location"),
                        theta = c(7, 7, 7)),   
         mm_mets = list(group_by = c("sample_name", "model", "location"),
-                       theta = c(7, 7, 7)))
+                       theta = c(7, 7, 7)),
+        normal_bone = list(group_by = c("sample_name"),
+                           theta = c(7)))
 
 #run QC and merge seurat objects
 #parallel::mclapply(unique(all_samples_csv$unique), function(group) 
@@ -587,8 +589,10 @@ for (group in unique(all_samples_csv$unique)){
         subset_object <- process_seurat(subset_object)
         if (length(unique(subset_object$sample_name)) > 1 && ncol(subset_object) > 50 ) {
             subset_object <- RunHarmony(subset_object,
-                                group.by.vars = "sample_name") %>%
+                                        group.by.vars = "sample_name") %>%
                 process_seurat(reduction = "harmony")
+        } else {
+            subset_object <- subset_object
         }
 
         subset_object$re_cluster <- str_c(cluster, ".", subset_object$seurat_clusters)
@@ -645,7 +649,6 @@ for (group in unique(all_samples_csv$unique)) {
                                               features = c("Col1a1", "Col1a2", "Satb2", "Runx2"))
     }
 }
-
 ```
 
 ## Patient prim 
@@ -753,7 +756,6 @@ for (group in unique(all_samples_csv$unique)) {
                                     group,
                                     ".qs"))
 }
-
 ```
 
 # SCEVAN and scATOMIC plots {.tabset}
@@ -832,23 +834,41 @@ cancer_celltypes <- list(patient_prim = c( "MSC",
 
 harmony_params <-
     list(patient_prim = list(group_by = c("sample_name", "method", "data_source"), 
-                             theta = c(7, 7, 7)),
+                             theta = c(7, 7, 7),
+                             clustree_cancer_res = 0.1,
+                             clustree_normal_res = ),
         patient_mets = list(group_by = c("sample_name", "method", "data_source"), 
-                            theta = c(7, 7, 7)),
+                            theta = c(7, 7, 7),
+                             clustree_cancer_res = 0.1,
+                             clustree_normal_res = 0.2),
         xeno_prim_human = list(group_by = c("sample_name", "method", "data_source"),
-                               theta = c(7, 7, 7)),
+                               theta = c(7, 7, 7),
+                               clustree_cancer_res = ,
+                               clustree_normal_res = ),
         xeno_mets_human = list(group_by = c("sample_name", "method", "data_source"),
-                               theta = c(7, 7, 7)),
+                               theta = c(7, 7, 7),
+                               clustree_cancer_res = ,
+                               clustree_normal_res = ),
         xeno_prim_mouse = list(group_by = c("sample_name", "method", "data_source"),
-                                theta = c(7, 7, 7)),
+                                theta = c(7, 7, 7),
+                                clustree_cancer_res = ,
+                                clustree_normal_res = ),
         xeno_mets_mouse = list(group_by = c("sample_name", "method", "data_source"),
-                               theta = c(7, 7, 7)),
+                               theta = c(7, 7, 7),
+                               clustree_cancer_res = ,
+                               clustree_normal_res = ),
         mm_prim = list(group_by = c("sample_name", "model"),
-                       theta = c(12, 12)),
+                       theta = c(12, 12),
+                       clustree_cancer_res = 0.2,
+                       clustree_normal_res = 0.1),
         mm_mets = list(group_by = c("sample_name", "model"),
-                       theta = c(7, 7)),
+                       theta = c(7, 7),
+                       clustree_cancer_res = ,
+                       clustree_normal_res = ),
         normal_bone = list(group_by = c("sample_name"),
-                           theta = c(7)))
+                           theta = c(7),
+                           clustree_cancer_res = ,
+                           clustree_normal_res =))
 
 
 #parallel::mclapply(unique(all_samples_csv$unique), function(group) 
@@ -878,9 +898,15 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                    cell_group == cell_group_name) %>%
             process_seurat() %>%
             RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
-                       theta = harmony_params[[group]]$theta,
-                       tau = 500)
+                       theta = harmony_params[[group]]$theta)
 
+        # resolution_range <- seq(from = 0, to = 1, by = 0.1)
+        # clustree_sobj <- FindClusters(s_obj,
+        #                              resolution = resolution_range,
+        #                              reduction = "harmony")
+        # tree <- clustree::clustree(clustree_sobj,
+        #                         prefix = "RNA_snn_res.")
+    
         #optimize resolution, silhouette score does not work for large dataset
         min_cell_silhouette <- 65000
         n_cells <- length(Cells(s_obj))
@@ -901,7 +927,8 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
             s_obj %>%
             process_seurat(reduction = "harmony",
                            resolution = res_normal)
-        #plot_my_stuff(s_obj, what = c("cell_group", "new_annot_clust", "sample_name"))
+        #plot_my_stuff(s_obj, what = c("seurat_clusters", "new_annot_clust", "sample_name"))
+
         qs::qsave(s_obj, str_c("output/seurat_objects/tumor_vs_stroma/",  #nolint
                                 group, "_",
                                 cell_group_name,
@@ -1022,7 +1049,6 @@ for (item in seq_len(nrow(umaps_group))) {
                 ggtitle("Stromal cells")
     }
 }
-
 ```
 
 ## UMAPS Patient primary
@@ -1107,7 +1133,10 @@ for (group in object_list) {
                   collapse = ",")
 
         celltype_df$med_cellscore_string[i] <- 
-            paste(cell_types_percent$Var1, cell_types_percent$med_cellscore, sep = ":", collapse = ",")
+            paste(cell_types_percent$Var1, 
+                  cell_types_percent$med_cellscore,
+                  sep = ":",
+                  collapse = ",")
     }
 
     all_data_celltypes <-
