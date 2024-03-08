@@ -391,6 +391,8 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                                     group,
                                     ".qs"))
 }
+
+
 ```
 
 # Split cancer vs the stroma - here
@@ -536,3 +538,37 @@ for (group in c("xeno_prim_human", "xeno_prim_mouse", "xeno_mets_human", "xeno_m
 
 ```
 
+# Clustering based of the silhouette score and clustree 
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
+object_list <-
+    tribble(~group,                         ~res_value,
+            "patient_prim_cancer_cells",    0.15,
+            "patient_mets_cancer_cells",    0.05,
+            "mm_prim_cancer_cells",         0.05,
+            "mm_mets_cancer_cells",         0.05,
+            "xeno_prim_human",              0.1,
+            "xeno_mets_human",              0.1,
+            "patient_prim_normal_cells",    0.15,
+            "patient_mets_normal_cells",    0.15,
+            "xeno_prim_mouse",              0.05,
+            "xeno_mets_mouse",              0.15,
+            "mm_prim_normal_cells",         0.25,
+            "mm_mets_normal_cells",         0.05)
+
+for (item in seq_len(nrow(object_list))) {
+    group <- object_list$group[item]
+    res_value <- object_list$res_value[item]
+    s_obj <- 
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                              group,
+                              ".qs"))
+    
+    s_obj <- FindClusters(s_obj,
+                          resolution = res_value)
+
+    qs::qsave(s_obj,
+              file = str_c("output/seurat_objects/resolution_optimized/",
+                            group,
+                            ".qs"))
+}
+```

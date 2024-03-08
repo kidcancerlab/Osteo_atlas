@@ -1,0 +1,396 @@
+---
+title: "Osteosarcoma scAtlas degs"
+output: 
+    html_document:
+        code_folding: hide
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+library(rrrSingleCellUtils)
+library(Seurat)
+library(ggrepel)
+library(tidyverse)
+library(stringr)
+library(harmony)
+library(cowplot)
+library(clustree)
+library(data.table)
+library(hdf5r)
+library(Rmagic)
+library(scATOMIC)
+library(SCEVAN)
+library(knitr)
+```
+
+# load in functions
+```{r, child='function_atlas.Rmd'}
+```
+
+```{r setup2, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE,
+                      cache.lazy = FALSE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+## Read metadata 
+```{r, cache.vars="all_samples_csv"}
+all_samples_csv <- read_tsv("allsample_details.txt")
+
+all_samples_csv$sp_pattern <-
+    str_replace_all(all_samples_csv$sp_pattern, "nothing", "")
+
+# #for the sake of presentation, I will just have patient data
+# all_samples_csv <- filter(all_samples_csv,
+#                           unique == "patient_prim" | unique =="patient_mets")
+
+```
+
+
+# Differential expression analysis for tumor cells {.tabset}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
+
+theme_set(theme_classic(base_size = 20) +
+            theme(axis.title.y = element_text(margin = margin(0, 20, 0, 0),
+                                              size = 10,
+                                              color = "black",
+                                              face = "bold"),
+                  axis.title.x = element_text(hjust = 0.5,
+                                              margin = margin(20, 0, 0, 0),
+                                              size = 10,
+                                              color = "black",
+                                              face = "bold"),
+                  plot.title = element_text(hjust = 0.5,
+                                            size = 10,
+                                            face = "bold"),
+                  legend.text = element_text(size = 8,
+                                             face = "bold")))
+
+#GSEA Miltilevel
+cat_tib <- dplyr::tribble(
+    ~category, ~subcategory,   ~cat_expl,
+    "H",        "NA",          "Hallmark_paths",
+    "C2",      "CP:KEGG",      "KEGG",
+    "C3",      "TFT:GTRD",     "Transcription_factor_targets",
+    "C6",       "NA",          "Oncogenic_signature")
+
+object_list <- 
+    c("patient_prim_cancer_cells",
+    "patient_mets_cancer_cells",
+    "mm_prim_cancer_cells",
+    "mm_mets_cancer_cells",
+    "xeno_prim_human",
+    "xeno_mets_human",
+    "patient_prim_normal_cells",
+    "patient_mets_normal_cells",
+    "xeno_prim_mouse",
+    "xeno_mets_mouse",
+    "mm_prim_normal_cells",
+    "mm_mets_normal_cells")
+
+panel_plots <- list()
+
+for (group in object_list) {
+    object <- qs::qread(str_c("output/seurat_objects/resolution_optimized/",
+                              group,
+                              ".qs"))
+    #object <- JoinLayers(object)
+
+    volc_plot <- list()
+    gsea_plot <- list()
+    gsea_result <- list()
+
+    dimplot <- plot_my_stuff(object, "seurat_clusters")
+
+    degs_result <- run_degs(sobject = object,
+                            group_by = "seurat_clusters",
+                            prefix = group)
+
+    for (item in names(degs_result)) {
+        logfc_cutoff <- 0.6
+        degs_result[[item]]$diffexpressed <- "Not Significant"
+        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange > logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "Upregulated"
+        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange < -1 * logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "Downregulated"
+#make the volcano plot
+        volc_plot[[item]] <- ggplot(data=degs_result[[item]],
+                            aes(x=log2FoldChange,
+                                y=-log10(pvalue),
+                                color = diffexpressed)) + 
+            geom_vline(xintercept = c(-1 * logfc_cutoff, logfc_cutoff), col = "gray", linetype = "dashed") + 
+            geom_hline(yintercept = c(0.05), col = "gray", linetype = "dashed") +
+            geom_point(size = 2) +
+            scale_color_manual(values = c(plot_cols[1], "grey", plot_cols[2]),
+                               name = "") +
+            geom_text_repel(aes(label = gene))
+    }
+#GSEA analysis for the dotplots
+    for (i in seq_len(nrow(cat_tib))){
+        category <- cat_tib$category[i]
+        subcategory <- cat_tib$subcategory[i]
+        cat_expl <- cat_tib$cat_expl[i]
+        if (subcategory == "NA") {
+            gsea_result <- run_gsea(degs_result = degs_result,
+                                    category = category,
+                                    species = object$organism[1])
+        } else {
+            gsea_result <- run_gsea(degs_result = degs_result,
+                                    category = category,
+                                    subcategory = subcategory,
+                                    species = object$organism[1])
+        }
+        for (item in names(gsea_result)) {
+            rows <- gsea_result[[item]] %>% 
+                nrow()
+            if (rows >= 1) {
+                top5up_down <- rbind(gsea_result[[item]] %>%
+                                        slice_head(n = 7),
+                                    gsea_result[[item]] %>%
+                                        slice_tail(n = 7)) %>%
+                                dplyr::select(pathway, NES, size, padj) %>%
+                                arrange(desc(NES)) %>%
+                                mutate(pathway = as.factor(pathway) %>%
+                                            str_replace_all("_", " ") %>%
+                                            str_wrap(65) %>%
+                                            fct_reorder(NES),
+                                       sample = item,
+                                       order = seq_len(n()),
+                                       justify_y = if_else(NES > 0, 1, 0),
+                                       y_pos = if_else(NES > 0, -0.1, 0.1))
+                gsea_plot[[cat_expl]][[item]] <- 
+                    local({cat_expl = cat_expl
+                          two_way_dotplot(top5up_down, x_col = "NES") +
+                    ggtitle(str_c(cat_expl, " for ", item))})
+            } else {
+                print(str_c("No Pathways up or down in ", item, " for ", cat_expl))
+                gsea_plot[[cat_expl]][[item]] <- 
+                local({cat_expl = cat_expl
+                      ggplot(data = NULL,
+                            aes(x = as.factor(1),
+                            y = as.factor(1))) +
+                        geom_text(aes(label = str_c("No pathways for ", cat_expl, " in ", item)),
+                                  size = 4)})
+            }
+        }
+    }
+#make panel plots
+    for (clusters in names(volc_plot)) {
+        panel_plots[[group]][[clusters]] <- gridExtra::grid.arrange(dimplot,
+                                            volc_plot[[clusters]],
+                                            gsea_plot$KEGG[[clusters]],
+                                            gsea_plot$Hallmark_paths[[clusters]],
+                                            gsea_plot$Oncogenic_signature[[clusters]],
+                                            gsea_plot$Transcription_factor_targets[[clusters]],
+                                            ncol = 2,
+                                            top = clusters)
+
+        ggsave(str_c("output/gsea/", group, "/", clusters, ".png"),
+                width = 12,
+                height = 18,
+                plot = panel_plots[[group]][[clusters]])
+
+        # print(dimplot)
+        # print(gsea_plot$KEGG[[clusters]])
+        # print(gsea_plot$Hallmark_paths[[clusters]])
+        # print(volc_plot[[clusters]])
+        # print(gsea_plot$Oncogenic_signature[[clusters]])
+        # print(gsea_plot$Transcription_factor_targets[[clusters]])
+        # r1 <- dimplot + 
+        #       volc_plot[[clusters]] +
+        #       gsea_plot$KEGG[[clusters]]
+        # r2 <- gsea_plot$Hallmark[[clusters]] +
+        #       gsea_plot$Oncogenic[[clusters]] +
+        #       gsea_plot$TF_targets[[clusters]]
+        # plots <- r1 / r2
+    }
+}
+
+```
+
+## Patient primary cancer
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+# for (item in names(panel_plots$patient_prim_cancer_cells)) {
+#     print(panel_plots$patient_prim_cancer_cells[[item]])
+# }
+
+panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_0
+panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_1
+panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_2
+panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_3
+panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_4
+panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_5
+panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_6
+panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_7
+panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_8
+panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_9
+
+```
+
+## patient mets cancer
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+# for (item in names(panel_plots$patient_mets_cancer_cells)) {
+#     print(panel_plots$patient_mets_cancer_cells[[item]])
+# }
+panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_0
+panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_1
+panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_2
+panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_3
+panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_4
+panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_5
+panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_6
+panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_7
+
+```
+
+## Mouse primary cancer
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_0
+panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_1
+panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_2
+panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_3
+panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_4
+panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_5
+
+```
+
+## Mouse mets cancer
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_0
+panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_1
+panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_2
+panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_3
+panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_4
+panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_5
+panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_6
+panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_7
+panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_8
+panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_9
+
+
+```
+
+## Xeno primary human
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+panel_plots$xeno_prim_human$xeno_prim_human_Cluster_0
+panel_plots$xeno_prim_human$xeno_prim_human_Cluster_1
+panel_plots$xeno_prim_human$xeno_prim_human_Cluster_2
+panel_plots$xeno_prim_human$xeno_prim_human_Cluster_3
+panel_plots$xeno_prim_human$xeno_prim_human_Cluster_4
+panel_plots$xeno_prim_human$xeno_prim_human_Cluster_5
+panel_plots$xeno_prim_human$xeno_prim_human_Cluster_6
+panel_plots$xeno_prim_human$xeno_prim_human_Cluster_7
+
+```
+
+## Xeno mets human
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+panel_plots$xeno_mets_human$xeno_mets_human_Cluster_0
+panel_plots$xeno_mets_human$xeno_mets_human_Cluster_1
+panel_plots$xeno_mets_human$xeno_mets_human_Cluster_2
+panel_plots$xeno_mets_human$xeno_mets_human_Cluster_3
+panel_plots$xeno_mets_human$xeno_mets_human_Cluster_4
+panel_plots$xeno_mets_human$xeno_mets_human_Cluster_5
+panel_plots$xeno_mets_human$xeno_mets_human_Cluster_6
+
+```
+
+## Patient primary normal
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_0
+panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_1
+panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_2
+panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_3
+panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_4
+panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_5
+panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_6
+panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_7
+panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_8
+panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_9
+panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_10
+panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_11
+
+```
+
+## Patient mets normal
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_0
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_1
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_2
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_3
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_4
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_5
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_6
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_7
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_8
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_9
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_10
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_11
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_12
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_13
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_14
+panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_15
+
+```
+
+## Xeno primary mouse
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_0
+panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_1
+panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_2
+panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_3
+panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_4
+panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_5
+panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_6
+panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_7
+panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_8
+panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_9
+```
+
+## Xeno mets mouse
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_0
+panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_1
+panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_2
+panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_3
+panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_4
+panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_5
+panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_6
+panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_7
+panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_8
+panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_9
+
+```
+
+## Mouse primary normal
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_0
+panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_1
+panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_2
+panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_3
+panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_4
+panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_5
+panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_6
+panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_7
+panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_8
+panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_9
+panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_10
+panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_11
+```
+
+## Mouse mets normal
+```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
+panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_0
+panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_1
+panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_2
+panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_3
+panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_4
+panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_5
+panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_6
+panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_7
+panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_8
+panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_9
+panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_10
+
+```
+
