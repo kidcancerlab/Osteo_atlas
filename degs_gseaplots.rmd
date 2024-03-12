@@ -109,6 +109,11 @@ for (group in object_list) {
                             prefix = group)
 
     for (item in names(degs_result)) {
+        if (!dir.exists(str_c("output/degs/", group))) {
+            dir.create(str_c("output/degs/", group), recursive = TRUE)
+        }
+        write_tsv(degs_result[[item]],
+                 str_c("output/degs/", group, "/", item, "_degs.tsv"))
         logfc_cutoff <- 0.6
         degs_result[[item]]$diffexpressed <- "Not Significant"
         degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange > logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "Upregulated"
@@ -176,33 +181,30 @@ for (group in object_list) {
     }
 #make panel plots
     for (clusters in names(volc_plot)) {
-        panel_plots[[group]][[clusters]] <- gridExtra::grid.arrange(dimplot,
-                                            volc_plot[[clusters]],
-                                            gsea_plot$KEGG[[clusters]],
-                                            gsea_plot$Hallmark_paths[[clusters]],
-                                            gsea_plot$Oncogenic_signature[[clusters]],
-                                            gsea_plot$Transcription_factor_targets[[clusters]],
-                                            ncol = 2,
-                                            top = clusters)
+        panel_plots[[group]][[clusters]] <- 
+            patchwork::wrap_plots(dimplot,
+            volc_plot[[clusters]],
+            gsea_plot$KEGG[[clusters]],
+            gsea_plot$Hallmark_paths[[clusters]] ,
+            gsea_plot$Oncogenic_signature[[clusters]],
+            gsea_plot$Transcription_factor_targets[[clusters]],
+            ncol = 2,
+            widths = c(6, 6),
+            heights = unit(c(7,7,7), c("cm", "cm", "cm")))
+
+            # gridExtra::arrangeGrob(dimplot,
+            #                         volc_plot[[clusters]],
+            #                         gsea_plot$KEGG[[clusters]],
+            #                         gsea_plot$Hallmark_paths[[clusters]],
+            #                         gsea_plot$Oncogenic_signature[[clusters]],
+            #                         gsea_plot$Transcription_factor_targets[[clusters]],
+            #                         ncol = 2,
+            #                         top = clusters)
 
         ggsave(str_c("output/gsea/", group, "/", clusters, ".png"),
                 width = 12,
                 height = 18,
                 plot = panel_plots[[group]][[clusters]])
-
-        # print(dimplot)
-        # print(gsea_plot$KEGG[[clusters]])
-        # print(gsea_plot$Hallmark_paths[[clusters]])
-        # print(volc_plot[[clusters]])
-        # print(gsea_plot$Oncogenic_signature[[clusters]])
-        # print(gsea_plot$Transcription_factor_targets[[clusters]])
-        # r1 <- dimplot + 
-        #       volc_plot[[clusters]] +
-        #       gsea_plot$KEGG[[clusters]]
-        # r2 <- gsea_plot$Hallmark[[clusters]] +
-        #       gsea_plot$Oncogenic[[clusters]] +
-        #       gsea_plot$TF_targets[[clusters]]
-        # plots <- r1 / r2
     }
 }
 
@@ -211,186 +213,173 @@ for (group in object_list) {
 ## Patient primary cancer
 ```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
 # for (item in names(panel_plots$patient_prim_cancer_cells)) {
-#     print(panel_plots$patient_prim_cancer_cells[[item]])
+#     grid::grid.draw(panel_plots$patient_prim_cancer_cells[[item]])
 # }
-
-panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_0
-panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_1
-panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_2
-panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_3
-panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_4
-panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_5
-panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_6
-panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_7
-panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_8
-panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_9
-
+#the code above only gave the last plot, so I will do it manually
+print(panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_0)
+print(panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_1)
+print(panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_2)
+print(panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_3)
+print(panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_4)
+print(panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_5)
+print(panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_6)
+print(panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_7)
+print(panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_8)
+print(panel_plots$patient_prim_cancer_cells$patient_prim_cancer_cells_Cluster_9)
 ```
 
 ## patient mets cancer
 ```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
-# for (item in names(panel_plots$patient_mets_cancer_cells)) {
-#     print(panel_plots$patient_mets_cancer_cells[[item]])
-# }
-panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_0
-panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_1
-panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_2
-panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_3
-panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_4
-panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_5
-panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_6
-panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_7
-
+print(panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_0)
+print(panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_1)
+print(panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_2)
+print(panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_3)
+print(panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_4)
+print(panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_5)
+print(panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_6)
+print(panel_plots$patient_mets_cancer_cells$patient_mets_cancer_cells_Cluster_7)
 ```
 
 ## Mouse primary cancer
 ```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
-panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_0
-panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_1
-panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_2
-panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_3
-panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_4
-panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_5
-
+print(panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_0)
+print(panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_1)
+print(panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_2)
+print(panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_3)
+print(panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_4)
+print(panel_plots$mm_prim_cancer_cells$mm_prim_cancer_cells_Cluster_5)
 ```
 
 ## Mouse mets cancer
 ```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
-panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_0
-panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_1
-panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_2
-panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_3
-panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_4
-panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_5
-panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_6
-panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_7
-panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_8
-panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_9
-
-
+print(panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_0)
+print(panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_1)
+print(panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_2)
+print(panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_3)
+print(panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_4)
+print(panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_5)
+print(panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_6)
+print(panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_7)
+print(panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_8)
+print(panel_plots$mm_mets_cancer_cells$mm_mets_cancer_cells_Cluster_9)
 ```
 
 ## Xeno primary human
 ```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
-panel_plots$xeno_prim_human$xeno_prim_human_Cluster_0
-panel_plots$xeno_prim_human$xeno_prim_human_Cluster_1
-panel_plots$xeno_prim_human$xeno_prim_human_Cluster_2
-panel_plots$xeno_prim_human$xeno_prim_human_Cluster_3
-panel_plots$xeno_prim_human$xeno_prim_human_Cluster_4
-panel_plots$xeno_prim_human$xeno_prim_human_Cluster_5
-panel_plots$xeno_prim_human$xeno_prim_human_Cluster_6
-panel_plots$xeno_prim_human$xeno_prim_human_Cluster_7
-
+print(panel_plots$xeno_prim_human$xeno_prim_human_Cluster_0)
+print(panel_plots$xeno_prim_human$xeno_prim_human_Cluster_1)
+print(panel_plots$xeno_prim_human$xeno_prim_human_Cluster_2)
+print(panel_plots$xeno_prim_human$xeno_prim_human_Cluster_3)
+print(panel_plots$xeno_prim_human$xeno_prim_human_Cluster_4)
+print(panel_plots$xeno_prim_human$xeno_prim_human_Cluster_5)
+print(panel_plots$xeno_prim_human$xeno_prim_human_Cluster_6)
+print(panel_plots$xeno_prim_human$xeno_prim_human_Cluster_7)
 ```
 
 ## Xeno mets human
 ```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
-panel_plots$xeno_mets_human$xeno_mets_human_Cluster_0
-panel_plots$xeno_mets_human$xeno_mets_human_Cluster_1
-panel_plots$xeno_mets_human$xeno_mets_human_Cluster_2
-panel_plots$xeno_mets_human$xeno_mets_human_Cluster_3
-panel_plots$xeno_mets_human$xeno_mets_human_Cluster_4
-panel_plots$xeno_mets_human$xeno_mets_human_Cluster_5
-panel_plots$xeno_mets_human$xeno_mets_human_Cluster_6
-
+print(panel_plots$xeno_mets_human$xeno_mets_human_Cluster_0)
+print(panel_plots$xeno_mets_human$xeno_mets_human_Cluster_1)
+print(panel_plots$xeno_mets_human$xeno_mets_human_Cluster_2)
+print(panel_plots$xeno_mets_human$xeno_mets_human_Cluster_3)
+print(panel_plots$xeno_mets_human$xeno_mets_human_Cluster_4)
+print(panel_plots$xeno_mets_human$xeno_mets_human_Cluster_5)
+print(panel_plots$xeno_mets_human$xeno_mets_human_Cluster_6)
 ```
 
 ## Patient primary normal
 ```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
-panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_0
-panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_1
-panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_2
-panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_3
-panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_4
-panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_5
-panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_6
-panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_7
-panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_8
-panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_9
-panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_10
-panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_11
-
+print(panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_0)
+print(panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_1)
+print(panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_2)
+print(panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_3)
+print(panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_4)
+print(panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_5)
+print(panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_6)
+print(panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_7)
+print(panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_8)
+print(panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_9)
+print(panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_10)
+print(panel_plots$patient_prim_normal_cells$patient_prim_normal_cells_Cluster_11)
 ```
 
 ## Patient mets normal
 ```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_0
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_1
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_2
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_3
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_4
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_5
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_6
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_7
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_8
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_9
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_10
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_11
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_12
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_13
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_14
-panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_15
-
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_0)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_1)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_2)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_3)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_4)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_5)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_6)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_7)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_8)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_9)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_10)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_11)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_12)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_13)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_14)
+print(panel_plots$patient_mets_normal_cells$patient_mets_normal_cells_Cluster_15)
 ```
 
 ## Xeno primary mouse
 ```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
-panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_0
-panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_1
-panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_2
-panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_3
-panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_4
-panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_5
-panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_6
-panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_7
-panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_8
-panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_9
+print(panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_0)
+print(panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_1)
+print(panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_2)
+print(panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_3)
+print(panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_4)
+print(panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_5)
+print(panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_6)
+print(panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_7)
+print(panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_8)
+print(panel_plots$xeno_prim_mouse$xeno_prim_mouse_Cluster_9)
 ```
 
 ## Xeno mets mouse
 ```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
-panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_0
-panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_1
-panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_2
-panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_3
-panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_4
-panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_5
-panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_6
-panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_7
-panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_8
-panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_9
-
+print(panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_0)
+print(panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_1)
+print(panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_2)
+print(panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_3)
+print(panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_4)
+print(panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_5)
+print(panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_6)
+print(panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_7)
+print(panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_8)
+print(panel_plots$xeno_mets_mouse$xeno_mets_mouse_Cluster_9)
 ```
 
 ## Mouse primary normal
 ```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
-panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_0
-panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_1
-panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_2
-panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_3
-panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_4
-panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_5
-panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_6
-panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_7
-panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_8
-panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_9
-panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_10
-panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_11
+print(panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_0)
+print(panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_1)
+print(panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_2)
+print(panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_3)
+print(panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_4)
+print(panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_5)
+print(panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_6)
+print(panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_7)
+print(panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_8)
+print(panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_9)
+print(panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_10)
+print(panel_plots$mm_prim_normal_cells$mm_prim_normal_cells_Cluster_11)
 ```
 
 ## Mouse mets normal
 ```{r, fig.width = 14, fig.height = 20, fig.align = "center"}
-panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_0
-panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_1
-panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_2
-panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_3
-panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_4
-panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_5
-panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_6
-panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_7
-panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_8
-panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_9
-panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_10
-
+print(panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_0)
+print(panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_1)
+print(panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_2)
+print(panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_3)
+print(panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_4)
+print(panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_5)
+print(panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_6)
+print(panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_7)
+print(panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_8)
+print(panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_9)
+print(panel_plots$mm_mets_normal_cells$mm_mets_normal_cells_Cluster_10)
 ```
+
 
