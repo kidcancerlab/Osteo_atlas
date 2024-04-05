@@ -6,7 +6,8 @@ output:
 always_allow_html: true
 ---
 
-```{r setup, include=FALSE}
+# Load the library
+```{r, include=FALSE}
 library(rrrSingleCellUtils)
 library(Seurat)
 library(ggrepel)
@@ -23,11 +24,12 @@ library(SCEVAN)
 library(knitr)
 ```
 
-# load in functions
+# load in functions as a child document
 ```{r, child='function_atlas.Rmd'}
 ```
 
-```{r setup2, include=FALSE}
+# setup
+```{r, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
                       cache = TRUE,
                       cache.lazy = FALSE,
@@ -35,9 +37,12 @@ knitr::opts_chunk$set(echo = TRUE,
                       message = FALSE)
 ```
 
-## Read metadata 
+## Read metadata
+This metadata is has information on sample and all the details on methods used,
+source, organism, unique identifier per group, QC, and other relevant information
 ```{r, cache.vars="all_samples_csv"}
-all_samples_csv <- read_tsv("allsample_details.txt")
+all_samples_csv <- 
+    read_tsv("allsample_details.txt")
 
 all_samples_csv$sp_pattern <-
     str_replace_all(all_samples_csv$sp_pattern, "nothing", "")
@@ -47,11 +52,12 @@ all_samples_csv$sp_pattern <-
 #                           unique == "patient_prim" | unique =="patient_mets")
 ```
 
-# Count cells per sample before the QC
+# Count before the QC
+Count the number of cells per sample before the QC
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
-
-single_sobjs <- list.files(path = "output/seurat_objects/sobj_preprocess/",
-                          full.names = FALSE)
+single_sobjs <- 
+    list.files(path = "output/seurat_objects/sobj_preprocess/",
+               full.names = FALSE)
 counts <- tibble()
 for (item in single_sobjs){
     sobj <- qs::qread(str_c("output/seurat_objects/sobj_preprocess/",
@@ -71,11 +77,9 @@ for (item in single_sobjs){
         rbind(counts) %>% 
         arrange(unique)
 }
-
 ```
 
-
-# Count the number of cells per sample post QC
+# Count post QC
 some of the samples are discarded as the ncountmin was set 500 and number of 
 cells limit was set to 200 cells and above per sample. The upper cutoff was set 
 as 5000 max cells per sample for similar dataset representation 
@@ -106,11 +110,13 @@ combined_table <-
     select("sample_name", "unique", "ncount_median_before", "ncount_median_after", "N_cells_before", "N_cells_after")
 
 DT::datatable(arrange(combined_table, unique, desc(N_cells_before)))
-
 ```
 
 
-# Data Integration Plots {.tabset}
+# Data Integration DimPlots {.tabset}
+This is the dimplot of the integrated data. The data is integrated using harmony.
+The plots will be in order of before and after integration for each group in
+tabset. The plots are grouped by sample name, method, and data source
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
 BI_clusters <- list()
 BI_method <- list()
@@ -119,6 +125,17 @@ BI_data_source <- list()
 AI_clusters <- list()
 AI_method <- list()
 AI_data_source <- list()
+
+plot_my_stuff <- function(object, what, ncol = 1) {
+    DimPlot(object,
+            group.by = what,
+            ncol = ncol,
+            label = T,
+            repel = T,
+            shuffle = T,
+            cols = c(plot_cols, sample(rainbow(1000)))) +
+        coord_fixed()
+}
 
 for (group in unique(all_samples_csv$unique)){
     before_harmo_obj <- qs::qread(str_c("output/seurat_objects/comb_sobjs/",
@@ -151,9 +168,7 @@ for (group in unique(all_samples_csv$unique)){
     AI_data_source[[group]] <- plot_my_stuff(harmo_obj, "data_source")
 
 }
-
 ```
-
 
 ## Plots for patient_prim before and after harmony integration
 ### Before Integration
@@ -265,7 +280,7 @@ AI_data_source$mm_prim
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 BI_clusters$mm_mets  
 BI_method$mm_mets  
-BI_data_source$mm_mets  
+BI_data_source$mm_mets 
 ```
 
 ### After Integration
@@ -276,7 +291,16 @@ AI_data_source$mm_mets
 ```
 
 # Clustering and setting the right resolution {.tabset}
-used silhouette score and clustree method for right resolution
+Used silhouette score and clustree method for right resolution. For this step, 
+silhouette score was used for clustering. The silhouette score is a measure of
+how similar an object is to its own cluster (cohesion) compared to other clusters
+(separation). The silhouette ranges from -1 to 1, where a high value indicates
+that the object is well matched to its own cluster and poorly matched to
+neighboring clusters. If most objects have a high value, then the clustering
+solution is appropriate. If many points have a low or negative value, then the
+clustering solution may have too many or too few clusters. The silhouette score
+does not work for large dataset (cells above around 65000), so the clustree method
+was used to compliment the right resolution. 
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE, message = FALSE, warning=FALSE}
 clustrees <- list()
 silhouette_scores <- list()
@@ -363,6 +387,15 @@ silhouette_scores$mm_mets
 ```
 
 # Make plots for annotated datasets {.tabset}
+Each seurat obejct was annotated using the `annotate` function. The function uses
+the `SingleR` package to annotate the cells. The `SingleR` package uses a 
+reference dataset to annotate the cells. The reference dataset used here is the
+`HumanPrimaryCellAtlas` and `MousePrimaryCellAtlas` for human and mouse samples
+respectively. I also input some manually annotated dataset to the reference such
+as human_lung, human_bone, mouselung.
+Annotation was by one level of Recurlstering. The Recurlstering was done using
+running proess seurat and harmony integration. Each cluster was then added back
+by the `AddMetaData` function.
 ```{r annotated, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
 singler_annotation <- list()
 anotation_cluster_assignment <- list()
@@ -441,9 +474,12 @@ anotation_cluster_assignment$mm_mets
 feature_plots$mm_mets
 ```
 
-
 # SCEVAN and scATOMIC plots {.tabset}
-```{r, fig.width = 10, fig.height = 10, fig.align = "center", eval = FALSE}
+The SCEVAN and scATOMIC plots are used to visualize the cell type assignment as
+found by the algorithms. The plots are grouped by the sample name and the
+cell type assignment. The plots are also grouped by the cancer vs normal cells.
+scAtomic works only with human datasets and SCEVAN works with both human and mouse.
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 scevan_plots <- list()
 scATOMIC_plots <- list()
 for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
@@ -451,7 +487,9 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                                     group,
                                     ".qs"))
     scevan_plots[[group]] <- plot_my_stuff(scevan_object, "class")
+}
 
+for (group in c("patient_prim", "patient_mets")) {
     scATOMIC_object <- qs::qread(str_c("output/scATOMIC/",
                                     group,
                                     ".qs"))
@@ -460,31 +498,32 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 ```
 
 ## Patient primary
-```{r, fig.width = 10, fig.height = 10, fig.align = "center", eval = FALSE}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 scevan_plots$patient_prim
 scATOMIC_plots$patient_prim
 ```
 
 ## Patient mets
-```{r, fig.width = 10, fig.height = 10, fig.align = "center", eval = FALSE}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 scevan_plots$patient_mets
 scATOMIC_plots$patient_mets
 ```
 
 ## Mouse primary
-```{r, fig.width = 10, fig.height = 10, fig.align = "center", eval = FALSE}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 scevan_plots$mm_prim
-scATOMIC_plots$mm_prim
 ```
 
 ## Mouse mets
-```{r, fig.width = 10, fig.height = 10, fig.align = "center", eval = FALSE}
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
 scevan_plots$mm_mets
-scATOMIC_plots$mm_mets
 ```
 
-
 # silhouette score and clustree {.tabset}
+The results from the annotation, featureplots and the SCEVAN and scATOMIC plots
+are used to distinguish the cancer vs normal cells. Once the cells are split into
+cancer and normal cells, the silhouette score and clustree method are used to 
+find the right resolution for the clustering. 
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
 object_list <-
     c("patient_prim_cancer_cells",
@@ -611,10 +650,15 @@ silhouette_list$mm_mets_normal_cells
 ```
 
 # UMAPS combined and individual {.tabset}
+The UMAPS are plotted for the combined and individual datasets. The combined
+umaps have both cancer and stromal cells together in the same plot. The individual
+umaps have the cancer and stromal cells in separate plots. The umaps are plotted
+for the patient primary, patient mets, xenograft primary, xenograft mets, mouse
+primary, and mouse mets. 
 ```{r plotsumaps, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
 #Checkups to make sure the outputs make sense
 
-umaps_group <- 
+umaps_group <-
     tribble(~sobj,            ~title,                  ~combine,
             "patient_prim",    "Patient Primary",      "no",
             "patient_mets",    "Patient Metastatic",   "no",
@@ -733,6 +777,14 @@ just_stroma$mm_mets
 ```
 
 # calculate the celltype percentage and score per each clusters
+The cell type percentage and score per each cluster is calculated. The cell type
+percentage is calculated by taking the top 5 cell types and their percentage
+per cluster. The cell type score is calculated by taking the median of the cell
+score per cluster. The cell type percentage and score is calculated for the
+patient primary cancer cells, patient mets cancer cells, mouse primary cancer
+cells, mouse mets cancer cells, xenograft primary human, xenograft mets human,
+patient primary normal cells, patient mets normal cells, xenograft primary mouse,
+xenograft mets mouse, mouse primary normal cells, and mouse mets normal cells.
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
 object_list <- 
     c("patient_prim_cancer_cells",
@@ -822,3 +874,6 @@ for (group in object_list) {
 write_tsv(all_data_celltypes, "output/all_data_celltypes.tsv")
 ```
 
+# load in GSEA childdocs
+```{r, child='degs_gseaplots.rmd'}
+```

@@ -190,16 +190,8 @@ for (group in object_list) {
             gsea_plot$Transcription_factor_targets[[clusters]],
             ncol = 2,
             widths = c(6, 6),
-            heights = unit(c(7,7,7), c("cm", "cm", "cm")))
-
-            # gridExtra::arrangeGrob(dimplot,
-            #                         volc_plot[[clusters]],
-            #                         gsea_plot$KEGG[[clusters]],
-            #                         gsea_plot$Hallmark_paths[[clusters]],
-            #                         gsea_plot$Oncogenic_signature[[clusters]],
-            #                         gsea_plot$Transcription_factor_targets[[clusters]],
-            #                         ncol = 2,
-            #                         top = clusters)
+            heights = unit(c(8,8,8), c("cm", "cm", "cm"))) +
+            patchwork::plot_annotation(title = clusters)
 
         ggsave(str_c("output/gsea/", group, "/", clusters, ".png"),
                 width = 12,

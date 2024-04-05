@@ -1,17 +1,18 @@
 
+
 ```{r}
-plot_my_stuff <- function(object, what) {
+plot_my_stuff <- function(object, what, ncol = 1) {
     DimPlot(object,
             group.by = what,
-            ncol = 1,
+            ncol = ncol,
             label = T,
             repel = T,
             shuffle = T,
             cols = c(plot_cols, sample(rainbow(1000)))) +
-        coord_fixed() +
-        NoLegend()
+        coord_fixed()
 }
 ```
+
 # Cell type annotaton function data compilation
 ```{r}
 #loading the normal lungblood ref downloaded
@@ -164,20 +165,24 @@ annotate <- function(sobject,
 run_degs <- function(sobject,
                      group_by = "",
                      prefix = "") {
+    sobject$new_sample_name <- sobject$sample_name %>%
+        stringr::str_replace_all("_", "") %>%
+        stringr::str_replace_all("-", "")
+
     if (group_by == "seurat_clusters") {
-        sobject$pseudobulk_col <- stringr::str_c(sobject$sample_name,
+        sobject$pseudobulk_col <- stringr::str_c(sobject$new_sample_name,
                                  "-",
                                  sobject$seurat_clusters)
     } else if (group_by == "annotations") {
         sobject$annotations <-
             stringr::str_replace_all(sobject$annotations, " ", "")
-        sobject$pseudobulk_col <- stringr::str_c(sobject$sample_name,
+        sobject$pseudobulk_col <- stringr::str_c(sobject$new_sample_name,
                                  "-",
                                  sobject$annotations)
     }
     pseudobulk <- Seurat::AggregateExpression(object = sobject,
-                                      group.by = "pseudobulk_col",
-                                      slot = "counts")[[1]]
+                                            group.by = "pseudobulk_col",
+                                            slot = "counts")[[1]]
     deseq_coldata <- data.frame(pseudobulk_group = colnames(pseudobulk))
     rownames(deseq_coldata) <- deseq_coldata$pseudobulk_group
     deseq_coldata <- tidyr::separate(data = deseq_coldata,
@@ -200,7 +205,7 @@ run_degs <- function(sobject,
         other_group$group[other_group$group == interested_group] <- "target"  #nolint
         other_group$group[other_group$group != "target"] <- "other"         #nolint
         degs_output[[group]] <-
-            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk,
+            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk+1,
                                            colData = other_group,
                                            design = ~ group) %>%
             DESeq2::DESeq() %>%
@@ -216,26 +221,7 @@ run_degs <- function(sobject,
 
 # RUN GSEA
 ```{r}
-#' Run Gene Set Enrichment Analysis (GSEA)
-#'
-#' This function performs Gene Set Enrichment Analysis (GSEA) using the fgsea package.
-#' It takes a list of differential expression results and performs GSEA for each result.
-#'
-#' @param degs_result A list of differential expression results.
-#' @param category The category of gene sets to use for enrichment analysis.
-#' @param subcategory The subcategory of gene sets to use for enrichment analysis.
-#' @param species The species for which gene sets are available.
-#'
-#' @return A list of GSEA results for each differential expression result.
-#'
-#'
-#' @examples
-#' degs_result <- list(result1 = data.frame(gene = c("gene1", "gene2", "gene3"),
-#'                                          log2FoldChange = c(1.5, -2.0, 0.8)),
-#'                     result2 = data.frame(gene = c("gene4", "gene5", "gene6"),
-#'                                          log2FoldChange = c(0.9, -1.2, 2.3)))
-#' run_gsea(degs_result, category = "C2", subcategory = "CP:Canonical pathways", species = "Homo sapiens")
-
+#function to run gsea
 run_gsea <- function(degs_result,
                      category = "",
                      subcategory = "",
@@ -265,10 +251,8 @@ run_gsea <- function(degs_result,
 
 ```
 
-
 # GSEA Plots function for twoway dotplot and barplot
 ```{r}
-
 #two way dotplot
 two_way_dotplot <- function(data, x_col = "z_score") {
     lab4plot <-
@@ -324,7 +308,8 @@ two_way_dotplot <- function(data, x_col = "z_score") {
              x = "") +
         theme(plot.title = element_text(hjust = 0.5)) +
         ylim(-6, 6) +
-        scale_color_gradient(low = "pink", high = "darkred")
+        scale_color_gradient(low = plot_cols[2],
+                             high =plot_cols[1])
 
     return(plot_name)
 }
@@ -388,203 +373,3 @@ two_way_plot <- function(data, x_col = "z_score") {
 }
 ```
 
-
-# Recursive clustering function
-```{r}
-
-#source("/gpfs0/home2/gdrobertslab/lab/Analysis/Matt/10xRNAatac/test1/recurl.R")
-
-recurluster <- function(sobj,
-                        level = 1,
-                        max_level = 3,
-                        min_cells = 0,
-                        data_type = "RNA",
-                        do_plots = TRUE,
-                        parallel = FALSE,
-                        verbose = TRUE) {
-    if (verbose) {
-        message("Clustering level ", level)
-    }
-
-    # can't do plots while parallelizing
-    if (parallel && do_plots) {
-        do_plots <- FALSE
-        warning("Cannot plot while operating in parallel")
-    }
-
-    # number of PCs needs to be less than number of cells
-    pc_num <- min(50, length(Seurat::Cells(sobj)) - 1)
-
-    # Recluster at course resolution
-    if (data_type == "RNA") {
-        temp_sobj <- sobj %>%
-            Seurat::FindVariableFeatures(verbose = FALSE) %>%
-            Seurat::RunPCA(verbose = FALSE,
-                           npcs = pc_num,
-                           approx = FALSE) %>%
-            Seurat::FindNeighbors(dims = 1:min(10, pc_num),
-                                  verbose = FALSE) %>%
-            Seurat::RunUMAP(dims = 1:min(10, pc_num),
-                            n.neighbors = min(30, pc_num / 2),
-                            verbose = FALSE)
-        # opt_res <-
-        #     optimize_silhouette(temp_sobj,
-        #                         test_res = seq(0.05, 0.3, by = 0.05),
-        #                         summary_plot = FALSE) %>%
-        #     dplyr::arrange(sil_vals * -1) %>%
-        #     dplyr::pull(res_vals) %>%
-        #     head(n = 1)
-
-        temp_sobj <- RunHarmony(temp_sobj,
-                                group.by.vars = "sample_name")
-
-        temp_sobj <- temp_sobj %>%
-            process_seurat(reduction = "harmony",
-                           resolution = 0.1)
-            # if (verbose) {
-            #     message("Optimal resolution: ", opt_res)
-            # }
-    } else if (data_type == "ATAC") {
-        temp_sobj <- sobj %>%
-            Signac::RunTFIDF(verbose = FALSE) %>%
-            Signac::FindTopFeatures(min.cutoff = "q25", verbose = FALSE) %>%
-            Signac::RunSVD(verbose = FALSE) %>%
-            Seurat::RunUMAP(reduction = "lsi",
-                            dims = 2:min(30, pc_num),
-                            verbose = FALSE) %>%
-            Seurat::FindNeighbors(dims = 1:min(10, pc_num),
-                                  reduction = "lsi",
-                                  verbose = FALSE) %>%
-            Seurat::FindClusters(algorithm = 3, resolution = res, verbose = FALSE)
-    }
-
-    # Add new clusters to the Seurat object, at approprate level
-    if (level == 1) {
-        temp_sobj[[paste0("clust_", level)]] <-
-            paste0("clust_", temp_sobj$seurat_clusters)
-    } else {
-        temp_sobj[[paste0("clust_", level)]] <-
-            paste0(temp_sobj[[paste0("clust_", level - 1)]][, 1],
-                   ".",
-                   temp_sobj$seurat_clusters)
-    }
-
-    # Plot the clusters at this level
-    if (do_plots) {
-        Seurat::Idents(temp_sobj) <- temp_sobj[[paste0("clust_", level)]]
-        print(Seurat::DimPlot(temp_sobj, pt.size = 1) +
-            ggplot2::ggtitle(paste0("Level ", level))) +
-            ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5))
-    }
-
-    # If more than one cluster isolate and recurluster each cluster
-    # Also stop if we've reached the max level
-    if (temp_sobj$seurat_clusters %>%
-            as.character() %>%
-            as.numeric() %>%
-            max() > 0 &&
-        level < max_level) {
-
-        if (!parallel) {
-            sobj_list <-
-                lapply(unique(temp_sobj$seurat_clusters),
-                       function(x) re_recurluster(sobject = temp_sobj,
-                                                  cluster_num = x,
-                                                  level = level,
-                                                  min_cells = min_cells,
-                                                  data_type = data_type,
-                                                  do_plots = do_plots,
-                                                  parallel = parallel,
-                                                  verbose = verbose))
-        } else {
-            num_cores <- parallel::detectCores()
-            sobj_list <-
-                parallel::mclapply(unique(temp_sobj$seurat_clusters),
-                                   function(x) re_recurluster(sobject = temp_sobj,
-                                                              cluster_num = x,
-                                                              level = level,
-                                                              min_cells = min_cells,
-                                                              data_type = data_type,
-                                                              do_plots = do_plots,
-                                                              parallel = parallel,
-                                                              verbose = verbose),
-                                   mc.cores = num_cores)
-        }
-        # Merge the subclusters into a single Seurat object
-        temp_sobj <- merge(sobj_list[[1]],
-                           sobj_list[2:length(sobj_list)])
-    }
-
-    # Fill in NAs in the clustser columns with parent cluster plus "_0"
-    for (clust_col in grep("clust_",
-                           names(temp_sobj@meta.data),
-                           value = TRUE) %>%
-            grep("clust_1", ., value = TRUE, invert = TRUE)) {
-        clust_num <- stringr::str_remove(clust_col, "clust_") %>%
-            as.numeric()
-
-        temp_sobj[[clust_col]] <-
-            temp_sobj@meta.data %>%
-            as.data.frame() %>%
-            dplyr::mutate({{ clust_col }} := dplyr::if_else(is.na(get(clust_col)),
-                                              paste0(get(paste0("clust_",
-                                                                clust_num - 1)),
-                                                     "0"),
-                                              get(clust_col))) %>%
-            dplyr::pull(get(clust_col))
-    }
-    return(temp_sobj)
-}
-
-re_recurluster <- function(sobject,
-                           cluster_num,
-                           level,
-                           min_cells,
-                           data_type,
-                           do_plots,
-                           parallel,
-                           verbose) {
-    if (length(which(sobject$seurat_clusters == cluster_num)) > min_cells) {
-        if (verbose) {
-            message("Processing cluster ",
-                    cluster_num,
-                    " at level ",
-                    level)
-        }
-        sobj_out <-
-            recurluster(subset(sobject,
-                                subset = seurat_clusters == cluster_num),
-                        level = level + 1,
-                        min_cells = min_cells,
-                        data_type = data_type,
-                        do_plots = do_plots,
-                        parallel = parallel)
-    } else {
-        sobj_out <-
-            subset(sobject,
-                   subset = seurat_clusters == cluster_num)
-    }
-    return(sobj_out)
-}
-
-recurluster_fill_nas <- function(sobject) {
-    for (clust_col in grep("clust_",
-                        names(sobject@meta.data),
-                        value = TRUE) %>%
-        grep("clust_1", ., value = TRUE, invert = TRUE)) {
-        clust_num <- stringr::str_remove(clust_col, "clust_") %>%
-            as.numeric()
-
-        sobject[[clust_col]] <-
-            sobject@meta.data %>%
-            as.data.frame() %>%
-            dplyr::mutate({{ clust_col }} := dplyr::if_else(is.na(get(clust_col)),
-                                                paste0(get(paste0("clust_",
-                                                                clust_num - 1)),
-                                                        "0"),
-                                                get(clust_col))) %>%
-            dplyr::pull(get(clust_col))
-    }
-}
-
-```

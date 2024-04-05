@@ -361,7 +361,7 @@ scATOMIC_pred : celltype annotation
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE, eval = FALSE}
 scATOMIC_plots <- list()
 
-for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+for (group in c("patient_prim", "patient_mets")) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
                               group,
                               ".qs"))
@@ -382,17 +382,12 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                                               raw_counts = count_mtx, 
                                               min_prop = 0.5 )
     scATOMIC_object <- AddMetaData(object, scATOMIC_results)
-
     #scATOMIC_plots[[group]] <- plot_my_stuff(scATOMIC_object, "pan_cancer_cluster")
-
-    #sc_ATOMIC_annot <- table(scATOMIC_results$scATOMIC_pred)
-
+    
     qs::qsave(scATOMIC_object, str_c("output/scATOMIC/",
                                     group,
                                     ".qs"))
 }
-
-
 ```
 
 # Split cancer vs the stroma - here
@@ -422,7 +417,8 @@ cancer_celltypes <- list(patient_prim = c( "MSC",
                                          "Fibroblasts",
                                          "Astrocyte",
                                          "BM",
-                                         "iPS_cells"),
+                                         "iPS_cells",
+                                         "Neurons"),
                         xeno_prim_human = c(),
                         xeno_mets_human = c(),
                         xeno_prim_mouse = c(),
@@ -439,9 +435,11 @@ cancer_celltypes <- list(patient_prim = c( "MSC",
 
 harmony_params <-
     list(patient_prim = list(group_by = c("sample_name", "method", "data_source"), 
-                             theta = c(7, 7, 7)),
+                             theta = c(5, 5, 5),
+                             lambda = c(0.5, 0.5, 0.5)),
         patient_mets = list(group_by = c("sample_name", "method", "data_source"), 
-                            theta = c(7, 7, 7)),
+                            theta = c(7, 7, 7),
+                            lambda = c(0.5, 0.5, 0.5)),
         xeno_prim_human = list(group_by = c("sample_name", "method", "data_source"),
                                theta = c(7, 7, 7)),
         xeno_mets_human = list(group_by = c("sample_name", "method", "data_source"),
@@ -463,7 +461,11 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
                         group,
                         ".qs"))
-    #plot_my_stuff(object, what = c("cell_group", "new_annot_clust", "sample_name"))
+    #x <- plot_my_stuff(s_obj, what = c("new_annot_clust"))
+    ggsave(plot = x,
+           filename = str_c("output/plots/", group, "_annot_clust.png"),
+           width = 7,
+           height = 7)
     Idents(object) <-
         object$new_annot_clust
     object$cancer_normal <-
@@ -484,11 +486,12 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                    cell_group == cell_group_name) %>%
             process_seurat() %>%
             RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
-                       theta = harmony_params[[group]]$theta)
+                       theta = harmony_params[[group]]$theta,
+                       lambda = harmony_params[[group]]$lambda)
         s_obj <-
             s_obj %>%
             process_seurat(reduction = "harmony")
-        #plot_my_stuff(s_obj, what = c("seurat_clusters", "new_annot_clust", "sample_name"))
+        #plot_my_stuff(s_obj, what = c("seurat_clusters", "new_annot_clust"))
 
         qs::qsave(s_obj, str_c("output/seurat_objects/tumor_vs_stroma/",  #nolint
                                 group, "_",
