@@ -1,9 +1,9 @@
 
-
-```{r}
-plot_my_stuff <- function(object, what, ncol = 1) {
+## Make a DimPlot with better default settings
+```{r dimplot_better_function}
+dimplot_better <- function(object, group_by, ncol = 1) {
     DimPlot(object,
-            group.by = what,
+            group.by = group_by,
             ncol = ncol,
             label = T,
             repel = T,
@@ -13,81 +13,89 @@ plot_my_stuff <- function(object, what, ncol = 1) {
 }
 ```
 
-# Cell type annotaton function data compilation
-```{r}
-#loading the normal lungblood ref downloaded
-human_lung <- qs::qread("input/downloads/normal_lung.qs")
+## Cell type annotaton data compilation
+Human normal lung reference data downloaded from
 
-human_lung$free_annotation <-
-    str_replace_all(human_lung$free_annotation, c("/" = "_",
+Mouse lung reference data is from
+https://pubmed.ncbi.nlm.nih.gov/33692365/
+https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE151974
+We kept only the normoxic samples for the analysis
+```{r celltype_annotation_data}
+human_lung_ref <- qs::qread("input/downloads/normal_lung.qs")
+
+human_lung_ref$free_annotation <-
+    str_replace_all(human_lung_ref$free_annotation, c("/" = "_",
                                                   "\\+" = "_plus"))
 
-human_lung$free_annotation <-
-    stringr::str_replace_all(human_lung$free_annotation,
-                              c("Alveolar Epithelial Type 1" = "Alveolar Epithelial",  #nolint
-                                "Alveolar Epithelial Type 2" = "Alveolar Epithelial",  #nolint
-                                "Basophil_Mast 1" = "Basophil_Mast",
-                                "Basophil_Mast 2" = "Basophil_Mast",
-                                "Bronchial Vessel 1" = "Bronchial Vessel",
-                                "Bronchial Vessel 2" = "Bronchial Vessel",
-                                "IGSF21_plus Dendritic" = "Dendritic cells",
-                                "Myeloid Dendritic Type 1" = "Myeloid Dendritic",   #nolint
-                                "Myeloid Dendritic Type 2" = "Myeloid Dendritic",   #nolint
-                                "Natural Killer" = "NK cells",
-                                "Natural Killer T" = "NKT",
-                                "NK cells T" = "NKT",
-                                "CD4_plus Memory/Effector T" = "CD4+ T cells",
-                                "CD4_plus Naive T" = "CD4+ T cells",
-                                "CD8_plus Memory_Effector T" = "CD8+ T cells",
-                                "CD8_plus Naive T" = "CD8+ T cells",
-                                "Proliferating NK_T" = "NKT",
-                                "TREM2_plus Dendritic" = "Dendritic cells",
-                                "Proliferating Macrophage" = "Macrophage",
-                                "Nonclassical Monocyte" = "Monocytes",
-                                "Classical Monocyte" = "Monocytes"))
+human_lung_ref$free_annotation <-
+    stringr::str_replace_all(
+        human_lung_ref$free_annotation,
+        c("Alveolar Epithelial Type 1" = "Alveolar Epithelial",
+          "Alveolar Epithelial Type 2" = "Alveolar Epithelial",
+          "Basophil_Mast 1" = "Basophil_Mast",
+          "Basophil_Mast 2" = "Basophil_Mast",
+          "Bronchial Vessel 1" = "Bronchial Vessel",
+          "Bronchial Vessel 2" = "Bronchial Vessel",
+          "IGSF21_plus Dendritic" = "Dendritic cells",
+          "Myeloid Dendritic Type 1" = "Myeloid Dendritic",
+          "Myeloid Dendritic Type 2" = "Myeloid Dendritic",
+          "Natural Killer" = "NK cells",
+          "Natural Killer T" = "NKT",
+          "NK cells T" = "NKT",
+          "CD4_plus Memory/Effector T" = "CD4+ T cells",
+          "CD4_plus Naive T" = "CD4+ T cells",
+          "CD8_plus Memory_Effector T" = "CD8+ T cells",
+          "CD8_plus Naive T" = "CD8+ T cells",
+          "Proliferating NK_T" = "NKT",
+          "TREM2_plus Dendritic" = "Dendritic cells",
+          "Proliferating Macrophage" = "Macrophage",
+          "Nonclassical Monocyte" = "Monocytes",
+          "Classical Monocyte" = "Monocytes")
+        )
 
-#camilles paper mouse lung
-mouse_lung <- qs::qread("input/downloads/mouse_lung.qs")
+mouse_lung_ref <- qs::qread("input/downloads/mouse_lung.qs")
 
-mouse_lung$CellType <-
-            str_replace_all(mouse_lung$CellType, c("/" = "_",
-                                                   "\\+" = "_plus",
-                                                   "-" = "_"))
+mouse_lung_ref$CellType <-
+            str_replace_all(mouse_lung_ref$CellType,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_"))
 
+mouse_lung_ref$CellType <-
+    str_replace_all(mouse_lung_ref$CellType,
+                    c("Col14a1_plus fibroblast" = "Fibroblasts",
+                      "Col13a1_plus fibroblast" = "Fibroblasts",
+                      "AT1" = "AT",
+                      "AT2 1" = "AT",
+                      "AT2 2" = "AT",
+                      "B cell 1" = "B cells",
+                      "B cell 2" = "B cells",
+                      "Cap_a" = "Cap",
+                      "CD4 T cell 1" = "CD4",
+                      "CD4 T cell 2" = "CD4",
+                      "CD8 T cell 1" = "CD8",
+                      "CD8 T cell 2" = "CD8",
+                      "DC1" = "Dendritic cells",
+                      "DC2" = "Dendritic cells",
+                      "gd T cell" = "Tgd",
+                      "Neut 1" = "Neutrophils",
+                      "Neut 2" = "Neutrophils",
+                      "NK cell" = "NK cells",
+                      "Pericyte 1" = "Pericytes",
+                      "Pericyte 2" = "Pericytes",
+                      "Mast Ba2" = "Mast_Basophils",
+                      "Mono" = "Monocytes"))
+```
 
-mouse_lung$CellType <-
-    stringr::str_replace_all(mouse_lung$CellType,
-                            c("Col14a1_plus fibroblast" = "Fibroblasts",
-                              "Col13a1_plus fibroblast" = "Fibroblasts",
-                              "AT1" = "AT",
-                              "AT2 1" = "AT",
-                              "AT2 2" = "AT",
-                              "B cell 1" = "B cells",
-                              "B cell 2" = "B cells",
-                              "Cap_a" = "Cap",
-                              "CD4 T cell 1" = "CD4",
-                              "CD4 T cell 2" = "CD4",
-                              "CD8 T cell 1" = "CD8",
-                              "CD8 T cell 2" = "CD8",
-                              "DC1" = "Dendritic cells",
-                              "DC2" = "Dendritic cells",
-                              "gd T cell" = "Tgd",
-                              "Neut 1" = "Neutrophils",
-                              "Neut 2" = "Neutrophils",
-                              "NK cell" = "NK cells",
-                              "Pericyte 1" = "Pericytes",
-                              "Pericyte 2" = "Pericytes",
-                              "Mast Ba2" = "Mast_Basophils",
-                              "Mono" = "Monocytes"))
-
-#function with mouse and human lung
-annotate <- function(sobject,
-                     species = "",
-                     ref,
-                     labels,
-                     aggr_ref = FALSE,
-                     label_type = "label.main",
-                     ...) {
+## Function to annotate cell types with mouse and human lung
+```{r annotate_function}
+annotate_celltypes <- function(sobject,
+                               species = "",
+                               ref,
+                               labels,
+                               aggr_ref = FALSE,
+                               label_type = "label.main",
+                               ...) {
     if (species == "human") {
         hpca <- celldex::HumanPrimaryCellAtlasData()
         huim <- celldex::MonacoImmuneData()
@@ -123,27 +131,27 @@ annotate <- function(sobject,
                                        "Monocyte" = "Monocytes",
                                        "DC" = "Dendritic cells"))
         huim <- celldex::MonacoImmuneData()
-        ref3 <- GetAssayData(human_lung)
+        ref3 <- SeuratObject::GetAssayData(human_lung_ref)
         ref <- list(hpca,
                     huim,
                     ref3)
         labels <- list(hpca[[label_type]],
                        huim[[label_type]],
-                       human_lung$free_annotation)
+                       human_lung_ref$free_annotation)
     } else if (species == "mouse_lung") {
         mord <- celldex::MouseRNAseqData()
         moim <- celldex::ImmGenData()
-        ref3 <- GetAssayData(mouse_lung)
+        ref3 <- SeuratObject::GetAssayData(mouse_lung_ref)
         moim$label.main <-
             stringr::str_replace_all(moim$label.main,
-                                    c("B cells, pro" = "B cells",
-                                      "DC" = "Dendritic cells"))
+                                     c("B cells, pro" = "B cells",
+                                       "DC" = "Dendritic cells"))
         ref <- list(mord,
                     moim,
                     ref3)
         labels <- list(mord[[label_type]],
                        moim[[label_type]],
-                       mouse_lung$CellType)
+                       mouse_lung_ref$CellType)
     }
     annotation <-
         SingleR::SingleR(test = Seurat::as.SingleCellExperiment(sobject),
@@ -160,8 +168,8 @@ annotate <- function(sobject,
 }
 ```
 
-# RUN DEGs 
-```{r}
+## RUN differential expression analysis on a Seurat object
+```{r run_degs_function}
 run_degs <- function(sobject,
                      group_by = "",
                      prefix = "") {
@@ -170,34 +178,39 @@ run_degs <- function(sobject,
         stringr::str_replace_all("-", "")
 
     if (group_by == "seurat_clusters") {
-        sobject$pseudobulk_col <- stringr::str_c(sobject$new_sample_name,
-                                 "-",
-                                 sobject$seurat_clusters)
+        sobject$pseudobulk_col <-
+            stringr::str_c(sobject$new_sample_name,
+                           "-",
+                           sobject$seurat_clusters)
     } else if (group_by == "annotations") {
         sobject$annotations <-
             stringr::str_replace_all(sobject$annotations, " ", "")
-        sobject$pseudobulk_col <- stringr::str_c(sobject$new_sample_name,
-                                 "-",
-                                 sobject$annotations)
+        sobject$pseudobulk_col <-
+            stringr::str_c(sobject$new_sample_name,
+                           "-",
+                           sobject$annotations)
     }
     pseudobulk <- Seurat::AggregateExpression(object = sobject,
-                                            group.by = "pseudobulk_col",
-                                            slot = "counts")[[1]]
+                                              group.by = "pseudobulk_col",
+                                              slot = "counts")[[1]]
     deseq_coldata <- data.frame(pseudobulk_group = colnames(pseudobulk))
     rownames(deseq_coldata) <- deseq_coldata$pseudobulk_group
-    deseq_coldata <- tidyr::separate(data = deseq_coldata,
-                          col = "pseudobulk_group",
-                          into = c("sample_name", "group"),
-                          sep = "-")
+    deseq_coldata <-
+        tidyr::separate(data = deseq_coldata,
+                        col = "pseudobulk_group",
+                        into = c("sample_name", "group"),
+                        sep = "-")
     deseq_coldata$type <- "single-read"
     deseq_coldata <- deseq_coldata[, -1]
+
     if (group_by == "seurat_clusters") {
         deseq_group <- levels(factor(sobject$seurat_clusters))
-        names(deseq_group) <- paste0(prefix, "_Cluster_", deseq_group) #nolint
+        names(deseq_group) <- paste0(prefix, "_Cluster_", deseq_group)
     } else if (group_by == "annotations") {
         deseq_group <- levels(factor(sobject$annotations))
-        names(deseq_group) <- paste0(prefix, "_Celltype_", deseq_group) #nolint
+        names(deseq_group) <- paste0(prefix, "_Celltype_", deseq_group)
     }
+
     degs_output <- list()
     for (group in names(deseq_group)) {
         interested_group <- deseq_group[group]
@@ -219,9 +232,8 @@ run_degs <- function(sobject,
 }
 ```
 
-# RUN GSEA
-```{r}
-#function to run gsea
+## Function to run GSEA
+```{r gsea_function}
 run_gsea <- function(degs_result,
                      category = "",
                      subcategory = "",
@@ -241,20 +253,20 @@ run_gsea <- function(degs_result,
                                          minSize = 10,
                                          maxSize = 500,
                                          nPermSimple = 10000)
-        gsea_output[[item]] <- output %>%
+        gsea_output[[item]] <-
+            output %>%
             dplyr::arrange(desc(NES)) %>%
             filter(padj < 0.05) %>%
             na.omit()
     }
     return(gsea_output)
 }
-
 ```
 
 # GSEA Plots function for twoway dotplot and barplot
 ```{r}
 #two way dotplot
-two_way_dotplot <- function(data, x_col = "z_score") {
+gsea_dotplot <- function(data, x_col = "z_score") {
     lab4plot <-
         tibble(y = c(-2.5, 2.5),
                x = c(0.2, 0.2),
@@ -270,9 +282,6 @@ two_way_dotplot <- function(data, x_col = "z_score") {
                  stat = "identity",
                  alpha = 0.8) +
         coord_flip() +
-        # geom_hline(yintercept = 0,
-        #             color = "black",
-        #             linewidth = 0.5) +
         geom_text(data = data,                #text for pathways names
                     aes(x = -1 * order,
                         y = get(x_col) + (y_pos *5),
@@ -298,7 +307,7 @@ two_way_dotplot <- function(data, x_col = "z_score") {
               axis.line.y = element_blank(),
               axis.title.x = element_text(size = 7),
               axis.ticks.y = element_blank(),
-              plot.title = element_text(size = 7, face = "bold"),    #title of the plot
+              plot.title = element_text(size = 7, face = "bold"),
               axis.text.y = element_blank(),
               axis.text.x = element_text(size = 7),
               legend.title = element_text(size = 7,
@@ -315,7 +324,7 @@ two_way_dotplot <- function(data, x_col = "z_score") {
 }
 
 
-two_way_plot <- function(data, x_col = "z_score") {
+gsea_barplot <- function(data, x_col = "z_score") {
     lab4plot <-
         tibble(y = c(-3, 3),
                x = c(0.2, 0.2),
@@ -350,7 +359,6 @@ two_way_plot <- function(data, x_col = "z_score") {
                           name = paste0(x_col, " > 0")) +
         theme(strip.background = element_rect(color = "white",
                                               fill = "white"),
-              #legend.position = "none",
               panel.grid.major = element_blank(),
               panel.grid.minor = element_blank(),
               panel.border = element_blank(),
@@ -358,7 +366,7 @@ two_way_plot <- function(data, x_col = "z_score") {
               axis.line.y = element_blank(),
               axis.title.x = element_text(size = 7),
               axis.ticks.y = element_blank(),
-              plot.title = element_text(size = 7, face = "bold"),    #title of the plot
+              plot.title = element_text(size = 7, face = "bold"),
               axis.text.y = element_blank(),
               axis.text.x = element_text(size = 7),
               legend.title = element_text(size = 7,
@@ -367,7 +375,7 @@ two_way_plot <- function(data, x_col = "z_score") {
              y = "NES",
              x = "") +
         theme(plot.title = element_text(hjust = 0.5)) +
-        ylim(-6, 6) 
+        ylim(-6, 6)
 
     return(plot_name)
 }

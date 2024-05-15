@@ -1,0 +1,224 @@
+## Read metadata
+```{r, cache.vars="all_samples_csv"}
+all_samples_csv <- read_tsv("misc/allsample_details.txt",
+                            show_col_types = FALSE)
+
+all_samples_csv$sp_pattern <-
+    str_replace_all(all_samples_csv$sp_pattern, "nothing", "")
+```
+
+## Reading data and make prepreocessed seurat objects
+The code will first look if the h5 files exist in each repo. If exists, the
+seurat object is made and saved.
+
+Seurat objects and save individual qs object
+```{r read_raw}
+#| fig.width: 10
+#| fig.height: 10
+#| fig.align: center
+#| echo: FALSE
+nCount_min <- 500
+min_n_cells <- 200
+
+path_key <- list(
+    SJ = "/gpfs0/home2/gdrobertslab/lab/ExternalData/Patel_lab/",
+    NCH = "/gpfs0/home2/gdrobertslab/lab/Counts_2/",
+    NCI_POB = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/03_FilteredMatricesH5/",
+    GEO = "/gpfs0/home2/gdrobertslab/lab/Counts_2/"
+    )
+
+path_suffix_key <- list(
+    SJ = "/filtered_feature_bc_matrix.h5",
+    NCH = "/filtered_feature_bc_matrix.h5",
+    NCI_POB = "_filtered_feature_bc_matrix.h5", # Note different file names
+    GEO = "/filtered_feature_bc_matrix.h5"
+    )
+
+count_list <-
+    parallel::mclapply(seq_len(nrow(all_samples_csv)),
+                       mc.cores = parallelly::availableCores(),
+                       function(i) {
+        sample_name <- all_samples_csv$sample_name[i]
+        data_source <- all_samples_csv$data_source[i]
+        organism <- all_samples_csv$organism[i]
+        ncount_max <- all_samples_csv$ncount_max[i]
+        mt_percent <- all_samples_csv$mt_percent[i]
+
+        #check if the object already exists
+        dir <- str_c("output/seurat_objects/sobj_preprocess")
+        sobject <- str_c(sample_name, "_", organism, ".qs")
+
+        path_h5 <-
+            paste0(path_key[data_source],
+                    sample_name,
+                    path_suffix_key[data_source])
+
+        counts <- tibble(sample_name = sample_name)
+
+        if (!file.exists(path_h5)) {
+            message(str_c(sample_name, " h5 file does not exist"))
+        } else {
+            sobj <-
+                tenx_load_qc(h5_file = path_h5,
+                             species_pattern = all_samples_csv$sp_pattern[i],
+                             violin_plot = FALSE,
+                             min_cells = 1,
+                             min_features = 1)
+
+            counts$n_cells_pre_filter = ncol(sobj)
+
+            counts$n_cells_post_filter <-
+                sobj@meta.data %>%
+                as.data.frame() %>%
+                filter(nCount_RNA > nCount_min &
+                       nCount_RNA < ncount_max &
+                       percent.mt < mt_percent) %>%
+                nrow()
+
+            if (counts$n_cells_post_filter >= min_n_cells) {
+                counts$kept <- TRUE
+                sobj <-
+                    subset(sobj,
+                           nCount_RNA > nCount_min &
+                           nCount_RNA < all_samples_csv$ncount_max[i] &
+                           percent.mt < all_samples_csv$mt_percent[i]) %>%
+                    process_seurat()
+
+                # Add metadata to Seurat object from all_samples_csv
+                for (colname in colnames(all_samples_csv)) {
+                    sobj[[colname]] <- all_samples_csv[[colname]][i]
+                }
+
+                qs::qsave(sobj, str_c(dir, "/", sobject))
+
+                print(str_c(sobject, " made and saved"))
+            } else {
+                counts$kept <- FALSE
+                print(str_c(sample_name,
+                            " has ",
+                            ncol(sobj),
+                            " cells which is less than ",
+                            min_n_cells,
+                            " hence discarded"))
+            }
+        }
+        return(counts)
+    })
+
+write_tsv(bind_rows(count_list),
+          "output/counts/cell_counts.txt")
+```
+
+## Run QC and create merged Seurat Object
+Will apply QC of ncount_min > 500 and number of cells > 200 cells per sample
+to be included into the merged seurat object per each group of patient_primary,
+patient_metastatic, mouse_primary, mouse_metastatic, xenograft_primary_human,
+xenograft_primary_mouse, xenograft_metastatic_human, and xenograft_metastatic_mouse
+```{r merge_harmony}
+#| fig.width: 10
+#| fig.height: 10
+#| fig.align: center
+harmony_params <-
+    list(patient_prim = list(group_by = c("sample_name", "method", "data_source"),
+                             theta = c(7, 7, 7)),
+         patient_mets = list(group_by = c("sample_name", "method", "data_source"),
+                             theta = c(7, 7, 7)),
+         xeno_prim_human = list(group_by = c("sample_name", "method", "data_source"),
+                                theta = c(7, 7, 7)),
+         xeno_mets_human = list(group_by = c("sample_name", "method", "data_source"),
+                                theta = c(7, 7, 7)),
+         xeno_prim_mouse = list(group_by = c("sample_name", "data_source"),
+                                 theta = c(7, 7)),
+         xeno_mets_mouse = list(group_by = c("sample_name", "method", "data_source"),
+                                theta = c(7, 7, 7)),
+         mm_prim = list(group_by = c("sample_name", "model", "location"),
+                        theta = c(7, 7, 7)),
+         mm_mets = list(group_by = c("sample_name", "model", "location"),
+                        theta = c(7, 7, 7)),
+         normal_bone = list(group_by = c("sample_name"),
+                            theta = c(7)))
+
+max_n_cells <- 5000
+
+#run QC and merge seurat objects
+#for (group in unique(all_samples_csv$unique)) {
+results <-
+    parallel::mclapply(unique(all_samples_csv$unique),
+                       mc.cores = parallelly::availableCores(),
+                       function(group) {
+    single_sobjs <- list.files(path = "output/seurat_objects/sobj_preprocess/",
+                               full.names = FALSE)
+    tmp_df <- subset(all_samples_csv, subset = (unique == group))
+    temp_list <- list()
+
+    for (i in seq_len(nrow(tmp_df))) {
+        sample_name <- tmp_df$sample_name[i]
+        organism <- tmp_df$organism[i]
+        dir <- str_c("output/seurat_objects/sobj_preprocess")
+        sobject <- str_c(sample_name, "_", organism, ".qs")
+
+        #check if the single seurat object exists and run QC
+        if (file.exists(str_c(dir, "/", sobject))) {
+            sobj <- qs::qread(str_c(dir, "/", sobject))
+
+            #if the cells are more than 5000, subset to 5000
+
+            set.seed(63274528)
+
+            cell_names <- Cells(sobj)
+            temp_list[[sample_name]] <-
+                subset(sobj,
+                       cells = sample(cell_names,
+                                      min(max_n_cells,
+                                          length(cell_names))))
+            rm(sobj)
+        } else {
+            print(str_c(sample_name,
+                  " does not exist in the preprocess folder"))
+        }
+    }
+
+    merged_sobj <- merge(x = temp_list[[1]],
+                         y = temp_list[2:length(temp_list)],
+                         add.cell.id = names(temp_list)) %>%
+        JoinLayers() %>%
+        process_seurat()
+    rm(temp_list)
+
+    qs::qsave(merged_sobj,
+              str_c("output/seurat_objects/comb_sobjs/",
+                    group,
+                    ".qs"))
+    #run harmony
+    harmony_obj <-
+        RunHarmony(object = merged_sobj,
+                   group.by.vars = harmony_params[[group]]$group_by,
+                   theta = harmony_params[[group]]$theta)
+
+    #optimize resolution, silhouette score does not work for large dataset
+    max_cell_silhouette <- 65000
+    n_cells <- length(Cells(harmony_obj))
+    keep_n_cells <- min(max_cell_silhouette, n_cells)
+    set.seed(63249528)
+    res_score <-
+        optimize_silhouette(sobject = harmony_obj[, sample(1:n_cells, keep_n_cells)],
+                            test_res = seq(0.1, 0.9, by = 0.1),
+                            summary_plot = FALSE,
+                            reduction = "harmony") %>%
+        arrange(desc(sil_vals), res_vals) %>%
+        slice_head(n=1) %>%
+        pull(res_vals)
+
+    harmony_obj <-
+        harmony_obj %>%
+        process_seurat(reduction = "harmony",
+                       resolution = res_score)
+
+    qs::qsave(harmony_obj,
+              str_c("output/seurat_objects/harmony_sobjs/",
+                    group,
+                    ".qs"))
+
+    return(TRUE)
+})
+```
