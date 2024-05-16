@@ -162,7 +162,6 @@ results <-
             sobj <- qs::qread(str_c(dir, "/", sobject))
 
             #if the cells are more than 5000, subset to 5000
-
             set.seed(63274528)
 
             cell_names <- Cells(sobj)

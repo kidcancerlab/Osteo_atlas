@@ -1,0 +1,92 @@
+
+## Cancer cells vs normal cells using SCEVAN
+Single CEll Variational Aneuploidy aNalysis
+When run, the result is in three metadata column:
+class: with tumor (blue) vs normal celltype(green), and (filtered (red): low quality cells i think)
+subclone: clones numbered like a seurat clusters
+SCEVAN starts from the raw count matrix removing irrelevant genes and cells.
+Identification of a small set of highly confident normal cells.
+Relative gene expression obtained from removal of the baseline inferred from confident normal cells.
+Edge-preserving nonlinear diffusion filtering of relative gene expression.
+Segmentation with a variational region-growing algorithm.
+Identification of normal cells as those in the cluster containing the majority of confident normal cells.
+Segments are then classified in five copy number states.
+Analysis of subclones including clone tree, pathway activities, but it can be turned off
+
+```{r scevan}
+#| fig.width: 10
+#| fig.height: 10
+#| fig.align: center
+#| echo: FALSE
+
+for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                              group,
+                              ".qs"))
+    if (ncol(object) > 10000) {
+        object <- subset(x = object,
+                                cells = sample(Cells(object),
+                                        min(10000, length(Cells(object)))))
+    } else {
+        object <- object
+    }
+
+    count_mtx <- object@assays$RNA$counts
+    results <- SCEVAN::pipelineCNA(count_mtx,
+                                   organism = object$organism[1],
+                                   par_cores = parallelly::availableCores(),
+                                   plotTree = FALSE,
+                                   SUBCLONES = FALSE)
+    scv_object <- Seurat::AddMetaData(object, metadata = results)
+
+    qs::qsave(scv_object,
+              str_c("output/SCEVAN/",
+                    group,
+                    ".qs"))
+}
+```
+
+## Cancer cells vs normal cells using scATOMIC
+The result comes with the annotation of cell types including for both cancer type
+and the normal cell types. Also outputs for each cell:
+Classification_confidence: confident, low_confidence on annotation
+pan_cancer_cluster: either cancer or normal
+scATOMIC_pred : celltype annotation
+```{r scatomic}
+#| fig.width: 10
+#| fig.height: 10
+#| fig.align: center
+#| echo: FALSE
+
+scATOMIC_plots <- list()
+
+for (group in c("patient_prim", "patient_mets")) {
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                              group,
+                              ".qs"))
+    if (ncol(object) > 10000) {
+        object <- subset(x = object,
+                         cells = sample(Cells(object),
+                         min(10000, length(Cells(object)))))
+    } else {
+        object <- object
+    }
+    count_mtx <- object@assays$RNA$counts
+    cell_predictions <-
+        scATOMIC::run_scATOMIC(rna_counts = count_mtx,
+                               mc.cores = parallelly::availableCores())
+    scATOMIC_results <-
+        scATOMIC::create_summary_matrix(prediction_list = cell_predictions,
+                              use_CNVs = F,
+                              modify_results = T,
+                              mc.cores = parallelly::availableCores(),
+                              raw_counts = count_mtx,
+                              min_prop = 0.5 )
+    scATOMIC_object <- AddMetaData(object, scATOMIC_results)
+
+    qs::qsave(scATOMIC_object,
+              str_c("output/scATOMIC/",
+                    group,
+                    ".qs"))
+}
+```
