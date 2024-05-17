@@ -1,0 +1,168 @@
+
+Label potential tumor cell and then split the seurat object into cancer cells and
+normal cells. The silhouette score was used to cluster the normal cells and 0.1
+resolution was used to cluster the cancer cells (to reduce the excessive)
+clustering.
+It might be a worthwile to annotate or re run SCEVAN in the cancer cells to filter
+out any normal cells that might have been group as cancer cells.
+```{r}
+#| fig.width: 10
+#| fig.height: 10
+#| fig.align: center
+#| echo: FALSE
+
+cancer_celltypes <- list(patient_prim = c("MSC",
+                                          "Chondrocytes",
+                                          "Tissue_stem_cells",
+                                          "Neurons",
+                                          "Osteoblasts",
+                                          "Erythroblast",
+                                          "Astrocyte",
+                                          "BM",
+                                          "Fibroblasts",
+                                          "iPS_cells"),
+                        patient_mets = c("MSC",
+                                         "Chondrocytes",
+                                         "Tissue_stem_cells",
+                                         "Osteoblasts",
+                                         "Smooth_muscle_cells",
+                                         "Erythroblast",
+                                         "Fibroblasts",
+                                         "Astrocyte",
+                                         "BM",
+                                         "iPS_cells",
+                                         "Neurons"),
+                        xeno_prim_human = c(),
+                        xeno_mets_human = c(),
+                        xeno_prim_mouse = c(),
+                        xeno_mets_mouse = c(),
+                        normal_bone = c(),
+                        mm_prim = c("Fibroblasts",
+                                    "Stem cells",
+                                    "Stromal cells",
+                                    "Cardiomyocytes"),
+                        mm_mets = c("Fibroblasts",
+                                    "Stem cells",
+                                    "Stromal cells",
+                                    "Cardiomyocytes"))
+
+harmony_params <-
+    list(patient_prim = list(group_by = c("sample_name",
+                                          "method",
+                                          "data_source"),
+                             theta = c(5, 5, 5),
+                             lambda = c(0.5, 0.5, 0.5)),
+        patient_mets = list(group_by = c("sample_name",
+                                         "method",
+                                         "data_source"),
+                            theta = c(7, 7, 7),
+                            lambda = c(0.5, 0.5, 0.5)),
+        xeno_prim_human = list(group_by = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                               theta = c(7, 7, 7)),
+        xeno_mets_human = list(group_by = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                               theta = c(7, 7, 7)),
+        xeno_prim_mouse = list(group_by = c("sample_name",
+                                            "data_source"),
+                                theta = c(7, 7)),
+        xeno_mets_mouse = list(group_by = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                               theta = c(7, 7, 7)),
+        mm_prim = list(group_by = c("sample_name",
+                                    "model"),
+                       theta = c(12, 12)),
+        mm_mets = list(group_by = c("sample_name",
+                                    "model"),
+                       theta = c(7, 7)),
+        normal_bone = list(group_by = c("sample_name"),
+                           theta = c(7)))
+
+#parallel::mclapply(unique(all_samples_csv$unique), function(group)
+for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        group,
+                        ".qs"))
+    #x <- plot_my_stuff(s_obj, what = c("new_annot_clust"))
+    # ggsave(plot = x,
+    #        filename = str_c("output/plots/", group, "_annot_clust.png"),
+    #        width = 7,
+    #        height = 7)
+    Idents(object) <-
+        object$new_annot_clust
+    object$cancer_normal <-
+        if_else(object$new_annot_clust %in% cancer_celltypes[[group]],
+                "cancer_cells",
+                object$new_annot_clust)
+    object$cell_group <-
+        if_else(object$new_annot_clust %in% cancer_celltypes[[group]],
+                "cancer_cells",
+                "normal_cells")
+    qs::qsave(object, str_c("output/seurat_objects/annotated_sobjs/",
+                            group,
+                            ".qs"))
+
+    for (cell_group_name in c("cancer_cells", "normal_cells")) {
+        s_obj <-
+            subset(x = object,
+                   cell_group == cell_group_name) %>%
+            process_seurat() %>%
+            RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
+                       theta = harmony_params[[group]]$theta,
+                       lambda = harmony_params[[group]]$lambda)
+        s_obj <-
+            s_obj %>%
+            process_seurat(reduction = "harmony")
+        #plot_my_stuff(s_obj, what = c("seurat_clusters", "new_annot_clust"))
+
+        qs::qsave(s_obj, str_c("output/seurat_objects/tumor_vs_stroma/",  #nolint
+                                group, "_",
+                                cell_group_name,
+                                ".qs"))
+
+        #save the cancer object metadata with the cell barcodes
+        date_time <-
+            format(Sys.time(), "%Y%m%d_%H%M%S")
+        s_obj$cell_barcodes <-
+            colnames(s_obj)
+        readr::write_tsv(x = s_obj@meta.data,
+                        file = str_c("output/metadata/",
+                                        group,
+                                        "_cancer",
+                                        date_time,
+                                        ".tsv"))
+    }
+    print(str_c(group, " labelled with cancer_vs_normal cells and subsetted and saved"))
+}
+
+#save the xenograft objects
+for (group in c("xeno_prim_human", "xeno_prim_mouse", "xeno_mets_human", "xeno_mets_mouse")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                        group,
+                        ".qs"))
+
+    qs::qsave(object, str_c("output/seurat_objects/tumor_vs_stroma/",
+                            group,
+                            ".qs"))
+    qs::qsave(object, str_c("output/seurat_objects/annotated_sobjs/",
+                            group,
+                            ".qs"))
+
+    #save the cancer object metadata with the cell barcodes
+    date_time <-
+        format(Sys.time(), "%Y%m%d_%H%M%S")
+    object$cell_barcodes <-
+        colnames(object)
+    readr::write_tsv(x = object@meta.data,
+                    file = str_c("output/metadata/",
+                                    group,
+                                    date_time,
+                                    ".tsv"))
+}
+
+```
