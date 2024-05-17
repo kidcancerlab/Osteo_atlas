@@ -1,5 +1,6 @@
 ## Read metadata
-```{r, cache.vars="all_samples_csv"}
+```{r read_metadata}
+#| cache.vars: all_samples_csv
 all_samples_csv <- read_tsv("misc/allsample_details.txt",
                             show_col_types = FALSE)
 
@@ -17,6 +18,7 @@ Seurat objects and save individual qs object
 #| fig.height: 10
 #| fig.align: center
 #| echo: FALSE
+#| dependson: read_metadata
 nCount_min <- 500
 min_n_cells <- 200
 
@@ -118,6 +120,7 @@ xenograft_primary_mouse, xenograft_metastatic_human, and xenograft_metastatic_mo
 #| fig.width: 10
 #| fig.height: 10
 #| fig.align: center
+#| dependson: read_raw
 harmony_params <-
     list(patient_prim = list(group_by = c("sample_name", "method", "data_source"),
                              theta = c(7, 7, 7)),
@@ -200,7 +203,7 @@ results <-
     keep_n_cells <- min(max_cell_silhouette, n_cells)
     set.seed(63249528)
     res_score <-
-        optimize_silhouette(sobject = harmony_obj[, sample(1:n_cells, keep_n_cells)],
+        optimize_silhouette(harmony_obj[, sample(1:n_cells, keep_n_cells)],
                             test_res = seq(0.1, 0.9, by = 0.1),
                             summary_plot = FALSE,
                             reduction = "harmony") %>%

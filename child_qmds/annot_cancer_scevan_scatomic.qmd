@@ -1,4 +1,3 @@
-
 ## Cancer cells vs normal cells using SCEVAN
 Single CEll Variational Aneuploidy aNalysis
 When run, the result is in three metadata column:
@@ -18,6 +17,7 @@ Analysis of subclones including clone tree, pathway activities, but it can be tu
 #| fig.height: 10
 #| fig.align: center
 #| echo: FALSE
+#| dependson: annot_celltypes
 
 for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
@@ -57,6 +57,7 @@ scATOMIC_pred : celltype annotation
 #| fig.height: 10
 #| fig.align: center
 #| echo: FALSE
+#| dependson: annot_celltypes
 
 scATOMIC_plots <- list()
 

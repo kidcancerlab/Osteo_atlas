@@ -8,6 +8,7 @@ assigned by highest number of celltype per each seurat cluster
 #| fig.width: 10
 #| fig.height: 10
 #| fig.align: "center"
+#| dependson: merge_harmony
 
 for (group in unique(all_samples_csv$unique)){
     ann_sobj <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
