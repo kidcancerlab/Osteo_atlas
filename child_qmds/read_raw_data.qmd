@@ -19,7 +19,7 @@ Seurat objects and save individual qs object
 #| fig.align: center
 #| echo: FALSE
 #| dependson: read_metadata
-nCount_min <- 500
+ncount_min <- 500
 min_n_cells <- 200
 
 path_key <- list(
@@ -72,7 +72,7 @@ count_list <-
             counts$n_cells_post_filter <-
                 sobj@meta.data %>%
                 as.data.frame() %>%
-                filter(nCount_RNA > nCount_min &
+                filter(nCount_RNA > ncount_min &
                        nCount_RNA < ncount_max &
                        percent.mt < mt_percent) %>%
                 nrow()
@@ -81,7 +81,7 @@ count_list <-
                 counts$kept <- TRUE
                 sobj <-
                     subset(sobj,
-                           nCount_RNA > nCount_min &
+                           nCount_RNA > ncount_min &
                            nCount_RNA < all_samples_csv$ncount_max[i] &
                            percent.mt < all_samples_csv$mt_percent[i]) %>%
                     process_seurat()
@@ -122,21 +122,36 @@ xenograft_primary_mouse, xenograft_metastatic_human, and xenograft_metastatic_mo
 #| fig.align: center
 #| dependson: read_raw
 harmony_params <-
-    list(patient_prim = list(group_by = c("sample_name", "method", "data_source"),
+    list(patient_prim = list(group_by = c("sample_name",
+                                          "method",
+                                          "data_source"),
                              theta = c(7, 7, 7)),
-         patient_mets = list(group_by = c("sample_name", "method", "data_source"),
+         patient_mets = list(group_by = c("sample_name",
+                                          "method",
+                                          "data_source"),
                              theta = c(7, 7, 7)),
-         xeno_prim_human = list(group_by = c("sample_name", "method", "data_source"),
+         xeno_prim_human = list(group_by = c("sample_name",
+                                             "method",
+                                             "data_source"),
                                 theta = c(7, 7, 7)),
-         xeno_mets_human = list(group_by = c("sample_name", "method", "data_source"),
+         xeno_mets_human = list(group_by = c("sample_name",
+                                             "method",
+                                             "data_source"),
                                 theta = c(7, 7, 7)),
-         xeno_prim_mouse = list(group_by = c("sample_name", "data_source"),
+         xeno_prim_mouse = list(group_by = c("sample_name",
+                                             "data_source"),
                                  theta = c(7, 7)),
-         xeno_mets_mouse = list(group_by = c("sample_name", "method", "data_source"),
+         xeno_mets_mouse = list(group_by = c("sample_name",
+                                             "method",
+                                             "data_source"),
                                 theta = c(7, 7, 7)),
-         mm_prim = list(group_by = c("sample_name", "model", "location"),
+         mm_prim = list(group_by = c("sample_name",
+                                     "model",
+                                     "location"),
                         theta = c(7, 7, 7)),
-         mm_mets = list(group_by = c("sample_name", "model", "location"),
+         mm_mets = list(group_by = c("sample_name",
+                                     "model",
+                                     "location"),
                         theta = c(7, 7, 7)),
          normal_bone = list(group_by = c("sample_name"),
                             theta = c(7)))
