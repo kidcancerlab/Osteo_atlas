@@ -10,69 +10,73 @@ assigned by highest number of celltype per each seurat cluster
 #| fig.align: "center"
 #| dependson: merge_harmony
 
-for (group in unique(all_samples_csv$unique)){
-    ann_sobj <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
-                              group,
-                              ".qs"))
-    ann_sobj <- annotate_celltypes(sobject = ann_sobj,
-                                   species = ann_sobj$organism[1],
-                                   aggr_ref = TRUE)
+# for (group in unique(all_samples_csv$unique)){
+results <-
+    parallel::mclapply(unique(all_samples_csv$unique),
+                       mc.cores = parallelly::availableCores(),
+                       function(group) {
+        ann_sobj <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                                    group,
+                                    ".qs"))
+        ann_sobj <- annotate_celltypes(sobject = ann_sobj,
+                                       species = ann_sobj$organism[1],
+                                       aggr_ref = TRUE)
 
-    Idents(ann_sobj) <- ann_sobj$seurat_clusters
-    clust_info <- tibble()
-    for (cluster in unique(ann_sobj$seurat_clusters)) {
-        subset_object <- subset(ann_sobj, ident = cluster) %>%
-            FindVariableFeatures() %>%
-            ScaleData() %>%
-            # don't ask for more PCs than there are cells
-            RunPCA(npcs = min(50,
-                              sum(ann_sobj$seurat_clusters == cluster) - 1))
+        Idents(ann_sobj) <- ann_sobj$seurat_clusters
+        clust_info <- tibble()
+        for (cluster in unique(ann_sobj$seurat_clusters)) {
+            subset_object <- subset(ann_sobj, ident = cluster) %>%
+                FindVariableFeatures() %>%
+                ScaleData() %>%
+                # don't ask for more PCs than there are cells
+                RunPCA(npcs = min(50,
+                                  sum(ann_sobj$seurat_clusters == cluster) - 1))
 
-        if (length(unique(subset_object$sample_name)) > 1 &&
-            ncol(subset_object) > 50) {
-            subset_object <- RunHarmony(subset_object,
-                                        group.by.vars = "sample_name") %>%
-                process_seurat(reduction = "harmony")
-        } else {
-            subset_object <- subset_object
+            if (length(unique(subset_object$sample_name)) > 1 &&
+                ncol(subset_object) > 50) {
+                subset_object <- RunHarmony(subset_object,
+                                            group.by.vars = "sample_name") %>%
+                    process_seurat(reduction = "harmony")
+            } else {
+                subset_object <- subset_object
+            }
+
+            subset_object$re_cluster <- str_c(cluster,
+                                              ".",
+                                              subset_object$seurat_clusters)
+
+            print(str_c("Done reclustering ", group, " ", cluster))
+            clust_info <- subset_object@meta.data %>%
+                    as.data.frame() %>%
+                    select(re_cluster) %>%
+                    rbind(clust_info)
         }
 
-        subset_object$re_cluster <- str_c(cluster,
-                                          ".",
-                                          subset_object$seurat_clusters)
+        ann_sobj <- AddMetaData(ann_sobj, metadata = clust_info)
+        ann_sobj$new_annot_clust <- ann_sobj$re_cluster
 
-        print(str_c("Done reclustering ", group, " ", cluster))
-        clust_info <- subset_object@meta.data %>%
-                as.data.frame() %>%
-                select(re_cluster) %>%
-                rbind(clust_info)
-    }
+        cluster_celltypes <-
+            table(ann_sobj$re_cluster, ann_sobj$annotations) %>%
+            as.data.frame() %>%
+            group_by(Var1) %>%
+            arrange(desc(Freq), .by_group = TRUE) %>%
+            slice_head(n = 1)
 
-    ann_sobj <- AddMetaData(ann_sobj, metadata = clust_info)
-    ann_sobj$new_annot_clust <- ann_sobj$re_cluster
+        for (i in seq_len(nrow(cluster_celltypes))) {
+            seurat_clust <- str_c("^", cluster_celltypes$Var1[i], "$") %>%
+                as.character()
 
-    cluster_celltypes <-
-        table(ann_sobj$re_cluster, ann_sobj$annotations) %>%
-        as.data.frame() %>%
-        group_by(Var1) %>%
-        arrange(desc(Freq), .by_group = TRUE) %>%
-        slice_head(n = 1)
+            celltype <- cluster_celltypes$Var2[i] %>%
+                as.character()
 
-    for (i in seq_len(nrow(cluster_celltypes))) {
-        seurat_clust <- str_c("^", cluster_celltypes$Var1[i], "$") %>%
-            as.character()
-
-        celltype <- cluster_celltypes$Var2[i] %>%
-            as.character()
-
-        ann_sobj$new_annot_clust <-
-            str_replace_all(string = ann_sobj$new_annot_clust,
-                            pattern = seurat_clust,
-                            replacement = celltype)
-    }
-    qs::qsave(x = ann_sobj,
-              file = str_c("output/seurat_objects/harmony_sobjs_annot/",
-                                       group,
-                                       ".qs"))
-}
+            ann_sobj$new_annot_clust <-
+                str_replace_all(string = ann_sobj$new_annot_clust,
+                                pattern = seurat_clust,
+                                replacement = celltype)
+        }
+        qs::qsave(x = ann_sobj,
+                  file = str_c("output/seurat_objects/harmony_sobjs_annot/",
+                               group,
+                               ".qs"))
+    })
 ```
