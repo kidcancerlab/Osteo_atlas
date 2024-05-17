@@ -65,7 +65,7 @@ count_list <-
                              min_cells = 1,
                              min_features = 1)
 
-            counts$n_cells_pre_filter = ncol(sobj)
+            counts$n_cells_pre_filter <- ncol(sobj)
 
             counts$n_cells_post_filter <-
                 sobj@meta.data %>%
@@ -205,7 +205,7 @@ results <-
                             summary_plot = FALSE,
                             reduction = "harmony") %>%
         arrange(desc(sil_vals), res_vals) %>%
-        slice_head(n=1) %>%
+        slice_head(n = 1) %>%
         pull(res_vals)
 
     harmony_obj <-
