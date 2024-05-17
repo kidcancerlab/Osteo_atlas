@@ -1,4 +1,3 @@
-
 Label potential tumor cell and then split the seurat object into cancer cells and
 normal cells. The silhouette score was used to cluster the normal cells and 0.1
 resolution was used to cluster the cancer cells (to reduce the excessive)
@@ -45,6 +44,8 @@ cancer_celltypes <- list(patient_prim = c("MSC",
                                     "Stem cells",
                                     "Stromal cells",
                                     "Cardiomyocytes"))
+
+###### We may want to use specific harmony parameters for tumor/stroma separation
 
 harmony_params <-
     list(patient_prim = list(group_by = c("sample_name",
@@ -94,14 +95,17 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
     #        height = 7)
     Idents(object) <-
         object$new_annot_clust
+
     object$cancer_normal <-
         if_else(object$new_annot_clust %in% cancer_celltypes[[group]],
                 "cancer_cells",
                 object$new_annot_clust)
+
     object$cell_group <-
         if_else(object$new_annot_clust %in% cancer_celltypes[[group]],
                 "cancer_cells",
                 "normal_cells")
+
     qs::qsave(object, str_c("output/seurat_objects/annotated_sobjs/",
                             group,
                             ".qs"))
@@ -119,28 +123,30 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
             process_seurat(reduction = "harmony")
         #plot_my_stuff(s_obj, what = c("seurat_clusters", "new_annot_clust"))
 
-        qs::qsave(s_obj, str_c("output/seurat_objects/tumor_vs_stroma/",  #nolint
-                                group, "_",
-                                cell_group_name,
-                                ".qs"))
+        qs::qsave(s_obj, str_c("output/seurat_objects/tumor_vs_stroma/",
+                               group, "_",
+                               cell_group_name,
+                               ".qs"))
 
         #save the cancer object metadata with the cell barcodes
-        date_time <-
-            format(Sys.time(), "%Y%m%d_%H%M%S")
         s_obj$cell_barcodes <-
             colnames(s_obj)
         readr::write_tsv(x = s_obj@meta.data,
                         file = str_c("output/metadata/",
-                                        group,
-                                        "_cancer",
-                                        date_time,
-                                        ".tsv"))
+                                     group,
+                                     "_cancer",
+                                     format(Sys.time(), "%Y%m%d_%H%M%S"),
+                                     ".tsv"))
     }
-    print(str_c(group, " labelled with cancer_vs_normal cells and subsetted and saved"))
+    print(str_c(group,
+                " labelled with cancer_vs_normal cells, subsetted and saved"))
 }
 
 #save the xenograft objects
-for (group in c("xeno_prim_human", "xeno_prim_mouse", "xeno_mets_human", "xeno_mets_mouse")) {
+for (group in c("xeno_prim_human",
+                "xeno_prim_mouse",
+                "xeno_mets_human",
+                "xeno_mets_mouse")) {
     object <-
         qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
                         group,
@@ -154,15 +160,12 @@ for (group in c("xeno_prim_human", "xeno_prim_mouse", "xeno_mets_human", "xeno_m
                             ".qs"))
 
     #save the cancer object metadata with the cell barcodes
-    date_time <-
-        format(Sys.time(), "%Y%m%d_%H%M%S")
     object$cell_barcodes <-
         colnames(object)
     readr::write_tsv(x = object@meta.data,
                     file = str_c("output/metadata/",
-                                    group,
-                                    date_time,
-                                    ".tsv"))
+                                 group,
+                                 format(Sys.time(), "%Y%m%d_%H%M%S"),
+                                 ".tsv"))
 }
-
 ```
