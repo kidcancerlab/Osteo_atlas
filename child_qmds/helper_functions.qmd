@@ -21,6 +21,7 @@ https://pubmed.ncbi.nlm.nih.gov/33692365/
 https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE151974
 We kept only the normoxic samples for the analysis
 ```{r celltype_annotation_data}
+#| cache.vars = c('human_lung_ref', 'mouse_lung_ref')
 human_lung_ref <- qs::qread("input/downloads/normal_lung.qs")
 
 human_lung_ref$free_annotation <-
@@ -89,6 +90,7 @@ mouse_lung_ref$CellType <-
 
 ## Function to annotate cell types with mouse and human lung
 ```{r annotate_function}
+#| cache.vars = 'annotate_celltypes'
 annotate_celltypes <- function(sobject,
                                species = "",
                                ref,
@@ -170,6 +172,7 @@ annotate_celltypes <- function(sobject,
 
 ## RUN differential expression analysis on a Seurat object
 ```{r run_degs_function}
+#| cache.vars = 'run_degs'
 run_degs <- function(sobject,
                      group_by = "",
                      prefix = "") {
@@ -234,6 +237,7 @@ run_degs <- function(sobject,
 
 ## Function to run GSEA
 ```{r gsea_function}
+#| cache.vars = 'run_gsea'
 run_gsea <- function(degs_result,
                      category = "",
                      subcategory = "",
@@ -265,7 +269,7 @@ run_gsea <- function(degs_result,
 
 # GSEA Plots function for twoway dotplot and barplot
 ```{r}
-#two way dotplot
+#| cache.vars = c('gsea_dotplot', 'gsea_barplot')
 gsea_dotplot <- function(data, x_col = "z_score") {
     lab4plot <-
         tibble(y = c(-2.5, 2.5),
