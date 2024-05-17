@@ -1,5 +1,4 @@
-
-# Annotate via Recurlstering all the datasets
+## Annotate via Recurlstering all the datasets
 The anotate function was build by compliling publicly available reference
 comprising of lung, blood, and other primary cells for both human and mouse.
 Once the clustering resolution was set, we mount each seurat object for
@@ -22,9 +21,14 @@ for (group in unique(all_samples_csv$unique)){
     clust_info <- tibble()
     for (cluster in unique(ann_sobj$seurat_clusters)) {
         subset_object <- subset(ann_sobj, ident = cluster) %>%
-            process_seurat()
+            FindVariableFeatures() %>%
+            ScaleData() %>%
+            # don't ask for more PCs than there are cells
+            RunPCA(npcs = min(50,
+                              sum(ann_sobj$seurat_clusters == cluster) - 1))
+
         if (length(unique(subset_object$sample_name)) > 1 &&
-                          ncol(subset_object) > 50) {
+            ncol(subset_object) > 50) {
             subset_object <- RunHarmony(subset_object,
                                         group.by.vars = "sample_name") %>%
                 process_seurat(reduction = "harmony")
@@ -32,26 +36,34 @@ for (group in unique(all_samples_csv$unique)){
             subset_object <- subset_object
         }
 
-        subset_object$re_cluster <- str_c(cluster, ".", subset_object$seurat_clusters)
+        subset_object$re_cluster <- str_c(cluster,
+                                          ".",
+                                          subset_object$seurat_clusters)
+
         print(str_c("Done reclustering ", group, " ", cluster))
         clust_info <- subset_object@meta.data %>%
                 as.data.frame() %>%
                 select(re_cluster) %>%
                 rbind(clust_info)
     }
+
     ann_sobj <- AddMetaData(ann_sobj, metadata = clust_info)
     ann_sobj$new_annot_clust <- ann_sobj$re_cluster
+
     cluster_celltypes <-
         table(ann_sobj$re_cluster, ann_sobj$annotations) %>%
         as.data.frame() %>%
         group_by(Var1) %>%
         arrange(desc(Freq), .by_group = TRUE) %>%
         slice_head(n = 1)
+
     for (i in seq_len(nrow(cluster_celltypes))) {
         seurat_clust <- str_c("^", cluster_celltypes$Var1[i], "$") %>%
             as.character()
+
         celltype <- cluster_celltypes$Var2[i] %>%
             as.character()
+
         ann_sobj$new_annot_clust <-
             str_replace_all(string = ann_sobj$new_annot_clust,
                             pattern = seurat_clust,
