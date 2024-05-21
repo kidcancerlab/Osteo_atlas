@@ -51,10 +51,14 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
             return(output)
         })
 
-    write_tsv(bind_rows(result_list),
-              str_c("output/id_tumor/SCEVAN/",
-                    group,
-                    "_metadata.tsv"))
+    bind_rows(result_list) %>%
+        mutate(scevan_tumor_call = if_else(class == "tumor",
+                                           "cancer_cells",
+                                           "normal_cells")) %>%
+        rownames_to_column("cell") %>%
+        write_tsv(str_c("output/id_tumor/SCEVAN/",
+                        group,
+                        "_metadata.tsv"))
 }
 ```
 
@@ -76,10 +80,6 @@ for (group in c("patient_prim", "patient_mets")) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                               group,
                               ".qs"))
-
-    # object <- subset(x = object,
-    #                  cells = sample(Cells(object),
-    #                                 min(10000, length(Cells(object)))))
 
     min_count_per_gene <- 10
     count_mtx_list <- object %>%
@@ -112,11 +112,13 @@ for (group in c("patient_prim", "patient_mets")) {
                        "classification_confidence")
         })
 
-    write.table(bind_rows(scATOMIC_results),
-                str_c("output/id_tumor/scATOMIC/",
-                      group,
-                      "_metadata.tsv"),
-                sep = "\t",
-                quote = FALSE)
+    bind_rows(result_list) %>%
+    mutate(scatomic_tumor_call = if_else(grepl("Cancer Cell$", scATOMIC_pred),
+                                         "cancer_cells",
+                                         "normal_cells")) %>%
+    rownames_to_column("cell") %>%
+    write_tsv(str_c("output/id_tumor/scATOMIC/",
+                    group,
+                    "_metadata.tsv"))
 }
 ```
