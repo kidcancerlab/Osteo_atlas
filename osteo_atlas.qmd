@@ -52,8 +52,9 @@ for directoryName in \
     output/seurat_objects/comb_sobjs \
     output/seurat_objects/harmony_sobjs \
     output/seurat_objects/harmony_sobjs_annot \
-    output/scATOMIC \
-    output/SCEVAN
+    output/id_tumor/scATOMIC \
+    output/id_tumor/SCEVAN \
+    output/id_tumor/celltype
 do
     if [ ! -d ${directoryName} ]
     then
@@ -85,7 +86,13 @@ This will help in splitting the cancer cells from the stroma cells.
 
 {{< include child_qmds/annot_cancer_scevan_scatomic.qmd >}}
 
-# Split cancer vs the stroma - here
+# Use SingleR cell annotations to try to ID cancer cells
+
+{{< include child_qmds/annot_cancer_celltype.qmd >}}
+
+# Split cancer vs the stroma
+
+{{< include child_qmds/split_tumor_stromal.qmd >}}
 
 # Clustering based of the silhouette score and clustree
 ```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE, eval = FALSE}
