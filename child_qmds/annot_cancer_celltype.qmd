@@ -1,0 +1,72 @@
+```{r annot_cancer_celltypes}
+#| fig.width: 10
+#| fig.height: 10
+#| fig.align: center
+#| echo: FALSE
+#| dependson: annot_celltypes
+#| eval: FALSE
+
+cancer_celltypes <- list(patient_prim = c("MSC",
+                                          "Chondrocytes",
+                                          "Tissue_stem_cells",
+                                          "Neurons",
+                                          "Osteoblasts",
+                                          "Erythroblast",
+                                          "Astrocyte",
+                                          "BM",
+                                          "Fibroblasts",
+                                          "iPS_cells"),
+                        patient_mets = c("MSC",
+                                         "Chondrocytes",
+                                         "Tissue_stem_cells",
+                                         "Osteoblasts",
+                                         "Smooth_muscle_cells",
+                                         "Erythroblast",
+                                         "Fibroblasts",
+                                         "Astrocyte",
+                                         "BM",
+                                         "iPS_cells",
+                                         "Neurons"),
+                        xeno_prim_human = c(),
+                        xeno_mets_human = c(),
+                        xeno_prim_mouse = c(),
+                        xeno_mets_mouse = c(),
+                        normal_bone = c(),
+                        mm_prim = c("Fibroblasts",
+                                    "Stem cells",
+                                    "Stromal cells",
+                                    "Cardiomyocytes"),
+                        mm_mets = c("Fibroblasts",
+                                    "Stem cells",
+                                    "Stromal cells",
+                                    "Cardiomyocytes"))
+
+#parallel::mclapply(unique(all_samples_csv$unique), function(group)
+for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        group,
+                        ".qs"))
+
+    Idents(object) <-
+        object$new_annot_clust
+
+    object$cancer_normal <-
+        if_else(object$new_annot_clust %in% cancer_celltypes[[group]],
+                "cancer_cells",
+                object$new_annot_clust)
+
+    object$cell_group <-
+        if_else(object$new_annot_clust %in% cancer_celltypes[[group]],
+                "cancer_cells",
+                "normal_cells")
+
+    object@meta.data %>%
+        as.data.frame() %>%
+        rownames_to_column("cell") %>%
+        select(cell, cancer_normal, cell_group) %>%
+        write_tsv(paste0("output/id_tumor/celltype/",
+                         group,
+                         "_cancer_normal.tsv"))
+}
+```
