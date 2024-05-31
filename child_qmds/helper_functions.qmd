@@ -1,6 +1,7 @@
 
 ## Make a DimPlot with better default settings
 ```{r dimplot_better_function}
+#| cache.vars = 'dimplot_better'
 dimplot_better <- function(object, group_by, ncol = 1) {
     DimPlot(object,
             group.by = group_by,
