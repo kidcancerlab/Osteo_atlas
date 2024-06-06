@@ -1,0 +1,68 @@
+## Read in the datasets and write them out to h5ad format
+```{r}
+for (dataset in c("xeno_mets_human", "xeno_prim_human")) {
+    sobj <- qs::qread(paste0("output/seurat_objects/harmony_sobjs_annot/",
+                             dataset,
+                             ".qs"))
+
+    empty_genes <-
+        GetAssayData(sobj) %>%
+        as.matrix() %>%
+        rowSums() < 50
+
+    sobj <- sobj[!empty_genes, ]
+
+    sobj[["harmony"]] <- NULL
+
+    sobj <- DietSeurat(sobj, layers = "counts")
+    sobj[["RNA"]]$scale.data <- NULL
+    sobj[["RNA"]]$data <- NULL
+
+    sobj[["RNA"]] <- as(object = sobj[["RNA"]], Class = "Assay")
+
+    SeuratDisk::SaveH5Seurat(
+        sobj,
+        filename = paste0("output/seurat_objects/harmony_sobjs_annot/",
+                          dataset,
+                          ".h5Seurat")
+    )
+    SeuratDisk::Convert(paste0("output/seurat_objects/harmony_sobjs_annot/",
+                               dataset,
+                               ".h5Seurat"),
+            dest = "h5ad")
+}
+```
+
+```{python}
+import numpy as np
+import pandas as pd
+import anndata as ad
+import scanpy as sc
+import hotspot
+np.random.seed(888)
+
+adata = sc.read_h5ad("output/seurat_objects/harmony_sobjs_annot/xeno_mets_human.h5ad")
+sc.pp.filter_genes(adata, min_cells = 3)
+sc.pp.filter_cells(adata, min_genes = 100)
+adata.layers["counts"] = adata.X.copy()
+sc.pp.normalize_total(adata, target_sum=1e4)
+sc.pp.log1p(adata)
+sc.pp.highly_variable_genes(adata, n_top_genes = 5000)
+sc.tl.pca(adata)
+
+hs = hotspot.Hotspot(
+    adata,
+    layer_key="counts",
+    model='danb',
+    latent_obsm_key="X_pca")
+
+
+hs.create_knn_graph(weighted_graph=False, n_neighbors=30) # lets try weighted_graph = True
+hs_results = hs.compute_autocorrelations()
+
+hs_genes = hs_results.loc[hs_results.FDR < 0.05].index
+
+# Working up to here, but this step looks to take a full day to run??
+local_correlations = hs.compute_local_correlations(hs_genes, jobs=20)
+
+```
