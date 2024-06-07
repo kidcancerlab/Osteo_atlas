@@ -47,6 +47,18 @@ sc.pp.filter_cells(adata, min_genes = 100)
 adata.layers["counts"] = adata.X.copy()
 sc.pp.normalize_total(adata, target_sum=1e4)
 sc.pp.log1p(adata)
+
+# maybe do batch correction here?
+adata.raw = adata
+# Combine the method, data_source, and sample_name into a batch variable
+adata.obs['batch'] = \
+    adata.obs['method'].astype(str) + '_' + \
+    adata.obs['data_source'].astype(str) + '_' + \
+    adata.obs['sample_name'].astype(str)
+
+sc.pp.combat(adata, key= 'batch')
+
+
 sc.pp.highly_variable_genes(adata, n_top_genes = 5000)
 sc.tl.pca(adata)
 
@@ -64,5 +76,29 @@ hs_genes = hs_results.loc[hs_results.FDR < 0.05].index
 
 # Working up to here, but this step looks to take a full day to run??
 local_correlations = hs.compute_local_correlations(hs_genes, jobs=20)
+
+modules = hs.create_modules(
+    min_gene_threshold=200,
+    core_only=True,
+    fdr_threshold=0.05
+)
+
+module_scores = hs.calculate_module_scores()
+
+modules.sort_values().to_csv("modules_200.csv")
+
+
+import matplotlib.pyplot as plt
+hs.plot_local_correlations()
+plt.savefig('plot.pdf')
+plt.show()
+
+
+pickle.dump(hs, open("output/hotspot/hs.pkl", 'wb'))
+pickle.dump(hs_results, open("output/hotspot/hs_results.pkl", 'wb'))
+pickle.dump(hs_genes, open("output/hotspot/hs_genes.pkl", 'wb'))
+pickle.dump(local_correlations, open("output/hotspot/local_correlations.pkl", 'wb'))
+pickle.dump(modules, open("output/hotspot/modules.pkl", 'wb'))
+pickle.dump(module_scores, open("output/hotspot/module_scores.pkl", 'wb'))
 
 ```
