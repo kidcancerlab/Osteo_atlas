@@ -7,7 +7,7 @@ library(Seurat)
 
 ```{r load_sample_meta}
 samples_to_run <-
-    read_csv("misc/allsample_details.txt",
+    read_tsv("misc/allsample_details.txt",
              show_col_types = FALSE) %>%
     filter(species %in% c("patient", "mousemodel") &
            location != "cc_alltumor" &
@@ -70,26 +70,26 @@ for (i in 49:nrow(samples_to_run)) {
         bam_file <- "gex_possorted_bam.bam"
     }
     message("loading data")
-    s_obj <-
-        tenx_load_qc(h5_file = paste0(file_loc,
-                                      sample_id,
-                                      "/filtered_feature_bc_matrix.h5"),
-                     violin_plot = FALSE) %>%
-        subset(nCount_RNA <= samples_to_run$ncount_max[i] &
-               percent.mt <= samples_to_run$mt_percent[i])
-    if (length(Cells(s_obj)) > 100) {
-        s_obj <-
-            s_obj %>%
-            process_seurat(run_umap_dims = 1:50) %>%
-            annotate(species = species)
-    } else {
-        message("Only ",
-                length(Cells(s_obj)),
-                " cells for ",
-                sample_id)
-        next
-        #return(FALSE)
-    }
+
+    qs_file <- paste0("output/seurat_objects/sobj_preprocess/",
+                      sample_id,
+                      "_", species,
+                      ".qs")
+    if (file.exists(qs_file)) {
+        sobj <- qs::qread(qs_file)
+        if (length(Cells(s_obj)) > 100) {
+            s_obj <-
+                s_obj %>%
+                process_seurat(run_umap_dims = 1:50) %>%
+                annotate(species = species)
+        } else {
+            message("Only ",
+                    length(Cells(s_obj)),
+                    " cells for ",
+                    sample_id)
+            next
+            #return(FALSE)
+        }
 
     message("optimize silhouette")
     opt_res <-
@@ -221,14 +221,12 @@ for (i in 49:nrow(samples_to_run)) {
             plot = plot_name,
             width = 20,
             height = 15)
+
+        s_obj@meta.data %>%
+            rownames_to_column("cell") %>%
+            select(cell_barcode, starts_with("snp_min_depth")) %>%
+            write_tsv(paste0("output/snvs/", sample_id, "_snp_calls.tsv"))
     }
-
-    qs::qsave(s_obj, paste0("output/snvs/", sample_id, ".qs"))
-
-    s_obj@meta.data %>%
-        rownames_to_column("cell_barcode") %>%
-        select(cell_barcode, starts_with("snp_min_depth")) %>%
-        write_tsv(paste0("output/snvs/", sample_id, "_snp_calls.tsv"))
 }
     #return(TRUE)
 #})
