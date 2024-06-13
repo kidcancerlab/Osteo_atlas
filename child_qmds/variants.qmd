@@ -50,11 +50,12 @@ genome_key <-
     list("human" = "/home/gdrobertslab/lab/GenRef/10x-hg38/fasta/genome.fa",
          "mouse" = "/home/gdrobertslab/lab/GenRef/10x-mm10/fasta/genome.fa")
 
-# parallel::mclapply(seq_len(nrow(samples_to_run)),
-#                    mc.cores = 10,
-#                    function(i) {
+output <-
+    parallel::mclapply(seq_len(nrow(samples_to_run)),
+                       mc.cores = 10,
+                       function(i) {
 
-for (i in seq_len(nrow(samples_to_run))) {
+#for (i in seq_len(nrow(samples_to_run))) {
 #for (i in 49:nrow(samples_to_run)) {
     sample_id <- samples_to_run$sample_name[i]
     species <- samples_to_run$organism[i]
@@ -78,10 +79,14 @@ for (i in seq_len(nrow(samples_to_run))) {
                ".qs")
 
     if (!file.exists(qs_file)) {
-        message("No seurat object for ",
+        return(
+            paste0(
+                "No seurat object for ",
                 sample_id,
                 " at ",
-                qs_file)
+                qs_file
+            )
+        )
     } else {
         s_obj <- qs::qread(qs_file)
         if (length(Cells(s_obj)) > 100) {
@@ -90,18 +95,19 @@ for (i in seq_len(nrow(samples_to_run))) {
                 process_seurat(run_umap_dims = 1:50) %>%
                 annotate_celltypes(species = species)
         } else {
-            message("Only ",
+            return(
+                paste0(
+                    "Only ",
                     length(Cells(s_obj)),
                     " cells for ",
-                    sample_id)
-            next
-            #return(FALSE)
+                    sample_id
+                )
+            )
         }
 
         message("Optimizing silhouette score")
         opt_res <-
-            optimize_silhouette(s_obj,
-                                summary_plot = FALSE) %>%
+            optimize_silhouette(s_obj, summary_plot = FALSE) %>%
             arrange(desc(sil_vals)) %>%
             pull(res_vals) %>%
             head(1)
@@ -115,12 +121,14 @@ for (i in seq_len(nrow(samples_to_run))) {
                    bam_file)
 
         if (!file.exists(full_bam_file)) {
-            message("No bam file for ",
+            return(
+                paste0(
+                    "No bam file for ",
                     sample_id,
                     " at ",
-                    full_bam_file)
-            next
-            #return(FALSE)
+                    full_bam_file
+                )
+            )
         }
 
         s_obj$bam_file <- full_bam_file
@@ -150,21 +158,27 @@ for (i in seq_len(nrow(samples_to_run))) {
         message("Making snp tree")
         snp_tree <-
             tryCatch({
-                get_snp_tree(cellid_bam_table = c_b_t,
-                            ploidy = ploidy,
-                            ref_fasta = genome_key[[species]],
-                            min_depth = c(5, 10, 20),
-                            temp_dir = paste0("output/id_tumor/snvs/", sample_id),
-                            sbatch_base = paste0("output/id_tumor/snvs/", sample_id, "/shell"),
-                            slurm_base = paste0("output/id_tumor/snvs/", sample_id, "/slurm"),
-                            min_sites_covered = 1000,
-                            cleanup = TRUE)
+                get_snp_tree(
+                    cellid_bam_table = c_b_t,
+                    ploidy = ploidy,
+                    ref_fasta = genome_key[[species]],
+                    min_depth = c(5, 10, 20),
+                    temp_dir = paste0("output/id_tumor/snvs/", sample_id),
+                    sbatch_base = paste0("output/id_tumor/snvs/", sample_id, "/shell"),
+                    slurm_base = paste0("output/id_tumor/snvs/", sample_id, "/slurm"),
+                    min_sites_covered = 1000,
+                    cleanup = TRUE
+                )
             }, error = function(e) {
-                message("Error in snp_tree for ",
+                return(
+                    paste0(
+                        "Error in snp_tree for ",
                         sample_id,
                         ": ",
-                        e)
-                #return(NULL)
+                        e
+                    )
+                )
+                return(NULL)
             })
 
         # if all the min_depths failed due to low coverage, then the value of snp_tree
@@ -173,9 +187,9 @@ for (i in seq_len(nrow(samples_to_run))) {
             snp_tree <- NULL
         }
 
-        # if (is.null(snp_tree)) {
-        #     return(FALSE)
-        # }
+        if (is.null(snp_tree)) {
+            return(paste0("No snp_tree for ", sample_id))
+        }
         qs::qsave(snp_tree,
                   paste0("output/id_tumor/snvs/",
                          sample_id, "/",
@@ -231,13 +245,13 @@ for (i in seq_len(nrow(samples_to_run))) {
 
             s_obj@meta.data %>%
                 rownames_to_column("cell") %>%
-                select(cell_barcode, starts_with("snp_min_depth")) %>%
+                select(cell, starts_with("snp_min_depth")) %>%
                 write_tsv(paste0("output/id_tumor/snvs/", sample_id, "_snp_calls.tsv"))
         }
     }
-}
-    #return(TRUE)
-#})
+#}
+    return("Completed successfully")
+})
 ```
 
 ```{r}
