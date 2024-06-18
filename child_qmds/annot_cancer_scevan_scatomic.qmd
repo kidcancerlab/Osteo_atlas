@@ -111,6 +111,7 @@ for (group in c("patient_prim", "patient_mets")) {
     result_list <-
         parallel::mclapply(names(count_mtx_list),
                            mc.cores = parallelly::availableCores(),
+                           mc.preschedule = FALSE,
                            function(x) {
             cell_predictions <-
                 scATOMIC::run_scATOMIC(
@@ -146,7 +147,7 @@ for (group in c("patient_prim", "patient_mets")) {
                     select(starts_with("layer_"),
                                any_of(c("scATOMIC_pred",
                                       "classification_confidence",
-                                      "pan_cancer_cluster")))
+                                      "CNV_status")))
                 })
 
             # # subset the individual seurat object
@@ -182,5 +183,7 @@ for (group in c("patient_prim", "patient_mets")) {
                     group,
                     "_metadata.tsv"))
 }
+
+
 ```
 
