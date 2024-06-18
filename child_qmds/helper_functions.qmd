@@ -17,7 +17,6 @@ dimplot_better <- function(object, group_by, ncol = 1, split_by = NULL) {
 
 ## Cell type annotaton data compilation
 Human normal lung reference data downloaded from
-
 Mouse lung reference data is from
 https://pubmed.ncbi.nlm.nih.gov/33692365/
 https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE151974
@@ -127,12 +126,13 @@ mouse_tumor_cell <- qs::qread("input/downloads/mm_tumor_cellculture.qs")
 #| cache.vars = 'annotate_celltypes'
 annotate_celltypes <- function(sobject,
                                species = "",
+                               with_tumor = FALSE,
                                ref,
                                labels,
                                aggr_ref = FALSE,
                                label_type = "label.main",
                                ...) {
-    if (species == "human") {
+    if (grepl("human", species)) {
         hpca <- celldex::HumanPrimaryCellAtlasData()
         huim <- celldex::MonacoImmuneData()
         ref4 <- SeuratObject::GetAssayData(human_tumor_cell)
@@ -144,12 +144,31 @@ annotate_celltypes <- function(sobject,
                                        "Monocyte" = "Monocytes",
                                        "DC" = "Dendritic cells"))
         ref <- list(hpca,
-                    huim,
-                    ref4)
+                    huim)
         labels <- list(hpca[[label_type]],
-                      huim[[label_type]],
-                      human_tumor_cell$CellType)
-    } else if (species == "mouse") {
+                       huim[[label_type]])
+
+        if (with_tumor) {
+            ref <- list(hpca,
+                        huim,
+                        ref4)
+            labels <- list(hpca[[label_type]],
+                           huim[[label_type]],
+                           human_tumor_cell$CellType)
+        }
+
+        if (species == "human_lung") {
+            ref <- list(hpca,
+                        huim,
+                        ref4,
+                        SeuratObject::GetAssayData(human_lung_ref))
+            labels <- list(hpca[[label_type]],
+                           huim[[label_type]],
+                           human_tumor_cell$CellType,
+                           human_lung_ref$free_annotation)
+        }
+
+    } else if (grepl("mouse", species)) {
         mord <- celldex::MouseRNAseqData()
         moim <- celldex::ImmGenData()
         ref4 <- SeuratObject::GetAssayData(mouse_tumor_cell)
@@ -157,50 +176,30 @@ annotate_celltypes <- function(sobject,
             stringr::str_replace_all(moim$label.main,
                                     c("B cells, pro" = "B cells",
                                       "DC" = "Dendritic cells"))
-        cancer_ref <- 
         ref <- list(mord,
-                    moim,
-                    ref4)
+                    moim)
         labels <- list(mord[[label_type]],
-                       moim[[label_type]],
-                       mouse_tumor_cell$CellType)
-    } else if (species == "human_lung") {
-        hpca <- celldex::HumanPrimaryCellAtlasData()
-        hpca$label.main <-
-            stringr::str_replace_all(hpca$label.main,
-                                     c("T_cells" = "T cells",
-                                       "B_cell" = "B cells",
-                                       "NK_cell" = "NK cells",
-                                       "Monocyte" = "Monocytes",
-                                       "DC" = "Dendritic cells"))
-        huim <- celldex::MonacoImmuneData()
-        ref3 <- SeuratObject::GetAssayData(human_lung_ref)
-        ref4 <- SeuratObject::GetAssayData(human_tumor_cell)
-        ref <- list(hpca,
-                    huim,
-                    ref3,
-                    ref4)
-        labels <- list(hpca[[label_type]],
-                       huim[[label_type]],
-                       human_lung_ref$free_annotation,
-                       human_tumor_cell$CellType)
-    } else if (species == "mouse_lung") {
-        mord <- celldex::MouseRNAseqData()
-        moim <- celldex::ImmGenData()
-        ref3 <- SeuratObject::GetAssayData(mouse_lung_ref)
-        ref4 <- SeuratObject::GetAssayData(mouse_tumor_cell)
-        moim$label.main <-
-            stringr::str_replace_all(moim$label.main,
-                                     c("B cells, pro" = "B cells",
-                                       "DC" = "Dendritic cells"))
-        ref <- list(mord,
-                    moim,
-                    ref3,
-                    ref4)
-        labels <- list(mord[[label_type]],
-                       moim[[label_type]],
-                       mouse_lung_ref$CellType,
-                       mouse_tumor_cell$CellType)
+                       moim[[label_type]])
+
+        if (with_tumor) {
+            ref <- list(mord,
+                        moim,
+                        ref4)
+            labels <- list(mord[[label_type]],
+                           moim[[label_type]],
+                           mouse_tumor_cell$CellType)
+        }
+
+        if (species == "mouse_lung") {
+            ref <- list(mord,
+                        moim,
+                        ref4,
+                        SeuratObject::GetAssayData(mouse_lung_ref))
+            labels <- list(mord[[label_type]],
+                           moim[[label_type]],
+                           mouse_tumor_cell$CellType,
+                           mouse_lung_ref$CellType)
+        }
     }
     annotation <-
         SingleR::SingleR(test = Seurat::as.SingleCellExperiment(sobject),
@@ -215,6 +214,7 @@ annotate_celltypes <- function(sobject,
               function(x) max(x, na.rm = TRUE))
     return(sobject)
 }
+
 ```
 
 ## RUN differential expression analysis on a Seurat object
