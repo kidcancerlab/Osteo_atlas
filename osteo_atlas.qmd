@@ -35,6 +35,8 @@ library(data.table)
 library(hdf5r)
 library(Rmagic)
 library(knitr)
+library(scATOMIC)
+library(copykat)
 ```
 
 # Load in functions
@@ -52,6 +54,7 @@ for directoryName in \
     output/seurat_objects/comb_sobjs \
     output/seurat_objects/harmony_sobjs \
     output/seurat_objects/harmony_sobjs_annot \
+    output/seurat_objects/sobj_preprocess_ \
     output/id_tumor/scATOMIC \
     output/id_tumor/SCEVAN \
     output/id_tumor/celltype
