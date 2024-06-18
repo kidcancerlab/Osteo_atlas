@@ -10,6 +10,16 @@ assigned by highest number of celltype per each seurat cluster
 #| fig.align: "center"
 #| dependson: merge_harmony
 
+annotation_type <- list(patient_prim = "human",
+                        patient_mets = "human_lung",
+                        mm_prim = "mouse",
+                        mm_mets = "mouse_lung",
+                        xeno_prim_human = "human",
+                        xeno_mets_human = "human_lung",
+                        xeno_prim_mouse = "mouse",
+                        xeno_mets_mouse = "mouse_lung",
+                        normal_bone = "human")
+
 # for (group in unique(all_samples_csv$unique)){
 results <-
     parallel::mclapply(unique(all_samples_csv$unique),
@@ -19,7 +29,8 @@ results <-
                                     group,
                                     ".qs"))
         ann_sobj <- annotate_celltypes(sobject = ann_sobj,
-                                       species = ann_sobj$organism[1],
+                                       species = annotation_type[group][1],
+                                       with_tumor = TRUE,
                                        aggr_ref = TRUE)
 
         Idents(ann_sobj) <- ann_sobj$seurat_clusters
@@ -79,4 +90,6 @@ results <-
                                group,
                                ".qs"))
     })
+
+
 ```
