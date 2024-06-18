@@ -52,6 +52,20 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                 system(paste0("mv output/' ",
                             x,
                             "onlytumor vega_output' output/id_tumor/SCEVAN/"))
+                sub_sobj <- subset(object, sample_name == x) %>%
+                    AddMetaData(metadata = output) %>%
+                    process_seurat()
+                
+                # make a plot
+                dimplot_sub_sobj <- dimplot_better(sub_sobj,
+                                                    group_by = c("class",
+                                                                "celltype_tumor_call",
+                                                                "new_annot_clust"))
+                ggsave(str_c("output/figures/scevan/",
+                             group, "/",
+                             x,
+                             "_dimplot.png"),
+                       plot = dimplot_sub_sobj)
                 return(output)
             }
         })
@@ -79,7 +93,7 @@ scATOMIC_pred : celltype annotation
 #| fig.align: center
 #| echo: FALSE
 #| dependson: annot_celltypes
-library(scATOMIC)
+
 
 for (group in c("patient_prim", "patient_mets")) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
@@ -104,20 +118,62 @@ for (group in c("patient_prim", "patient_mets")) {
                     mc.cores = parallelly::availableCores()
                 )
             scATOMIC_results <-
-                scATOMIC::create_summary_matrix(
-                    prediction_list = cell_predictions,
-                    use_CNVs = FALSE,
-                    modify_results = TRUE,
-                    mc.cores = parallelly::availableCores(),
-                    raw_counts = count_mtx_list[[x]],
-                    min_prop = 0.5
-                ) %>%
-                select(starts_with("layer_"),
-                       "scATOMIC_pred",
-                       "classification_confidence")
+                tryCatch(
+                    {
+                        scATOMIC::create_summary_matrix(
+                            prediction_list = cell_predictions,
+                            use_CNVs = T,
+                            modify_results = T,
+                            mc.cores = parallelly::availableCores(),
+                            raw_counts = count_mtx_list[[x]],
+                            min_prop = 0.5
+                        ) %>%
+                        select(starts_with("layer_"),
+                               any_of(c("scATOMIC_pred",
+                                      "classification_confidence",
+                                      "CNV_status",
+                                      "pan_cancer_cluster")))
+                },
+                error = function(e) {
+                    message("scATOMIC failed for ",group, " ", x, " with error: ", e)
+                    scATOMIC::create_summary_matrix(
+                        prediction_list = cell_predictions,
+                        modify_results = T,
+                        mc.cores = parallelly::availableCores(),
+                        raw_counts = count_mtx_list[[x]],
+                        min_prop = 0.5
+                    ) %>%
+                    select(starts_with("layer_"),
+                               any_of(c("scATOMIC_pred",
+                                      "classification_confidence",
+                                      "pan_cancer_cluster")))
+                })
+
+            # # subset the individual seurat object
+            # sub_sobj <- subset(object, sample_name == x) %>%
+            #     AddMetaData(metadata = scATOMIC_results) %>%
+            #     process_seurat()
+
+            # # make a plot
+            # dimplot_sub_sobj <- 
+            #     dimplot_better(sub_sobj,
+            #                    group_by = c("CNV_status",
+            #                                 "scATOMIC_pred",
+            #                                 "pan_cancer_cluster"))
+
+            # # save the plot
+            # ggsave(str_c("output/figures/scatomic/",
+            #                 group, "/",
+            #                 x,
+            #                 "_dimplot.png"),
+            #         plot = dimplot_sub_sobj,
+            #         height = 24,
+            #         width = 8)
+
+            return(scATOMIC_results)
         })
 
-    bind_rows(result_list) %>%
+    dplyr::bind_rows(result_list) %>%
     mutate(scatomic_tumor_call = if_else(grepl("Cancer Cell$", scATOMIC_pred),
                                          "cancer_cells",
                                          "normal_cells")) %>%
@@ -127,3 +183,4 @@ for (group in c("patient_prim", "patient_mets")) {
                     "_metadata.tsv"))
 }
 ```
+
