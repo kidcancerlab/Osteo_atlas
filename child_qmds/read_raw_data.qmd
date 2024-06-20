@@ -19,8 +19,8 @@ Seurat objects and save individual qs object
 #| fig.align: center
 #| echo: FALSE
 #| dependson: read_metadata
-ncount_min <- 500
-min_n_cells <- 200
+ncount_min <- 750
+min_n_cells <- 500
 
 path_key <- list(
     SJ = "/gpfs0/home2/gdrobertslab/lab/ExternalData/Patel_lab/",
@@ -132,8 +132,9 @@ harmony_params <-
                              theta = c(7, 7, 7)),
          xeno_prim_human = list(group_by = c("sample_name",
                                              "method",
-                                             "data_source"),
-                                theta = c(7, 7, 7)),
+                                             "data_source",
+                                             "location"),
+                                theta = c(7, 7, 7, 7)),
          xeno_mets_human = list(group_by = c("sample_name",
                                              "method",
                                              "data_source"),

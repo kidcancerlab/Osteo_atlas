@@ -16,8 +16,6 @@ We will make these column names have the format "cancer_lable_{method_name}" so 
 #| echo: FALSE
 #| eval: FALSE
 
-
-
 ###### We may want to use specific harmony parameters for tumor/stroma separation
 
 harmony_params <-
@@ -63,7 +61,138 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                         ".qs"))
 
     # Pull in cancer cell annotation from all the methods we attempted and add them to the metadata
-    for (method_used in c("SCEVAN", "scATOMIC", ""))
+    for (method_used in c("SCEVAN", "scATOMIC", "celltype", "snv_calling")) {
+        cancer_label_file <- str_c("output/id_tumor/",
+                       method_used,
+                       "/",
+                       group,
+                       "_metadata.tsv")
+
+        if (file.exists(cancer_label_file)) {
+            cancer_label <- readr::read_tsv(cancer_label_file) %>%
+                filter(cell %in% colnames(object)) %>%
+                column_to_rownames("cell")
+        }
+        object <- object %>%
+            AddMetaData(metadata = cancer_label)
+    }
+
+    #save the seurat object.size
+    qs::qsave(object, str_c("output/seurat_objects/final_combined_sobjs/",
+                            group,
+                            ".qs"))
+
+    #plot for the cancer normal cells, mouse do not have scatomic tumor call
+    if ("scatomic_tumor_call" %in% colnames(object@meta.data)){
+        combinedplot1 <- dimplot_better(object,
+                                        group_by = "scatomic_tumor_call") +
+                            NoLegend()
+    } else {
+        combinedplot1 <- ggplot(data = NULL) +
+                            aes(x = as.factor(1), y = as.factor(1)) +
+                            geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
+    }
+    combineplot2 <- dimplot_better(object,
+                                    group_by = "scevan_tumor_call") +
+                    NoLegend()
+    combineplot3 <- dimplot_better(object,
+                                    group_by = "final_snv_call") +
+                        NoLegend()
+    combineplot4 <- dimplot_better(object,
+                                   group_by = "celltype_tumor_call") +
+                        NoLegend()
+    combineplot5 <- dimplot_better(object,
+                                    group_by = "new_annot_clust") +
+                        NoLegend()
+    combineplot6 <- dimplot_better(object,
+                                    group_by = "sample_name") +
+                        NoLegend()
+
+    # use patchwork to combine the plots
+    combined_plots <- patchwork::wrap_plots(combinedplot1,
+                                            combineplot2,
+                                            combineplot3,
+                                            combineplot4,
+                                            combineplot5,
+                                            combineplot6,
+                                            ncol = 3) +
+                        patchwork::plot_annotation(title = group)
+
+    #save the combined plots
+    ggsave(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "combined_plots.png"),
+           plot = combined_plots,
+           width = 21,
+           height = 14)
+}
+
+#<ake feature plots for all the groups
+for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        group,
+                        ".qs"))
+    # plot feature plots
+    if (object$organism[1] == "human") {
+        # tumor features for human
+        featureplot1_tumor <-
+            FeaturePlot(object,
+                        features = c("COL1A1", "COL1A2", "FBLN1",
+                                     "SATB2", "RUNX2", "ALPL"),
+                        ncol = 3)
+        # Tcell=CD3E, Neutrophil=CD4, Macrophase=CD68,CD14, Bcells=MS4A1 or CD20, Endotthelial=ESAM
+        featureplot2_immune <-
+            FeaturePlot(object,
+                        features = c("CD3E", "CD4", "CD68",
+                                     "CD14", "MS4A1", "ESAM"),
+                        ncol = 3)
+    } else {
+        # plots for mouse
+        featureplot1_tumor <-
+            FeaturePlot(object,
+                        features = c("Col1a1", "Col1a2", "Fbln1",
+                                     "Satb2", "Runx2", "Alpl"),
+                        ncol = 3)
+        
+        featureplot2_immune <-
+            FeaturePlot(object,
+                        features = c("Cd3e", "Cd4", "Cd68",
+                                     "Cd14", "Ms4a1", "Esam"),
+                        ncol = 3)
+    }
+    ggsave(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "tumor_featureplots.png"),
+           plot = featureplot1_tumor,
+           width = 21,
+           height = 14)
+    
+    ggsave(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "immune_featureplots.png"),
+           plot = featureplot2_immune,
+           width = 21,
+           height = 14)
+}
+
+
+
+
+
+# the idea to split tumor and stromal cells is to use reclustering 1 level down and then
+# using the seurat clusters to split
+
+
+
+
+
+    # Find tumor cells annotated as commonly in scatomic and scevan tumor call
+
+
 
     # plot the cancer annotation columns for each method
 
@@ -101,6 +230,8 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                 " labelled with cancer_vs_normal cells, subsetted and saved"))
 }
 
+
+
 #save the xenograft objects
 for (group in c("xeno_prim_human",
                 "xeno_prim_mouse",
@@ -110,6 +241,15 @@ for (group in c("xeno_prim_human",
         qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
                         group,
                         ".qs"))
+    
+    dimplot_better(ann_sobj,
+                    group_by = c("new_annot_clust"),
+                    split_by = "sample_name",
+                    ncol = 6)
+FeaturePlot(ann_sobj,
+            features = c("COL1A1", "COL1A2", "CD14", "SATB2", "RUNX2", "RUNX3"),
+            cols = c("grey", "blue", "red", "green", "purple", "orange"),
+            pt.size = 0.5)
 
     qs::qsave(object, str_c("output/seurat_objects/tumor_vs_stroma/",
                             group,
@@ -128,3 +268,5 @@ for (group in c("xeno_prim_human",
                                  ".tsv"))
 }
 ```
+
+
