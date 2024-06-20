@@ -57,6 +57,7 @@ for directoryName in \
     output/seurat_objects/sobj_preprocess_ \
     output/id_tumor/scATOMIC \
     output/id_tumor/SCEVAN \
+    output/id_tumor/snvs/plots \
     output/id_tumor/celltype
 do
     if [ ! -d ${directoryName} ]
