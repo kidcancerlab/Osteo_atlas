@@ -1,10 +1,5 @@
-```{r library}
-library(tidyverse)
-library(rrrSingleCellUtils)
-library(rrrSnvs)
-library(Seurat)
-```
-
+## Load in the list of samples to run SNV calling on
+We're only running on patient and mouse model samples that are primary tumors or lung metastases. We're also excluding samples from the NCI-POB data source because we don't have the bam files for these samples. We're also excluding samples with low reads.
 ```{r load_sample_meta}
 samples_to_run <-
     read_tsv("misc/allsample_details.txt",
@@ -13,7 +8,7 @@ samples_to_run <-
            location != "cc_alltumor" &
            (tumor_type == "primary" |
             (tumor_type == "metastatic" & location == "lung")) &
-           data_source != "NCI-POB") %>% # We don't have the bam files for these samples
+           data_source != "NCI-POB") %>% # No bam files for these samples
     filter(!sample_name %in% c("SJOS013768_D1", # drop samples with low reads
                                "SJOS016016_D1",
                                "SJOS030605_D1",
@@ -21,15 +16,8 @@ samples_to_run <-
                                "SJOS030605_D2"))
 ```
 
-
-Anand's data is here: /home/gdrobertslab/lab/ExternalData/Patel_lab/
-    all samples with SJOS.+
-our data and GEO data are here: /home/gdrobertslab/lab/Counts_2/
-    All samples with S0.+ and X0.+
-
-Seurat objects in:
-/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/sobj_preprocess/
-
+## Run SNV calling on the pseudobulked clusters to try to ID tumor cells
+This portion requires https://github.com/kidcancerlab/rrrSnvs
 ```{r}
 file_loc_key <-
     list("X0" = "/home/gdrobertslab/lab/Counts_2/",
@@ -52,11 +40,9 @@ genome_key <-
 
 output <-
     parallel::mclapply(seq_len(nrow(samples_to_run)),
+                       mc.preschedule = FALSE,
                        mc.cores = 10,
                        function(i) {
-
-#for (i in seq_len(nrow(samples_to_run))) {
-#for (i in 49:nrow(samples_to_run)) {
     sample_id <- samples_to_run$sample_name[i]
     species <- samples_to_run$organism[i]
     file_loc <- file_loc_key[[substr(sample_id, 1, 2)]]
@@ -137,35 +123,56 @@ output <-
         s_obj$cell_group <- paste0("cluster_", s_obj$seurat_clusters)
         message("Making DimPlot")
         dim_plot_name <-
-            DimPlot(s_obj,
-                    group.by = c("seurat_clusters", "annotations"),
-                    label = TRUE,
-                    repel = TRUE,
-                    ncol = 1)
+            DimPlot(
+                s_obj,
+                group.by = c("seurat_clusters", "annotations"),
+                label = TRUE,
+                repel = TRUE,
+                ncol = 1
+            )
 
-        ggsave(paste0("output/id_tumor/snvs/plots/", sample_id, "_dim_plot.png"),
-               plot = dim_plot_name,
-               width = 20,
-               height = 20)
+        ggsave(
+            paste0(
+                "output/id_tumor/snvs/plots/",
+                sample_id,
+                "_dim_plot.png"
+            ),
+            plot = dim_plot_name,
+            width = 20,
+            height = 20
+        )
 
         c_b_t <-
             s_obj@meta.data %>%
             select(cell_group, bam_file, cell_barcode)
 
         if (!dir.exists(paste0("output/id_tumor/snvs/", sample_id))) {
-            dir.create(paste0("output/id_tumor/snvs/", sample_id), recursive = TRUE)
+            dir.create(
+                paste0(
+                    "output/id_tumor/snvs/",
+                    sample_id
+                ),
+                recursive = TRUE)
         }
         message("Making snp tree")
         snp_tree <-
             tryCatch({
-                get_snp_tree(
+                rrrSnvs::get_snp_tree(
                     cellid_bam_table = c_b_t,
                     ploidy = ploidy,
                     ref_fasta = genome_key[[species]],
                     min_depth = c(5, 10, 20),
                     temp_dir = paste0("output/id_tumor/snvs/", sample_id),
-                    sbatch_base = paste0("output/id_tumor/snvs/", sample_id, "/shell"),
-                    slurm_base = paste0("output/id_tumor/snvs/", sample_id, "/slurm"),
+                    sbatch_base = paste0(
+                        "output/id_tumor/snvs/",
+                        sample_id,
+                        "/shell"
+                        ),
+                    slurm_base = paste0(
+                        "output/id_tumor/snvs/",
+                        sample_id,
+                        "/slurm"
+                        ),
                     min_sites_covered = 1000,
                     cleanup = TRUE
                 )
@@ -181,8 +188,9 @@ output <-
                 return(NULL)
             })
 
-        # if all the min_depths failed due to low coverage, then the value of snp_tree
-        # an empty list of length 0. We change this to NULL for downstream processing
+        # if all the min_depths failed due to low coverage, then the value
+        #  of snp_tree is an empty list of length 0. We change this to NULL for
+        # downstream processing
         if (length(snp_tree) == 0) {
             snp_tree <- NULL
         }
@@ -190,20 +198,31 @@ output <-
         if (is.null(snp_tree)) {
             return(paste0("No snp_tree for ", sample_id))
         }
-        qs::qsave(snp_tree,
-                  paste0("output/id_tumor/snvs/",
-                         sample_id, "/",
-                         sample_id, "_snp_tree.qs"))
+
+        qs::qsave(
+            snp_tree,
+            paste0(
+                "output/id_tumor/snvs/",
+                sample_id, "/",
+                sample_id, "_snp_tree.qs"
+            )
+        )
 
         message("Plotting trees")
         for (depth in c("min_depth_5", "min_depth_10", "min_depth_20")) {
             if (!is.null(snp_tree[[depth]])) {
                 snp_tree[[depth]]$labels <-
                     str_remove(snp_tree[[depth]]$labels, "split_")
-                png(paste0("output/id_tumor/snvs/", sample_id, "/", depth, "_", sample_id, ".png"),
+                png(
+                    paste0(
+                        "output/id_tumor/snvs/",
+                        sample_id, "/",
+                        depth, "_", sample_id, ".png"
+                    ),
                     width = 2500,
                     height = 2500,
-                    res = 300)
+                    res = 300
+                )
                 plot(snp_tree[[depth]])
                 dev.off()
             }
@@ -211,10 +230,12 @@ output <-
         message("Labeling tree groups")
         # Figure out which clusters are more than 50% control celltypes
         normal_clusters <-
-            match_celltype_clusters(sobject = s_obj,
-                                    normal_celltypes = control_celltypes,
-                                    cluster_col = "seurat_clusters",
-                                    celltype_col = "annotations") %>%
+            rrrSnvs::match_celltype_clusters(
+                sobject = s_obj,
+                normal_celltypes = control_celltypes,
+                cluster_col = "seurat_clusters",
+                celltype_col = "annotations"
+            ) %>%
             paste0("cluster_", .)
 
         cut_n_groups <- 2
@@ -223,119 +244,50 @@ output <-
         for (depth in c("min_depth_5", "min_depth_10", "min_depth_20")) {
             if (!is.null(snp_tree[[depth]])) {
                 s_obj <-
-                    label_tree_groups(sobject = s_obj,
-                                      dist_tree = snp_tree[[depth]],
-                                      group_col_name = "cell_group",
-                                      normal_groups = normal_clusters,
-                                      cut_n_groups = cut_n_groups,
-                                      tumor_call_column = paste0("snp_", depth))
+                    rrrSnvs::label_tree_groups(
+                        sobject = s_obj,
+                        dist_tree = snp_tree[[depth]],
+                        group_col_name = "cell_group",
+                        normal_groups = normal_clusters,
+                        cut_n_groups = cut_n_groups,
+                        tumor_call_column = paste0("snp_", depth)
+                    )
             }
         }
         message("Dimplots of calls")
         if (!is.null(snp_tree)) {
             plot_name <-
-                DimPlot(s_obj,
-                        group.by = c("snp_min_depth_5",
-                                     "snp_min_depth_10",
-                                     "snp_min_depth_20"))
-            ggsave(paste0("output/id_tumor/snvs/", sample_id, "_dim_plot_calls.png"),
-                   plot = plot_name,
-                   width = 20,
-                   height = 15)
+                DimPlot(
+                    s_obj,
+                    group.by = c(
+                        "snp_min_depth_5",
+                        "snp_min_depth_10",
+                        "snp_min_depth_20"
+                    )
+                )
+            ggsave(
+                paste0(
+                    "output/id_tumor/snvs/",
+                    sample_id,
+                    "_dim_plot_calls.png"
+                    ),
+                plot = plot_name,
+                width = 20,
+                height = 15
+            )
 
             s_obj@meta.data %>%
                 rownames_to_column("cell") %>%
                 select(cell, starts_with("snp_min_depth")) %>%
-                write_tsv(paste0("output/id_tumor/snvs/", sample_id, "_snp_calls.tsv"))
+                write_tsv(
+                    paste0(
+                        "output/id_tumor/snvs/",
+                        sample_id,
+                        "_snp_calls.tsv"
+                    )
+                )
         }
     }
-#}
     return("Completed successfully")
 })
-```
-
-```{r}
-
-f420 <-
-    qs::qread("/home/gdrobertslab/mvc002/analyses/roberts/24_Ley_barcodes/output/rdata/sobj_list.qs")[[2]]
-f420$bam_file <-
-    paste0("/home/gdrobertslab/lab/Counts_2/",
-           f420$Sample_ID,
-           "/possorted_genome_bam.bam")
-f420$cell_barcode <- colnames(f420)
-f420$cell_group <- f420$seurat_clusters
-
-
-# imm_cells <- celldex::ImmGenData()
-# mouse_rna <- celldex::MouseRNAseqData()
-
-# cell_assign <-
-#     SingleR::SingleR(as.SingleCellExperiment(test_sobj),
-#                      ref = list(imm_cells,
-#                                 mouse_rna),
-#                      labels = list(imm_cells$label.main,
-#                                    mouse_rna$label.main))
-
-# test_sobj$cell_type <- cell_assign$labels
-# test_sobj$cell_score <- cell_assign$scores %>%
-#     apply(MARGIN = 1, function(x) max(x, na.rm = TRUE))
-
-c_b_t <-
-    f420@meta.data %>%
-    select(cell_group, bam_file, cell_barcode)
-
-snp_tree <-
-    get_snp_tree(cellid_bam_table = c_b_t,
-                 ploidy = "mm10",
-                 ref_fasta = "/home/gdrobertslab/lab/GenRef/10x-mm10/fasta/genome.fa",
-                 min_depth = c(5, 10, 20),
-                 temp_dir = "/gpfs0/scratch/mvc002/test_Y",
-                 sbatch_base = "test_Y",
-                 slurm_base = "/gpfs0/scratch/mvc002/test_Y/two_sobj",
-                 min_sites_covered = 1000,
-                 cleanup = TRUE)
-
-qs::qsave(snp_tree, "test_snp_tree.RData")
-
-png("testTwoSobjOutput1.png",
-    width = 2500,
-    height = 2500,
-    res = 300)
-plot(snp_tree$min_depth_5)
-dev.off()
-
-# Do cell type annotation so I can use macrophages and monocytes as known normal cells
-# The idea is that Osteosarcoma cells are unlikely to be mistakenly annotated as macrophages or monocytes
-
-control_celltypes <- c("Monocytes", "Macrophages")
-
-# Figure out which clusters are more than 50% control celltypes
-normal_clusters <-
-    match_celltype_clusters(sobject = test_sobj,
-                            normal_celltypes = control_celltypes,
-                            cluster_col = "seurat_clusters",
-                            celltype_col = "cell_type")
-
-cut_n_groups <- 2
-
-new_two_sobj <-
-    label_tree_groups(sobject = two_sobj,
-                      dist_tree = snp_tree,
-                      group_col_name = "used_clusters",
-                      normal_groups = normal_clusters,
-                      cut_n_groups = cut_n_groups)
-
-
-png("testTwoSobjOutput2.png",
-    width = 7000,
-    height = 2500,
-    res = 300)
-DimPlot(new_two_sobj,
-        group.by = c("snp_tumor_call",
-                     "cell_type"),
-        label = TRUE,
-        repel = TRUE) +
-    NoLegend()
-dev.off()
-
 ```
