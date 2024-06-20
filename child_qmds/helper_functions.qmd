@@ -2,15 +2,24 @@
 ## Make a DimPlot with better default settings
 ```{r dimplot_better_function}
 #| cache.vars = 'dimplot_better'
-dimplot_better <- function(object, group_by, ncol = 1, split_by = NULL) {
+dimplot_better <- function(object,
+                           group_by,
+                           cols,
+                           ncol = 1,
+                           label.size = 2.5,
+                           split_by = NULL,
+                           ...) {
     DimPlot(object,
             group.by = group_by,
             split.by = split_by,
             ncol = ncol,
+            label.size = label.size,
             label = T,
             repel = T,
             shuffle = T,
-            cols = c(plot_cols, sample(rainbow(1000)))) +
+            label.box = T,
+            cols = c(plot_cols, sample(rainbow(1000))),
+            ...) +
         coord_fixed()
 }
 ```
@@ -68,7 +77,6 @@ human_lung_ref$free_annotation <-
 
 #load the object
 human_tumor_cell <- qs::qread("input/downloads/human_tumor_fromxenograft.qs")
-
 
 #mouse lung normal cells reference
 mouse_lung_ref <- qs::qread("input/downloads/mouse_lung.qs")
