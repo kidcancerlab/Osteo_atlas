@@ -252,8 +252,7 @@ all_samples_csv <- read_tsv("misc/allsample_details.txt",
 #| cache.vars = 'run_degs'
 run_degs <- function(sobject,
                      group_by = "",
-                     prefix = "",
-                     batch_df) {
+                     prefix = "") {
 
     degs_output <- list()
 
