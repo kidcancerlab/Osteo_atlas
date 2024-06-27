@@ -155,7 +155,6 @@ annotate_celltypes <- function(sobject,
                     huim)
         labels <- list(hpca[[label_type]],
                        huim[[label_type]])
-
         if (with_tumor == TRUE) {
             ref <- list(hpca,
                         huim,
@@ -164,7 +163,6 @@ annotate_celltypes <- function(sobject,
                            huim[[label_type]],
                            human_tumor_cell$CellType)
         }
-
         if (species == "human_lung") {
             ref <- list(hpca,
                         huim,
@@ -173,7 +171,6 @@ annotate_celltypes <- function(sobject,
                            huim[[label_type]],
                            human_lung_ref$free_annotation)
         }
-
         if (species == "human_lung" && with_tumor == TRUE) {
             ref <- list(hpca,
                         huim,
@@ -184,7 +181,6 @@ annotate_celltypes <- function(sobject,
                            human_tumor_cell$CellType,
                            human_lung_ref$free_annotation)
         }
-
     } else if (grepl("mouse", species)) {
         mord <- celldex::MouseRNAseqData()
         moim <- celldex::ImmGenData()
@@ -197,7 +193,6 @@ annotate_celltypes <- function(sobject,
                     moim)
         labels <- list(mord[[label_type]],
                        moim[[label_type]])
-
         if (with_tumor == TRUE) {
             ref <- list(mord,
                         moim,
@@ -206,7 +201,6 @@ annotate_celltypes <- function(sobject,
                            moim[[label_type]],
                            mouse_tumor_cell$CellType)
         }
-
         if (species == "mouse_lung") {
             ref <- list(mord,
                         moim,
@@ -215,7 +209,6 @@ annotate_celltypes <- function(sobject,
                            moim[[label_type]],
                            mouse_lung_ref$CellType)
         }
-
         if (species == "mouse_lung" && with_tumor == TRUE) {
             ref <- list(mord,
                         moim,
@@ -270,17 +263,26 @@ run_degs <- function(sobject,
         batch_df_new <-
             tibble(col_label = colnames(pseudobulk),
                    sample_name = colnames(pseudobulk) %>%
-                              str_remove("_[0-9]+$"),
+                   str_remove("_[0-9]+$"),
                    cluster_no = str_remove(colnames(pseudobulk), ".+_")) %>%
-            left_join(batch_df)
+            left_join(batch_df) %>%
+            mutate(sample_name = str_replace_all(sample_name, "-", "_")) %>%
+            mutate(organism = sobject$organism[1])
 
         #add the datasource and method as batch in batch_df_new from all_samples_csv for each sample_name
         new_all_samples_csv <- all_samples_csv %>%
-            select(sample_name, method, data_source, model, location)
-        batch_df_new2 <- left_join(batch_df_new,
-                                  new_all_samples_csv,
-                                  by = "sample_name") %>%
-            select(-sample_name)
+            select(sample_name, method, data_source, model, location, organism)
+        if (sobject$organism[1] == "mouse") {
+            batch_df_new2 <- left_join(batch_df_new,
+                                    new_all_samples_csv,
+                                    by = c("sample_name", "organism")) %>%
+                select(-sample_name, -method, -location, -data_source, -organism)
+        } else {
+            batch_df_new2 <- left_join(batch_df_new,
+                                    new_all_samples_csv,
+                                    by = c("sample_name", "organism")) %>%
+                select(-sample_name, -method,-location, -model, -organism)
+        }
 
         all(colnames(pseudobulk) == batch_df_new$col_label)
 
