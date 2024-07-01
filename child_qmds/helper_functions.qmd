@@ -31,7 +31,7 @@ https://pubmed.ncbi.nlm.nih.gov/33692365/
 https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE151974
 We kept only the normoxic samples for the analysis
 ```{r celltype_annotation_data}
-#| cache.vars = c('human_lung_ref', 'mouse_lung_ref')
+#| cache.vars = c('human_lung_ref', 'mouse_lung_ref', 'human_tumor_cell', 'mouse_tumor_cell')
 human_lung_ref <- qs::qread("input/downloads/normal_lung.qs")
 
 human_lung_ref$free_annotation <-
@@ -41,28 +41,54 @@ human_lung_ref$free_annotation <-
 human_lung_ref$free_annotation <-
     stringr::str_replace_all(
         human_lung_ref$free_annotation,
-        c("Alveolar Epithelial Type 1" = "Alveolar Epithelial",
-          "Alveolar Epithelial Type 2" = "Alveolar Epithelial",
-          "Basophil_Mast 1" = "Basophil_Mast",
-          "Basophil_Mast 2" = "Basophil_Mast",
-          "Bronchial Vessel 1" = "Bronchial Vessel",
-          "Bronchial Vessel 2" = "Bronchial Vessel",
-          "IGSF21_plus Dendritic" = "Dendritic cells",
-          "Myeloid Dendritic Type 1" = "Myeloid Dendritic",
-          "Myeloid Dendritic Type 2" = "Myeloid Dendritic",
-          "Natural Killer" = "NK cells",
-          "Natural Killer T" = "NKT",
-          "NK cells T" = "NKT",
-          "CD4_plus Memory/Effector T" = "CD4+ T cells",
-          "CD4_plus Naive T" = "CD4+ T cells",
-          "CD8_plus Memory_Effector T" = "CD8+ T cells",
-          "CD8_plus Naive T" = "CD8+ T cells",
-          "Proliferating NK_T" = "NKT",
-          "TREM2_plus Dendritic" = "Dendritic cells",
-          "Proliferating Macrophage" = "Macrophage",
-          "Nonclassical Monocyte" = "Monocytes",
-          "Classical Monocyte" = "Monocytes")
-        )
+        c("^Alveolar Epithelial Type 1$" = "Epithelial_cells",
+          "^Alveolar Epithelial Type 2$" = "Epithelial_cells",
+          "^Signaling Alveolar Epithelial Type 2$" = "Epithelial_cells",
+          "^Basophil_Mast 1$" = "Basophil_Mast",
+          "^Basophil_Mast 2$" = "Basophil_Mast",
+          "^Bronchial Vessel 1$" = "Endothelial_cells",
+          "^Bronchial Vessel 2$" = "Endothelial_cells",
+          "^IGSF21_plus Dendritic$" = "Dendritic_cells",
+          "^Myeloid Dendritic Type 1$" = "Dendritic_cells",
+          "^Myeloid Dendritic Type 2$" = "Dendritic_cells",
+          "^Natural Killer$" = "NK_cells",
+          "^Natural Killer T$" = "NKT_cells",
+          "^NK cells T$" = "NKT_cells",
+          "^CD4_plus Memory/Effector T$" = "T_cells",
+          "^CD4_plus Naive T$" = "Tcells",
+          "^CD8_plus Memory_Effector T$" = "T_cells",
+          "^CD4_plus Memory_Effector T$" = "T_cells",
+          "^CD8_plus Naive T$" = "T_cells",
+          "^Proliferating NK_T$" = "NKT_cells",
+          "^TREM2_plus Dendritic$" = "Dendritic_cells",
+          "^Proliferating Macrophage$" = "Macrophages",
+          "^Proliferating Basal$" = "Basal",
+          "^Nonclassical Monocyte$" = "Monocytes",
+          "^Classical Monocyte$" = "Monocytes",
+          "^B$" = "B_cells",
+          "^Plasma$" = "B_cells",
+          "^Vascular Smooth Muscle$" = "Mural_cells",
+          "^Alveolar Fibroblast$" = "Fibroblasts",
+          "^Capillary Aerocyte$" = "Endothelial_cells",
+          "^Plasmacytoid Dendritic$" = "Dendritic_cells",
+          "^Signalling Alveolar Epithelial$" = "Epithelial_cells",
+          "^Adventitial Fibroblast$" = "Fibroblasts",
+          "^Signaling Alveolar_Epithelial$" = "Epithelial_cells",
+          "^Macrophage$" = "Macrophages",
+          "^Differentiating Basal$" = "Basal",
+          "^Airway Smooth Muscle$" = "Mural_cells",
+          "^Proximal Ciliated$" = "Epithelial_cells",
+          "^Myofibroblast$" = "Fibroblasts",
+          "^Club$" = "Epithelial_cells",
+          "^Ionocyte$" = "Epithelial_cells",
+          "^Ciliated$" = "Epithelial_cells",
+          "^Pericyte$" = "Mural_cells",
+          "^Artery$" = "Endothelial_cells",
+          "^Vein$" = "Endothelial_cells",
+          "^Lymphatic$" = "Endothelial_cells",
+          "^Mucous$" = "Epithelial_cells",
+          "^Tcells$" = "T_cells",
+          "^Capillary$" = "Endothelial_cells"))
 
 # #load in the human tumor cell from xenograft primary fro documentation
 # sobj <- qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs") %>%
@@ -89,28 +115,48 @@ mouse_lung_ref$CellType <-
 
 mouse_lung_ref$CellType <-
     str_replace_all(mouse_lung_ref$CellType,
-                    c("Col14a1_plus fibroblast" = "Fibroblasts",
-                      "Col13a1_plus fibroblast" = "Fibroblasts",
-                      "AT1" = "AT",
-                      "AT2 1" = "AT",
-                      "AT2 2" = "AT",
-                      "B cell 1" = "B cells",
-                      "B cell 2" = "B cells",
-                      "Cap_a" = "Cap",
-                      "CD4 T cell 1" = "CD4",
-                      "CD4 T cell 2" = "CD4",
-                      "CD8 T cell 1" = "CD8",
-                      "CD8 T cell 2" = "CD8",
-                      "DC1" = "Dendritic cells",
-                      "DC2" = "Dendritic cells",
-                      "gd T cell" = "Tgd",
-                      "Neut 1" = "Neutrophils",
-                      "Neut 2" = "Neutrophils",
-                      "NK cell" = "NK cells",
-                      "Pericyte 1" = "Pericytes",
-                      "Pericyte 2" = "Pericytes",
-                      "Mast Ba2" = "Mast_Basophils",
-                      "Mono" = "Monocytes"))
+                    c("^Col14a1_plus fibroblast$" = "Fibroblasts",
+                      "^Col13a1_plus fibroblast$" = "Fibroblasts",
+                      "^AT1$" = "Epithelial_cells",
+                      "^AT2 1$" = "Epithelial_cells",
+                      "^AT2 2$" = "Epithelial_cells",
+                      "^B cells$" = "B_cells",
+                      "^Cap_a$" = "Endothelial_cells", #capillary endothelial
+                      "^CD4$" = "T_cells",
+                      "^CD4 T cell 2$" = "T_cells",
+                      "^CD8$" = "T_cells",
+                      "^CD8 T cell 2$" = "T_cells",
+                      "^DC1$" = "Dendritic_cells",
+                      "^DC2$" = "Dendritic_cells",
+                      "^gd T cell$" = "T_cells",
+                      "^Tgd$" = "T_cells",
+                      "^Neut 1$" = "Neutrophils",
+                      "^Neut 2$" = "Neutrophils",
+                      "^NK cells$" = "NK_cells",
+                      "^Pericyte 1$" = "Mural_cells",
+                      "^Pericyte 2$" = "Mural_cells",
+                      "^Mast Ba2$" = "Basophil_Mast",
+                      "^Mono$" = "Monocytes",
+                      "^Alv Mf$" = "Macrophages",
+                      "^Int Mf$" = "Macrophages",
+                      "^B cells$" = "B_cells",
+                      "^AT$" = "Epithelial_cells",
+                      "^Endothelial cells$" = "Endothelial_cells",
+                      "^SMC$" = "Mural_cells",
+                      "^ILC2$" = "Lymphoid_cells",
+                      "^Dendritic cells$" = "Dendritic_cells",
+                      "^AT$" = "Epithelial_cells",
+                      "^Cap$" = "Endothelial_cells",
+                      "^Lymph$" = "Endothelial_cells",
+                      "^Art$" = "Endothelial_cells",
+                      "^Vein$" = "Endothelial_cells",
+                      "^Myofibroblast$" = "Fibroblasts",
+                      "^Club$" = "Epithelial_cells",
+                        "^Ionocyte$" = "Epithelial_cells",
+                        "^Ciliated$" = "Epithelial_cells",
+                        "^Pericytes$" = "Mural_cells",
+                        "^Mesothelial$" = "Epithelial_cells",
+                        "^Capillary$" = "Endothelial_cells"))
 
 # #make a reference for all tumor cells, using cell culture data documantation
 # mouse_tumor_cell <- 
@@ -132,6 +178,93 @@ mouse_tumor_cell <- qs::qread("input/downloads/mm_tumor_cellculture.qs")
 ## Function to annotate cell types with mouse and human lung
 ```{r annotate_function}
 #| cache.vars = 'annotate_celltypes'
+hpca <- celldex::HumanPrimaryCellAtlasData()
+huim <- celldex::MonacoImmuneData()
+ref4 <- SeuratObject::GetAssayData(human_tumor_cell)
+
+hpca$label.main <-
+            str_replace_all(hpca$label.main,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_"))
+hpca$label.main <-
+            stringr::str_replace_all(hpca$label.main,
+                                     c("^T_cells$" = "T_cells",
+                                       "^B_cell$" = "B_cells",
+                                       "^NK_cell$" = "NK_cells",
+                                       "^Monocyte$" = "Monocytes",
+                                       "^DC$" = "Dendritic_cells",
+                                       "^Pre_B_cell_CD34_$" = "B_cells",
+                                       "^Pro_B_cell_CD34_plus$" = "B_cells",
+                                       "^BM$" = "Bone_marrow",
+                                       "^HSC_CD34_plus$" = "Hematopoietic_stem_cells",
+                                       "^Pro_Myelocyte$" = "Myelocyte",
+                                       "^MEP$" = "Progenitor_cells",
+                                       "^GMP$" = "Progenitor_cells",
+                                       "^CMP$" = "Progenitor_cells",
+                                       "^BM & Prog.$" = "Bone_marrow",
+                                       "^Macrophage$" = "Macrophages",
+                                       "^Capillary$" = "Endothelial_cells"))
+
+huim$label.main <-
+            str_replace_all(huim$label.main,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_"))
+huim$label.main <- 
+    stringr::str_replace_all(huim$label.main,
+                                c("^B cells$" = "B_cells",
+                                "^Dendritic cells$" = "Dendritic_cells",
+                                "^NK cells$" = "NK_cells",
+                                "^T cells$" = "T_cells",
+                                "^CD8_plus T cells$" = "T_cells",
+                                "^CD4_plus T cells$" = "T_cells",
+                                "^Progenitors$" = "Progenitor_cells",
+                                "^Macrophage$" = "Macrophages",
+                                "^Basophils$" = "Basophil_Mast",
+                                "^Capillary$" = "Endothelial_cells"))
+
+
+mord <- celldex::MouseRNAseqData()
+moim <- celldex::ImmGenData()
+ref4 <- SeuratObject::GetAssayData(mouse_tumor_cell)
+mord$label.main <-
+    stringr::str_replace_all(mord$label.main,
+                            c("^T cells$" = "T_cells",
+                                "^B cells$" = "B_cells",
+                                "^NK cells$" = "NK_cells",
+                                "^Epithelial cells$" = "Epithelial_cells",
+                                "^Dendritic cells$" = "Dendritic_cells",
+                                "^Endothelial cells$" = "Endothelial_cells",
+                                "^Progenitors$" = "Progenitor_cells",
+                                "^Airway Smooth Muscle$" = "Mural_cells",
+                                "^Proximal Ciliated$" = "Epithelial_cells",
+                                "^Myofibroblast$" = "Fibroblasts",
+                                "^Club$" = "Epithelial_cells",
+                                "^Ionocyte$" = "Epithelial_cells",
+                                "^Ciliated$" = "Epithelial_cells",
+                                "^Microglia$" = "Macrophages",
+                                "^Pericytes$" = "Mural_cells",
+                                "^Capillary$" = "Endothelial_cells"))
+moim$label.main <-
+    stringr::str_replace_all(moim$label.main,
+                            c("^B cells, pro$" = "B_cells",
+                            "^DC$" = "Dendritic_cells",
+                            "^NK cells$" = "NK_cells",
+                            "^T cells$" = "T_cells",
+                            "^Epithelial cells$" = "Epithelial_cells",
+                            "^Endothelial cells$" = "Endothelial_cells",
+                            "^B cells$" = "B_cells",
+                            "^Stem cells$" = "Stem_cells",
+                            "^Stromal cells$" = "Stromal_cells",
+                            "^Mast cells$" = "Basophil_Mast",
+                            "^NKT$" = "NKT_cells",
+                            "^Tgd$" = "T_cells",
+                            "^ILC$" = "Lymphoid_cells",
+                            "^Microglia$" = "Macrophages",
+                            "^Capillary$" = "Endothelial_cells"))
+
+#function to annotate celltypes
 annotate_celltypes <- function(sobject,
                                species = "",
                                with_tumor = FALSE,
@@ -141,67 +274,61 @@ annotate_celltypes <- function(sobject,
                                label_type = "label.main",
                                ...) {
     if (grepl("human", species)) {
-        hpca <- celldex::HumanPrimaryCellAtlasData()
-        huim <- celldex::MonacoImmuneData()
-        ref4 <- SeuratObject::GetAssayData(human_tumor_cell)
-        hpca$label.main <-
-            stringr::str_replace_all(hpca$label.main,
-                                     c("T_cells" = "T cells",
-                                       "B_cell" = "B cells",
-                                       "NK_cell" = "NK cells",
-                                       "Monocyte" = "Monocytes",
-                                       "DC" = "Dendritic cells"))
         ref <- list(hpca,
                     huim)
         labels <- list(hpca[[label_type]],
                        huim[[label_type]])
-
-        if (with_tumor) {
+        if (with_tumor == TRUE) {
             ref <- list(hpca,
                         huim,
-                        ref4)
+                        SeuratObject::GetAssayData(human_tumor_cell))
             labels <- list(hpca[[label_type]],
                            huim[[label_type]],
                            human_tumor_cell$CellType)
         }
-
         if (species == "human_lung") {
             ref <- list(hpca,
                         huim,
-                        ref4,
+                        SeuratObject::GetAssayData(human_lung_ref))
+            labels <- list(hpca[[label_type]],
+                           huim[[label_type]],
+                           human_lung_ref$free_annotation)
+        }
+        if (species == "human_lung" && with_tumor == TRUE) {
+            ref <- list(hpca,
+                        huim,
+                        SeuratObject::GetAssayData(human_tumor_cell),
                         SeuratObject::GetAssayData(human_lung_ref))
             labels <- list(hpca[[label_type]],
                            huim[[label_type]],
                            human_tumor_cell$CellType,
                            human_lung_ref$free_annotation)
         }
-
     } else if (grepl("mouse", species)) {
-        mord <- celldex::MouseRNAseqData()
-        moim <- celldex::ImmGenData()
-        ref4 <- SeuratObject::GetAssayData(mouse_tumor_cell)
-        moim$label.main <-
-            stringr::str_replace_all(moim$label.main,
-                                    c("B cells, pro" = "B cells",
-                                      "DC" = "Dendritic cells"))
         ref <- list(mord,
                     moim)
         labels <- list(mord[[label_type]],
                        moim[[label_type]])
-
-        if (with_tumor) {
+        if (with_tumor == TRUE) {
             ref <- list(mord,
                         moim,
-                        ref4)
+                        SeuratObject::GetAssayData(mouse_tumor_cell))
             labels <- list(mord[[label_type]],
                            moim[[label_type]],
                            mouse_tumor_cell$CellType)
         }
-
         if (species == "mouse_lung") {
             ref <- list(mord,
                         moim,
-                        ref4,
+                        SeuratObject::GetAssayData(mouse_lung_ref))
+            labels <- list(mord[[label_type]],
+                           moim[[label_type]],
+                           mouse_lung_ref$CellType)
+        }
+        if (species == "mouse_lung" && with_tumor == TRUE) {
+            ref <- list(mord,
+                        moim,
+                        SeuratObject::GetAssayData(mouse_tumor_cell),
                         SeuratObject::GetAssayData(mouse_lung_ref))
             labels <- list(mord[[label_type]],
                            moim[[label_type]],
@@ -227,58 +354,69 @@ annotate_celltypes <- function(sobject,
 
 ## RUN differential expression analysis on a Seurat object
 ```{r run_degs_function}
+#| cache.vars: all_samples_csv
+all_samples_csv <- read_tsv("misc/allsample_details.txt",
+                            show_col_types = FALSE)
+
 #| cache.vars = 'run_degs'
 run_degs <- function(sobject,
                      group_by = "",
                      prefix = "") {
-    sobject$new_sample_name <- sobject$sample_name %>%
-        stringr::str_replace_all("_", "") %>%
-        stringr::str_replace_all("-", "")
-
-    if (group_by == "seurat_clusters") {
-        sobject$pseudobulk_col <-
-            stringr::str_c(sobject$new_sample_name,
-                           "-",
-                           sobject$seurat_clusters)
-    } else if (group_by == "annotations") {
-        sobject$annotations <-
-            stringr::str_replace_all(sobject$annotations, " ", "")
-        sobject$pseudobulk_col <-
-            stringr::str_c(sobject$new_sample_name,
-                           "-",
-                           sobject$annotations)
-    }
-    pseudobulk <- Seurat::AggregateExpression(object = sobject,
-                                              group.by = "pseudobulk_col",
-                                              slot = "counts")[[1]]
-    deseq_coldata <- data.frame(pseudobulk_group = colnames(pseudobulk))
-    rownames(deseq_coldata) <- deseq_coldata$pseudobulk_group
-    deseq_coldata <-
-        tidyr::separate(data = deseq_coldata,
-                        col = "pseudobulk_group",
-                        into = c("sample_name", "group"),
-                        sep = "-")
-    deseq_coldata$type <- "single-read"
-    deseq_coldata <- deseq_coldata[, -1]
-
-    if (group_by == "seurat_clusters") {
-        deseq_group <- levels(factor(sobject$seurat_clusters))
-        names(deseq_group) <- paste0(prefix, "_Cluster_", deseq_group)
-    } else if (group_by == "annotations") {
-        deseq_group <- levels(factor(sobject$annotations))
-        names(deseq_group) <- paste0(prefix, "_Celltype_", deseq_group)
-    }
 
     degs_output <- list()
-    for (group in names(deseq_group)) {
-        interested_group <- deseq_group[group]
-        other_group <- deseq_coldata
-        other_group$group[other_group$group == interested_group] <- "target"  #nolint
-        other_group$group[other_group$group != "target"] <- "other"         #nolint
-        degs_output[[group]] <-
-            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk+1,
-                                           colData = other_group,
-                                           design = ~ group) %>%
+
+    pseudobulk <- sobject %>%
+        Seurat::AggregateExpression(group.by = c("sample_name", "seurat_clusters"),
+                                    slot = "counts",
+                                    assay = "RNA")
+    pseudobulk <- pseudobulk[[1]]
+
+    # run the deseq2
+    for (cluster_no in unique(object$seurat_clusters)) {
+
+        batch_df <- data.frame(sample_name = colnames(pseudobulk))
+
+        batch_df_new <-
+            tibble(col_label = colnames(pseudobulk),
+                   sample_name = colnames(pseudobulk) %>%
+                   str_remove("_[0-9]+$"),
+                   cluster_no = str_remove(colnames(pseudobulk), ".+_")) %>%
+            left_join(batch_df) %>%
+            mutate(sample_name = str_replace_all(sample_name, "-", "_")) %>%
+            mutate(organism = sobject$organism[1])
+
+        #add the datasource and method as batch in batch_df_new from all_samples_csv for each sample_name
+        new_all_samples_csv <- all_samples_csv %>%
+            select(sample_name, method, data_source, model, location, organism)
+        if (sobject$organism[1] == "mouse") {
+            batch_df_new2 <- left_join(batch_df_new,
+                                    new_all_samples_csv,
+                                    by = c("sample_name", "organism")) %>%
+                select(-sample_name, -method, -location, -data_source, -organism)
+        } else {
+            batch_df_new2 <- left_join(batch_df_new,
+                                    new_all_samples_csv,
+                                    by = c("sample_name", "organism")) %>%
+                select(-sample_name, -method,-location, -model, -organism)
+        }
+
+        all(colnames(pseudobulk) == batch_df_new$col_label)
+
+        batch_df_new2$group <- "other"
+        batch_df_new2$group[batch_df_new2$cluster_no == cluster_no] <- "target"
+        batch_df_new2$group <- factor(batch_df_new2$group)
+
+        for (columns in colnames(batch_df_new2)) {
+            if (unique(batch_df_new2[[columns]]) %>% length() == 1) {
+                batch_df_new2[[columns]] <- NULL
+            }
+        }
+        design <- as.formula(paste0("~", paste(colnames(batch_df_new2)[c(-1,-2)], collapse = " + ")))
+
+        degs_output[[cluster_no]] <-
+            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
+                                           colData = batch_df_new2,
+                                           design = design) %>%
             DESeq2::DESeq() %>%
             DESeq2::results() %>%
             as.data.frame() %>%

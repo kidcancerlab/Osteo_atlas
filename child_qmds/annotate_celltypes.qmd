@@ -30,7 +30,7 @@ results <-
                                     ".qs"))
         ann_sobj <- annotate_celltypes(sobject = ann_sobj,
                                        species = annotation_type[group][1],
-                                       with_tumor = TRUE,
+                                       with_tumor = FALSE,
                                        aggr_ref = TRUE)
 
         Idents(ann_sobj) <- ann_sobj$seurat_clusters
@@ -90,6 +90,5 @@ results <-
                                group,
                                ".qs"))
     })
-
 
 ```
