@@ -46,12 +46,15 @@ library(knitr)
 for directoryName in \
     output \
     output/figures \
+    output/figures/gsea \
     output/counts \
     output/metadata \
     output/seurat_objects/sobj_preprocess \
     output/seurat_objects/comb_sobjs \
     output/seurat_objects/harmony_sobjs \
     output/seurat_objects/harmony_sobjs_annot \
+    output/seurat_objects/sobj_preprocess_ \
+    output/seurat_objects/tumor_vs_stroma \
     output/id_tumor/scATOMIC \
     output/id_tumor/SCEVAN \
     output/id_tumor/snvs/plots \
