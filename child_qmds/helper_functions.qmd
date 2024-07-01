@@ -54,11 +54,11 @@ human_lung_ref$free_annotation <-
           "^Natural Killer$" = "NK_cells",
           "^Natural Killer T$" = "NKT_cells",
           "^NK cells T$" = "NKT_cells",
-          "^CD4_plus Memory/Effector T$" = "Tcells",
+          "^CD4_plus Memory/Effector T$" = "T_cells",
           "^CD4_plus Naive T$" = "Tcells",
-          "^CD8_plus Memory_Effector T$" = "Tcells",
-          "^CD4_plus Memory_Effector T$" = "Tcells",
-          "^CD8_plus Naive T$" = "CD8_Tcells",
+          "^CD8_plus Memory_Effector T$" = "T_cells",
+          "^CD4_plus Memory_Effector T$" = "T_cells",
+          "^CD8_plus Naive T$" = "T_cells",
           "^Proliferating NK_T$" = "NKT_cells",
           "^TREM2_plus Dendritic$" = "Dendritic_cells",
           "^Proliferating Macrophage$" = "Macrophages",
@@ -83,11 +83,12 @@ human_lung_ref$free_annotation <-
           "^Ionocyte$" = "Epithelial_cells",
           "^Ciliated$" = "Epithelial_cells",
           "^Pericyte$" = "Mural_cells",
-          "^Artery$" = "Endothelial_Cells",
-          "^Vein$" = "Endothelial_Cells",
-          "^Lymphatic$" = "Endothelial_Cells",
+          "^Artery$" = "Endothelial_cells",
+          "^Vein$" = "Endothelial_cells",
+          "^Lymphatic$" = "Endothelial_cells",
           "^Mucous$" = "Epithelial_cells",
-          "^Tcells$" = "T_cells"))
+          "^Tcells$" = "T_cells",
+          "^Capillary$" = "Endothelial_cells"))
 
 # #load in the human tumor cell from xenograft primary fro documentation
 # sobj <- qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs") %>%
@@ -121,10 +122,10 @@ mouse_lung_ref$CellType <-
                       "^AT2 2$" = "Epithelial_cells",
                       "^B cells$" = "B_cells",
                       "^Cap_a$" = "Endothelial_cells", #capillary endothelial
-                      "^CD4$" = "Tcells",
-                      "^CD4 T cell 2$" = "Tcells",
-                      "^CD8$" = "Tcells",
-                      "^CD8 T cell 2$" = "Tcells",
+                      "^CD4$" = "T_cells",
+                      "^CD4 T cell 2$" = "T_cells",
+                      "^CD8$" = "T_cells",
+                      "^CD8 T cell 2$" = "T_cells",
                       "^DC1$" = "Dendritic_cells",
                       "^DC2$" = "Dendritic_cells",
                       "^gd T cell$" = "T_cells",
@@ -145,16 +146,17 @@ mouse_lung_ref$CellType <-
                       "^ILC2$" = "Lymphoid_cells",
                       "^Dendritic cells$" = "Dendritic_cells",
                       "^AT$" = "Epithelial_cells",
-                      "^Cap$" = "Endothelial_Cells",
-                      "^Lymph$" = "Endothelial_Cells",
-                      "^Art$" = "Endothelial_Cells",
-                      "^Vein$" = "Endothelial_Cells",
+                      "^Cap$" = "Endothelial_cells",
+                      "^Lymph$" = "Endothelial_cells",
+                      "^Art$" = "Endothelial_cells",
+                      "^Vein$" = "Endothelial_cells",
                       "^Myofibroblast$" = "Fibroblasts",
                       "^Club$" = "Epithelial_cells",
                         "^Ionocyte$" = "Epithelial_cells",
                         "^Ciliated$" = "Epithelial_cells",
                         "^Pericytes$" = "Mural_cells",
-                        "^Mesothelial$" = "Epithelial_cells"))
+                        "^Mesothelial$" = "Epithelial_cells",
+                        "^Capillary$" = "Endothelial_cells"))
 
 # #make a reference for all tumor cells, using cell culture data documantation
 # mouse_tumor_cell <- 
@@ -201,7 +203,8 @@ hpca$label.main <-
                                        "^GMP$" = "Progenitor_cells",
                                        "^CMP$" = "Progenitor_cells",
                                        "^BM & Prog.$" = "Bone_marrow",
-                                       "^Macrophage$" = "Macrophages"))
+                                       "^Macrophage$" = "Macrophages",
+                                       "^Capillary$" = "Endothelial_cells"))
 
 huim$label.main <-
             str_replace_all(huim$label.main,
@@ -214,11 +217,12 @@ huim$label.main <-
                                 "^Dendritic cells$" = "Dendritic_cells",
                                 "^NK cells$" = "NK_cells",
                                 "^T cells$" = "T_cells",
-                                "^CD8_plus T cells$" = "Tcells",
-                                "^CD4_plus T cells$" = "Tcells",
+                                "^CD8_plus T cells$" = "T_cells",
+                                "^CD4_plus T cells$" = "T_cells",
                                 "^Progenitors$" = "Progenitor_cells",
                                 "^Macrophage$" = "Macrophages",
-                                "^Basophils$" = "Basophil_Mast"))
+                                "^Basophils$" = "Basophil_Mast",
+                                "^Capillary$" = "Endothelial_cells"))
 
 
 mord <- celldex::MouseRNAseqData()
@@ -240,7 +244,8 @@ mord$label.main <-
                                 "^Ionocyte$" = "Epithelial_cells",
                                 "^Ciliated$" = "Epithelial_cells",
                                 "^Microglia$" = "Macrophages",
-                                "^Pericytes$" = "Mural_cells"))
+                                "^Pericytes$" = "Mural_cells",
+                                "^Capillary$" = "Endothelial_cells"))
 moim$label.main <-
     stringr::str_replace_all(moim$label.main,
                             c("^B cells, pro$" = "B_cells",
@@ -256,7 +261,8 @@ moim$label.main <-
                             "^NKT$" = "NKT_cells",
                             "^Tgd$" = "T_cells",
                             "^ILC$" = "Lymphoid_cells",
-                            "^Microglia$" = "Macrophages"))
+                            "^Microglia$" = "Macrophages",
+                            "^Capillary$" = "Endothelial_cells"))
 
 #function to annotate celltypes
 annotate_celltypes <- function(sobject,
