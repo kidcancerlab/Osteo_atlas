@@ -35,6 +35,8 @@ library(data.table)
 library(hdf5r)
 library(Rmagic)
 library(knitr)
+library(scATOMIC)
+library(copykat)
 ```
 
 # Load in functions

@@ -1,0 +1,81 @@
+Recluster the normal cell types and annotate the types.
+
+## Normal cells reclustering
+
+```{r setup, include=FALSE}
+
+object_list <-
+    tribble(~group,                         ~res_value,
+            "patient_prim_normal_cells",    0.15,
+            "patient_mets_normal_cells",    0.05,
+            "xeno_prim_mouse",              0.05,
+            "xeno_mets_mouse",              0.05,
+            "mm_prim_normal_cells",         0.25,
+            "mm_mets_normal_cells",         0.05)
+
+object_list <- list(patient_prim_normal_cells = c("Macrophage",
+                                                  "Endothelial_cells",
+                                                  "Tcells",
+                                                  "NK cells",
+                                                  "Monocytes",
+                                                  "Dendritic cells",
+                                                  "B cells"),
+                    patient_mets_normal_cells = c("Macrophage",
+                                                  "Endothelial_cells",
+                                                  "Tcells",
+                                                  "NK cells",
+                                                  "Monocytes",
+                                                  "Dendritic cells",
+                                                  "B cells"),)
+                        
+
+
+for (item in seq_len(nrow(object_list))) {
+    group <- object_list$group[item]
+    res_value <- object_list$res_value[item]
+
+    object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                              group,
+                              ".qs"))
+
+    object <- FindClusters(object,
+                           resolution = res_value)
+    
+    dimplot <- dimplot_better(object,
+                              group_by = c("seurat_clusters",
+                                           "new_annot_clust"))
+
+    for (celltypes in unique(object$new_annot_clust)) {
+        subset_sobj <- subset(object,
+                              new_annot_clust == celltypes) %>%
+            process_seurat() %>%
+            RunHarmony(group.by.vars = "sample_name") %>%
+            process_seurat(reduction = "harmony")
+
+        res_score <-
+            optimize_silhouette(sobject = subset_sobj[, sample(1:n_cells, keep_n_cells)],
+                                test_res = seq(0, 0.9, by = 0.05),
+                                summary_plot = FALSE,
+                                reduction = "harmony") %>%
+            filter(sil_vals == max(sil_vals)) %>%
+            slice_head(n=1) %>%
+            dplyr::pull(res_vals)
+
+        if (res_score >= 0.5) {
+            subset_sobj <- FindClusters(subset_sobj,
+                                       resolution = res_score)
+        }
+
+        dimplot_better(subset_sobj,
+                       group_by = c("seurat_clusters",
+                                    "sample_name",
+                                    "new_annot_clust",
+                                    "data_source"),
+                        ncol=2)
+
+        FeaturePlot(subset_sobj,
+                    features = c("CD3E", "CD4", "CD8A", "CD19", "CD14", "CD68"))
+    }
+
+}
+```

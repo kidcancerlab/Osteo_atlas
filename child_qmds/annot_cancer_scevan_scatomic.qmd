@@ -28,6 +28,8 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
     count_mtx_list <- object %>%
         SplitObject(split.by = "sample_name") %>%
         lapply(FUN = function(x) GetAssayData(x, layer = "counts"))
+
+    # SCEVAN results listed into an output for each seurat object
     result_list <-
         parallel::mclapply(names(count_mtx_list),
                            mc.cores = min(1, parallelly::availableCores()),
@@ -52,6 +54,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                 system(paste0("mv output/' ",
                             x,
                             "onlytumor vega_output' output/id_tumor/SCEVAN/"))
+
                 return(output)
             }
         })
@@ -79,7 +82,6 @@ scATOMIC_pred : celltype annotation
 #| fig.align: center
 #| echo: FALSE
 #| dependson: annot_celltypes
-library(scATOMIC)
 
 for (group in c("patient_prim", "patient_mets")) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
@@ -97,6 +99,7 @@ for (group in c("patient_prim", "patient_mets")) {
     result_list <-
         parallel::mclapply(names(count_mtx_list),
                            mc.cores = parallelly::availableCores(),
+                           mc.preschedule = FALSE,
                            function(x) {
             cell_predictions <-
                 scATOMIC::run_scATOMIC(
@@ -104,20 +107,41 @@ for (group in c("patient_prim", "patient_mets")) {
                     mc.cores = parallelly::availableCores()
                 )
             scATOMIC_results <-
-                scATOMIC::create_summary_matrix(
-                    prediction_list = cell_predictions,
-                    use_CNVs = FALSE,
-                    modify_results = TRUE,
-                    mc.cores = parallelly::availableCores(),
-                    raw_counts = count_mtx_list[[x]],
-                    min_prop = 0.5
-                ) %>%
-                select(starts_with("layer_"),
-                       "scATOMIC_pred",
-                       "classification_confidence")
+                tryCatch(
+                    {
+                        scATOMIC::create_summary_matrix(
+                            prediction_list = cell_predictions,
+                            use_CNVs = T,
+                            modify_results = T,
+                            mc.cores = parallelly::availableCores(),
+                            raw_counts = count_mtx_list[[x]],
+                            min_prop = 0.5
+                        ) %>%
+                        select(starts_with("layer_"),
+                               any_of(c("scATOMIC_pred",
+                                      "classification_confidence",
+                                      "CNV_status",
+                                      "pan_cancer_cluster")))
+                },
+                error = function(e) {
+                    message("scATOMIC failed for ",group, " ", x, " with error: ", e)
+                    scATOMIC::create_summary_matrix(
+                        prediction_list = cell_predictions,
+                        modify_results = T,
+                        mc.cores = parallelly::availableCores(),
+                        raw_counts = count_mtx_list[[x]],
+                        min_prop = 0.5
+                    ) %>%
+                    select(starts_with("layer_"),
+                               any_of(c("scATOMIC_pred",
+                                      "classification_confidence",
+                                      "CNV_status")))
+                })
+
+            return(scATOMIC_results)
         })
 
-    bind_rows(result_list) %>%
+    dplyr::bind_rows(result_list) %>%
     mutate(scatomic_tumor_call = if_else(grepl("Cancer Cell$", scATOMIC_pred),
                                          "cancer_cells",
                                          "normal_cells")) %>%
@@ -126,4 +150,177 @@ for (group in c("patient_prim", "patient_mets")) {
                     group,
                     "_metadata.tsv"))
 }
+
+
+```
+
+## plotting the results of scATOMIC 
+```{r scatomic_scevan_plots}
+#| fig.width: 10
+#| fig.height: 10
+#| fig.align: center
+#| echo: FALSE
+#| dependson: scatomic
+for (group in c("patient_prim", "patient_mets")) {
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                              group,
+                              ".qs"))
+
+    #add scatomic label
+    scatomic_label <- readr::read_tsv(str_c("output/id_tumor/scATOMIC/",
+                                    group,
+                                    "_metadata.tsv")) %>%
+        column_to_rownames("cell")
+    object <- object %>%
+            AddMetaData(metadata = scatomic_label)
+
+    #loop over individual  samples to plot and save
+    for (samples in unique(object$sample_name)) {
+        sub_sobj <- subset(object, sample_name == samples) %>%
+                        process_seurat()
+
+        #make a plot
+        scatomic1 <- dimplot_better(sub_sobj,
+                                   group_by = "scATOMIC_pred") +
+                        NoLegend()
+
+        # check if CNV_status is present and if all of them are NA, cannot plot
+        if (all(!is.na(sub_sobj$CNV_status))) {
+            scatomic2 <- dimplot_better(sub_sobj,
+                                        group_by = "CNV_status") +
+                            NoLegend()
+        } else {
+            scatomic2 <- ggplot(data = NULL) +
+                            aes(x = as.factor(1), y = as.factor(1)) +
+                            geom_text(aes(label = str_c("CNV_status not present for ", samples)))
+        }
+        scatomic3 <- dimplot_better(sub_sobj,
+                                   group_by = "scatomic_tumor_call") +
+                        NoLegend()
+
+        scatomic4 <- dimplot_better(sub_sobj,
+                                   group_by = "new_annot_clust") +
+                        NoLegend()
+
+        # patchwork the plot for scatomic
+        dimplot_sub_sobj <- 
+            patchwork::wrap_plots(scatomic1,
+                                scatomic2,
+                                scatomic3,
+                                scatomic4,
+                                ncol = 2) +
+                patchwork::plot_annotation(title = samples)
+
+        # save the plot for scatomic
+        ggsave(str_c("output/figures/scatomic/",
+                        group, "/",
+                        samples,
+                        "_dimplot.png"),
+                plot = dimplot_sub_sobj,
+                width = 14,
+                height = 14)
+    }
+}
+
+# scevan was done in mice as well so have to loop over all of the groups
+for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                              group,
+                              ".qs"))
+
+    #add scevan label
+    scevan_label <- readr::read_tsv(str_c("output/id_tumor/SCEVAN/",
+                                    group,
+                                    "_metadata.tsv")) %>%
+        column_to_rownames("cell")
+    object <- object %>%
+            AddMetaData(metadata = scevan_label)
+
+    #loop over individual  samples to plot and save
+    for (samples in unique(object$sample_name)) {
+        sub_sobj <- subset(object, sample_name == samples) %>%
+                        process_seurat()
+
+        # check if CNV_status is present and if all of them are NA, cannot plot
+        if (all(!is.na(sub_sobj$scevan_tumor_call))) {
+            scevan1 <- dimplot_better(sub_sobj,
+                                        group_by = "scevan_tumor_call") +
+                            NoLegend()
+        } else {
+            scevan1 <- ggplot(data = NULL) +
+                            aes(x = as.factor(1), y = as.factor(1)) +
+                            geom_text(aes(label = str_c("scevan_tumor_call not present for ", samples)))
+        }
+
+        scevan2 <- dimplot_better(sub_sobj,
+                                   group_by = "new_annot_clust") +
+                        NoLegend()
+
+        # patchwork the plot for scatomic
+        dimplot_sub_sobj <- 
+            patchwork::wrap_plots(scevan1,
+                                scevan2,
+                                ncol = 2) +
+                patchwork::plot_annotation(title = samples)
+
+        # save the plot for scatomic
+        ggsave(str_c("output/figures/scevan/",
+                        group, "/",
+                        samples,
+                        "_dimplot.png"),
+                plot = dimplot_sub_sobj,
+                width = 14,
+                height = 7)
+    }
+}
+```
+
+## create the snv calling metadata and save it
+```{r snv_calling}
+# path to snv result metadata in Matts repo
+snv_result_path <-
+    "/gpfs0/home2/gdrobertslab/lab/Analysis/Matt/24_Osteo_atlas/output/id_tumor/snvs/"
+snv_depth <-
+    read_tsv("output/id_tumor/snv_calling/use_snv_tumor_calls.txt")
+
+for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                              group,
+                              ".qs"))
+
+    #make a list of the samples
+    metadata_list <- list()
+
+    # read in the cmetadata
+    for (samples in unique(object$sample_name)) {
+        sobj <- subset(object, sample_name == samples)
+
+        tsv_file <- str_c(snv_result_path,
+                        samples,
+                        "_snp_calls.tsv")
+        if (file.exists(tsv_file)) {
+            pick_depth <- snv_depth %>%
+                filter(sample_name == samples) %>%
+                pull(use_snvs_depth)
+            snv_metadata <-
+                readr::read_tsv(tsv_file) %>%
+                mutate(barcode = paste(samples, cell, sep = "_")) %>%
+                select(barcode, paste0("snp_min_depth_",pick_depth)) %>%
+                filter(unique(barcode) %in% colnames(sobj)) %>%
+                dplyr::rename(final_snv_call = paste0("snp_min_depth_",pick_depth),
+                              cell = barcode) %>%
+                mutate(final_snv_call = if_else(final_snv_call == "tumor",
+                                                "cancer_cells",
+                                                "normal_cells"))
+
+        metadata_list[[samples]] <- snv_metadata
+        }
+    }
+    dplyr::bind_rows(metadata_list) %>%
+        write_tsv(str_c("output/id_tumor/snv_calling/",
+                        group,
+                        "_metadata.tsv"))
+}
+
+
 ```
