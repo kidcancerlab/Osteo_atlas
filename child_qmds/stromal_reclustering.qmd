@@ -8,10 +8,10 @@ object_list <-
     tribble(~group,                         ~res_value,
             "patient_prim_normal_cells",    0.15,
             "patient_mets_normal_cells",    0.05,
-            "xeno_prim_mouse",              0.05,
-            "xeno_mets_mouse",              0.05,
+            "xeno_prim_mouse",              0.1,
+            "xeno_mets_mouse",              0.1,
             "mm_prim_normal_cells",         0.25,
-            "mm_mets_normal_cells",         0.05)
+            "mm_mets_normal_cells",         0.2)
 
 object_list <- list(patient_prim_normal_cells = c("Macrophage",
                                                   "Endothelial_cells",
@@ -27,7 +27,50 @@ object_list <- list(patient_prim_normal_cells = c("Macrophage",
                                                   "Monocytes",
                                                   "Dendritic cells",
                                                   "B cells"),)
-                        
+
+
+recluster_celltypes <- 
+
+#https://www.cell.com/trends/immunology/fulltext/S1471-4906(22)00094-1
+Macrophages <- list(LA_TAMs = c("APOC1", "APOE", "APC5", "FABP5"),
+                   Inflam_TAMs = c("IL1B", "CCL3", "CXCL1", "CXCL2", "CXCL3", "CXCL5"),
+                   IFN_TAMs = c("IDO", "ISG15", "CXCL8", "CXCL9", "CXCL10"),
+                   Reg_TAMs = c("AGR1", "MRC1", "CD274", "CX3CR1"),
+                   Prolif_TAMs = c("MKI67", "CDK1"),
+                   RTM_TAMs = c("LYVE1", "HES1", "FOLR2"),
+                   Angio_TAMs = c("VEGFA", "ANGPT2", "ANGPTL4", "SSP1"))
+
+#https://www.nature.com/articles/s41467-021-23324-4
+#https://www.biocompare.com/Editorial-Articles/569888-A-Guide-to-T-Cell-Markers/
+T_cells <- list(CD4 = c("CD4", "IL7R", "IL21"),
+                CD4_Naive = c("IFNGR1", "CCR7", "CXCR3"),
+                CD8 = c("CD8A", "CD8B", "KLRB1", "GZMK"),
+                CD8_Naive = c("CD62L", "CD127", "CCR7", "CXCR3"),
+                CD8_Effector = c("CD25", "CD8B", "CD69" "CCR7"),
+                CD8_Memory = c("CD8A", "CD8B", "CD3E", "CD69", "GZMK", "KLRG1"),
+                T_reg = c("FOXP3", "IL2RA", "CD27", "CTLA4"),
+                Exhausted = c("PD1", "LAG3", "TIM3", "TOX", "TIGIT", "BTLA", "IL2"),
+                Prolif_T = c("MKI67", "CDK1", "CDK2", "CDK4", "CDK6"))
+
+#https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9192344/
+Fibroblasts <- list(MyoFibroblasts = c("FBLN1", "TAGLN", "ASPN", "MYLK", "WIF1", "ACTA2"),
+                    InflamFibroblasts = c("IL6", "IL1B", "CXCL1", "CXCL2", "CXCL3", "CXCL5"),
+                    MatrixFibroblasts = c("COL1A1", "COL1A2", "COL3A1", "COL5A1", "COL5A2", "COL6A1"),
+                    AngioFibroblasts = c("VEGFA", "ANGPT2", "ANGPTL4", "SSP1"),
+                    AdventitialFibroblasts = c("PDGFRB", "SERPINF1", "PI16", "SFRP2"),
+                    AlveolarFibroblasts = c("SFTPC", "AQP5", "PDPN", "KRT5"))
+
+# Dan regan paper
+Dendritic_cells <- list(PreDC = c("IL3RA", "PGLYRP2", "DDR2"),
+                        mregDC = c("IDO1", "IL4I1", "CCR7"),
+                        pDC = c("IGF1", "RARRES2", "IGHM", "IGKC"),
+                        cDC1 = c("CADM1", "DNASE1L3", "CLEC1B"),
+                        cDC2 = c("CD300H", "PID1", "CD1C"))
+
+
+FeaturePlot(subset_sobj,
+                    features = Dendritic_cells$cDC2,
+                    ncol = 4)
 
 
 for (item in seq_len(nrow(object_list))) {
@@ -38,44 +81,124 @@ for (item in seq_len(nrow(object_list))) {
                               group,
                               ".qs"))
 
-    object <- FindClusters(object,
-                           resolution = res_value)
-    
-    dimplot <- dimplot_better(object,
-                              group_by = c("seurat_clusters",
-                                           "new_annot_clust"))
+    object <- 
+        FindClusters(object,
+                    resolution = res_value)
+
+    dimplot_main <-
+        dimplot_better(object,
+                      group_by = "annotations") +
+            ggtitle(group)
 
     for (celltypes in unique(object$new_annot_clust)) {
         subset_sobj <- subset(object,
-                              new_annot_clust == celltypes) %>%
+                              annotations == celltypes) %>%
             process_seurat() %>%
-            RunHarmony(group.by.vars = "sample_name") %>%
-            process_seurat(reduction = "harmony")
+            RunHarmony(group.by.vars = "sample_name")
 
-        res_score <-
-            optimize_silhouette(sobject = subset_sobj[, sample(1:n_cells, keep_n_cells)],
-                                test_res = seq(0, 0.9, by = 0.05),
-                                summary_plot = FALSE,
-                                reduction = "harmony") %>%
+        sil_val <- optimize_silhouette(sobject = subset_sobj,
+                                       test_res = seq(0.05, 0.9, by = 0.05),
+                                       summary_plot = FALSE,
+                                       reduction = "harmony") %>%
             filter(sil_vals == max(sil_vals)) %>%
             slice_head(n=1) %>%
             dplyr::pull(res_vals)
 
-        if (res_score >= 0.5) {
-            subset_sobj <- FindClusters(subset_sobj,
-                                       resolution = res_score)
-        }
+        subset_sobj <- subset_sobj %>%
+            process_seurat(reduction = "harmony",
+                           resolution = sil_val)
 
-        dimplot_better(subset_sobj,
-                       group_by = c("seurat_clusters",
-                                    "sample_name",
-                                    "new_annot_clust",
-                                    "data_source"),
-                        ncol=2)
+        dimplot_subset <- 
+            dimplot_better(subset_sobj,
+                        group_by = "seurat_clusters") +
+                ggtitle(celltypes)
 
-        FeaturePlot(subset_sobj,
-                    features = c("CD3E", "CD4", "CD8A", "CD19", "CD14", "CD68"))
+
+
+        VlnPlot(subset_sobj,
+                features = Angio_TAMs,
+                group.by = "seurat_clusters")
     }
 
 }
+
+modulez <- list("Naïve" = c("CCR7", "LEF1", "SELL", "TCF7"),
+                "Cytotoxic" = c("CST7", "GZMA", "GZMB", "IFNG", "PRF1", "TNFSF10"),
+                "Regulatory" = c("IL2RA", "IL4R", "IL7", "TGFB1", "TGFB3", "TGFBI", "TGFBR1"),
+                "Exhausted" = c("BTLA", "CTLA4", "HAVCR2", "LAG3", "PDCD1", "TIGIT"),
+                "Costimulatory" = c("ICOS", "CD226", "SLAMF1", "TNFRSF14", "TNFRSF25", "TNFRSF9"),
+                "NK cell" = c("KLRF1", "STMN2", "NCR3", "F2RL3", "CD96", "IL2RB"),
+                "Cycling T cell" = c("TOP2A", "MKI67", "RRM2", "H1-5", "DIAPH3", "TK1"),
+                "IFN signature" = c("CXCL10", "IFI44", "OAS1", "ISG15", "IFI44L", "IFGGB2")
+                )
+
+#run module score
+seu.obj <- AddModuleScore(subset_sobj,
+                          features = modulez,
+                         name = "_score")
+
+names(seu.obj@meta.data)[grep("_score", names(seu.obj@meta.data))] <- names(modulez)
+
+
+#plot the results of enrichment scores
+features <- names(modulez)
+
+majorDot <- function(seu.obj = NULL, groupBy = "",
+                     yAxis = NULL, scale = T,
+                     features = "", split.by = NULL, cols = c("lightgrey", "blue"), cluster.idents = F
+                    ){
+    
+    t <- try(head(seu.obj@assays$RNA@scale.data),silent = T)
+
+    if("try-error" %in% class(t)){
+        seu.obj <- ScaleData(seu.obj)
+    }
+                       
+    p <- DotPlot(seu.obj,
+                 assay = "RNA",
+                 features = features,
+                 group.by = groupBy,
+                 cols = cols,
+                 scale = scale,
+                 split.by = split.by#,
+                 #idents = levels(seu.obj@meta.data[[groupBy]]),
+                 #cluster.idents = cluster.idents
+                ) +
+      geom_point(aes(size=pct.exp), shape = 21, colour="black", stroke=0.5) +
+      labs(size='Percent\nexpression')  +
+      theme(axis.line = element_blank(),
+            axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+            legend.position = "top",
+            legend.direction = "horizontal",
+            legend.justification='center',
+            panel.background = element_rect(fill = "white",colour = NA),
+            plot.background = element_rect(fill = "white",colour = NA),
+            legend.key.size = unit(1, "line"),
+            panel.border = element_rect(color = "black",
+                                        fill = NA,
+                                        size = 1),
+            ) +
+      scale_colour_viridis(option="magma", name='Average\nexpression') +
+      guides(size=guide_legend(override.aes = list(shape=21, colour="black", fill="white"),
+                               label.position = "bottom")) +
+      scale_size(range = c(0.5, 8), limits = c(0, 100)) +
+      #annotate("rect", xmin = features_cnt$startVal, xmax = features_cnt$endVal, ymin = features_cnt$cluster-0.5, ymax = features_cnt$cluster+0.5, fill = NA, colour = "mediumpurple1", size = 1) +
+      {if(!is.null(yAxis)){scale_y_discrete(limits=rev(yAxis))}} +
+      guides(color = guide_colorbar(title = 'Scaled\nExpression')) 
+      
+    
+    return(p)
+}
+  
+
+ecScores <- majorDot(seu.obj = seu.obj, groupBy = "clusterID_sub",
+                     features = rev(features)
+                    ) + coord_flip() + theme(plot.margin = margin(3, 0, 3, 0, "pt"),
+                                             axis.text.y=element_text(size=10),
+                                                                   axis.title = element_blank(),
+                                                                   legend.position = "right",
+                                                                   legend.direction = "vertical",
+                                                                   axis.text.x = element_text(angle=0, hjust = 0.5)
+                                            ) + scale_y_discrete(position = "right") + scale_colour_continuous(name="Enrichment score", type = "viridis")
+
 ```

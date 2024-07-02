@@ -18,41 +18,6 @@ We will make these column names have the format "cancer_lable_{method_name}" so 
 
 ###### We may want to use specific harmony parameters for tumor/stroma separation
 
-harmony_params <-
-    list(patient_prim = list(group_by = c("sample_name",
-                                          "method",
-                                          "data_source"),
-                             theta = c(5, 5, 5),
-                             lambda = c(0.5, 0.5, 0.5)),
-        patient_mets = list(group_by = c("sample_name",
-                                         "method",
-                                         "data_source"),
-                            theta = c(7, 7, 7),
-                            lambda = c(0.5, 0.5, 0.5)),
-        xeno_prim_human = list(group_by = c("sample_name",
-                                            "method",
-                                            "data_source"),
-                               theta = c(7, 7, 7)),
-        xeno_mets_human = list(group_by = c("sample_name",
-                                            "method",
-                                            "data_source"),
-                               theta = c(7, 7, 7)),
-        xeno_prim_mouse = list(group_by = c("sample_name",
-                                            "data_source"),
-                                theta = c(7, 7)),
-        xeno_mets_mouse = list(group_by = c("sample_name",
-                                            "method",
-                                            "data_source"),
-                               theta = c(7, 7, 7)),
-        mm_prim = list(group_by = c("sample_name",
-                                    "model"),
-                       theta = c(12, 12)),
-        mm_mets = list(group_by = c("sample_name",
-                                    "model"),
-                       theta = c(7, 7)),
-        normal_bone = list(group_by = c("sample_name"),
-                           theta = c(7)))
-
 #parallel::mclapply(unique(all_samples_csv$unique), function(group)
 for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
     object <-
@@ -178,9 +143,47 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
            width = 21,
            height = 14)
 }
+```
 
-# the idea to split tumor and stromal cells is to use reclustering 1 level down and then
-# using the seurat clusters to split
+
+## Split by clustering with right resolution as found by clustree
+
+```{r}
+# Harmony parameters for the split
+harmony_params <-
+    list(patient_prim = list(group_by = c("sample_name",
+                                          "method",
+                                          "data_source"),
+                             theta = c(5, 5, 5),
+                             lambda = c(0.5, 0.5, 0.5)),
+        patient_mets = list(group_by = c("sample_name",
+                                         "method",
+                                         "data_source"),
+                            theta = c(7, 7, 7),
+                            lambda = c(0.5, 0.5, 0.5)),
+        xeno_prim_human = list(group_by = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                               theta = c(7, 7, 7)),
+        xeno_mets_human = list(group_by = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                               theta = c(7, 7, 7)),
+        xeno_prim_mouse = list(group_by = c("sample_name",
+                                            "data_source"),
+                                theta = c(7, 7)),
+        xeno_mets_mouse = list(group_by = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                               theta = c(7, 7, 7)),
+        mm_prim = list(group_by = c("sample_name",
+                                    "model"),
+                       theta = c(12, 12)),
+        mm_mets = list(group_by = c("sample_name",
+                                    "model"),
+                       theta = c(7, 7)),
+        normal_bone = list(group_by = c("sample_name"),
+                           theta = c(7)))
 
 for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
     object <-
@@ -188,12 +191,19 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                         group,
                         ".qs"))
 
+    if (any(c("S0200", "S0201") %in% object$sample_name)) {
+        object <- subset(object, sample_name != "S0200" & sample_name != "S0201")
+    }
+
      for (cell_group_name in c("cancer_cells", "normal_cells")) {
+        sub_group <- str_c(group, "_", cell_group_name)
+
         s_obj <-
             subset(x = object,
                    celltype_tumor_call == cell_group_name) %>%
             process_seurat() %>%
-            RunHarmony(group.by.vars = harmony_params[[group]]$group_by) %>%
+            RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
+                       theta = harmony_params[[group]]$theta) %>%
             process_seurat(reduction = "harmony")
 
         dimplot1 <- 
@@ -231,7 +241,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                     "_dimplot.png"),
                 plot = all_dimplots,
                 width = 14,
-                height = 7)
+                height = 14)
 
     if (object$organism[1] == "human") {
         tumor_featureplot <- 
@@ -294,26 +304,92 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
     print(str_c(group, " labelled with cancer_vs_normal cells and subsetted and saved"))
 }
 
-
 #save the xenograft objects
 for (group in c("xeno_prim_human",
                 "xeno_prim_mouse",
                 "xeno_mets_human",
                 "xeno_mets_mouse")) {
     object <-
-        qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
+
+    dimplot1 <- 
+        dimplot_better(object,
+                    group_by = "seurat_clusters") +
+            NoLegend()
     
-    dimplot_better(ann_sobj,
-                    group_by = c("new_annot_clust"),
-                    split_by = "sample_name",
-                    ncol = 6)
+    dimplot2 <-
+        dimplot_better(object,
+                    group_by = "annotations") +
+            NoLegend()
+
+    dimplot3 <- 
+        dimplot_better(object,
+                    group_by = "sample_name") +
+            NoLegend()
+
+    dimplot4 <- 
+        dimplot_better(object,
+                    group_by = "data_source") +
+            NoLegend()
+
+    all_dimplots <- 
+        patchwork::wrap_plots(dimplot1,
+                            dimplot2,
+                            dimplot3,
+                            dimplot4,
+                            ncol = 2) +
+        patchwork::plot_annotation(title = group)
+    
+    ggsave(str_c("output/figures/tumor_vs_stroma/",
+                group,
+                "/",
+                "dimplot.png"),
+            plot = all_dimplots,
+            width = 14,
+            height = 14)
+        
+    if (object$organism[1] == "human") {
+        tumor_featureplot <- 
+            FeaturePlot(object,
+                        features = c("COL1A1", "COL1A2", "FBLN1",
+                                    "SATB2", "RUNX2", "ALPL"),
+                        ncol = 3)
+        immune_featureplot <- 
+            FeaturePlot(object,
+                        features = c("CD3E", "CD4", "CD68",
+                                    "MUC1", "MS4A1", "ESAM"),
+                        ncol = 3)
+    } else {
+        tumor_featureplot <- 
+            FeaturePlot(object,
+                        features = c("Col1a1", "Col1a2", "Fbln1",
+                                    "Satb2", "Runx2", "Alpl"),
+                        ncol = 3)
+        immune_featureplot <- 
+            FeaturePlot(object,
+                        features = c("Cd3e", "Cd4", "Cd68",
+                                    "Muc1", "Ms4a1", "Esam"),
+                        ncol = 3)
+    }
+    ggsave(str_c("output/figures/tumor_vs_stroma/",
+                group,
+                "/",
+                "tumor_featureplot.png"),
+            plot = tumor_featureplot,
+            width = 21,
+            height = 21)
+
+    ggsave(str_c("output/figures/tumor_vs_stroma/",
+                group,
+                "/",
+                "immune_featureplot.png"),
+            plot = immune_featureplot,
+            width = 21,
+            height = 21)
 
     qs::qsave(object, str_c("output/seurat_objects/tumor_vs_stroma/",
-                            group,
-                            ".qs"))
-    qs::qsave(object, str_c("output/seurat_objects/annotated_sobjs/",
                             group,
                             ".qs"))
 
@@ -327,5 +403,4 @@ for (group in c("xeno_prim_human",
                                  ".tsv"))
 }
 ```
-
 

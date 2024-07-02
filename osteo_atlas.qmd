@@ -57,6 +57,7 @@ for directoryName in \
     output/seurat_objects/sobj_preprocess_ \
     output/id_tumor/scATOMIC \
     output/id_tumor/SCEVAN \
+    output/id_tumor/snv_calling \
     output/id_tumor/snvs/plots \
     output/id_tumor/celltype
 do
@@ -65,6 +66,7 @@ do
         mkdir -p ${directoryName}
     fi
 done
+
 ```
 
 # Read in raw data and process to Seurat objects
@@ -80,10 +82,16 @@ Harmonized datasets are saved to `output/seurat_objects/sobj_preprocess_merged/`
 
 {{< include child_qmds/read_raw_data.qmd >}}
 
+
 # Use SingleR and reference datasets to annotate cell types
 The output of this is written to `output/seurat_objects/harmony_sobjs_annot/`
 
 {{< include child_qmds/annotate_celltypes.qmd >}}
+
+<!-- # Use SNV calling to try to ID tumor cells
+Run Matts SNV calling pipeline to try to ID tumor cells
+
+{{< include child_qmds/variants.qmd >}} -->
 
 # Use SCEVAN and scATOMIC to try to identify tumor cells
 This will help in splitting the cancer cells from the stroma cells.
@@ -98,41 +106,10 @@ This will help in splitting the cancer cells from the stroma cells.
 
 {{< include child_qmds/split_tumor_stromal.qmd >}}
 
-# Clustering based of the silhouette score and clustree
-```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE, eval = FALSE}
-object_list <-
-    tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.15,
-            "patient_mets_cancer_cells",    0.05,
-            "mm_prim_cancer_cells",         0.05,
-            "mm_mets_cancer_cells",         0.05,
-            "xeno_prim_human",              0.1,
-            "xeno_mets_human",              0.1,
-            "patient_prim_normal_cells",    0.15,
-            "patient_mets_normal_cells",    0.15,
-            "xeno_prim_mouse",              0.05,
-            "xeno_mets_mouse",              0.15,
-            "mm_prim_normal_cells",         0.25,
-            "mm_mets_normal_cells",         0.05)
+# DEGS and GSEA
+Run the differential expression and GSEA
 
-for (item in seq_len(nrow(object_list))) {
-    group <- object_list$group[item]
-    res_value <- object_list$res_value[item]
-    s_obj <-
-        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
-                              group,
-                              ".qs"))
-
-    s_obj <- FindClusters(s_obj,
-                          resolution = res_value)
-
-    qs::qsave(s_obj,
-              file = str_c("output/seurat_objects/resolution_optimized/",
-                            group,
-                            ".qs"))
-}
-```
-
+{{< include child_qmds/degs_gseaplots.qmd >}}
 
 # Session info
 ```{r}

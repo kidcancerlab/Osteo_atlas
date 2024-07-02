@@ -281,7 +281,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 snv_result_path <-
     "/gpfs0/home2/gdrobertslab/lab/Analysis/Matt/24_Osteo_atlas/output/id_tumor/snvs/"
 snv_depth <-
-    read_tsv("output/id_tumor/snv_calling/use_snv_tumor_calls.txt")
+    read_tsv("misc/use_snv_tumor_calls.txt")
 
 for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
@@ -311,7 +311,8 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                               cell = barcode) %>%
                 mutate(final_snv_call = if_else(final_snv_call == "tumor",
                                                 "cancer_cells",
-                                                "normal_cells"))
+                                                "normal_cells") %>%
+                      tidyr::replace_na(replace = "unknown"))
 
         metadata_list[[samples]] <- snv_metadata
         }

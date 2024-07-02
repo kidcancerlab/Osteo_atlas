@@ -19,8 +19,8 @@ Seurat objects and save individual qs object
 #| fig.align: center
 #| echo: FALSE
 #| dependson: read_metadata
-ncount_min <- 750
-min_n_cells <- 500
+ncount_min <- 1000
+min_n_cells <- 100
 
 path_key <- list(
     SJ = "/gpfs0/home2/gdrobertslab/lab/ExternalData/Patel_lab/",
@@ -201,6 +201,8 @@ results <-
                          add.cell.id = names(temp_list)) %>%
         JoinLayers() %>%
         process_seurat()
+    
+    #remove the temp_list
     rm(temp_list)
 
     qs::qsave(merged_sobj,
@@ -208,6 +210,90 @@ results <-
                     group,
                     ".qs"))
     #run harmony
+    
+    #save the dimplot of the merged object
+    dimplot1 <- 
+            dimplot_better(merged_sobj,
+                        group_by = "seurat_clusters") +
+                NoLegend()
+
+    dimplot2 <- 
+        dimplot_better(merged_sobj,
+                    group_by = "model") +
+            NoLegend()
+
+    dimplot3 <- 
+        dimplot_better(merged_sobj,
+                    group_by = "sample_name") +
+            NoLegend()
+    
+    dimplot4 <- 
+        dimplot_better(merged_sobj,
+                    group_by = "data_source") +
+            NoLegend()
+
+    pre_harmony_dimplots <- 
+        patchwork::wrap_plots(dimplot1,
+                                dimplot2,
+                                dimplot3,
+                                dimplot4,
+                                ncol = 2) +
+        patchwork::plot_annotation(title = str_c(group, " pre harmony dimplots"))
+    #save the combined plots
+    ggsave(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "preHarmony_combined_plots.png"),
+           plot = pre_harmony_dimplots,
+           width = 14,
+           height = 14)
+
+    # make feaureplots
+      # plot feature plots
+    if (merged_sobj$organism[1] == "human") {
+        # tumor features for human
+        featureplot1_tumor <-
+            FeaturePlot(merged_sobj,
+                        features = c("COL1A1", "COL1A2", "FBLN1",
+                                     "SATB2", "RUNX2", "ALPL"),
+                        ncol = 3)
+        # Tcell=CD3E, Neutrophil=CD4, Macrophase=CD68,CD14, Bcells=MS4A1 or CD20, Endotthelial=ESAM, Epithelial=MUC1
+        featureplot2_immune <-
+            FeaturePlot(merged_sobj,
+                        features = c("CD3E", "CD4", "CD68",
+                                     "MUC1", "MS4A1", "ESAM"),
+                        ncol = 3)
+    } else {
+        # plots for mouse
+        featureplot1_tumor <-
+            FeaturePlot(merged_sobj,
+                        features = c("Col1a1", "Col1a2", "Fbln1",
+                                     "Satb2", "Runx2", "Alpl"),
+                        ncol = 3)
+
+        featureplot2_immune <-
+            FeaturePlot(merged_sobj,
+                        features = c("Cd3e", "Cd4", "Cd68",
+                                     "Muc1", "Ms4a1", "Esam"),
+                        ncol = 3)
+    }
+    ggsave(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "preharmony_tumor_featureplots.png"),
+           plot = featureplot1_tumor,
+           width = 21,
+           height = 14)
+    
+    ggsave(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "preharmony_immune_featureplots.png"),
+           plot = featureplot2_immune,
+           width = 21,
+           height = 14)
+
+    #run the harmony
     harmony_obj <-
         RunHarmony(object = merged_sobj,
                    group.by.vars = harmony_params[[group]]$group_by,
@@ -239,4 +325,6 @@ results <-
 
     return(TRUE)
 })
+
+
 ```
