@@ -678,6 +678,7 @@ circle_plot <- function(sobj,
             )
         ) +
         geom_tile() +
+        coord_equal() +
         geom_point(aes(size = perc_expressed), shape = 1, color = "white") +
         scale_fill_gradient(
             low = "lightgray",
@@ -686,7 +687,8 @@ circle_plot <- function(sobj,
         ) +
         scale_size_continuous(name = "Percent\nExpressed") +
         theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 10),
-              axis.text.y = element_text(size = 10)) +
+              axis.text.y = element_text(size = 10),
+              legend.key = element_rect(fill = "lightgray")) +
         labs(x = NULL, y = NULL)
 }
 ```

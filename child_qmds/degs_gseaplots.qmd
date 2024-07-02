@@ -40,7 +40,7 @@ for (i in seq_len(length(all_groups))) {
                             summary_plot = FALSE,
                             reduction = "harmony") %>%
         filter(sil_vals == max(sil_vals)) %>%
-        slice_head(n=1) %>%
+        slice_head(n = 1) %>%
         dplyr::pull(res_vals)
 
     sil_val_list[[group]] <- res_score
@@ -139,4 +139,3 @@ for (i in seq_len(nrow(object_list))) {
 ```{r print_panel_plots}
 qreport::maketabs(panel_plot_list)
 ```
-
