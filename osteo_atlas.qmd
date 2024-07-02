@@ -48,6 +48,8 @@ library(copykat)
 for directoryName in \
     output \
     output/figures \
+    output/figures/gsea \
+    output/figures/tumor_vs_stroma/clustree \
     output/counts \
     output/metadata \
     output/seurat_objects/sobj_preprocess \
@@ -55,6 +57,7 @@ for directoryName in \
     output/seurat_objects/harmony_sobjs \
     output/seurat_objects/harmony_sobjs_annot \
     output/seurat_objects/sobj_preprocess_ \
+    output/seurat_objects/tumor_vs_stroma \
     output/id_tumor/scATOMIC \
     output/id_tumor/SCEVAN \
     output/id_tumor/snv_calling \
