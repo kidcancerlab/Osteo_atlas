@@ -159,7 +159,7 @@ mouse_lung_ref$CellType <-
                         "^Capillary$" = "Endothelial_cells"))
 
 # #make a reference for all tumor cells, using cell culture data documantation
-# mouse_tumor_cell <- 
+# mouse_tumor_cell <-
 #     qs::qread("output/seurat_objects/comb_sobjs/mm_prim.qs") %>%
 #     subset(sample_name %in% c("S0200", "S0201"))
 
@@ -211,7 +211,7 @@ huim$label.main <-
                             c("/" = "_",
                               "\\+" = "_plus",
                               "-" = "_"))
-huim$label.main <- 
+huim$label.main <-
     stringr::str_replace_all(huim$label.main,
                                 c("^B cells$" = "B_cells",
                                 "^Dendritic cells$" = "Dendritic_cells",
@@ -349,31 +349,32 @@ annotate_celltypes <- function(sobject,
               function(x) max(x, na.rm = TRUE))
     return(sobject)
 }
-
 ```
 
 ## RUN differential expression analysis on a Seurat object
 ```{r run_degs_function}
-#| cache.vars: all_samples_csv
+#| cache.vars: all_samples_csv, run_degs
 all_samples_csv <- read_tsv("misc/allsample_details.txt",
                             show_col_types = FALSE)
 
-#| cache.vars = 'run_degs'
 run_degs <- function(sobject,
-                     group_by = "",
-                     prefix = "") {
-
-    degs_output <- list()
+                     group_by = "") {
 
     pseudobulk <- sobject %>%
-        Seurat::AggregateExpression(group.by = c("sample_name", "seurat_clusters"),
-                                    slot = "counts",
-                                    assay = "RNA")
+        Seurat::AggregateExpression(
+            group.by = c("sample_name", "seurat_clusters"),
+            slot = "counts",
+            assay = "RNA"
+        )
     pseudobulk <- pseudobulk[[1]]
 
-    # run the deseq2
-    for (cluster_no in unique(object$seurat_clusters)) {
-
+    # run deseq2
+    #for (cluster_no in unique(object$seurat_clusters)) {
+    degs_output <-
+        parallel::mclapply(unique(sobject$seurat_clusters),
+                           mc.cores = parallelly::availableCores(),
+                           mc.preschedule = FALSE,
+                           function(cluster_no) {
         batch_df <- data.frame(sample_name = colnames(pseudobulk))
 
         batch_df_new <-
@@ -397,7 +398,7 @@ run_degs <- function(sobject,
             batch_df_new2 <- left_join(batch_df_new,
                                     new_all_samples_csv,
                                     by = c("sample_name", "organism")) %>%
-                select(-sample_name, -method,-location, -model, -organism)
+                select(-sample_name, -method, -location, -model, -organism)
         }
 
         all(colnames(pseudobulk) == batch_df_new$col_label)
@@ -411,19 +412,28 @@ run_degs <- function(sobject,
                 batch_df_new2[[columns]] <- NULL
             }
         }
-        design <- as.formula(paste0("~", paste(colnames(batch_df_new2)[c(-1,-2)], collapse = " + ")))
+        design <-
+            as.formula(
+                paste0(
+                    "~",
+                    paste(colnames(batch_df_new2)[c(-1, -2)], collapse = " + ")
+                )
+            )
 
-        degs_output[[cluster_no]] <-
+        return(
             DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
                                            colData = batch_df_new2,
                                            design = design) %>%
-            DESeq2::DESeq() %>%
+            DESeq2::DESeq(quiet = TRUE) %>%
             DESeq2::results() %>%
             as.data.frame() %>%
-            dplyr::arrange(desc(log2FoldChange)) %>%
+            dplyr::arrange(dplyr::desc(log2FoldChange)) %>%
             tibble::rownames_to_column("gene") %>%
             na.omit()
-    }
+        )
+    })
+    names(degs_output) <- unique(sobject$seurat_clusters)
+
     return(degs_output)
 }
 ```
@@ -441,21 +451,28 @@ run_gsea <- function(degs_result,
         split(x = .$gene_symbol, f = .$gs_name)
 
     gsea_output <- list()
-    for (item in names(degs_result)) {
-        gsea_input <- as.vector(degs_result[[item]]$log2FoldChange)
-        names(gsea_input) <- degs_result[[item]]$gene
+    #for (item in names(degs_result)) {
+    gsea_output <-
+        parallel::mclapply(names(degs_result),
+                           mc.cores = parallelly::availableCores(),
+                           mc.preschedule = FALSE,
+                           function(item) {
+            gsea_input <- as.vector(degs_result[[item]]$log2FoldChange)
+            names(gsea_input) <- degs_result[[item]]$gene
 
-        output <- fgsea::fgseaMultilevel(gsea_ref,
-                                         gsea_input,
-                                         minSize = 10,
-                                         maxSize = 500,
-                                         nPermSimple = 10000)
-        gsea_output[[item]] <-
-            output %>%
-            dplyr::arrange(desc(NES)) %>%
-            filter(padj < 0.05) %>%
-            na.omit()
-    }
+            output <- fgsea::fgseaMultilevel(gsea_ref,
+                                            gsea_input,
+                                            minSize = 10,
+                                            maxSize = 500,
+                                            nPermSimple = 10000)
+            gsea_output[[item]] <-
+                output %>%
+                dplyr::arrange(desc(NES)) %>%
+                filter(padj < 0.05) %>%
+                na.omit()
+        })
+    names(gsea_output) <- names(degs_result)
+
     return(gsea_output)
 }
 ```
@@ -578,3 +595,309 @@ gsea_barplot <- function(data, x_col = "z_score") {
 }
 ```
 
+## Circle plot function
+```{r circle_plot_function}
+#| cache.vars: 'circle_plot'
+circle_plot <- function(sobj,
+                        cluster_column,
+                        features) {
+    avg_expr <-
+        AverageExpression(
+            sobj,
+            assay = "RNA",
+            layer = "scale.data",
+            features = features,
+            group.by = cluster_column
+        ) %>%
+        as.data.frame() %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        pivot_longer(
+            cols = -gene,
+            names_to = "cluster",
+            values_to = "expression"
+        ) %>%
+        mutate(cluster = str_replace(cluster, "RNA.g", "Cluster "))
+
+    clusters <-
+        sobj[[cluster_column]] %>%
+        unlist() %>%
+        unique() %>%
+        as.character()
+
+    perc_expressed <-
+        lapply(clusters,
+            function(x) {
+                binarized <-
+                    sobj[, sobj[[cluster_column]] == x] %>%
+                    GetAssayData(slot = "data")
+                binarized <- binarized[features, ]
+                binarized <- binarized == 0
+                perc_expressed <- 1 - rowSums(binarized) / ncol(binarized)
+                return(
+                    enframe(
+                        perc_expressed,
+                        name = "gene",
+                        value = "perc_expressed"
+                    ) %>%
+                    mutate(cluster = paste0("Cluster ", x))
+                )
+            }) %>%
+        bind_rows()
+
+    ############### Use hclust to group genes and clusters
+    # Calculate the distance matrix
+    cluster_tree <-
+        avg_expr %>%
+        pivot_wider(
+            names_from = gene,
+            values_from = expression
+        ) %>%
+        column_to_rownames("cluster") %>%
+        dist() %>%
+        hclust()
+
+    gene_tree <-
+        avg_expr %>%
+        pivot_wider(
+            names_from = cluster,
+            values_from = expression
+        ) %>%
+        column_to_rownames("gene") %>%
+        dist() %>%
+        hclust()
+
+    left_join(avg_expr, perc_expressed, by = c("gene", "cluster")) %>%
+        mutate(cluster = factor(cluster, levels = cluster_tree$label[cluster_tree$order]),
+               gene = factor(gene, levels = gene_tree$label[gene_tree$order])) %>%
+        ggplot(
+            aes(
+                x = cluster,
+                y = gene,
+                fill = expression
+            )
+        ) +
+        geom_tile() +
+        coord_equal() +
+        geom_point(aes(size = perc_expressed), shape = 1, color = "white") +
+        scale_fill_gradient(
+            low = "lightgray",
+            high = "darkblue",
+            name = "Scaled\nExpression"
+        ) +
+        scale_size_continuous(name = "Percent\nExpressed") +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 10),
+              axis.text.y = element_text(size = 10),
+              legend.key = element_rect(fill = "lightgray")) +
+        labs(x = NULL, y = NULL)
+}
+```
+
+```{r panel_plot_function}
+#| cache.vars: 'make_panel_plot'
+make_panel_plot <- function(sobj, cluster_column, label) {
+    volc_plots <- list()
+    gsea_plots <- list()
+    gsea_results <- list()
+    heatmap_plots <- list()
+
+    colors_use <-
+        colorRampPalette(rev(RColorBrewer::brewer.pal(n = 7, name = "RdYlBu")))(100)
+
+    colors_use <- c(colors_use[1:48], rep("gray", 4), colors_use[52:100])
+
+    dimplot <- dimplot_better(sobj, group_by = cluster_column)
+    dimplot_celltype <- dimplot_better(sobj, group_by = "new_annot_clust")
+
+    degs_result <- run_degs(sobject = sobj, group_by = cluster_column)
+
+    if (dir.exists(paste0("output/degs/", label))) {
+        unlink(paste0("output/degs/", label), recursive = TRUE)
+    }
+    # Calculate the differentially expressed genes
+    for (cluster_name in names(degs_result)) {
+        if (!dir.exists(paste0("output/degs/", label))) {
+            dir.create(paste0("output/degs/", label), recursive = TRUE)
+        }
+        write_tsv(
+            degs_result[[cluster_name]],
+            paste0("output/degs/", label, "/", cluster_name, "_degs.tsv")
+        )
+
+        logfc_cutoff <- 0.6
+        degs_result[[cluster_name]] <-
+            degs_result[[cluster_name]] %>%
+            mutate(
+                diffexpressed = if_else(
+                    log2FoldChange > logfc_cutoff & padj < 0.05,
+                    "Upregulated",
+                    if_else(
+                        log2FoldChange < -1 * logfc_cutoff & padj < 0.05,
+                        "Downregulated",
+                        "Not Significant"
+                    )
+                )
+            )
+
+        #make the volcano plot
+        volc_plots[[cluster_name]] <-
+            ggplot(
+                degs_result[[cluster_name]],
+                aes(
+                    x = log2FoldChange,
+                    y = -log10(pvalue),
+                    color = diffexpressed
+                )
+            ) +
+            geom_vline(xintercept = c(-1 * logfc_cutoff, logfc_cutoff),
+                      col = "gray",
+                      linetype = "dashed") +
+            geom_hline(yintercept = c(0.05),
+                      col = "gray",
+                      linetype = "dashed") +
+            geom_point(size = 2) +
+            scale_color_manual(values = c(plot_cols[1], "grey", plot_cols[2]),
+                               name = "") +
+            geom_text_repel(aes(label = gene))
+    }
+
+    marker_genes <-
+        sapply(
+            names(degs_result),
+            simplify = FALSE,
+            function(x) {
+                x <- as.character(x)
+                degs_result[[x]] %>%
+                    mutate(cluster = paste0("Cluster ", x)) %>%
+                    select(-baseMean, -lfcSE, -stat) %>%
+                    filter(diffexpressed == "Upregulated") %>%
+                    arrange(desc(log2FoldChange)) %>%
+                    slice_head(n = 10)
+        }) %>%
+        bind_rows() %>%
+        pull(gene)
+
+    circle_plot_out <-
+        circle_plot(
+            sobj,
+            cluster_column = cluster_column,
+            features = marker_genes
+        )
+
+    # GSEA analysis
+    if (dir.exists(paste0("output/gsea/", label))) {
+        unlink(paste0("output/gsea/", label), recursive = TRUE)
+    }
+    for (i in seq_len(nrow(cat_tib))){
+        category <- cat_tib$category[i]
+        subcategory <- cat_tib$subcategory[i]
+        cat_expl <- cat_tib$cat_expl[i]
+        if (subcategory == "NA") {
+            gsea_result <-
+                run_gsea(
+                    degs_result = degs_result,
+                    category = category,
+                    species = sobj$organism[1]
+                )
+        } else {
+            gsea_result <-
+                run_gsea(
+                    degs_result = degs_result,
+                    category = category,
+                    subcategory = subcategory,
+                    species = sobj$organism[1]
+                )
+        }
+        #test if directory to save the results exists
+        if (!dir.exists(paste0("output/gsea/", label))) {
+            dir.create(paste0("output/gsea/", label), recursive = TRUE)
+        }
+
+        gsea_result <-
+            sapply(names(gsea_result),
+                   simplify = FALSE,
+                   function(x) {
+                gsea_result[[x]] %>%
+                    mutate(cluster = paste("Cluster", x),
+                           pathway_group = cat_expl)
+            })
+
+        for (item in names(gsea_result)) {
+              #save the results
+            write_tsv(
+                gsea_result[[item]],
+                paste0(
+                    "output/gsea/", label, "/",
+                    cat_expl, "_cluster_", item, "_gsea.tsv"
+                )
+            )
+        }
+
+        #########################################################
+        # Drop in code to make heatmap here
+        n_paths_per_cluster <- 20
+        use_pathways <-
+            gsea_result %>%
+            bind_rows() %>%
+            group_by(cluster) %>%
+            mutate(abs_NES = abs(NES)) %>%
+            slice_max(order_by = abs_NES, n = n_paths_per_cluster) %>%
+            pull(pathway) %>%
+            unique()
+
+        max_abs_nes <-
+            gsea_result %>%
+            bind_rows() %>%
+            pull(NES) %>%
+            max() %>%
+            ceiling()
+
+        breaks_use <-
+            seq(-max_abs_nes, max_abs_nes, length.out = 101)
+
+        heatmap_plots[[cat_expl]] <-
+            gsea_result %>%
+            bind_rows() %>%
+            filter(pathway %in% use_pathways) %>%
+            select(
+                -padj,
+                -log2err,
+                -ES,
+                -size,
+                -leadingEdge,
+                -pval,
+                -pathway_group) %>%
+            pivot_wider(
+                names_from = cluster,
+                values_from = NES,
+                values_fill = 0
+            ) %>%
+            column_to_rownames("pathway") %>%
+            pheatmap::pheatmap(
+                color = colors_use,
+                breaks = breaks_use,
+                display_numbers = TRUE,
+                silent = TRUE,
+                main = paste0(cat_expl),
+                fontsize_row = 5,
+                fontsize_number = 5
+            )
+    }
+
+    panel_plots[[label]] <-
+        patchwork::wrap_plots(
+            dimplot,
+            circle_plot_out,
+            ggplotify::as.ggplot(heatmap_plots$Hallmark_paths),
+            ggplotify::as.ggplot(heatmap_plots$KEGG),
+            ggplotify::as.ggplot(heatmap_plots$Oncogenic_signature),
+            ggplotify::as.ggplot(heatmap_plots$Transcription_factor_targets),
+            ncol = 2) +
+        patchwork::plot_annotation(title = label)
+    ggsave(
+        paste0("output/figures/gsea/", label, "_six_panels.png"),
+        width = 16,
+        height = 24,
+        plot = panel_plots[[label]])
+}
+```
