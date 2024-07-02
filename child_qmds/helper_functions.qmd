@@ -156,7 +156,8 @@ mouse_lung_ref$CellType <-
                         "^Ciliated$" = "Epithelial_cells",
                         "^Pericytes$" = "Mural_cells",
                         "^Mesothelial$" = "Epithelial_cells",
-                        "^Capillary$" = "Endothelial_cells"))
+                        "^Capillary$" = "Endothelial_cells",
+                        "^Mast_Basophils$" = "Basophil_Mast"))
 
 # #make a reference for all tumor cells, using cell culture data documantation
 # mouse_tumor_cell <- 
