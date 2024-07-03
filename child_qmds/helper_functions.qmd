@@ -679,7 +679,7 @@ circle_plot <- function(sobj,
             )
         ) +
         geom_tile() +
-        coord_equal() +
+        #coord_equal() +
         geom_point(aes(size = perc_expressed), shape = 1, color = "white") +
         scale_fill_gradient(
             low = "lightgray",
@@ -696,7 +696,7 @@ circle_plot <- function(sobj,
 
 ```{r panel_plot_function}
 #| cache.vars: 'make_panel_plot'
-make_panel_plot <- function(sobj, cluster_column, label) {
+make_panel_plot <- function(sobj, cluster_column, label, group) {
     volc_plots <- list()
     gsea_plots <- list()
     gsea_results <- list()
@@ -717,12 +717,12 @@ make_panel_plot <- function(sobj, cluster_column, label) {
     }
     # Calculate the differentially expressed genes
     for (cluster_name in names(degs_result)) {
-        if (!dir.exists(paste0("output/degs/", label))) {
-            dir.create(paste0("output/degs/", label), recursive = TRUE)
+        if (!dir.exists(paste0("output/degs/", group, "/", label))) {
+            dir.create(paste0("output/degs/", group, "/", label), recursive = TRUE)
         }
         write_tsv(
             degs_result[[cluster_name]],
-            paste0("output/degs/", label, "/", cluster_name, "_degs.tsv")
+            paste0("output/degs/", group, "/", label, "/", cluster_name, "_degs.tsv")
         )
 
         logfc_cutoff <- 0.6
@@ -773,7 +773,7 @@ make_panel_plot <- function(sobj, cluster_column, label) {
                     select(-baseMean, -lfcSE, -stat) %>%
                     filter(diffexpressed == "Upregulated") %>%
                     arrange(desc(log2FoldChange)) %>%
-                    slice_head(n = 10)
+                    slice_head(n = 5)
         }) %>%
         bind_rows() %>%
         pull(gene)
@@ -810,8 +810,8 @@ make_panel_plot <- function(sobj, cluster_column, label) {
                 )
         }
         #test if directory to save the results exists
-        if (!dir.exists(paste0("output/gsea/", label))) {
-            dir.create(paste0("output/gsea/", label), recursive = TRUE)
+        if (!dir.exists(paste0("output/gsea/", group, "/", label))) {
+            dir.create(paste0("output/gsea/", group, "/", label), recursive = TRUE)
         }
 
         gsea_result <-
@@ -828,7 +828,7 @@ make_panel_plot <- function(sobj, cluster_column, label) {
             write_tsv(
                 gsea_result[[item]],
                 paste0(
-                    "output/gsea/", label, "/",
+                    "output/gsea/", group, "/", label, "/",
                     cat_expl, "_cluster_", item, "_gsea.tsv"
                 )
             )
@@ -896,9 +896,9 @@ make_panel_plot <- function(sobj, cluster_column, label) {
             ncol = 2) +
         patchwork::plot_annotation(title = label)
     ggsave(
-        paste0("output/figures/gsea/", label, "_six_panels.png"),
-        width = 16,
-        height = 24,
+        paste0("output/figures/gsea/", group, "/", label, "_six_panels.png"),
+        width = 20,
+        height = 50,
         plot = panel_plots[[label]])
 }
 ```
