@@ -897,8 +897,9 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
         patchwork::plot_annotation(title = label)
     ggsave(
         paste0("output/figures/gsea/", group, "/", label, "_six_panels.png"),
-        width = 20,
+        width = 30,
         height = 50,
+        limitsize = FALSE,
         plot = panel_plots[[label]])
 }
 ```

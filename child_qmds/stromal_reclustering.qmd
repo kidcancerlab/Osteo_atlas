@@ -29,7 +29,16 @@ object_list <- list(patient_prim_normal_cells = c("Macrophage",
                                                   "B cells"),)
 
 
-recluster_celltypes <- 
+genes <- markers::get_markers("human")
+
+mousify <- function(a){
+    return(paste0(substr(a,1,1), tolower(substr(a,2, nchar(a)))))
+}
+
+
+genes <- c("ABC45", "DEF-443", "GHI_rt", "JKL_1")
+genes_m <- sapply(genes, mousify)
+
 
 #https://www.cell.com/trends/immunology/fulltext/S1471-4906(22)00094-1
 Macrophages <- list(LA_TAMs = c("APOC1", "APOE", "APC5", "FABP5"),
@@ -42,8 +51,8 @@ Macrophages <- list(LA_TAMs = c("APOC1", "APOE", "APC5", "FABP5"),
 
 #https://www.nature.com/articles/s41467-021-23324-4
 #https://www.biocompare.com/Editorial-Articles/569888-A-Guide-to-T-Cell-Markers/
-T_cells <- list(CD4 = c("CD4", "IL7R", "IL21"),
-                CD8 = c("CD8A", "CD8B", "GZMK"),
+T_cells <- list(CD4_cells = c("CD4", "IL7R", "IL21"),
+                CD8_cells = c("CD8A", "CD8B", "GZMK", "GZMB", "PRF1"),
                 T_reg = c("FOXP3", "IL2RA", "CTLA4"),
                 Exhausted = c("PD1", "TOX", "TIGIT"),
                 Prolif_T = c("MKI67", "CDK1", "CDK4"))
@@ -64,6 +73,29 @@ Dendritic_cells <- list(PreDC = c("IL3RA", "PGLYRP2", "DDR2"),
                         cDC2 = c("CD300H", "PID1", "CD1C"))
 
 
+
+for (module in names(get(celltypes))) {
+    cell_ranks <- AUCell::AUCell_run(subset_sobj[["RNA"]]$counts,
+                                     geneSets = get(celltypes)[[module]])
+    subset_sobj[[module]] <- AUCell::getAUC(cell_ranks)[1,]
+
+    feature_plot <- FeaturePlot(subset_sobj,
+                                module,
+                                cols = c("#EEEEEE", "#ae0600"),
+                                min.cutoff = 0.15,
+                                pt.size = 1,
+                                order = TRUE) +
+                        coord_fixed() +
+                        ggtitle(paste0(celltypes, ": ", module))
+
+    featureplot_list[[module]] <- feature_plot
+}
+
+
+
+
+
+featureplot_list <- list()
 
 
 for (item in seq_len(nrow(object_list))) {
@@ -101,6 +133,30 @@ for (item in seq_len(nrow(object_list))) {
         subset_sobj <- subset_sobj %>%
             process_seurat(reduction = "harmony",
                            resolution = sil_val)
+        #prepare the matrix for aucell
+        matrix <- subset_sobj@assays$RNA$counts
+
+        for (module in names(get(celltypes))) {
+            cell_ranks <- AUCell::AUCell_run(exprMat = matrix,
+                                            geneSets = get(celltypes)[[module]])
+            subset_sobj[[module]] <- AUCell::getAUC(cell_ranks)[1,]
+
+            feature_plot <- FeaturePlot(subset_sobj,
+                                        module,
+                                        cols = c("#EEEEEE", "#ae0600"),
+                                        min.cutoff = 0.15,
+                                        pt.size = 1,
+                                        order = TRUE) +
+                                coord_fixed() +
+                                ggtitle(paste0(celltypes, ": ", module))
+
+            featureplot_list[[module]] <- feature_plot
+
+        }
+            # Combine all the plots into a panel plot with 
+
+        panel_plot <- cowplot::plot_grid(plotlist = featureplot_list,
+                                         ncol = 2)
 
         # Recluster the cells
         clust_info <- tibble()
@@ -144,7 +200,7 @@ for (item in seq_len(nrow(object_list))) {
 
         #make the panel plot for degs and GSEA
         make_panel_plot(sobj = subset_sobj,
-                        cluster_column = "rere_cluster",
+                        cluster_column = "seurat_clusters",
                         label = celltypes,
                         group = group)
 
