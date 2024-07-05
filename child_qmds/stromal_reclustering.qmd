@@ -29,14 +29,14 @@ object_list <- list(patient_prim_normal_cells = c("Macrophage",
                                                   "B cells"),)
 
 
-genes <- markers::get_markers("human")
-
 mousify <- function(a){
     return(paste0(substr(a,1,1), tolower(substr(a,2, nchar(a)))))
 }
 
+genes <- c("CD4", "CD45", "COL1A1", "SATB2")
 
-genes <- c("ABC45", "DEF-443", "GHI_rt", "JKL_1")
+mouse <- nichenetr::convert_human_to_mouse_symbols(genes)
+
 genes_m <- sapply(genes, mousify)
 
 
@@ -95,7 +95,7 @@ for (module in names(get(celltypes))) {
 
 
 
-featureplot_list <- list()
+
 
 
 for (item in seq_len(nrow(object_list))) {
@@ -133,8 +133,18 @@ for (item in seq_len(nrow(object_list))) {
         subset_sobj <- subset_sobj %>%
             process_seurat(reduction = "harmony",
                            resolution = sil_val)
+
+        #make the dimplot
+        dimplot_subset <- 
+            dimplot_better(subset_sobj,
+                        group_by = "seurat_clusters") +
+                ggtitle(celltypes) +
+                NoLegend()
+
         #prepare the matrix for aucell
         matrix <- subset_sobj@assays$RNA$counts
+
+        featureplot_list <- list()
 
         for (module in names(get(celltypes))) {
             cell_ranks <- AUCell::AUCell_run(exprMat = matrix,
@@ -151,10 +161,9 @@ for (item in seq_len(nrow(object_list))) {
                                 ggtitle(paste0(celltypes, ": ", module))
 
             featureplot_list[[module]] <- feature_plot
-
         }
-            # Combine all the plots into a panel plot with 
 
+        # Combine all the plots into a panel plot with 
         panel_plot <- cowplot::plot_grid(plotlist = featureplot_list,
                                          ncol = 2)
 
@@ -191,12 +200,26 @@ for (item in seq_len(nrow(object_list))) {
         subset_sobj <- AddMetaData(subset_sobj, metadata = clust_info)
         subset_sobj$seurat_clusters <- subset_sobj$rere_cluster
 
-        #make the dimplot
-        dimplot_subset <- 
-            dimplot_better(subset_sobj,
-                        group_by = "rere_cluster") +
-                ggtitle(celltypes) +
-                NoLegend()
+        # correlation analysis
+        correlation_plot <- 
+            AverageExpression(subset_sobj,
+                              layer = "scale.data",
+                              group.by = "seurat_clusters")$RNA %>%
+                as.matrix() %>%
+                cor() %>%
+                pheatmap::pheatmap(display_numbers = TRUE,
+                                   silent = TRUE)
+
+        #save the correlation plot
+        ggsave(filename = str_c("output/figures/relustering_normals/",
+                               group,
+                               "/",
+                               celltypes,
+                               "_correlation.png"),
+               plot = correlation_plot,
+               width = 14,
+               height = 14,
+               bg = "white")
 
         #make the panel plot for degs and GSEA
         make_panel_plot(sobj = subset_sobj,
