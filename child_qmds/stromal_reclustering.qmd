@@ -29,15 +29,11 @@ object_list <- list(patient_prim_normal_cells = c("Macrophage",
                                                   "B cells"),)
 
 
-mousify <- function(a){
-    return(paste0(substr(a,1,1), tolower(substr(a,2, nchar(a)))))
-}
 
-genes <- c("CD4", "CD45", "COL1A1", "SATB2")
+human_genes <- c("CD4", "CD45", "COL1A1", "SATB2")
 
-mouse <- nichenetr::convert_human_to_mouse_symbols(genes)
+mouse_genes <- nichenetr::convert_human_to_mouse_symbols(human_genes)
 
-genes_m <- sapply(genes, mousify)
 
 
 #https://www.cell.com/trends/immunology/fulltext/S1471-4906(22)00094-1
@@ -48,14 +44,27 @@ Macrophages <- list(LA_TAMs = c("APOC1", "APOE", "APC5", "FABP5"),
                    Prolif_TAMs = c("MKI67", "CDK1"),
                    RTM_TAMs = c("LYVE1", "HES1", "FOLR2"),
                    Angio_TAMs = c("VEGFA", "ANGPT2", "ANGPTL4", "SSP1"))
+                   
+                #    Alveolar_TAMs = c("CD11c", "MARCO", "CD64", "CD169", "CD11c"),
+                #    Adventitial_TAMs = c("PDGFRB", "SERPINF1", "PI16", "SFRP2"),
+                #    Interstitial_TAMs = c("CD11b", "CD11c", "CD64"),
+                #    Pro-inflammatory = c("AZIN1", "CD38","CD86","CXCL10","FPR2","GPR18", "IL12B",
+                #                        "IL18","IRF5","NFKBIZ","NOS2","PTGS2","TLR4","TNF"),
+                #    Anti-inflammatory = c("ALOX15", "ARG1", "CHIL3", "CHIL4","EGR2", "IL10",
+                #                           "IRF4","KLF4","MRC1","MYC","SOCS2","TGM2")
+# alveolar macs and int macs?
+
 
 #https://www.nature.com/articles/s41467-021-23324-4
 #https://www.biocompare.com/Editorial-Articles/569888-A-Guide-to-T-Cell-Markers/
 T_cells <- list(CD4_cells = c("CD4", "IL7R", "IL21"),
                 CD8_cells = c("CD8A", "CD8B", "GZMK", "GZMB", "PRF1"),
-                T_reg = c("FOXP3", "IL2RA", "CTLA4"),
-                Exhausted = c("PD1", "TOX", "TIGIT"),
-                Prolif_T = c("MKI67", "CDK1", "CDK4"))
+                Naïve = c("CCR7", "LEF1", "SELL", "TCF7"),
+                Cytotoxic = c("CST7", "GZMA", "GZMB", "IFNG", "PRF1", "TNFSF10"),
+                T_reg = c("FOXP3", "IL2RA", "CTLA4", "CD25", "IL4R", "IL7", "TGFB1", "TGFB3", "TGFBR1"),
+                Exhausted = c("PD1", "TOX", "TIGIT", "BTLA", "CTLA4", "HAVCR2", "LAG3", "PDCD1", "TIGIT"),
+                Prolif_T = c("MKI67", "CDK1", "CDK4", "TK1", "DIAPH3"),
+                IFN_signature = c("CXCL10", "IFI44", "OAS1", "ISG15", "IFI44L", "IFGGB2"))
 
 #https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9192344/
 Fibroblasts <- list(MyoFibroblasts = c("FBLN1", "TAGLN", "ASPN", "MYLK", "WIF1", "ACTA2"),
@@ -72,31 +81,15 @@ Dendritic_cells <- list(PreDC = c("IL3RA", "PGLYRP2", "DDR2"),
                         cDC1 = c("CADM1", "DNASE1L3", "CLEC1B"),
                         cDC2 = c("CD300H", "PID1", "CD1C"))
 
+#https://www.abcam.com/en-us/technical-resources/research-areas/marker-guides/b-cell-markers
+B_cells <- list(Immature_B = c("CD19", "CD20", "CD34", "CD38", "CD45R")
+                Plasm_B = c("CD38", "CD138", "IgG", "CD45", "CD184", "TNFRSF17")
+                Memory =c("CD19", "CD20", "CD21", "CD27", "CD69", "CD95"),
+                )
 
-
-for (module in names(get(celltypes))) {
-    cell_ranks <- AUCell::AUCell_run(subset_sobj[["RNA"]]$counts,
-                                     geneSets = get(celltypes)[[module]])
-    subset_sobj[[module]] <- AUCell::getAUC(cell_ranks)[1,]
-
-    feature_plot <- FeaturePlot(subset_sobj,
-                                module,
-                                cols = c("#EEEEEE", "#ae0600"),
-                                min.cutoff = 0.15,
-                                pt.size = 1,
-                                order = TRUE) +
-                        coord_fixed() +
-                        ggtitle(paste0(celltypes, ": ", module))
-
-    featureplot_list[[module]] <- feature_plot
-}
-
-
-
-
-
-
-
+FeaturePlot(subset_sobj,
+            features = Memory,
+            ncol = 3)
 
 for (item in seq_len(nrow(object_list))) {
     group <- object_list$group[item]
@@ -105,6 +98,23 @@ for (item in seq_len(nrow(object_list))) {
     object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                               group,
                               ".qs"))
+
+    object$new_annot_clust <-
+            stringr::str_replace_all(object$new_annot_clust,
+                                    c("^CD4T_cells$" = "T_cells",
+                                      "^CD4T_Memory$" = "T_cells",
+                                      "^CD4T_Naive$" = "T_cells",
+                                      "^Myeloid_Dendritic2$" = "Dendritic_cells",
+                                      "^CD8T_cells$" = "T_cells",
+                                      "^Plasma_Bcells$" = "B_cells",
+                                      "^CD8T_Memory$" = "T_cells",
+                                      "^CD4T_cells1$" = "T_cells",
+                                      "^CD8T_cells1$" = "T_cells",
+                                      "^AlvEpithelial_T1$" = "Epithelial_cells",
+                                      "^AlvEpithelial_T2$" = "Epithelial_cells",
+                                      "^Signalling_AlvEpithelial$" = "Epithelial_cells",
+                                      "^Int_Macrophages$" = "Macrophages",
+                                      "^Alv_Macrophages$" = "Macrophages"))
 
     object <- 
         FindClusters(object,
@@ -116,164 +126,156 @@ for (item in seq_len(nrow(object_list))) {
             ggtitle(group) +
             NoLegend()
 
-    for (celltypes in unique(object$new_annot_clust)) {
-        subset_sobj <- subset(object,
-                              annotations == celltypes) %>%
-            process_seurat() %>%
-            RunHarmony(group.by.vars = "sample_name")
+    #subset ech celltype for reclustering and labelling the celltypes
+    for (celltypes in c("Macrophages", "T_cells", "Fibroblasts", "Dendritic_cells")) {
+        if (celltypes %in% object$new_annot_clust) {
+            subset_sobj <-
+                subset(object,
+                    annotations == celltypes) %>%
+                process_seurat() %>%
+                RunHarmony(group.by.vars = "sample_name")
 
-        sil_val <- optimize_silhouette(sobject = subset_sobj,
-                                       test_res = seq(0.05, 0.9, by = 0.05),
-                                       summary_plot = FALSE,
-                                       reduction = "harmony") %>%
-            filter(sil_vals == max(sil_vals)) %>%
-            slice_head(n=1) %>%
-            dplyr::pull(res_vals)
+            sil_val <- 
+                optimize_silhouette(sobject = subset_sobj,
+                                    test_res = seq(0.05, 0.9, by = 0.05),
+                                    summary_plot = FALSE,
+                                    reduction = "harmony") %>%
+                filter(!is.na(sil_vals)) %>%
+                filter(sil_vals == max(sil_vals)) %>%
+                slice_head(n=1) %>%
+                dplyr::pull(res_vals)
 
-        subset_sobj <- subset_sobj %>%
-            process_seurat(reduction = "harmony",
-                           resolution = sil_val)
+            subset_sobj <- subset_sobj %>%
+                process_seurat(reduction = "harmony",
+                            resolution = sil_val)
 
-        #make the dimplot
-        dimplot_subset <- 
-            dimplot_better(subset_sobj,
-                        group_by = "seurat_clusters") +
-                ggtitle(celltypes) +
-                NoLegend()
+            #make the dimplot
+            dimplot_subset <- 
+                dimplot_better(subset_sobj,
+                            group_by = "seurat_clusters") +
+                    ggtitle(celltypes) +
+                    NoLegend()
 
-        #prepare the matrix for aucell
-        matrix <- subset_sobj@assays$RNA$counts
+            #prepare the matrix for aucell
+            matrix <- subset_sobj@assays$RNA$counts
 
-        featureplot_list <- list()
+            featureplot_list <- list()
 
-        for (module in names(get(celltypes))) {
-            cell_ranks <- AUCell::AUCell_run(exprMat = matrix,
-                                            geneSets = get(celltypes)[[module]])
-            subset_sobj[[module]] <- AUCell::getAUC(cell_ranks)[1,]
+            for (module in names(get(celltypes))) {
+                if (grepl("mouse", object$organism[1])) {
+                    genelist <- 
+                        nichenetr::convert_human_to_mouse_symbols(get(celltypes)[[module]]) %>%
+                        na.omit() %>%
+                        unique()
+                } else {
+                    genelist <- get(celltypes)[[module]]
+                }
+                cell_ranks <- 
+                    AUCell::AUCell_run(exprMat = matrix,
+                                    geneSets = genelist)
+                subset_sobj[[module]] <- AUCell::getAUC(cell_ranks)[1,]
 
-            feature_plot <- FeaturePlot(subset_sobj,
-                                        module,
-                                        cols = c("#EEEEEE", "#ae0600"),
-                                        min.cutoff = 0.15,
-                                        pt.size = 1,
-                                        order = TRUE) +
-                                coord_fixed() +
-                                ggtitle(paste0(celltypes, ": ", module))
+                feature_plot <- 
+                    FeaturePlot(subset_sobj,
+                                module,
+                                cols = c("#EEEEEE", "#ae0600"),
+                                min.cutoff = 0.15,
+                                pt.size = 1,
+                                order = TRUE) +
+                        coord_fixed() +
+                        ggtitle(paste0(celltypes, ": ", module))
 
-            featureplot_list[[module]] <- feature_plot
-        }
-
-        # Combine all the plots into a panel plot with 
-        panel_plot <- cowplot::plot_grid(plotlist = featureplot_list,
-                                         ncol = 2)
-
-        # Recluster the cells
-        clust_info <- tibble()
-        for (clusters in unique(subset_sobj$seurat_clusters)) {
-            re_subset_sobj <- subset(subset_sobj,
-                                     ident = clusters) %>%
-                FindVariableFeatures() %>%
-                ScaleData() %>%
-                RunPCA(npcs = 50) %>%
-                RunUMAP(dims= 1:30)
-
-            if (length(unique(re_subset_sobj$sample_name)) > 1 &&
-                ncol(re_subset_sobj) > 50) {
-                re_subset_sobj <- RunHarmony(re_subset_sobj,
-                                            group.by.vars = "sample_name") %>%
-                    process_seurat(reduction = "harmony")
-            } else {
-                re_subset_sobj <- re_subset_sobj
+                featureplot_list[[module]] <- feature_plot
             }
 
-            re_subset_sobj$rere_cluster <- str_c(clusters,
-                                                ".",
-                                                re_subset_sobj$seurat_clusters)
+            # Combine all the plots into a panel plot with 
+            panel_plot <- 
+                cowplot::plot_grid(dimplot_main,
+                                    dimplot_subset,
+                                    plotlist = featureplot_list,
+                                    ncol = 2)
 
-            print(str_c("Done reclustering ", group, " ", celltypes, " ", clusters))
-            clust_info <- re_subset_sobj@meta.data %>%
-                as.data.frame() %>%
-                select(rere_cluster) %>%
-                rbind(clust_info)
+            #calcuate height based of the number of features
+            length_var <- 
+                if (length(featureplot_list) %% 2 == 1) {
+                    length(featureplot_list) + 1
+                } else {
+                    length(featureplot_list)
+                }
+
+            height <- (length_var/2 * 7) + 7
+
+            # save the panel plot
+            ggsave(filename = str_c("output/figures/relustering_normals/",
+                                        group,
+                                        "/",
+                                        celltypes,
+                                        ".png"),
+                        plot = panel_plot,
+                        width = 14,
+                        height = height,
+                        device = "png",
+                        bg = "white")
+
+            # correlation analysis
+            correlation_plot <- 
+                AverageExpression(subset_sobj,
+                                layer = "scale.data",
+                                group.by = "seurat_clusters")$RNA %>%
+                    as.matrix() %>%
+                    cor() %>%
+                    pheatmap::pheatmap(display_numbers = TRUE,
+                                    silent = TRUE)
+
+            #save the correlation plot
+            ggsave(filename = str_c("output/figures/relustering_normals/",
+                                group,
+                                "/",
+                                celltypes,
+                                "_correlation.png"),
+                plot = correlation_plot,
+                width = 14,
+                height = 14,
+                bg = "white")
+
+            #make the panel plot for degs and GSEA
+            make_panel_plot(sobj = subset_sobj,
+                            cluster_column = "seurat_clusters",
+                            label = celltypes,
+                            group = group)
+        } else {
+            print(str_c(celltypes, " not in ", group))
         }
-
-        subset_sobj <- AddMetaData(subset_sobj, metadata = clust_info)
-        subset_sobj$seurat_clusters <- subset_sobj$rere_cluster
-
-        # correlation analysis
-        correlation_plot <- 
-            AverageExpression(subset_sobj,
-                              layer = "scale.data",
-                              group.by = "seurat_clusters")$RNA %>%
-                as.matrix() %>%
-                cor() %>%
-                pheatmap::pheatmap(display_numbers = TRUE,
-                                   silent = TRUE)
-
-        #save the correlation plot
-        ggsave(filename = str_c("output/figures/relustering_normals/",
-                               group,
-                               "/",
-                               celltypes,
-                               "_correlation.png"),
-               plot = correlation_plot,
-               width = 14,
-               height = 14,
-               bg = "white")
-
-        #make the panel plot for degs and GSEA
-        make_panel_plot(sobj = subset_sobj,
-                        cluster_column = "seurat_clusters",
-                        label = celltypes,
-                        group = group)
-
-        #Add module scores for each celltypes and features
-        module_object <-
-            AddModuleScore(subset_sobj,
-                        features = get(celltypes),
-                        name = paste0(names(get(celltypes)), "@"))
-
-        # Remove numbers from module names in metadata
-        colnames(module_object@meta.data) <-
-            gsub("@.+", "", names(module_object@meta.data))
-        
-        #make an empty list for plots
-        featureplot_list <- list()
-
-        for (module in names(get(celltypes))) {
-            feature_plot <- FeaturePlot(module_object,
-                                                      features = module) +
-                ggtitle(paste0(celltypes, ": ", module)) +
-                coord_fixed()
-
-            featureplot_list[[module]] <- feature_plot
-        }
-        # Combine all the plots into a panel plot with optimized dimensions
-        panel_plot <- cowplot::plot_grid(dimplot_main,
-                                         dimplot_subset,
-                                         plotlist = featureplot_list,
-                                         ncol = 2)
-        
-        #calcuate height based of the number of features
-        length_var <- if (length(featureplot_list) %% 2 == 1) length(featureplot_list) + 1 
-            else length(featureplot_list)
-
-        height <- (length_var/2 * 7) + 7
-
-        # save the panel plot
-        ggsave(filename = str_c("output/figures/relustering_normals/",
-                                       group,
-                                       "/",
-                                       celltypes,
-                                       ".png"),
-                       plot = panel_plot,
-                       width = 14,
-                       height = height,
-                       device = "png",
-                       bg = "white")
     }
 }
 
 
 
+
+
+correlation_plot <- 
+                AverageExpression(subset_sobj,
+                                layer = "scale.data",
+                                group.by = "seurat_clusters")$RNA %>%
+                    as.matrix() %>%
+                    cor() %>%
+                    pheatmap::pheatmap(display_numbers = TRUE,
+                                    silent = TRUE)
+
+correlation_plot
+
+#save plot as qs object
+qs::qsave(correlation_plot,
+            str_c("output/figures/relustering_normals/",
+                group,
+                "/",
+                "correlation_plot.qs"))
+
+# read plot as qs object
+correlation_plot <- qs::qread(str_c("output/figures/relustering_normals/",
+                                    group,
+                                    "/",
+                                    "correlation_plot.qs"))
+
+correlation_plot
 ```

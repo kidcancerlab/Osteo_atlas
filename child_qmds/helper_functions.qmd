@@ -363,7 +363,7 @@ run_degs <- function(sobject,
 
     pseudobulk <- sobject %>%
         Seurat::AggregateExpression(
-            group.by = c("sample_name", group_by),
+            group.by = c("sample_name", "seurat_clusters"),
             slot = "counts",
             assay = "RNA"
         )
@@ -372,7 +372,7 @@ run_degs <- function(sobject,
     # run deseq2
     #for (cluster_no in unique(object$seurat_clusters)) {
     degs_output <-
-        parallel::mclapply(unique(sobject[[group_by]][[1]]),
+        parallel::mclapply(unique(sobject$seurat_clusters),
                            mc.cores = parallelly::availableCores(),
                            mc.preschedule = FALSE,
                            function(cluster_no) {
@@ -434,8 +434,7 @@ run_degs <- function(sobject,
         )
     })
     # subset and name the degs_output by the group_by variables
-    names(degs_output) <- unique(sobject[[group_by]])[[1]]
-    degs_output <- setNames(degs_output, unique(sobject[[group_by]])[[1]])
+    names(degs_output) <- unique(sobject$seurat_clusters)
 
     return(degs_output)
 }
