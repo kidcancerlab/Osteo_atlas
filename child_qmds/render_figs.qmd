@@ -1,0 +1,101 @@
+This qmd will be used to read in the figures and perpare the html output to hand to our collaborators
+
+---
+title: "Osteosarcoma scAtlas"
+author: "Yogesh Budhathoki"
+date: "`r format(Sys.time(), '%m/%d/%Y')`"
+output: 
+    html_document:
+        code_folding: hide
+always_allow_html: true
+---
+
+# Before harmony and after harmony
+```{r library}
+library(rrrSingleCellUtils)
+library(Seurat)
+library(ggrepel)
+library(tidyverse)
+library(harmony)
+library(cowplot)
+library(clustree)
+library(data.table)
+library(hdf5r)
+library(Rmagic)
+library(knitr)
+library(scATOMIC)
+library(copykat)
+
+object_list <-
+    tribble(~group,                         ~res_value,
+            "patient_prim_normal_cells",    0.15,
+            "patient_mets_normal_cells",    0.05,
+            "xeno_prim_mouse",              0.1,
+            "xeno_mets_mouse",              0.1,
+            "mm_prim_normal_cells",         0.25,
+            "mm_mets_normal_cells",         0.2)
+
+dimplot_better <- function(object,
+                           group_by,
+                           cols,
+                           ncol = 1,
+                           label.size = 2.5,
+                           split_by = NULL,
+                           ...) {
+    DimPlot(object,
+            group.by = group_by,
+            split.by = split_by,
+            ncol = ncol,
+            label.size = label.size,
+            label = T,
+            repel = T,
+            shuffle = T,
+            label.box = T,
+            cols = c(plot_cols, sample(rainbow(1000))),
+            ...) +
+        coord_fixed()
+}
+```
+
+```{r read_figures, echo=FALSE, results='asis', warning = FALSE}
+# dependson : library
+dimplot_list <- list()
+
+for (item in seq_len(nrow(object_list))) {
+    group <- object_list$group[item]
+    res_value <- object_list$res_value[item]
+
+    object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                              group,
+                              ".qs"))
+
+    object$new_annot_clust <-
+            stringr::str_replace_all(object$new_annot_clust,
+                                    c("^CD4T_cells$" = "T_cells",
+                                      "^CD4T_Memory$" = "T_cells",
+                                      "^CD4T_Naive$" = "T_cells",
+                                      "^Myeloid_Dendritic2$" = "Dendritic_cells",
+                                      "^CD8T_cells$" = "T_cells",
+                                      "^Plasma_Bcells$" = "B_cells",
+                                      "^CD8T_Memory$" = "T_cells",
+                                      "^CD4T_cells1$" = "T_cells",
+                                      "^CD8T_cells1$" = "T_cells",
+                                      "^AlvEpithelial_T1$" = "Epithelial_cells",
+                                      "^AlvEpithelial_T2$" = "Epithelial_cells",
+                                      "^Signalling_AlvEpithelial$" = "Epithelial_cells",
+                                      "^Int_Macrophages$" = "Macrophages",
+                                      "^Alv_Macrophages$" = "Macrophages"))
+
+    dimplot_main <-
+        dimplot_better(object,
+                      group_by = "new_annot_clust") +
+            ggtitle(group) +
+            NoLegend()
+
+    dimplot_list[[group]] <- dimplot_main
+}
+
+qreport::maketabs(dimplot_list)
+
+```
+
