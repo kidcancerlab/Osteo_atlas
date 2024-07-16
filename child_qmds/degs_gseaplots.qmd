@@ -39,6 +39,7 @@ for (i in seq_len(length(all_groups))) {
                             test_res = seq(0.1, 0.9, by = 0.1),
                             summary_plot = FALSE,
                             reduction = "harmony") %>%
+        filter(!is.na(sil_vals)) %>%
         filter(sil_vals == max(sil_vals)) %>%
         slice_head(n = 1) %>%
         dplyr::pull(res_vals)
@@ -56,6 +57,10 @@ for (i in seq_len(length(all_groups))) {
             width = 10,
             height = 10,
             plot = tree)
+
+    #save as qs
+    qs::qsave(tree,
+              str_c("output/figures/tumor_vs_stroma/clustree/", group, ".qs"))
 
     clustrees[[group]] <- tree
 }
@@ -114,7 +119,6 @@ object_list <-
             "mm_prim_normal_cells",         0.25,
             "mm_mets_normal_cells",         0.2)
 
-panel_plot_list <- list()
 
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
@@ -130,12 +134,12 @@ for (i in seq_len(nrow(object_list))) {
         ) %>%
         FindClusters(resolution = res_value)
 
-    panel_plot_list[[group]] <-
-        make_panel_plot(sobj_list[[group]], "seurat_clusters", group)
+    make_panel_plot(sobj,
+                    cluster_column = "seurat_clusters",
+                    label = "seurat_clusters",
+                    group = group)
+
 }
+
 ```
 
-## Plot the GSEA panel figures
-```{r print_panel_plots}
-qreport::maketabs(panel_plot_list)
-```

@@ -29,13 +29,6 @@ object_list <- list(patient_prim_normal_cells = c("Macrophage",
                                                   "B cells"),)
 
 
-
-human_genes <- c("CD4", "CD45", "COL1A1", "SATB2")
-
-mouse_genes <- nichenetr::convert_human_to_mouse_symbols(human_genes)
-
-
-
 #https://www.cell.com/trends/immunology/fulltext/S1471-4906(22)00094-1
 Macrophages <- list(LA_TAMs = c("APOC1", "APOE", "APC5", "FABP5"),
                    Inflam_TAMs = c("IL1B", "CCL3", "CXCL1", "CXCL2", "CXCL3", "CXCL5"),
@@ -82,14 +75,11 @@ Dendritic_cells <- list(PreDC = c("IL3RA", "PGLYRP2", "DDR2"),
                         cDC2 = c("CD300H", "PID1", "CD1C"))
 
 #https://www.abcam.com/en-us/technical-resources/research-areas/marker-guides/b-cell-markers
-B_cells <- list(Immature_B = c("CD19", "CD20", "CD34", "CD38", "CD45R")
-                Plasm_B = c("CD38", "CD138", "IgG", "CD45", "CD184", "TNFRSF17")
+B_cells <- list(Immature_B = c("CD19", "CD20", "CD34", "CD38", "CD45R"),
+                Plasm_B = c("CD38", "CD138", "IgG", "CD45", "CD184", "TNFRSF17"),
                 Memory =c("CD19", "CD20", "CD21", "CD27", "CD69", "CD95"),
-                )
+                Regulatory = c("IgM", "CD19", "CD1d", "CD21", "CD5"))
 
-FeaturePlot(subset_sobj,
-            features = Memory,
-            ncol = 3)
 
 for (item in seq_len(nrow(object_list))) {
     group <- object_list$group[item]
@@ -144,10 +134,15 @@ for (item in seq_len(nrow(object_list))) {
                 filter(sil_vals == max(sil_vals)) %>%
                 slice_head(n=1) %>%
                 dplyr::pull(res_vals)
-
-            subset_sobj <- subset_sobj %>%
-                process_seurat(reduction = "harmony",
-                            resolution = sil_val)
+            
+            if (length(sil_val) != 0) {
+                subset_sobj <- subset_sobj %>%
+                    process_seurat(reduction = "harmony",
+                                resolution = sil_val)
+            } else {
+                subset_sobj <- subset_sobj %>%
+                    process_seurat(reduction = "harmony")
+            }
 
             #make the dimplot
             dimplot_subset <- 
@@ -217,32 +212,50 @@ for (item in seq_len(nrow(object_list))) {
                         device = "png",
                         bg = "white")
 
+            # qs save
+            qs::qsave(panel_plot,
+                    str_c("output/figures/relustering_normals/",
+                            group,
+                            "/",
+                            celltypes,
+                            ".qs"))
+
             # correlation analysis
-            correlation_plot <- 
-                AverageExpression(subset_sobj,
-                                layer = "scale.data",
-                                group.by = "seurat_clusters")$RNA %>%
-                    as.matrix() %>%
-                    cor() %>%
-                    pheatmap::pheatmap(display_numbers = TRUE,
-                                    silent = TRUE)
+            if (length(unique(subset_sobj$seurat_clusters)) > 1) {
+                correlation_plot <- 
+                    AverageExpression(subset_sobj,
+                                    layer = "scale.data",
+                                    group.by = "seurat_clusters")$RNA %>%
+                        as.matrix() %>%
+                        cor() %>%
+                        pheatmap::pheatmap(display_numbers = TRUE,
+                                        silent = TRUE)
 
             #save the correlation plot
-            ggsave(filename = str_c("output/figures/relustering_normals/",
+                ggsave(filename = str_c("output/figures/relustering_normals/",
+                                    group,
+                                    "/",
+                                    celltypes,
+                                    "_correlation.png"),
+                    plot = correlation_plot,
+                    width = 14,
+                    height = 14,
+                    bg = "white")
+
+                # qs save
+                qs::qsave(correlation_plot,
+                        str_c("output/figures/relustering_normals/",
                                 group,
                                 "/",
                                 celltypes,
-                                "_correlation.png"),
-                plot = correlation_plot,
-                width = 14,
-                height = 14,
-                bg = "white")
+                                "_correlation.qs"))
 
             #make the panel plot for degs and GSEA
-            make_panel_plot(sobj = subset_sobj,
-                            cluster_column = "seurat_clusters",
-                            label = celltypes,
-                            group = group)
+                make_panel_plot(sobj = subset_sobj,
+                                cluster_column = "seurat_clusters",
+                                label = celltypes,
+                                group = group)
+            }
         } else {
             print(str_c(celltypes, " not in ", group))
         }
@@ -253,29 +266,4 @@ for (item in seq_len(nrow(object_list))) {
 
 
 
-correlation_plot <- 
-                AverageExpression(subset_sobj,
-                                layer = "scale.data",
-                                group.by = "seurat_clusters")$RNA %>%
-                    as.matrix() %>%
-                    cor() %>%
-                    pheatmap::pheatmap(display_numbers = TRUE,
-                                    silent = TRUE)
-
-correlation_plot
-
-#save plot as qs object
-qs::qsave(correlation_plot,
-            str_c("output/figures/relustering_normals/",
-                group,
-                "/",
-                "correlation_plot.qs"))
-
-# read plot as qs object
-correlation_plot <- qs::qread(str_c("output/figures/relustering_normals/",
-                                    group,
-                                    "/",
-                                    "correlation_plot.qs"))
-
-correlation_plot
 ```

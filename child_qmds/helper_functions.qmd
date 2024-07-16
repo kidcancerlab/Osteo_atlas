@@ -697,6 +697,16 @@ circle_plot <- function(sobj,
 
 ```{r panel_plot_function}
 #| cache.vars: 'make_panel_plot'
+
+#GSEA Miltilevel
+cat_tib <- dplyr::tribble(
+    ~category, ~subcategory,   ~cat_expl,
+    "H",        "NA",          "Hallmark_paths",
+    "C2",      "CP:KEGG",      "KEGG",
+    "C3",      "TFT:GTRD",     "Transcription_factor_targets",
+    "C6",       "NA",          "Oncogenic_signature")
+
+
 make_panel_plot <- function(sobj, cluster_column, label, group) {
     volc_plots <- list()
     gsea_plots <- list()
@@ -779,12 +789,18 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
         bind_rows() %>%
         pull(gene)
 
-    circle_plot_out <-
-        circle_plot(
-            sobj,
-            cluster_column = cluster_column,
-            features = marker_genes
-        )
+    if (length(marker_genes) != 0) {
+        circle_plot_out <-
+            circle_plot(
+                sobj,
+                cluster_column = cluster_column,
+                features = marker_genes)
+    } else {
+        circle_plot_out <- 
+            ggplot(data = NULL) +
+                   aes(x = as.factor(1), y = as.factor(1)) +
+                   geom_text(aes(label = str_c("No marker genes for ", label)))
+    }
 
     # GSEA analysis
     if (dir.exists(paste0("output/gsea/", label))) {
@@ -902,5 +918,9 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
         height = 50,
         limitsize = FALSE,
         plot = panel_plots[[label]])
+
+    #save as qs
+    qs::qsave(panel_plots[[label]],
+              file = paste0("output/figures/gsea/", group, "/", label, "_six_panels.qs"))
 }
 ```

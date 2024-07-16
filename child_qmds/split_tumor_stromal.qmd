@@ -91,6 +91,13 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
            plot = combined_plots,
            width = 21,
            height = 14)
+
+    # save the plot as qs object
+    qs::qsave(combined_plots,
+              str_c("output/figures/combined_plots/",
+                    group,
+                    "/",
+                    "combined_plots.qs"))
 }
 
 #make feature plots for all the groups
@@ -135,6 +142,12 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
            width = 21,
            height = 14)
     
+    qs::qsave(featureplot1_tumor,
+              str_c("output/figures/combined_plots/",
+                    group,
+                    "/",
+                    "tumor_featureplots.qs"))
+    
     ggsave(str_c("output/figures/combined_plots/",
                  group,
                  "/",
@@ -142,6 +155,12 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
            plot = featureplot2_immune,
            width = 21,
            height = 14)
+    
+    qs::qsave(featureplot2_immune,
+              str_c("output/figures/combined_plots/",
+                    group,
+                    "/",
+                    "immune_featureplots.qs"))
 }
 ```
 
@@ -243,6 +262,14 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                 width = 14,
                 height = 14)
 
+        #save as qs
+        qs::qsave(all_dimplots,
+                  str_c("output/figures/tumor_vs_stroma/",
+                        group,
+                        "/",
+                        cell_group_name,
+                        "_dimplot.qs"))
+
     if (object$organism[1] == "human") {
         tumor_featureplot <- 
             FeaturePlot(s_obj,
@@ -274,6 +301,14 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                 plot = tumor_featureplot,
                 width = 21,
                 height = 21)
+        
+        #save as qs
+        qs::qsave(tumor_featureplot,
+                  str_c("output/figures/tumor_vs_stroma/",
+                        group,
+                        "/",
+                        cell_group_name,
+                        "_tumor_featureplot.qs"))
 
         ggsave(str_c("output/figures/tumor_vs_stroma/",
                     group,
@@ -283,6 +318,14 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                 plot = immune_featureplot,
                 width = 21,
                 height = 21)
+        
+        #save as qs
+        qs::qsave(immune_featureplot,
+                  str_c("output/figures/tumor_vs_stroma/",
+                        group,
+                        "/",
+                        cell_group_name,
+                        "_immune_featureplot.qs"))
 
         qs::qsave(s_obj, str_c("output/seurat_objects/tumor_vs_stroma/",  #nolint
                                 group, "_",
@@ -349,7 +392,14 @@ for (group in c("xeno_prim_human",
             plot = all_dimplots,
             width = 14,
             height = 14)
-        
+    
+    # save as qs
+    qs::qsave(all_dimplots,
+              str_c("output/figures/tumor_vs_stroma/",
+                    group,
+                    "/",
+                    "dimplot.qs"))
+
     if (object$organism[1] == "human") {
         tumor_featureplot <- 
             FeaturePlot(object,
@@ -380,6 +430,13 @@ for (group in c("xeno_prim_human",
             plot = tumor_featureplot,
             width = 21,
             height = 21)
+    
+    #save as qs
+    qs::qsave(tumor_featureplot,
+              str_c("output/figures/tumor_vs_stroma/",
+                    group,
+                    "/",
+                    "tumor_featureplot.qs"))
 
     ggsave(str_c("output/figures/tumor_vs_stroma/",
                 group,
@@ -388,6 +445,13 @@ for (group in c("xeno_prim_human",
             plot = immune_featureplot,
             width = 21,
             height = 21)
+
+    #save as qs
+    qs::qsave(immune_featureplot,
+              str_c("output/figures/tumor_vs_stroma/",
+                    group,
+                    "/",
+                    "immune_featureplot.qs"))
 
     qs::qsave(object, str_c("output/seurat_objects/tumor_vs_stroma/",
                             group,

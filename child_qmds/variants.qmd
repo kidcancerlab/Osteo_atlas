@@ -127,8 +127,8 @@ output <-
             dimplot_better(
                             s_obj,
                             group_by = c("seurat_clusters", "annotations"),
-                            label = TRUE
-                        )
+                            label.size = 2.5) +
+                        NoLegend()
 
         ggsave(
             paste0(

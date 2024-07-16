@@ -247,6 +247,14 @@ results <-
            plot = pre_harmony_dimplots,
            width = 14,
            height = 14)
+    
+    #save as a qs image
+    qs::qsave(pre_harmony_dimplots,
+              str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "preHarmony_combined_plots.qs"))
+
 
     # make feaureplots
       # plot feature plots
@@ -285,6 +293,13 @@ results <-
            width = 21,
            height = 14)
     
+    #save as a qs image
+    qs::qsave(featureplot1_tumor,
+              str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "preharmony_tumor_featureplots.qs"))
+    
     ggsave(str_c("output/figures/combined_plots/",
                  group,
                  "/",
@@ -292,6 +307,12 @@ results <-
            plot = featureplot2_immune,
            width = 21,
            height = 14)
+    #qs object
+    qs::qsave(featureplot2_immune,
+              str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "preharmony_immune_featureplots.qs"))
 
     #run the harmony
     harmony_obj <-

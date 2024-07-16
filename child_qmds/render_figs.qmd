@@ -1,101 +1,321 @@
+
 This qmd will be used to read in the figures and perpare the html output to hand to our collaborators
 
----
-title: "Osteosarcoma scAtlas"
-author: "Yogesh Budhathoki"
-date: "`r format(Sys.time(), '%m/%d/%Y')`"
-output: 
-    html_document:
-        code_folding: hide
-always_allow_html: true
----
+## Before harmony
+```{r, before_harmony_figure_panels}
+#| cache.vars: c('preharmony_dimplot_list', 'featureplot1_tumor_list', 'featureplot2_immune_list')
 
-# Before harmony and after harmony
-```{r library}
-library(rrrSingleCellUtils)
-library(Seurat)
-library(ggrepel)
-library(tidyverse)
-library(harmony)
-library(cowplot)
-library(clustree)
-library(data.table)
-library(hdf5r)
-library(Rmagic)
-library(knitr)
-library(scATOMIC)
-library(copykat)
+sample_name_list <- c("patient_prim",
+                      "patient_mets",
+                      "mm_prim",
+                      "mm_mets",
+                      "xeno_prim_human",
+                      "xeno_mets_human",
+                      "xeno_prim_mouse",
+                      "xeno_mets_mouse")
 
-object_list <-
-    tribble(~group,                         ~res_value,
-            "patient_prim_normal_cells",    0.15,
-            "patient_mets_normal_cells",    0.05,
-            "xeno_prim_mouse",              0.1,
-            "xeno_mets_mouse",              0.1,
-            "mm_prim_normal_cells",         0.25,
-            "mm_mets_normal_cells",         0.2)
+preharmony_dimplot_list <- list()
+featureplot1_tumor_list <- list()
+featureplot2_immune_list <- list()
 
-dimplot_better <- function(object,
-                           group_by,
-                           cols,
-                           ncol = 1,
-                           label.size = 2.5,
-                           split_by = NULL,
-                           ...) {
-    DimPlot(object,
-            group.by = group_by,
-            split.by = split_by,
-            ncol = ncol,
-            label.size = label.size,
-            label = T,
-            repel = T,
-            shuffle = T,
-            label.box = T,
-            cols = c(plot_cols, sample(rainbow(1000))),
-            ...) +
-        coord_fixed()
+for (group in sample_name_list) {
+     preharmony_dimplot_list[[group]] <- 
+        qs::qread(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "preHarmony_combined_plots.qs"))
+
+    featureplot1_tumor_list[[group]] <- 
+        qs::qread(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "preharmony_tumor_featureplots.qs"))
+
+    featureplot2_immune_list[[group]] <-
+        qs::qread(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "preharmony_immune_featureplots.qs"))
 }
-```
-
-```{r read_figures, echo=FALSE, results='asis', warning = FALSE}
-# dependson : library
-dimplot_list <- list()
-
-for (item in seq_len(nrow(object_list))) {
-    group <- object_list$group[item]
-    res_value <- object_list$res_value[item]
-
-    object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
-                              group,
-                              ".qs"))
-
-    object$new_annot_clust <-
-            stringr::str_replace_all(object$new_annot_clust,
-                                    c("^CD4T_cells$" = "T_cells",
-                                      "^CD4T_Memory$" = "T_cells",
-                                      "^CD4T_Naive$" = "T_cells",
-                                      "^Myeloid_Dendritic2$" = "Dendritic_cells",
-                                      "^CD8T_cells$" = "T_cells",
-                                      "^Plasma_Bcells$" = "B_cells",
-                                      "^CD8T_Memory$" = "T_cells",
-                                      "^CD4T_cells1$" = "T_cells",
-                                      "^CD8T_cells1$" = "T_cells",
-                                      "^AlvEpithelial_T1$" = "Epithelial_cells",
-                                      "^AlvEpithelial_T2$" = "Epithelial_cells",
-                                      "^Signalling_AlvEpithelial$" = "Epithelial_cells",
-                                      "^Int_Macrophages$" = "Macrophages",
-                                      "^Alv_Macrophages$" = "Macrophages"))
-
-    dimplot_main <-
-        dimplot_better(object,
-                      group_by = "new_annot_clust") +
-            ggtitle(group) +
-            NoLegend()
-
-    dimplot_list[[group]] <- dimplot_main
-}
-
-qreport::maketabs(dimplot_list)
 
 ```
 
+### Pre Harmony Dimplots
+```{r print_panel_plots1, results = 'asis'}
+#| dependson: before_harmony_figure_panels
+qreport::maketabs(preharmony_dimplot_list)
+```
+
+### Pre Harmony Tumor Featureplot
+```{r, print_panel_plots2, results = 'asis'}
+#| dependson: before_harmony_figure_panels
+qreport::maketabs(featureplot1_tumor_list)
+```
+
+### Pre Harmony Immune Featureplot
+```{r, print_panel_plots3, results = 'asis'}
+#| dependson: before_harmony_figure_panels
+qreport::maketabs(featureplot2_immune_list)
+```
+
+
+## After Harmony
+```{r, before_harmony_figure_panels}
+#| cache.vars: postharmony_dimplot_list, posth_featureplot1_tumor_list, posth_eatureplot2_immune_list
+
+postharmony_dimplot_list <- list()
+posth_featureplot1_tumor_list <- list()
+posth_eatureplot2_immune_list <- list()
+
+for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+    combined_plots <- 
+        qs::qread(str_c("output/figures/combined_plots/",
+                group,
+                "/",
+                "combined_plots.qs"))
+    postharmony_dimplot_list[[group]] <- combined_plots
+
+    featureplot1_tumor <- 
+        qs::qread(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "tumor_featureplots.qs"))
+    posth_featureplot1_tumor_list[[group]] <- featureplot1_tumor
+
+    featureplot2_immune <-
+        qs::qread(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "immune_featureplots.qs"))
+    posth_eatureplot2_immune_list[[group]] <- featureplot2_immune
+}
+```
+
+### Post Harmony Dimplots
+```{r print_panel_plots4, results = 'asis'}
+#| dependson: before_harmony_figure_panels
+qreport::maketabs(postharmony_dimplot_list)
+```
+
+### Post Harmony Tumor Featureplot
+```{r, print_panel_plots5, results = 'asis'}
+#| dependson: before_harmony_figure_panels
+qreport::maketabs(posth_featureplot1_tumor_list)
+```
+
+### Post Harmony Immune Featureplot
+```{r, print_panel_plots6, results = 'asis'}
+#| dependson: before_harmony_figure_panels
+qreport::maketabs(posth_eatureplot2_immune_list)
+```
+
+
+## Split of tumor and stroma
+```{r, split_tumor_stroma}
+#| cache.vars: all_dimplots_list, alltumor_featureplot_list, allimmune_featureplot_list
+
+all_dimplots_list <- list()
+alltumor_featureplot_list <- list()
+allimmune_featureplot_list <- list()
+
+for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+    for (cell_group_name in c("cancer_cells", "normal_cells")) {
+        sub_group <- str_c(group, "_", cell_group_name)
+
+        all_dimplots <- 
+            qs::qread(str_c("output/figures/tumor_vs_stroma/",
+                     group,
+                     "/",
+                     cell_group_name,
+                     "_dimplot.qs"))
+        all_dimplots_list[[sub_group]] <- all_dimplots
+
+        tumor_featureplot <- 
+            qs::qread(str_c("output/figures/tumor_vs_stroma/",
+                     group,
+                     "/",
+                     cell_group_name,
+                     "_tumor_featureplot.qs"))
+        tumor_featureplot_list[[sub_group]] <- tumor_featureplot
+
+        immune_featureplot <-
+            qs::qread(str_c("output/figures/tumor_vs_stroma/",
+                     group,
+                     "/",
+                     cell_group_name,
+                     "_immune_featureplot.qs"))
+        immune_featureplot_list[[sub_group]] <- immune_featureplot
+    }
+}
+
+
+for (subgroup in c("xeno_prim_human",
+                "xeno_prim_mouse",
+                "xeno_mets_human",
+                "xeno_mets_mouse")) {
+
+    all_dimplots <-
+        qs::qread(str_c("output/figures/tumor_vs_stroma/",
+                 subgroup,
+                 "/",
+                 "dimplot.qs"))
+
+    all_dimplots_list[[subgroup]] <- all_dimplots
+
+    tumor_featureplot <-
+        qs::qread(str_c("output/figures/tumor_vs_stroma/",
+                 subgroup,
+                 "/",
+                 "tumor_featureplot.qs"))
+    tumor_featureplot_list[[subgroup]] <- tumor_featureplot
+
+    immune_featureplot <-
+        qs::qread(str_c("output/figures/tumor_vs_stroma/",
+                 subgroup,
+                 "/",
+                 "immune_featureplot.qs"))
+    immune_featureplot_list[[subgroup]] <- immune_featureplot
+}
+
+```
+
+## Clustree
+```{r, clustree}
+all_groups <-
+    c("patient_prim_cancer_cells",
+      "patient_mets_cancer_cells",
+      "mm_prim_cancer_cells",
+      "mm_mets_cancer_cells",
+      "xeno_prim_human",
+      "xeno_mets_human",
+      "patient_prim_normal_cells",
+      "patient_mets_normal_cells",
+      "xeno_prim_mouse",
+      "xeno_mets_mouse",
+      "mm_prim_normal_cells",
+      "mm_mets_normal_cells")
+
+clustrees <- list()
+
+for (group in all_groups) {
+    tree_plot <-
+        qs::qread(str_c("output/figures/tumor_vs_stroma/clustree/",
+                        group,
+                        ".qs"))
+
+    clustrees[[group]] <- tree_plot
+}
+
+```
+
+## Seurat Cluster Panel Plots
+```{r, panel_plots}
+
+all_groups <-
+    c("patient_prim_cancer_cells",
+      "patient_mets_cancer_cells",
+      "mm_prim_cancer_cells",
+      "mm_mets_cancer_cells",
+      "xeno_prim_human",
+      "xeno_mets_human",
+      "patient_prim_normal_cells",
+      "patient_mets_normal_cells",
+      "xeno_prim_mouse",
+      "xeno_mets_mouse",
+      "mm_prim_normal_cells",
+      "mm_mets_normal_cells")
+
+panel_plot_list <- list()
+
+for (group in all_groups) {
+    panel_plot <-
+        qs::qread(str_c("output/figures/gsea/",
+                        group,
+                        "/",
+                        "seurat_clusters_six_panels.qs"))
+
+    panel_plot_list[[group]] <- panel_plot
+}
+
+```
+
+
+## Clustering Normals AUCell and Correlation Plots
+```{r, clustering_normals}
+all_groups <-
+    c("patient_prim_normal_cells",
+      "patient_mets_normal_cells",
+      "xeno_prim_mouse",
+      "xeno_mets_mouse",
+      "mm_prim_normal_cells",
+      "mm_mets_normal_cells")
+
+
+
+#maybe from here I can read all the qs for each folder and put into a list and then plot them
+for (group in all_groups) {
+    path <- str_c("output/figures/relustering_normals/",
+                  group)
+    for (celltypes in c("Macrophages", "T_cells", "Fibroblasts", "Dendritic_cells")) {
+        corr_file_path <- 
+            str_c(path,
+                  "/",
+                  celltypes,
+                  "_correlation.qs")
+
+        #the problem here is that the heatmap does not plot when pasted in the terminal
+        if (file.exists(corr_file_path)) {
+            panel_plot <-
+                qs::qread(corr_file_path)
+
+            plot_list_name[[celltypes]] <- panel_plot
+        }
+
+        Aucell_file_path <- 
+            str_c(path,
+                  "/",
+                  celltypes,
+                  ".qs")
+
+        if (file.exists(Aucell_file_path)) {
+            panel_plot <-
+                qs::qread(Aucell_file_path)
+
+            plot_list_name[[celltypes]] <- panel_plot
+        }
+    }
+}
+```
+
+## Celltypes Panel Plots
+```{r, celltype_panel_plots}
+
+all_groups <-
+    c("patient_prim_normal_cells",
+      "patient_mets_normal_cells",
+      "xeno_prim_mouse",
+      "xeno_mets_mouse",
+      "mm_prim_normal_cells",
+      "mm_mets_normal_cells")
+
+# the problem here is that I want to make a new plot list for each group and want to append the plots to it
+for (group in all_groups) {
+    plot_list_name <- list()
+    for (celltypes in c("Macrophages", "T_cells", "Fibroblasts", "Dendritic_cells")) {
+        file_path <- 
+            str_c("output/figures/gsea/",
+                  group,
+                  "/",
+                  celltypes,
+                  "_six_panels.qs")
+        if (file.exists(file_path)) {
+            panel_plot <-
+                qs::qread(file_path)
+
+            plot_list_name[[celltypes]] <- panel_plot
+        }
+    }
+}
+
+
+```
