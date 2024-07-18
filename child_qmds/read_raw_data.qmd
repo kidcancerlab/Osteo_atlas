@@ -201,7 +201,7 @@ results <-
                          add.cell.id = names(temp_list)) %>%
         JoinLayers() %>%
         process_seurat()
-    
+
     #remove the temp_list
     rm(temp_list)
 
@@ -213,32 +213,39 @@ results <-
     
     #save the dimplot of the merged object
     dimplot1 <- 
-            dimplot_better(merged_sobj,
-                        group_by = "seurat_clusters") +
-                NoLegend()
+        dimplot_better(merged_sobj,
+                    group_by = "seurat_clusters") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
 
     dimplot2 <- 
         dimplot_better(merged_sobj,
-                    group_by = "model") +
-            NoLegend()
+                group_by = "model") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
 
     dimplot3 <- 
         dimplot_better(merged_sobj,
                     group_by = "sample_name") +
-            NoLegend()
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
     
     dimplot4 <- 
         dimplot_better(merged_sobj,
                     group_by = "data_source") +
-            NoLegend()
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
 
     pre_harmony_dimplots <- 
         patchwork::wrap_plots(dimplot1,
                                 dimplot2,
                                 dimplot3,
                                 dimplot4,
-                                ncol = 2) +
-        patchwork::plot_annotation(title = str_c(group, " pre harmony dimplots"))
+                                ncol = 2,
+                                widths = 14,
+                                heights = 14) +
+        patchwork::plot_annotation(title = str_c(group, " pre harmony dimplots")) +
+        theme(plot.title = element_text(size = 10))
     #save the combined plots
     ggsave(str_c("output/figures/combined_plots/",
                  group,

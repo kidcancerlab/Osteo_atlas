@@ -53,7 +53,7 @@ for (i in seq_len(length(all_groups))) {
                                 prefix = "RNA_snn_res.") +
             ggtitle(str_c("sil_val was ", res_score, " ", group))
 
-    ggsave(str_c("output/figures/tumor_vs_stroma/clustree/ ", group, ".png"),
+    ggsave(str_c("output/figures/tumor_vs_stroma/clustree/", group, ".png"),
             width = 10,
             height = 10,
             plot = tree)

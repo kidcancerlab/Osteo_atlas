@@ -927,7 +927,6 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
 
 
 ## Scenic plus regulon analysis function
-
 ```{r scenic_function}
 Run_GRA <- function(sobject,
                     idents,

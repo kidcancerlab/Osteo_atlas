@@ -10,8 +10,6 @@ Put all the labels into the metadata so we can use them to label the cells
 We will make these column names have the format "cancer_lable_{method_name}" so we can select them easily for plotting and doing an ensemble labeling
 
 ```{r}
-#| fig.width: 10
-#| fig.height: 10
 #| fig.align: center
 #| echo: FALSE
 #| eval: FALSE
@@ -49,39 +47,55 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 
     #plot for the cancer normal cells, mouse do not have scatomic tumor call
     if ("scatomic_tumor_call" %in% colnames(object@meta.data)){
-        combinedplot1 <- dimplot_better(object,
-                                        group_by = "scatomic_tumor_call") +
-                            NoLegend()
+        combinedplot1 <- 
+            dimplot_better(object,
+                           group_by = "scatomic_tumor_call") +
+                NoLegend() +
+                theme(plot.title = element_text(size = 7))
     } else {
         combinedplot1 <- ggplot(data = NULL) +
                             aes(x = as.factor(1), y = as.factor(1)) +
                             geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
     }
-    combineplot2 <- dimplot_better(object,
-                                    group_by = "scevan_tumor_call") +
-                    NoLegend()
-    combineplot3 <- dimplot_better(object,
-                                    group_by = "final_snv_call") +
-                        NoLegend()
-    combineplot4 <- dimplot_better(object,
-                                   group_by = "celltype_tumor_call") +
-                        NoLegend()
-    combineplot5 <- dimplot_better(object,
-                                    group_by = "new_annot_clust") +
-                        NoLegend()
-    combineplot6 <- dimplot_better(object,
-                                    group_by = "sample_name") +
-                        NoLegend()
+    combineplot2 <- 
+        dimplot_better(object,
+                       group_by = "scevan_tumor_call") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
+    combineplot3 <- 
+        dimplot_better(object,
+                       group_by = "final_snv_call") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
+    combineplot4 <- 
+        dimplot_better(object,
+                       group_by = "celltype_tumor_call") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
+    combineplot5 <- 
+        dimplot_better(object,
+                       group_by = "new_annot_clust") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
+    combineplot6 <- 
+        dimplot_better(object,
+                       group_by = "sample_name") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
 
     # use patchwork to combine the plots
-    combined_plots <- patchwork::wrap_plots(combinedplot1,
-                                            combineplot2,
-                                            combineplot3,
-                                            combineplot4,
-                                            combineplot5,
-                                            combineplot6,
-                                            ncol = 3) +
-                        patchwork::plot_annotation(title = group)
+    combined_plots <- 
+        patchwork::wrap_plots(combinedplot1,
+                            combineplot2,
+                            combineplot3,
+                            combineplot4,
+                            combineplot5,
+                            combineplot6,
+                            ncol = 3,
+                            widths = 21,
+                            heights = 14) +
+            patchwork::plot_annotation(title = group) +
+            theme(plot.title = element_text(size = 10))
 
     #save the combined plots
     ggsave(str_c("output/figures/combined_plots/",
@@ -126,13 +140,13 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
             FeaturePlot(object,
                         features = c("Col1a1", "Col1a2", "Fbln1",
                                      "Satb2", "Runx2", "Alpl"),
-                        ncol = 3)
+                        ncol = 3) 
 
         featureplot2_immune <-
             FeaturePlot(object,
                         features = c("Cd3e", "Cd4", "Cd68",
                                      "Muc1", "Ms4a1", "Esam"),
-                        ncol = 3)
+                        ncol = 3) 
     }
     ggsave(str_c("output/figures/combined_plots/",
                  group,
@@ -141,7 +155,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
            plot = featureplot1_tumor,
            width = 21,
            height = 14)
-    
+
     qs::qsave(featureplot1_tumor,
               str_c("output/figures/combined_plots/",
                     group,
@@ -228,30 +242,37 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         dimplot1 <- 
             dimplot_better(s_obj,
                         group_by = "seurat_clusters") +
-                NoLegend()
+                NoLegend() +
+                theme(plot.title = element_text(size = 7))
 
         dimplot2 <- 
             dimplot_better(s_obj,
                         group_by = "new_annot_clust") +
-                NoLegend()
+                NoLegend() +
+                theme(plot.title = element_text(size = 7))
         
         dimplot3 <- 
             dimplot_better(s_obj,
                         group_by = "sample_name") +
-                NoLegend()
+                NoLegend() +
+                theme(plot.title = element_text(size = 7))
         
         dimplot4 <- 
             dimplot_better(s_obj,
                         group_by = "data_source") +
-                NoLegend()
+                NoLegend() +
+                theme(plot.title = element_text(size = 7))
 
         all_dimplots <- 
             patchwork::wrap_plots(dimplot1,
                                   dimplot2,
                                   dimplot3,
                                   dimplot4,
-                                  ncol = 2) +
-            patchwork::plot_annotation(title = str_c(group, " ", cell_group_name))
+                                  ncol = 2,
+                                  widths = 14,
+                                  heights = 14) +
+            patchwork::plot_annotation(title = str_c(group, " ", cell_group_name)) +
+            theme(plot.title = element_text(size = 10))
     
         ggsave(str_c("output/figures/tumor_vs_stroma/",
                     group,
@@ -359,31 +380,38 @@ for (group in c("xeno_prim_human",
 
     dimplot1 <- 
         dimplot_better(object,
-                    group_by = "seurat_clusters") +
-            NoLegend()
+                group_by = "seurat_clusters") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
     
     dimplot2 <-
         dimplot_better(object,
                     group_by = "annotations") +
-            NoLegend()
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
 
     dimplot3 <- 
         dimplot_better(object,
                     group_by = "sample_name") +
-            NoLegend()
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
 
     dimplot4 <- 
         dimplot_better(object,
                     group_by = "data_source") +
-            NoLegend()
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
 
     all_dimplots <- 
         patchwork::wrap_plots(dimplot1,
                             dimplot2,
                             dimplot3,
                             dimplot4,
-                            ncol = 2) +
-        patchwork::plot_annotation(title = group)
+                            ncol = 2,
+                            widths = 14,
+                            heights = 14) +
+        patchwork::plot_annotation(title = group,
+                                   theme = theme(plot.title = element_text(size = 10)))
     
     ggsave(str_c("output/figures/tumor_vs_stroma/",
                 group,
@@ -416,7 +444,7 @@ for (group in c("xeno_prim_human",
             FeaturePlot(object,
                         features = c("Col1a1", "Col1a2", "Fbln1",
                                     "Satb2", "Runx2", "Alpl"),
-                        ncol = 3)
+                        ncol = 3) 
         immune_featureplot <- 
             FeaturePlot(object,
                         features = c("Cd3e", "Cd4", "Cd68",

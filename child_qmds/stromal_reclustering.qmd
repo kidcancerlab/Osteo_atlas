@@ -13,20 +13,20 @@ object_list <-
             "mm_prim_normal_cells",         0.25,
             "mm_mets_normal_cells",         0.2)
 
-object_list <- list(patient_prim_normal_cells = c("Macrophage",
-                                                  "Endothelial_cells",
-                                                  "Tcells",
-                                                  "NK cells",
-                                                  "Monocytes",
-                                                  "Dendritic cells",
-                                                  "B cells"),
-                    patient_mets_normal_cells = c("Macrophage",
-                                                  "Endothelial_cells",
-                                                  "Tcells",
-                                                  "NK cells",
-                                                  "Monocytes",
-                                                  "Dendritic cells",
-                                                  "B cells"),)
+# object_list <- list(patient_prim_normal_cells = c("Macrophage",
+#                                                   "Endothelial_cells",
+#                                                   "Tcells",
+#                                                   "NK cells",
+#                                                   "Monocytes",
+#                                                   "Dendritic cells",
+#                                                   "B cells"),
+#                     patient_mets_normal_cells = c("Macrophage",
+#                                                   "Endothelial_cells",
+#                                                   "Tcells",
+#                                                   "NK cells",
+#                                                   "Monocytes",
+#                                                   "Dendritic cells",
+#                                                   "B cells"))
 
 
 #https://www.cell.com/trends/immunology/fulltext/S1471-4906(22)00094-1

@@ -12,33 +12,40 @@ motifAnnotations_hgnc <- motifAnnotations
 data(list="motifAnnotations_mgi", package="RcisTarget")
 motifAnnotations_mgi <- motifAnnotations
 
-object_list <- 
-    c("patient_prim_cancer_cells",
-    "patient_mets_cancer_cells",
-    "mm_prim_cancer_cells",
-    "mm_mets_cancer_cells",
-    "xeno_prim_human",
-    "xeno_mets_human",
-    "patient_prim_normal_cells",
-    "patient_mets_normal_cells",
-    "xeno_prim_mouse",
-    "xeno_mets_mouse",
-    "mm_prim_normal_cells",
-    "mm_mets_normal_cells")
+object_list <-
+    tribble(~group,                         ~res_value, ~org,
+            "patient_prim_cancer_cells",    0.1,        "hgnc",
+            "patient_mets_cancer_cells",    0.1,        "hgnc",
+            "mm_prim_cancer_cells",         0.3,        "mgi",
+            "mm_mets_cancer_cells",         0.3,        "mgi",
+            "xeno_prim_human",              0.2,        "hgnc",
+            "xeno_mets_human",              0.1,        "hgnc",
+            "patient_prim_normal_cells",    0.15,       "hgnc",
+            "patient_mets_normal_cells",    0.05,       "hgnc",
+            "xeno_prim_mouse",              0.1,        "mgi",
+            "xeno_mets_mouse",              0.1,        "mgi",
+            "mm_prim_normal_cells",         0.25,       "mgi",
+            "mm_mets_normal_cells",         0.2,        "mgi")
 
-for (group in object_list) {
+for (i in seq_len(nrow(object_list))) {
+    group <- object_list$group[i]
+    res_value <- object_list$res_value[i]
+    org <- object_list$org[i]
+
     object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                               group,
-                              ".qs"))
-    dimplot <- dimplot_better(object,
-                              group_by = "seurat_clusters")
+                              ".qs")) %>%
+        FindClusters(resolution = res_value)
 
+    # dimplot <- 
+    #     dimplot_better(object,
+    #                   group_by = "seurat_clusters")
     GRA_output <-
         Run_GRA(sobject = object,
                 idents = "seurat_clusters",
-                org = "hgnc",
+                org = org,
                 subset = "yes",
-                subset_cell_number = 5000)
+                subset_cell_number = 10000)
 
     exprMat_log <- GRA_output$exprMat_log
     colVars <- GRA_output$colVars
@@ -132,7 +139,7 @@ for (group in object_list) {
            plot = binarized_heatmap,
            width = plot_width,
            height = plot_height)
-    
+
     #save qs object
     qs::qsave(binarized_heatmap,
               str_c("output/figures/regulon_analysis/",
@@ -140,322 +147,5 @@ for (group in object_list) {
                     "/binarized_heatmap.qs"))
 }
 
-
 ```
 
-
-```{python, eval = FALSE}
-import scanpy as sc
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-
-import scvelo as scv #just using for dataset
-
-import celloracle as co
-from celloracle.applications import Pseudotime_calculator
-from celloracle.applications import Gradient_calculator
-from celloracle.applications import Oracle_development_module
-
-adata = scv.datasets.pancreas()
-InstallData("pbmc3k")
-data("pbmc3k.final")
-pbmc3k.final
-
-library(scater)
-library(Seurat)
-library(cowplot)
-sobj <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
-
-pbmc_sce <- srt_to_adata(sobj)
-
-
-sceasy::convertFormat(ad, from="anndata", to="seurat", outFile='file.rds')
-
-pbmc_sce <- Convert(from = pbmc, to = "sce")
-
-
-library(Seurat)
-library(SeuratDisk)
-
-# step 1: Slim down a Seurat object. So you get raw counts, lognorm counts
-
-seu = DietSeurat(
-  sobj,
-  counts = TRUE, # so, raw counts save to adata.raw.X 
-  data = TRUE, # so, log1p counts save to adata.X
-  scale.data = FALSE, # set to false, or else will save to adata.X
-  features = rownames(sobj), # export all genes, not just top highly variable genes
-  assays = "RNA",
-  dimreducs = c("pca","umap"),
-  graphs = c("RNA_nn", "RNA_snn"), # to RNA_nn -> distances, RNA_snn -> connectivities
-  misc = TRUE
-)
-
-# step 2: factor to character, or else your factor will be number in adata 
-i <- sapply(seu@meta.data, is.factor)
-seu@meta.data[i] <- lapply(seu@meta.data[i], as.character)
-
-# step 3: convert 
-SaveH5Seurat(seu, filename = "srt.h5seurat", overwrite = TRUE)
-
-Convert("srt.h5seurat", "srt.h5ad", assay="RNA", overwrite = TRUE)
-
-adata = sc.read_h5ad("srt.h5ad")
-
-
-library(reticulate)
-library(anndata)
-library(sceasy)
-
-library(Seurat)
-library(SeuratData)
-
-```
-
-
-
-
-```{r, eval = FALSE}
-
-seuratobject <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_tumor.qs")
-DimPlot(seuratobject)
-
-sobj <- subset(x = seuratobject,
-                     cells = sample(Cells(seuratobject),
-                        min(700, length(Cells(seuratobject)))))
-DimPlot(sobj)
-
-library(BITFAM)
-
-
-Run_BITFAM <- function(sobj,
-                       species = "",
-                       idents = "",
-                       plot = "",
-                       scATAC_obj = NA,) {
-    SeuratObject::Idents(sobj) <- idents
-    raw_mtx <- sobj@assays$RNA@counts
-    mtx <- BITFAM_preprocess(raw_data = raw_mtx)
-    res <- BITFAM(data = mtx,
-             species = "human",
-             scATAC_obj = scATAC_obj,
-             ncores = parallelly::availableCores())
-    Z <- BITFAM_activities(res)
-    Z_tsne <- as.data.frame(Rtsne(Z)$Y)
-    colnames(Z_tsne) <- c("tSNE_1", "tSNE_2")
-    Z_tsne$Cell_type <- Idents(sobj)
-    if (plot == "TRUE") {
-        ggplot(Z_tsne, aes(tSNE_1, tSNE_2, color = Cell_type)) + geom_point(size=0.8)
-    } else if (plot == "FALSE") {
-        tsne_plot <- ggplot(Z_tsne, aes(tSNE_1, tSNE_2, color = Cell_type)) + 
-            geom_point(size=0.8)
-        print("type tsne_plot in the R terminal to visualize the plot")
-    }
-
-    cell_type_df <- data.frame()
-    for (item in unique(Idents(sobj))) {
-        cell_type_df[[item]] <- ifelse(Idents(sobj) == "1", 1, 0)
-    }
-
-
-    cell_type_df <- data.frame(C1 = ifelse(sobj$seurat_clusters == "1", 1, 0),
-                                C2 = ifelse(sobj$seurat_clusters == "2", 1, 0),
-                                C3 = ifelse(sobj$seurat_clusters == "3", 1, 0),
-                                C4 = ifelse(sobj$seurat_clusters == "4", 1, 0))
-
-}
-
-
-for (item in unique(Idents(sobj))) {
-    print(item)
-}
-
-
-
-
-raw_mtx <- sobj@assays$RNA@counts
-
-mtx <- BITFAM_preprocess(raw_data = raw_mtx)
-
-res <- BITFAM(data = mtx,
-             species = "human",
-             scATAC_obj = NA,
-             ncores = parallelly::availableCores())
-
-#qs::qsave(res, "res.qs")
-
-Z <- BITFAM_activities(res)
-write.table(Z, file = "BITFAM_out.csv", sep = ",")
-Z_tsne <- as.data.frame(Rtsne(Z)$Y)
-colnames(Z_tsne) <- c("tSNE_1", "tSNE_2")
-
-
-Z_tsne$Cell_type <- sobj$seurat_clusters
-ggplot(Z_tsne, aes(tSNE_1, tSNE_2, color = Cell_type)) + geom_point(size=0.8)
-
-
-cell_type_df <- data.frame(C1 = ifelse(sobj$seurat_clusters == "1", 1, 0),
-                           C2 = ifelse(sobj$seurat_clusters == "2", 1, 0),
-                           C3 = ifelse(sobj$seurat_clusters == "3", 1, 0),
-                           C4 = ifelse(sobj$seurat_clusters == "4", 1, 0))
-
-library(randomForest)
-
-
-
-
-Z <- as.data.frame(Z)
-Z_C1 <- cbind(Z, cell_type_df$C1) 
-colnames(Z_C1)[157] <- "C1"
-Z_C1$C1 <- factor(Z_C1$C1)
-fit_rf <- randomForest(C1~., data = Z_C1)  ## build the RF model 
-C1_tf_top10 <- importance(fit_rf)[order(importance(fit_rf)[, 1], decreasing = T), ][1:10]
-
-
-
-
-umaps_group <- 
-    tribble(~sobj,            ~title,                  ~combine,
-            "patient_prim",    "Patient Primary",      "no",
-            "patient_mets",    "Patient Metastatic",   "no",
-            "xeno_prim",       "Xenograft Primary",    "yes",
-            "xeno_mets",       "Xenograft Metastatic", "yes",
-            "mm_prim",         "Mouse Primary",        "no",
-            "mm_mets",         "Mouse Metastatic",     "no")
-
-annotated <- list()
-merged <- list()
-just_tumor <- list()
-just_stroma <- list()
-
-for (item in seq_len(nrow(umaps_group))) {
-    sobj_name <- umaps_group$sobj[item]
-    combine <- umaps_group$combine[item]
-    title <- umaps_group$title[item]
-    if (combine == "no") {
-        object <-
-            qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
-                            sobj_name,
-                            ".qs"))
-        annotated[[sobj_name]] <- 
-            plot_my_stuff(object,
-                          what = c("new_annot_clust", "seurat_clusters")) +
-                ggtitle("Annotated cell types by cluster")
-        merged[[sobj_name]] <- 
-            plot_my_stuff(object,
-                          what = c("cell_group")) +
-                ggtitle("Tumor and Stromal cells") + 
-                NoLegend() +
-                coord_fixed()
-
-        #plot the tumor cells
-        tumor <-
-            qs::qread(str_c("output/seurat_objects/resolution_optimized/",
-                            sobj_name,
-                            "_cancer_cells.qs"))
-        just_tumor[[sobj_name]] <- 
-            plot_my_stuff(tumor,
-                          what = c("seurat_clusters")) +
-                ggtitle("Tumor cells reclustering")
-
-        #plot the stromal cells
-        stroma <- 
-            qs::qread(str_c("output/seurat_objects/resolution_optimized/",
-                            sobj_name,
-                            "_normal_cells.qs"))
-        just_stroma[[sobj_name]] <- 
-            plot_my_stuff(stroma,
-                          what = c("seurat_clusters")) +
-                ggtitle("Stromal cells reclustering")
-    } else {
-        first_obj <- 
-            qs::qread(str_c("output/seurat_objects/resolution_optimized/",
-                            sobj_name,
-                            "_human.qs"))
-        just_tumor[[sobj_name]] <-
-            plot_my_stuff(first_obj,
-                          what = c("sample_name", "seurat_clusters", "new_annot_clust")) +
-                ggtitle("Tumor cells")
-
-        second_obj <- 
-            qs::qread(str_c("output/seurat_objects/resolution_optimized/",
-                            sobj_name,
-                            "_mouse.qs"))
-        just_stroma[[sobj_name]] <- 
-            plot_my_stuff(second_obj,
-                          what = c("sample_name", "seurat_clusters", "new_annot_clust")) +
-                ggtitle("Stromal cells")
-    }
-}
-
-
-
-
-object_list <- 
-    c("patient_prim_cancer_cells",
-    "patient_mets_cancer_cells",
-    #"mm_prim_cancer_cells",
-    #"mm_mets_cancer_cells",
-    #"xeno_prim_human",
-    #"xeno_mets_human",
-    "patient_prim_normal_cells",
-    "patient_mets_normal_cells")
-    #"xeno_prim_mouse",
-    #"xeno_mets_mouse",
-    #"mm_prim_normal_cells",
-    #"mm_mets_normal_cells")
-
-for (group in object_list) {
-    object <- 
-        qs::qread(str_c("output/seurat_objects/resolution_optimized/",
-                              group,
-                              ".qs"))
-    plot = plot_my_stuff(object,
-                  what = c("new_annot_clust")) +
-        NoLegend() +
-        coord_fixed()
-    ggsave(str_c("output/plots/umaps/", group, "_annot.png"),
-            width = 7,
-            height = 7,
-            plot = plot)
-}
-    #rename idents'
-    Idents(object) <- object$seurat_clusters
-    object <- RenameIdents(object = object,
-                           `0` = "MYC Driven",
-                           `1` = "Proliferating",
-                           `2` = "Angiogenic",
-                           `3` = "Inflammatory/NFkB",
-                           `4` = "Basal",
-                           `5` = "Dying",
-                           `6` = "Dying",
-                           `7` = "Dying")
-    #plot the UMAP
-    DimPlot(object, 
-            shuffle = T,
-            label = T,
-            cols = c(plot_cols, sample(rainbow(1000)))) +
-        coord_fixed() +
-        ggtitle("Renamed Idents") 
-}
-
-
-
-for (group in c("patient_prim", "patient_mets")) {
-    object <-
-            qs::qread(str_c("output/seurat_objects/annotated_sobjs/",
-                            group,
-                            ".qs"))
-    
-    plot <- plot_my_stuff(object,
-                          what = c("cell_group")) +
-                NoLegend()
-
-    ggsave(str_c("output/plots/umaps/", group, "cell_group.png"),
-            width = 7,
-            height = 7,
-            plot = plot)
-
-}
-```

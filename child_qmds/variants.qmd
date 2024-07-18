@@ -194,6 +194,10 @@ output <-
             snp_tree <- NULL
         }
 
+        if (is.character(snp_tree)) {
+            return(snp_tree)
+        }
+
         if (is.null(snp_tree)) {
             return(paste0("No snp_tree for ", sample_id))
         }
@@ -258,7 +262,7 @@ output <-
             plot_name <-
                 dimplot_better(
                     s_obj,
-                    group.by = c(
+                    group_by = c(
                         "snp_min_depth_5",
                         "snp_min_depth_10",
                         "snp_min_depth_20"
