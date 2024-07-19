@@ -19,13 +19,7 @@ object_list <-
             "mm_prim_cancer_cells",         0.3,        "mgi",
             "mm_mets_cancer_cells",         0.3,        "mgi",
             "xeno_prim_human",              0.2,        "hgnc",
-            "xeno_mets_human",              0.1,        "hgnc",
-            "patient_prim_normal_cells",    0.15,       "hgnc",
-            "patient_mets_normal_cells",    0.05,       "hgnc",
-            "xeno_prim_mouse",              0.1,        "mgi",
-            "xeno_mets_mouse",              0.1,        "mgi",
-            "mm_prim_normal_cells",         0.25,       "mgi",
-            "mm_mets_normal_cells",         0.2,        "mgi")
+            "xeno_mets_human",              0.1,        "hgnc")
 
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
@@ -45,7 +39,7 @@ for (i in seq_len(nrow(object_list))) {
                 idents = "seurat_clusters",
                 org = org,
                 subset = "yes",
-                subset_cell_number = 10000)
+                subset_cell_number = 5000)
 
     exprMat_log <- GRA_output$exprMat_log
     colVars <- GRA_output$colVars
@@ -78,7 +72,7 @@ for (i in seq_len(nrow(object_list))) {
         ceiling(nrow(regulon_activity_scaled)/4)
 
     plot_width <- 
-        ceiling(ncol(regulon_activity_scaled)/1.5)
+        ceiling(ncol(regulon_activity_scaled)/1.3)
 
     #save the heatmap
     if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
@@ -130,7 +124,7 @@ for (i in seq_len(nrow(object_list))) {
     plot_height <-
         ceiling(nrow(binary_activity_perc_subset)/3)
     plot_width <-
-        ceiling(ncol(binary_activity_perc_subset)/1.5)
+        ceiling(ncol(binary_activity_perc_subset)/1.2)
 
     #save the heatmap
     ggsave(str_c("output/figures/regulon_analysis/",

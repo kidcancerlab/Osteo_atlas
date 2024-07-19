@@ -48,7 +48,7 @@ human_lung_ref$free_annotation <-
           "^Basophil_Mast 2$" = "Basophil_Mast2",
           "^Bronchial Vessel 1$" = "Bronchial_Vessel1",
           "^Bronchial Vessel 2$" = "Bronchial_Vessel2",
-          "^IGSF21_plus Dendritic$" = "Dendritic_cells",
+          "^IGSF21_plus Dendritic$" = "IGSF21_plus_Dendritic_cells",
           "^Myeloid Dendritic Type 1$" = "Myeloid_Dendritic1",
           "^Myeloid Dendritic Type 2$" = "Myeloid_Dendritic2",
           "^Natural Killer$" = "NK_cells",
@@ -60,7 +60,7 @@ human_lung_ref$free_annotation <-
           "^CD4_plus Memory_Effector T$" = "CD4T_Memory",
           "^CD8_plus Naive T$" = "CD8T_Naive",
           "^Proliferating NK_T$" = "Prolif_NKT",
-          "^TREM2_plus Dendritic$" = "Dendritic_cells",
+          "^TREM2_plus Dendritic$" = "TREM2_plus_Dendritic_cells",
           "^Proliferating Macrophage$" = "Prolif_Macrophages",
           "^Proliferating Basal$" = "Prolif_Basal",
           "^Nonclassical Monocyte$" = "NonClassical_Monocytes",
@@ -70,7 +70,7 @@ human_lung_ref$free_annotation <-
           "^Vascular Smooth Muscle$" = "Vascular_SMC",
           "^Alveolar Fibroblast$" = "Alveolar_Fibroblasts",
           "^Capillary Aerocyte$" = "Capillary_Aerocytes",
-          "^Plasmacytoid Dendritic$" = "Dendritic_cells",
+          "^Plasmacytoid Dendritic$" = "Plasmacytoid_Dendritic_cells",
           "^Signalling Alveolar Epithelial$" = "Epithelial_cells",
           "^Adventitial Fibroblast$" = "Fibroblasts",
           "^Signaling Alveolar_Epithelial$" = "Signalling_AlvEpithelial",
@@ -224,7 +224,6 @@ huim$label.main <-
                                 "^Macrophage$" = "Macrophages",
                                 "^Basophils$" = "Basophil_Mast",
                                 "^Capillary$" = "Capillary_cells"))
-
 
 mord <- celldex::MouseRNAseqData()
 moim <- celldex::ImmGenData()

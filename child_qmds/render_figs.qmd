@@ -204,7 +204,7 @@ clustrees <- list()
 
 for (group in all_groups) {
     clustrees[[group]] <-
-        knitr::include_graphics(str_c("output/figures/tumor_vs_stroma/clustree/ ",
+        knitr::include_graphics(str_c("output/figures/tumor_vs_stroma/clustree/",
                         group,
                         ".png"))
 }

@@ -2,7 +2,7 @@ Recluster the normal cell types and annotate the types.
 
 ## Normal cells reclustering
 
-```{r setup, include=FALSE}
+```{r normal_reclustering, include=FALSE}
 
 object_list <-
     tribble(~group,                         ~res_value,
@@ -13,20 +13,45 @@ object_list <-
             "mm_prim_normal_cells",         0.25,
             "mm_mets_normal_cells",         0.2)
 
-# object_list <- list(patient_prim_normal_cells = c("Macrophage",
-#                                                   "Endothelial_cells",
-#                                                   "Tcells",
-#                                                   "NK cells",
-#                                                   "Monocytes",
-#                                                   "Dendritic cells",
-#                                                   "B cells"),
-#                     patient_mets_normal_cells = c("Macrophage",
-#                                                   "Endothelial_cells",
-#                                                   "Tcells",
-#                                                   "NK cells",
-#                                                   "Monocytes",
-#                                                   "Dendritic cells",
-#                                                   "B cells"))
+group_celltype_list <- 
+    list(patient_prim_normal_cells = c("Macrophages",
+                                        "Endothelial_cells",
+                                        "T_cells",
+                                        "NK_cells",
+                                        "Dendritic cells",
+                                        "B_cells"),
+        patient_mets_normal_cells = c("Macrophage",
+                                        "Endothelial_cells",
+                                        "Tcells",
+                                        "NK cells",
+                                        "Monocytes",
+                                        "Dendritic cells",
+                                        "B cells"),
+        xeno_prim_mouse = c("Macrophages",
+                            "Endothelial_cells",
+                            "T_cells",
+                            "NK_cells",
+                            "Dendritic cells",
+                            "B_cells"),
+        xeno_mets_mouse = c("Macrophages",
+                            "Endothelial_cells",
+                            "T_cells",
+                            "NK_cells",
+                            "Dendritic cells",
+                            "B_cells"),
+        mm_prim_normal_cells = c("Macrophages",
+                                "Endothelial_cells",
+                                "T_cells",
+                                "NK_cells",
+                                "Dendritic cells",
+                                "B_cells",
+                                "Fibroblasts"),
+        mm_mets_normal_cells = c("Macrophages",
+                                "Endothelial_cells",
+                                "T_cells",
+                                "NK_cells",
+                                "Dendritic cells",
+                                "B_cells"))
 
 
 #https://www.cell.com/trends/immunology/fulltext/S1471-4906(22)00094-1
@@ -81,6 +106,108 @@ B_cells <- list(Immature_B = c("CD19", "CD20", "CD34", "CD38", "CD45R"),
                 Regulatory = c("IgM", "CD19", "CD1d", "CD21", "CD5"))
 
 
+markers_list <-
+    read_tsv("input/downloads/PanglaoDB_markers_27_Mar_2020.tsv") %>%
+    select(`official gene symbol`, `cell type`) %>% 
+    subset(`cell type` %in% c("Alveolar macrophages",
+                              "B cells",
+                              "B cells memory",
+                              "B cells naive",
+                              "Basal cells",
+                              "Basophils",
+                              "Ciliated cells",
+                              "Dendritic cells",
+                              "Endothelial cells",
+                              "Epithelial cells",
+                              "Fibroblasts",
+                              "Gamma delta T cells",
+                              "Macrophages",
+                              "Mast cells",
+                              "Megakaryocytes",
+                              "Mesotheial cells",
+                              "Monocytes",
+                              "Myeloid-derived suppressor cells",
+                              "Myofibroblasts",
+                              "Natural killer T cells",
+                              "Neutrophils",
+                              "NK cells",
+                              "Chondrocytes",
+                              "Osteoblasts",
+                              "Osteoclasts",
+                              "Plasma cells",
+                              "Plasmacytoid dendritic cells",
+                              "Platelets",
+                              "Pulmonary alveolar type I cells",
+                              "Pulmonary alveolar type II cells",
+                              "Pulmonary vascular smooth muscle cells",
+                              "Stromal cells",
+                              "T cells",
+                              "T cells naive",
+                              "T cytotoxic cells",
+                              "T follicular helper cells",
+                              "T helper cells",
+                              "T memory cells",
+                              "T regulatory cells",
+                              "Vascular smooth muscle cells"))
+markers_list1 <- markers_list %>%
+    mutate(General_celltypes = str_replace_all(`cell type`,
+                                        c("^Alveolar macrophages$" = "Macrophages",
+                                          "^B cells$" = "B_cells",
+                                          "^B cells memory$" = "B_cells",
+                                          "^B cells naive$" = "B_cells",
+                                          "^Basal cells$" = "Epithelial_cells",
+                                          "^Basophils$" = "Granulocytes",
+                                          "^Ciliated cells$" = "Epithelial_cells",
+                                          "^Dendritic cells$" = "Dendritic_cells",
+                                          "^Endothelial cells$" = "Endothelial_cells",
+                                          "^Epithelial cells$" = "Epithelial_cells",
+                                          "^Fibroblasts$" = "Fibroblasts",
+                                          "^Gamma delta T cells$" = "T_cells",
+                                          "^Macrophages$" = "Macrophages",
+                                          "^Mast cells$" = "Mast_cells",
+                                          "^Megakaryocytes$" = "Megakaryocytes",
+                                          "^Mesotheial cells$" = "Mesothelial_cells",
+                                          "^Monocytes$" = "Monocytes",
+                                          "^Myeloid-derived suppressor cells$" = "Macrophages",
+                                          "^Myofibroblasts$" = "Fibroblasts",
+                                          "^Natural killer T cells$" = "T_cells",
+                                          "^Neutrophils$" = "Granulocytes",
+                                          "^NK cells$" = "NK_cells",
+                                          "^Chondrocytes$" = "Chondrocytes",
+                                          "^Osteoblasts$" = "Osteoblasts",
+                                          "^Osteoclasts$" = "Osteoclasts",
+                                          "^Plasma cells$" = "B_cells",
+                                          "^Plasmacytoid dendritic cells$" = "Dendritic_cells",
+                                          "^Platelets$" = "Platelets",
+                                          "^Pulmonary alveolar type I cells$" = "Epithelial_cells",
+                                          "^Pulmonary alveolar type II cells$" = "Epithelial_cells",
+                                          "^Pulmonary vascular smooth muscle cells$" = "Smooth_muscle_cells",
+                                          "^Stromal cells$" = "Stromal_cells",
+                                          "^T cells$" = "T_cells",
+                                          "^T cells naive$" = "T_cells",
+                                          "^T cytotoxic cells$" = "T_cells",
+                                          "^T follicular helper cells$" = "T_cells",
+                                          "^T helper cells$" = "T_cells",
+                                          "^T memory cells$" = "T_cells",
+                                          "^T regulatory cells$" = "T_cells",
+                                          "^Vascular smooth muscle cells$" = "Smooth_muscle_cells"))) %>%
+    mutate(cell_types = str_replace_all(`cell type`, " ", "_"))
+
+markers_list_summary <- markers_list1 %>%
+    group_by(cell_types) %>%
+    summarise(markers_list = list(`official gene symbol`))
+
+my_new_list <- markers_list_summary$markers_list
+names(my_new_list) <- markers_list_summary$cell_types
+
+# Fibroblasts <- list(Normal_Fibroblasts = ,
+#                     Cancer_associated_Fibroblasts = ,
+#                     Inflam_Fibroblasts = ,
+#                     Matrix_Fibroblasts = ,
+#                     Angio_Fibroblasts = ,
+#                     Adventitial_Fibroblasts = ,
+#                     Alveolar_Fibroblasts = )
+
 for (item in seq_len(nrow(object_list))) {
     group <- object_list$group[item]
     res_value <- object_list$res_value[item]
@@ -108,20 +235,73 @@ for (item in seq_len(nrow(object_list))) {
 
     object <- 
         FindClusters(object,
-                    resolution = res_value)
+                     resolution = res_value)
 
     dimplot_main <-
         dimplot_better(object,
-                      group_by = "new_annot_clust") +
+                      group_by = c("new_annot_clust")) +
             ggtitle(group) +
             NoLegend()
+
+    matrix <- object@assays$RNA$counts
+    big_featureplot_list <- list()
+
+    for (module in names(my_new_list)) {
+        if (grepl("mouse", object$organism[1])) {
+            genelist <-
+                nichenetr::convert_human_to_mouse_symbols(my_new_list[[module]]) %>%
+                na.omit() %>%
+                unique()
+        } else {
+            genelist <- my_new_list[[module]]
+        }
+        cell_ranks <-
+            AUCell::AUCell_run(exprMat = matrix,
+                            geneSets = genelist)
+        object[[module]] <- AUCell::getAUC(cell_ranks)[1,]
+
+        feature_plot <-
+                FeaturePlot(object,
+                            module,
+                            cols = c("#EEEEEE", "#ae0600"),
+                            min.cutoff = 0.15,
+                            pt.size = 1,
+                            order = TRUE) +
+                    coord_fixed() +
+                    ggtitle(paste0(group, ": ", module))
+
+        big_featureplot_list[[module]] <- feature_plot
+    }
+    big_panel_plot <- 
+        cowplot::plot_grid(dimplot_main,
+                            plotlist = big_featureplot_list,
+                            ncol = 2)
+    #calcuate height based of the number of features
+    length_var <- 
+        if (length(big_featureplot_list) %% 2 == 1) {
+            length(big_featureplot_list) + 1
+        } else {
+            length(big_featureplot_list)
+        }
+
+    height <- (length_var/2 * 7) + 7
+
+    ggsave(filename = str_c("output/figures/relustering_normals/",
+                            group,
+                            "/",
+                            "big_featureplot_list",
+                            ".png"),
+            plot = big_panel_plot,
+            width = 14,
+            height = height,
+            limitsize = FALSE)
 
     #subset ech celltype for reclustering and labelling the celltypes
     for (celltypes in c("Macrophages", "T_cells", "Fibroblasts", "Dendritic_cells")) {
         if (celltypes %in% object$new_annot_clust) {
             subset_sobj <-
                 subset(object,
-                    annotations == celltypes) %>%
+                    new_annot_clust == celltypes) %>%
                 process_seurat() %>%
                 RunHarmony(group.by.vars = "sample_name")
 
@@ -261,9 +441,5 @@ for (item in seq_len(nrow(object_list))) {
         }
     }
 }
-
-
-
-
 
 ```
