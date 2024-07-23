@@ -1,6 +1,13 @@
 
 This qmd will be used to read in the figures and perpare the html output to hand to our collaborators
 ## Before harmony
+The plots in this section are the combined plots before running harmony. 
+The first plot is the dimplot of the combined data split by multiple metadata. 
+The second plot is the feature plot of the tumor cells and the third plot is the
+feature plot of the immune cells. This gives a general sense of how the normal
+tumor cells are clustering before running harmony, the level of batch effects and
+the level of immune cell infiltration in the tumor samples.
+
 ```{r, before_harmony_figure_panels}
 #| cache.vars: c('preharmony_dimplot_list', 'featureplot1_tumor_list', 'featureplot2_immune_list')
 
@@ -39,24 +46,34 @@ for (group in sample_name_list) {
 ```
 
 ### Pre Harmony Dimplots
+Dimplots split by multiple relevant metadata before harmony integration
 ```{r print_panel_plots1, results = 'asis'}
 #| dependson: before_harmony_figure_panels
 qreport::maketabs(preharmony_dimplot_list)
 ```
 
 ### Pre Harmony Tumor Featureplot
+Featureplots of various tumor markers before harmony integration
 ```{r, print_panel_plots2, results = 'asis'}
 #| dependson: before_harmony_figure_panels
 qreport::maketabs(featureplot1_tumor_list)
 ```
 
 ### Pre Harmony Immune Featureplot
+Featureplots of various immune markers before harmony integration
 ```{r, print_panel_plots3, results = 'asis'}
 #| dependson: before_harmony_figure_panels
 qreport::maketabs(featureplot2_immune_list)
 ```
 
 ## After Harmony
+The plots in this section are the combined plots after running harmony.
+The first plot is the dimplot of the combined data split by multiple metadata.
+The second plot is the feature plot of the tumor cells and the third plot is the
+feature plot of the immune cells. This gives a general sense of how the normal
+tumor cells are clustering after running harmony, how well the batch effect 
+has been eliminated for visualization and the level of immune cell infiltration
+in the tumor samples.
 ```{r, after_harmony_figure_panels}
 #| cache.vars: c('postharmony_dimplot_list', 'posth_featureplot1_tumor_list', 'posth_eatureplot2_immune_list')
 
@@ -86,25 +103,33 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 ```
 
 ### Post Harmony Dimplots
+Dimplots split by multiple relevant metadata after harmony integration
 ```{r print_panel_plots4, results = 'asis'}
 #| dependson: after_harmony_figure_panels
 qreport::maketabs(postharmony_dimplot_list)
 ```
 
 ### Post Harmony Tumor Featureplot
+Featureplots of various relevant tumor markers after harmony integration
 ```{r, print_panel_plots5, results = 'asis'}
 #| dependson: after_harmony_figure_panels
 qreport::maketabs(posth_featureplot1_tumor_list)
 ```
 
 ### Post Harmony Immune Featureplot
+Featureplots of various relevant immune markers after harmony integration
 ```{r, print_panel_plots6, results = 'asis'}
 #| dependson: after_harmony_figure_panels
 qreport::maketabs(posth_eatureplot2_immune_list)
 ```
 
-
 ## Split of tumor and stroma plots
+The plots in this section are the combined plots after running harmony and
+splitting the tumor and stroma cells. The first plot is the dimplot of the 
+either tumor or stroma for each group. The second plot is the feature plot of
+the tumor markers and the third plot is the feature plot of the immune markers. 
+This gives a general sense of how the tumor and stroma cells are clustering
+in general and whether the splitting was done correctly. 
 ```{r, split_tumor_stroma}
 #| cache.vars: c('all_dimplots_list', 'alltumor_featureplot_list', 'allimmune_featureplot_list')
 
@@ -166,24 +191,32 @@ for (subgroup in c("xeno_prim_human",
 ```
 
 ### All Dimplots
+Dimplots split by tumor and stroma for each group. At this point we have both
+primary and metastatic tumors for different datasets split into 12
+different groups, 6 for tumor and 6 for stroma.
 ```{r, print_panel_plots7, results = 'asis'}
 #| dependson: split_tumor_stroma
 qreport::maketabs(all_dimplots_list)
 ```
 
 ### All Tumor Featureplot
+Featureplots of various tumor markers for each group split by tumor and stroma
 ```{r, print_panel_plots8, results = 'asis'}
 #| dependson: split_tumor_stroma
 qreport::maketabs(alltumor_featureplot_list)
 ```
 
 ### All Immune Featureplot
+Featureplots of various immune markers for each group split by tumor and stroma
 ```{r, print_panel_plots9, results = 'asis'}
 #| dependson: split_tumor_stroma
 qreport::maketabs(allimmune_featureplot_list)
 ```
 
 ## Clustree
+Clustree and silhouette score plots for each group was generated to determine the
+optimal resolution for clustering. The silhouette score is a measure of how similar
+an object is to its own cluster compared to other clusters. 
 ```{r, clustree_plots}
 #| cache.vars: clustrees
 all_groups <-
@@ -218,6 +251,9 @@ qreport::maketabs(clustrees)
 ```
 
 ## Seurat Cluster Panel Plots
+The Seurat cluster panel plots for each group was generated to show the different
+clusters in each group. The panel plots show the different clusters in each group
+and top 10 differentlly expressed genes and the GSEA pathways.
 ```{r, six_panel_plots}
 #| cache.vars: sixpanel_plot_list
 all_groups <-
@@ -252,7 +288,46 @@ for (group in all_groups) {
 qreport::maketabs(sixpanel_plot_list)
 ```
 
-## Clustering Normals AUCell and Correlation Plots
+## Stromal Celltype annotation verification by AUCell markers
+The AUCell markers for each cell type in each group was generated to show the
+activity of the each genes in each cells to distinguish the celltypes by gene
+activity inference. The markers were obtained from PanglaoDB_markers_27_Mar_2020.
+```{r, celltype_aucell_plots}
+#| cache.vars: c('stroma_celltype_aucell_plots')
+all_groups <-
+    c("patient_prim_normal_cells",
+      "patient_mets_normal_cells",
+      "xeno_prim_mouse",
+      "xeno_mets_mouse",
+      "mm_prim_normal_cells",
+      "mm_mets_normal_cells")
+
+stroma_celltype_aucell_plots <- list()
+
+for (group in all_groups) {
+    file_path <- 
+        str_c("output/figures/relustering_normals/",
+                                group,
+                                "/",
+                                "big_featureplot_list.png")
+    if (file.exists(file_path)) {
+        stroma_celltype_aucell_plots[[group]] <-
+            knitr::include_graphics(file_path)
+    }
+}
+```
+
+### Stromal Celltype AUCell Plots
+```{r, print_panel_plots122, results = 'asis'}
+#| dependson: celltype_aucell_plots
+qreport::maketabs(stroma_celltype_aucell_plots)
+```
+
+##  Re-Clustering Normals AUCell and Correlation Plots
+The AUCell and correlation plots for the normal cells in each group was generated
+to show the correlation between the different cell types and the AUCell scores for
+each cell type. The AUCell scores are a measure of the activity of the each genes
+in each cells to distinguish the celltypes by gene activity inference. 
 ```{r, reclustering_normals_plots}
 #| cache.vars: c('correlation_plot_list', 'Aucell_plot_list')
 all_groups <-
@@ -269,7 +344,7 @@ Aucell_plot_list <- list()
 for (group in all_groups) {
     path <- str_c("output/figures/relustering_normals/",
                   group)
-    for (celltypes in c("Macrophages", "T_cells", "Fibroblasts", "Dendritic_cells")) {
+    for (celltypes in c("Macrophages", "T_cells", "Fibroblasts", "Dendritic_cells", "B_cells")) {
         corr_file_path <- 
             str_c(path,
                   "/",
@@ -293,79 +368,89 @@ for (group in all_groups) {
 }
 ```
 
-### Correlation Plots: Patient primary Normal cells
+### Patient primary Normal cells
+#### Correlation Plots: Patient primary Normal cells
 ```{r, print_panel_plots12, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(correlation_plot_list[["patient_prim_normal_cells"]])
 ```
 
-### AUCell Plots : Patient primary Normal cells
+#### AUCell Plots : Patient primary Normal cells
 ```{r, print_panel_plots13, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(Aucell_plot_list[["patient_prim_normal_cells"]])
 ```
 
-### Correlation Plots: Patient Mets Normal cells
+### Patient Mets Normal cells
+#### Correlation Plots: Patient Mets Normal cells
 ```{r, print_panel_plots14, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(correlation_plot_list[["patient_mets_normal_cells"]])
 ```
 
-### AUCell Plots : Patient Mets Normal cells
+#### AUCell Plots : Patient Mets Normal cells
 ```{r, print_panel_plots15, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(Aucell_plot_list[["patient_mets_normal_cells"]])
 ```
 
-### Correlation Plots: Xeno Primary Mouse
+### Xeno Primary Mouse
+#### Correlation Plots: Xeno Primary Mouse
 ```{r, print_panel_plots16, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(correlation_plot_list[["xeno_prim_mouse"]])
 ```
 
-### AUCell Plots : Xeno Primary Mouse
+#### AUCell Plots : Xeno Primary Mouse
 ```{r, print_panel_plots17, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(Aucell_plot_list[["xeno_prim_mouse"]])
 ```
 
-### Correlation Plots: Xeno Mets Mouse
+### Xeno Mets Mouse
+#### Correlation Plots: Xeno Mets Mouse
 ```{r, print_panel_plots18, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(correlation_plot_list[["xeno_mets_mouse"]])
 ```
 
-### AUCell Plots : Xeno Mets Mouse
+#### AUCell Plots : Xeno Mets Mouse
 ```{r, print_panel_plots19, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(Aucell_plot_list[["xeno_mets_mouse"]])
 ```
 
-### Correlation Plots: MM Primary Normal cells
+### MM Primary Normal cells
+#### Correlation Plots: MM Primary Normal cells
 ```{r, print_panel_plots20, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(correlation_plot_list[["mm_prim_normal_cells"]])
 ```
 
-### AUCell Plots : MM Primary Normal cells
+#### AUCell Plots : MM Primary Normal cells
 ```{r, print_panel_plots21, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(Aucell_plot_list[["mm_prim_normal_cells"]])
 ```
 
-### Correlation Plots: MM Mets Normal cells
+### MM Mets Normal cells
+#### Correlation Plots: MM Mets Normal cells
 ```{r, print_panel_plots22, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(correlation_plot_list[["mm_mets_normal_cells"]])
 ```
 
-### AUCell Plots : MM Mets Normal cells
+#### AUCell Plots : MM Mets Normal cells
 ```{r, print_panel_plots23, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(Aucell_plot_list[["mm_mets_normal_cells"]])
 ```
 
 ## Normal Celltypes GSEA Panel Plots
+The GSEA panel plots for each group was generated to show the different
+GSEA pathways for each cell type in each group. The GSEA pathways are a measure
+of the activity of the each genesets in each cells to distinguish the upregulated
+and downregulated pathways.
 ```{r, celltype_panel_plots}
 #| cache.vars: normalcell_gsea_panelplots
 
@@ -431,5 +516,61 @@ qreport::maketabs(normalcell_gsea_panelplots[["mm_prim_normal_cells"]])
 #| dependson: celltype_panel_plots
 qreport::maketabs(normalcell_gsea_panelplots[["mm_mets_normal_cells"]])
 ```
+
+## Regulon Analysis Plots
+Regulon analysis was performed using the SCENIC plus package to determine the
+activity of the regulons in each cell type. This was performed for only the 
+cancer cells in each group. The regulon analysis was performed for the following
+groups: patient primary, patient mets, mm primary and mm mets. The regulon analysis
+was performed using the motif annotations for human and mouse.
+```{r, regulon_analysis_plots}
+#| cache.vars: c('Regulon_heatmap_list', 'binarized_heatmap_list')
+all_groups <-
+    c("patient_prim_cancer_cells",
+      "patient_mets_cancer_cells",
+      "mm_prim_cancer_cells",
+      "mm_mets_cancer_cells",
+      "xeno_prim_human",
+      "xeno_mets_human")
+
+Regulon_heatmap_list <- list()
+binarized_heatmap_list <- list()
+
+for (group in all_groups) {
+    path <- str_c("output/figures/regulon_analysis/",
+                  group)
+    regulon_file_path <- 
+        str_c(path,
+              "/",
+              "average_reg_heatmap.png")
+    if (file.exists(regulon_file_path)) {
+        Regulon_heatmap_list[[group]] <-
+            knitr::include_graphics(regulon_file_path)
+    }
+
+    binarized_file_path <- 
+        str_c(path,
+              "/",
+              "binarized_heatmap.png")
+    if (file.exists(binarized_file_path)) {
+        binarized_heatmap_list[[group]] <-
+            knitr::include_graphics(binarized_file_path)
+    }
+}
+
+```
+
+### Regulon Heatmap Plots
+```{r, print_panel_plots30, results = 'asis'}
+#| dependson: regulon_analysis_plots
+qreport::maketabs(Regulon_heatmap_list)
+```
+
+### Binarized Regulon Heatmap Plots
+```{r, print_panel_plots31, results = 'asis'}
+#| dependson: regulon_analysis_plots
+qreport::maketabs(binarized_heatmap_list)
+```
+
 
 

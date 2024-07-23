@@ -695,7 +695,7 @@ circle_plot <- function(sobj,
 ```
 
 ```{r panel_plot_function}
-#| cache.vars: 'make_panel_plot'
+#| cache.vars: c('make_panel_plot', 'cat_tib')
 
 #GSEA Miltilevel
 cat_tib <- dplyr::tribble(
@@ -704,7 +704,6 @@ cat_tib <- dplyr::tribble(
     "C2",      "CP:KEGG",      "KEGG",
     "C3",      "TFT:GTRD",     "Transcription_factor_targets",
     "C6",       "NA",          "Oncogenic_signature")
-
 
 make_panel_plot <- function(sobj, cluster_column, label, group) {
     volc_plots <- list()
@@ -901,6 +900,8 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
             )
     }
 
+    panel_plots <- list()
+
     panel_plots[[label]] <-
         patchwork::wrap_plots(
             dimplot,
@@ -927,6 +928,7 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
 
 ## Scenic plus regulon analysis function
 ```{r scenic_function}
+#| cache.vars = 'Run_GRA'
 Run_GRA <- function(sobject,
                     idents,
                     org,      #organism "mgi" for mouse, "hgnc" for human

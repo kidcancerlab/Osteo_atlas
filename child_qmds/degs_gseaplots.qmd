@@ -119,12 +119,12 @@ object_list <-
             "mm_prim_normal_cells",         0.25,
             "mm_mets_normal_cells",         0.2)
 
-
+# Run GSEA 
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
     res_value <- object_list$res_value[i]
 
-    sobj <-
+    object <-
         qs::qread(
             str_c(
                 "output/seurat_objects/tumor_vs_stroma/",
@@ -134,12 +134,107 @@ for (i in seq_len(nrow(object_list))) {
         ) %>%
         FindClusters(resolution = res_value)
 
-    make_panel_plot(sobj,
+    make_panel_plot(object,
                     cluster_column = "seurat_clusters",
                     label = "seurat_clusters",
                     group = group)
-
 }
+
+
+# Save the celltypes excel out with seurat clusters and celltypes annotation info
+all_data_celltypes <- tibble()
+
+
+for (i in seq_len(nrow(object_list))) {
+    group <- object_list$group[i]
+    res_value <- object_list$res_value[i]
+
+    object <-
+        qs::qread(
+            str_c(
+                "output/seurat_objects/tumor_vs_stroma/",
+                group,
+                ".qs"
+            )
+        ) %>%
+        FindClusters(resolution = res_value)
+
+    object$cell_types_string <- "NA"
+    object$med_cellscore_string <- "NA"
+    celltype_df <-
+        object@meta.data %>%
+        select(seurat_clusters) %>%
+        as_tibble() %>%
+        mutate(group = group,
+               assigned_celltype = NA,
+               cell_types_string = NA,
+               med_cellscore_string = NA,
+               NCH_assignment = NA,
+               NCI_assignment = NA,
+               SJ_assignment = NA) %>%
+        distinct() %>%
+        arrange(seurat_clusters)
+    for (i in seq_len(nrow(celltype_df))) {
+        temp_obj <-
+            subset(x = object,
+                   seurat_clusters == celltype_df$seurat_clusters[i])
+        cell_types_percent <- 
+            table(temp_obj$annotations) %>%
+            as.data.frame() %>%
+            arrange(desc(Freq), .by_group = TRUE) %>%
+            slice_head(n=5) %>%
+            mutate(Percentage = Freq / sum(Freq) * 100) %>%
+            group_by(Var1) %>%
+            mutate(med_cellscore = median(temp_obj$cell_scores[temp_obj$annotations == Var1]) %>% 
+                round(2))
+
+        celltype_df$assigned_celltype[i] <- 
+            cell_types_percent$Var1[1] %>%
+            as.character()
+
+        # Create a string of Var1 and Percentage
+        celltype_df$cell_types_string[i] <- 
+            paste(cell_types_percent$Var1,
+                  cell_types_percent$Percentage %>% round(1),
+                  sep = ":",
+                  collapse = ",")
+
+        celltype_df$med_cellscore_string[i] <- 
+            paste(cell_types_percent$Var1, 
+                  cell_types_percent$med_cellscore,
+                  sep = ":",
+                  collapse = ",")
+    }
+
+    all_data_celltypes <-
+        celltype_df %>%
+        rbind(all_data_celltypes)
+}
+# Add date and time to the filename
+timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+filename <- str_c("output/cluster_and_celltype/all_data_celltypes_",
+                  timestamp,
+                  ".tsv")
+write_tsv(x = all_data_celltypes, file = filename)
+
+```
+
+
+```{r, echo = FALSE}
+# Celltype assignment from organizations
+celltype_table <-
+    read_tsv("output/cluster_and_celltype/First_revised_all_data_celltypes.txt")
+
+for (i in seq_len(nrow(celltype_table))) {
+    seurat_clusters <- celltype_table$seurat_clusters[i]
+    group <- celltype_table$group[i]
+
+    #hopefully we will match date and time later on down the line
+    for (groups in unique(celltype_table$group)) {
+        metadata_group <- 
+            read_tsv(str_c("output/metadata/", groups, ".tsv")) %>%
+    }
+
 
 ```
 

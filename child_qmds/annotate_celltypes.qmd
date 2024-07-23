@@ -89,7 +89,8 @@ results <-
                   file = str_c("output/seurat_objects/harmony_sobjs_annot/",
                                group,
                                ".qs"))
-    })
+})
+
 
 ```
 

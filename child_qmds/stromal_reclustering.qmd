@@ -243,7 +243,7 @@ for (item in seq_len(nrow(object_list))) {
             ggtitle(group) +
             NoLegend()
 
-    matrix <- object@assays$RNA$counts
+    entire_matrix <- object@assays$RNA$counts
     big_featureplot_list <- list()
 
     for (module in names(my_new_list)) {
@@ -256,7 +256,7 @@ for (item in seq_len(nrow(object_list))) {
             genelist <- my_new_list[[module]]
         }
         cell_ranks <-
-            AUCell::AUCell_run(exprMat = matrix,
+            AUCell::AUCell_run(exprMat = entire_matrix,
                             geneSets = genelist)
         object[[module]] <- AUCell::getAUC(cell_ranks)[1,]
 
@@ -297,148 +297,156 @@ for (item in seq_len(nrow(object_list))) {
             limitsize = FALSE)
 
     #subset ech celltype for reclustering and labelling the celltypes
-    for (celltypes in c("Macrophages", "T_cells", "Fibroblasts", "Dendritic_cells")) {
+    for (celltypes in c("Macrophages", "T_cells", "Fibroblasts", "Dendritic_cells", "B_cells")) {
         if (celltypes %in% object$new_annot_clust) {
             subset_sobj <-
                 subset(object,
-                    new_annot_clust == celltypes) %>%
-                process_seurat() %>%
-                RunHarmony(group.by.vars = "sample_name")
+                       new_annot_clust == celltypes)
+            if (length(unique(subset_sobj$sample_name)) > 1 &&
+                ncol(subset_sobj) > 50) {
+                subset_sobj <- 
+                    subset_sobj %>%
+                    process_seurat() %>%
+                    RunHarmony(group.by.vars = "sample_name")
 
-            sil_val <- 
-                optimize_silhouette(sobject = subset_sobj,
-                                    test_res = seq(0.05, 0.9, by = 0.05),
-                                    summary_plot = FALSE,
-                                    reduction = "harmony") %>%
-                filter(!is.na(sil_vals)) %>%
-                filter(sil_vals == max(sil_vals)) %>%
-                slice_head(n=1) %>%
-                dplyr::pull(res_vals)
+                sil_val <- 
+                    optimize_silhouette(sobject = subset_sobj,
+                                        test_res = seq(0.05, 0.9, by = 0.05),
+                                        summary_plot = FALSE,
+                                        reduction = "harmony") %>%
+                    filter(!is.na(sil_vals)) %>%
+                    filter(sil_vals == max(sil_vals)) %>%
+                    slice_head(n=1) %>%
+                    dplyr::pull(res_vals)
             
-            if (length(sil_val) != 0) {
-                subset_sobj <- subset_sobj %>%
-                    process_seurat(reduction = "harmony",
-                                resolution = sil_val)
-            } else {
-                subset_sobj <- subset_sobj %>%
-                    process_seurat(reduction = "harmony")
-            }
+                if (length(sil_val) != 0) {
+                    subset_sobj <- subset_sobj %>%
+                        process_seurat(reduction = "harmony",
+                                    resolution = sil_val)
+                } else {
+                    subset_sobj <- subset_sobj %>%
+                        process_seurat(reduction = "harmony")
+                }
 
             #make the dimplot
-            dimplot_subset <- 
-                dimplot_better(subset_sobj,
-                            group_by = "seurat_clusters") +
-                    ggtitle(celltypes) +
-                    NoLegend()
+                dimplot_subset <- 
+                    dimplot_better(subset_sobj,
+                                group_by = "seurat_clusters") +
+                        ggtitle(celltypes) +
+                        NoLegend()
 
-            #prepare the matrix for aucell
-            matrix <- subset_sobj@assays$RNA$counts
+                #prepare the matrix for aucell
+                matrix <- subset_sobj@assays$RNA$counts
 
-            featureplot_list <- list()
+                featureplot_list <- list()
 
-            for (module in names(get(celltypes))) {
-                if (grepl("mouse", object$organism[1])) {
-                    genelist <- 
-                        nichenetr::convert_human_to_mouse_symbols(get(celltypes)[[module]]) %>%
-                        na.omit() %>%
-                        unique()
-                } else {
-                    genelist <- get(celltypes)[[module]]
-                }
-                cell_ranks <- 
-                    AUCell::AUCell_run(exprMat = matrix,
-                                    geneSets = genelist)
-                subset_sobj[[module]] <- AUCell::getAUC(cell_ranks)[1,]
+                for (module in names(get(celltypes))) {
+                    if (grepl("mouse", object$organism[1])) {
+                        genelist <- 
+                            nichenetr::convert_human_to_mouse_symbols(get(celltypes)[[module]]) %>%
+                            na.omit() %>%
+                            unique()
+                    } else {
+                        genelist <- get(celltypes)[[module]]
+                    }
+                    cell_ranks <- 
+                        AUCell::AUCell_run(exprMat = matrix,
+                                        geneSets = genelist)
+                    subset_sobj[[module]] <- AUCell::getAUC(cell_ranks)[1,]
 
-                feature_plot <- 
-                    FeaturePlot(subset_sobj,
-                                module,
-                                cols = c("#EEEEEE", "#ae0600"),
-                                min.cutoff = 0.15,
-                                pt.size = 1,
-                                order = TRUE) +
-                        coord_fixed() +
-                        ggtitle(paste0(celltypes, ": ", module))
+                    feature_plot <- 
+                        FeaturePlot(subset_sobj,
+                                    module,
+                                    cols = c("#EEEEEE", "#ae0600"),
+                                    min.cutoff = 0.15,
+                                    pt.size = 1,
+                                    order = TRUE) +
+                            coord_fixed() +
+                            ggtitle(paste0(celltypes, ": ", module))
 
-                featureplot_list[[module]] <- feature_plot
-            }
-
-            # Combine all the plots into a panel plot with 
-            panel_plot <- 
-                cowplot::plot_grid(dimplot_main,
-                                    dimplot_subset,
-                                    plotlist = featureplot_list,
-                                    ncol = 2)
-
-            #calcuate height based of the number of features
-            length_var <- 
-                if (length(featureplot_list) %% 2 == 1) {
-                    length(featureplot_list) + 1
-                } else {
-                    length(featureplot_list)
+                    featureplot_list[[module]] <- feature_plot
                 }
 
-            height <- (length_var/2 * 7) + 7
+                # Combine all the plots into a panel plot with 
+                panel_plot <- 
+                    cowplot::plot_grid(dimplot_main,
+                                        dimplot_subset,
+                                        plotlist = featureplot_list,
+                                        ncol = 2)
 
-            # save the panel plot
-            ggsave(filename = str_c("output/figures/relustering_normals/",
-                                        group,
-                                        "/",
-                                        celltypes,
-                                        ".png"),
-                        plot = panel_plot,
-                        width = 14,
-                        height = height,
-                        device = "png",
-                        bg = "white")
+                #calcuate height based of the number of features
+                length_var <- 
+                    if (length(featureplot_list) %% 2 == 1) {
+                        length(featureplot_list) + 1
+                    } else {
+                        length(featureplot_list)
+                    }
 
-            # qs save
-            qs::qsave(panel_plot,
-                    str_c("output/figures/relustering_normals/",
-                            group,
-                            "/",
-                            celltypes,
-                            ".qs"))
+                height <- (length_var/2 * 7) + 7
 
-            # correlation analysis
-            if (length(unique(subset_sobj$seurat_clusters)) > 1) {
-                correlation_plot <- 
-                    AverageExpression(subset_sobj,
-                                    layer = "scale.data",
-                                    group.by = "seurat_clusters")$RNA %>%
-                        as.matrix() %>%
-                        cor() %>%
-                        pheatmap::pheatmap(display_numbers = TRUE,
-                                        silent = TRUE)
-
-            #save the correlation plot
+                # save the panel plot
                 ggsave(filename = str_c("output/figures/relustering_normals/",
-                                    group,
-                                    "/",
-                                    celltypes,
-                                    "_correlation.png"),
-                    plot = correlation_plot,
-                    width = 14,
-                    height = 14,
-                    bg = "white")
+                                            group,
+                                            "/",
+                                            celltypes,
+                                            ".png"),
+                            plot = panel_plot,
+                            width = 14,
+                            height = height,
+                            device = "png",
+                            bg = "white")
 
                 # qs save
-                qs::qsave(correlation_plot,
+                qs::qsave(panel_plot,
                         str_c("output/figures/relustering_normals/",
                                 group,
                                 "/",
                                 celltypes,
-                                "_correlation.qs"))
+                                ".qs"))
 
-            #make the panel plot for degs and GSEA
-                make_panel_plot(sobj = subset_sobj,
-                                cluster_column = "seurat_clusters",
-                                label = celltypes,
-                                group = group)
+                # correlation analysis
+                if (length(unique(subset_sobj$seurat_clusters)) > 1) {
+                    correlation_plot <- 
+                        AverageExpression(subset_sobj,
+                                        layer = "scale.data",
+                                        group.by = "seurat_clusters")$RNA %>%
+                            as.matrix() %>%
+                            cor() %>%
+                            pheatmap::pheatmap(display_numbers = TRUE,
+                                            silent = TRUE)
+
+                #save the correlation plot
+                    ggsave(filename = str_c("output/figures/relustering_normals/",
+                                        group,
+                                        "/",
+                                        celltypes,
+                                        "_correlation.png"),
+                        plot = correlation_plot,
+                        width = 14,
+                        height = 14,
+                        bg = "white")
+
+                    # qs save
+                    qs::qsave(correlation_plot,
+                            str_c("output/figures/relustering_normals/",
+                                    group,
+                                    "/",
+                                    celltypes,
+                                    "_correlation.qs"))
+
+                #make the panel plot for degs and GSEA
+                    make_panel_plot(sobj = subset_sobj,
+                                    cluster_column = "seurat_clusters",
+                                    label = celltypes,
+                                    group = group)
+                }
+            } else {
+                print(str_c("Not enough cells for harmony in ", celltypes, " in ", group))
             }
         } else {
             print(str_c(celltypes, " not in ", group))
         }
+    print(str_c("Finished ", group, " ", celltypes))
     }
 }
 

@@ -47,7 +47,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 
     #plot for the cancer normal cells, mouse do not have scatomic tumor call
     if ("scatomic_tumor_call" %in% colnames(object@meta.data)){
-        combinedplot1 <- 
+        combinedplot1 <-
             dimplot_better(object,
                            group_by = "scatomic_tumor_call") +
                 NoLegend() +
@@ -57,7 +57,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                             aes(x = as.factor(1), y = as.factor(1)) +
                             geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
     }
-    combineplot2 <- 
+    combineplot2 <-
         dimplot_better(object,
                        group_by = "scevan_tumor_call") +
             NoLegend() +
