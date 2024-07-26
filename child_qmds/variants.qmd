@@ -8,13 +8,13 @@ samples_to_run <-
     filter(species %in% c("patient", "mousemodel") &
            location != "cc_alltumor" &
            (tumor_type == "primary" |
-            (tumor_type == "metastatic" & location == "lung")) &
-           data_source != "NCI-POB") %>% # No bam files for these samples
+            (tumor_type == "metastatic" & location == "lung"))) %>% # No bam files for these samples
     filter(!sample_name %in% c("SJOS013768_D1", # drop samples with low reads
                                "SJOS016016_D1",
                                "SJOS030605_D1",
                                "SJOS030411_D1",
-                               "SJOS030605_D2"))
+                               "SJOS030605_D2")) %>%
+    filter(data_source == "NCI_POB")
 ```
 
 ## Run SNV calling on the pseudobulked clusters to try to ID tumor cells
@@ -24,7 +24,8 @@ file_loc_key <-
     list("X0" = "/home/gdrobertslab/lab/Counts_2/",
          "S0" = "/home/gdrobertslab/lab/Counts_2/",
          "SC" = "/home/gdrobertslab/lab/Counts_2/",
-         "SJ" = "/home/gdrobertslab/lab/ExternalData/Patel_lab/")
+         "SJ" = "/home/gdrobertslab/lab/ExternalData/Patel_lab/",
+         "CC" = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/BAMs/")
 
 ploidy_key <-
     list("human" = "GRCh38",
@@ -54,7 +55,11 @@ output <-
     message(sample_id)
 
     bam_file <- "possorted_genome_bam.bam"
+
     if (method == "single_nucleus" && data_source == "NCH") {
+        bam_file <- "gex_possorted_bam.bam"
+    }
+    if (data_source == "NCI_POB") {
         bam_file <- "gex_possorted_bam.bam"
     }
     message("loading data")
@@ -101,11 +106,19 @@ output <-
 
         s_obj <- FindClusters(s_obj, resolution = opt_res)
 
-        full_bam_file <-
-            paste0(file_loc,
+        if (data_source == "NCI_POB") {
+            full_bam_file <- 
+                paste0(file_loc,
                    sample_id,
-                   "/",
+                   "_",
                    bam_file)
+        } else {
+            full_bam_file <-
+                paste0(file_loc,
+                    sample_id,
+                    "/",
+                    bam_file)
+        }
 
         if (!file.exists(full_bam_file)) {
             return(

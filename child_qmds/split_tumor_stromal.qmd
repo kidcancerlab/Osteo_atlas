@@ -14,14 +14,30 @@ We will make these column names have the format "cancer_lable_{method_name}" so 
 #| echo: FALSE
 #| eval: FALSE
 
-###### We may want to use specific harmony parameters for tumor/stroma separation
-
 #parallel::mclapply(unique(all_samples_csv$unique), function(group)
 for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
     object <-
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
+
+    force_directed_layout <- 
+        run_fdl(sobject = object)
+
+    combined_fdl_plot <- 
+        dimplot_better(force_directed_layout,
+                       group_by= "new_annot_clust",
+                       reduction = "fdl") +
+            NoLegend()
+
+    ggsave(str_c("output/figures/combined_plots",
+                "/",
+                group,
+                "/",
+                "combined_fdl_plot.png"),
+            plot = combined_fdl_plot,
+            width = 10,
+            height = 10)
 
     # Pull in cancer cell annotation from all the methods we attempted and add them to the metadata
     for (method_used in c("SCEVAN", "scATOMIC", "celltype", "snv_calling")) {
@@ -126,7 +142,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         featureplot1_tumor <-
             FeaturePlot(object,
                         features = c("COL1A1", "COL1A2", "FBLN1",
-                                     "SATB2", "RUNX2", "ALPL"),
+                                     "SATB2", "RUNX2", "SOX9"),
                         ncol = 3)
         # Tcell=CD3E, Neutrophil=CD4, Macrophase=CD68,CD14, Bcells=MS4A1 or CD20, Endotthelial=ESAM, Epithelial=MUC1
         featureplot2_immune <-
@@ -139,7 +155,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         featureplot1_tumor <-
             FeaturePlot(object,
                         features = c("Col1a1", "Col1a2", "Fbln1",
-                                     "Satb2", "Runx2", "Alpl"),
+                                     "Satb2", "Runx2", "Sox9"),
                         ncol = 3) 
 
         featureplot2_immune <-
@@ -183,6 +199,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 
 ```{r}
 # Harmony parameters for the split
+
 harmony_params <-
     list(patient_prim = list(group_by = c("sample_name",
                                           "method",
@@ -225,19 +242,39 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                         ".qs"))
 
     if (any(c("S0200", "S0201") %in% object$sample_name)) {
-        object <- subset(object, sample_name != "S0200" & sample_name != "S0201")
+        object <- subset(object,
+                         sample_name != "S0200" & sample_name != "S0201")
     }
 
      for (cell_group_name in c("cancer_cells", "normal_cells")) {
         sub_group <- str_c(group, "_", cell_group_name)
-
-        s_obj <-
-            subset(x = object,
-                   celltype_tumor_call == cell_group_name) %>%
-            process_seurat() %>%
-            RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
-                       theta = harmony_params[[group]]$theta) %>%
-            process_seurat(reduction = "harmony")
+        #change the date
+        date <- "2024-07-26"
+        cancer_ids <- 
+            read_tsv(paste0("output/id_tumor/celltype/purified_tumor_IDs/",
+                            group,
+                            "_metadata_",
+                            date,
+                            ".tsv")) %>%
+            pull(cell)
+        if (cell_group_name == "cancer_cells") {
+            s_obj <- 
+                subset(object,
+                       cell = cancer_ids) %>%
+                process_seurat() %>%
+                RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
+                           theta = harmony_params[[group]]$theta) %>%
+                process_seurat(reduction = "harmony")
+        } else {
+            s_obj <-
+                subset(object,
+                       cell = cancer_ids,
+                       invert = TRUE) %>%
+                process_seurat() %>%
+                RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
+                           theta = harmony_params[[group]]$theta) %>%
+                process_seurat(reduction = "harmony")
+        }
 
         dimplot1 <- 
             dimplot_better(s_obj,
@@ -250,7 +287,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                         group_by = "new_annot_clust") +
                 NoLegend() +
                 theme(plot.title = element_text(size = 7))
-        
+
         dimplot3 <- 
             dimplot_better(s_obj,
                         group_by = "sample_name") +
@@ -295,7 +332,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         tumor_featureplot <- 
             FeaturePlot(s_obj,
                         features = c("COL1A1", "COL1A2", "FBLN1",
-                                     "SATB2", "RUNX2", "ALPL"),
+                                     "SATB2", "RUNX2", "SOX9"),
                         ncol = 3)
         immune_featureplot <- 
             FeaturePlot(s_obj,
@@ -306,7 +343,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         tumor_featureplot <- 
             FeaturePlot(s_obj,
                         features = c("Col1a1", "Col1a2", "Fbln1",
-                                     "Satb2", "Runx2", "Alpl"),
+                                     "Satb2", "Runx2", "Sox9"),
                         ncol = 3)
         immune_featureplot <-
             FeaturePlot(s_obj,
@@ -378,6 +415,24 @@ for (group in c("xeno_prim_human",
                         group,
                         ".qs"))
 
+    force_directed_layout <- 
+        run_fdl(sobject = object)
+
+    combined_fdl_plot <- 
+        dimplot_better(force_directed_layout,
+                       group_by= "new_annot_clust",
+                       reduction = "fdl") +
+            NoLegend()
+
+    ggsave(str_c("output/figures/combined_plots",
+                "/",
+                group,
+                "/",
+                "combined_fdl_plot.png"),
+            plot = combined_fdl_plot,
+            width = 10,
+            height = 10)
+
     dimplot1 <- 
         dimplot_better(object,
                 group_by = "seurat_clusters") +
@@ -432,7 +487,7 @@ for (group in c("xeno_prim_human",
         tumor_featureplot <- 
             FeaturePlot(object,
                         features = c("COL1A1", "COL1A2", "FBLN1",
-                                    "SATB2", "RUNX2", "ALPL"),
+                                    "SATB2", "RUNX2", "SOX9"),
                         ncol = 3)
         immune_featureplot <- 
             FeaturePlot(object,
@@ -443,7 +498,7 @@ for (group in c("xeno_prim_human",
         tumor_featureplot <- 
             FeaturePlot(object,
                         features = c("Col1a1", "Col1a2", "Fbln1",
-                                    "Satb2", "Runx2", "Alpl"),
+                                    "Satb2", "Runx2", "Sox9"),
                         ncol = 3) 
         immune_featureplot <- 
             FeaturePlot(object,

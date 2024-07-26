@@ -6,6 +6,12 @@ Recluster the normal cell types and annotate the types.
 
 object_list <-
     tribble(~group,                         ~res_value,
+            "patient_prim_cancer_cells",    0.1,
+            "patient_mets_cancer_cells",    0.1,
+            "mm_prim_cancer_cells",         0.3,
+            "mm_mets_cancer_cells",         0.3,
+            "xeno_prim_human",              0.2,
+            "xeno_mets_human",              0.1,
             "patient_prim_normal_cells",    0.15,
             "patient_mets_normal_cells",    0.05,
             "xeno_prim_mouse",              0.1,

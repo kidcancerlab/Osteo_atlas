@@ -19,8 +19,6 @@ annotation_type <- list(patient_prim = list("human", FALSE),
                         xeno_prim_mouse = list("mouse", FALSE),
                         xeno_mets_mouse = list("mouse_lung", FALSE),
                         normal_bone = list("human", FALSE))
-
-# for (group in unique(all_samples_csv$unique)){
 results <-
     parallel::mclapply(unique(all_samples_csv$unique),
                        mc.cores = parallelly::availableCores(),

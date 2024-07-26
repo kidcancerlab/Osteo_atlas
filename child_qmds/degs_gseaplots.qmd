@@ -62,7 +62,6 @@ for (i in seq_len(length(all_groups))) {
     qs::qsave(tree,
               str_c("output/figures/tumor_vs_stroma/clustree/", group, ".qs"))
 
-    clustrees[[group]] <- tree
 }
 ```
 
@@ -100,17 +99,19 @@ cat_tib <- dplyr::tribble(
     "H",        "NA",          "Hallmark_paths",
     "C2",      "CP:KEGG",      "KEGG",
     "C3",      "TFT:GTRD",     "Transcription_factor_targets",
-    "C6",       "NA",          "Oncogenic_signature")
+    "C6",       "NA",          "Oncogenic_signature",
+    "C5",       "GO:BP",          "Biological_processes",
+    "C2",       "CP:REACTOME", "Reactome")
 
 panel_plots <- list()
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.1,
+            "patient_prim_cancer_cells",    0.05,
+            "patient_mets_cancer_cells",    0.05,
             "mm_prim_cancer_cells",         0.3,
             "mm_mets_cancer_cells",         0.3,
-            "xeno_prim_human",              0.2,
+            "xeno_prim_human",              0.15,
             "xeno_mets_human",              0.1,
             "patient_prim_normal_cells",    0.15,
             "patient_mets_normal_cells",    0.05,
@@ -125,25 +126,47 @@ for (i in seq_len(nrow(object_list))) {
     res_value <- object_list$res_value[i]
 
     object <-
-        qs::qread(
-            str_c(
-                "output/seurat_objects/tumor_vs_stroma/",
-                group,
-                ".qs"
-            )
-        ) %>%
-        FindClusters(resolution = res_value)
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                        group,
+                        ".qs"))
 
-    make_panel_plot(object,
+    celltypes <-
+        table(object$annotations) %>%
+        subset(., . >= 50)
+
+    object <-
+        subset(object, annotations %in% names(celltypes)) %>%
+        FindClusters(resolution = res_value)
+    
+    dimplot_better(object, group_by = "annotations")
+
+    #run fdl
+    force_directed_layout <- 
+        run_fdl(sobject = object)
+
+    split_fdl_plot <- 
+        dimplot_better(force_directed_layout,
+                       group_by= "new_annot_clust",
+                       reduction = "fdl") +
+            NoLegend()
+
+    ggsave(str_c("output/figures/tumor_vs_stroma/",
+                group,
+                "/",
+                "fdl_plot.png"),
+            plot = split_fdl_plot,
+            width = 10,
+            height = 10)
+
+
+    make_panel_plot(sobj = object,
                     cluster_column = "seurat_clusters",
                     label = "seurat_clusters",
                     group = group)
 }
 
-
 # Save the celltypes excel out with seurat clusters and celltypes annotation info
 all_data_celltypes <- tibble()
-
 
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]

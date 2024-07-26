@@ -18,6 +18,7 @@ dimplot_better <- function(object,
             repel = T,
             shuffle = T,
             label.box = T,
+            #raster.dpi = c(500, 500),
             cols = c(plot_cols, sample(rainbow(1000))),
             ...) +
         coord_fixed()
@@ -29,10 +30,11 @@ Human normal lung reference data downloaded from
 Mouse lung reference data is from
 https://pubmed.ncbi.nlm.nih.gov/33692365/
 https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE151974
+https://www.synapse.org/Synapse:syn21560554
 We kept only the normoxic samples for the analysis
 ```{r celltype_annotation_data}
 #| cache.vars = c('human_lung_ref', 'mouse_lung_ref', 'human_tumor_cell', 'mouse_tumor_cell')
-human_lung_ref <- qs::qread("input/downloads/normal_lung.qs")
+human_lung_ref <- qs::qread("input/downloads/human_lung.qs")
 
 human_lung_ref$free_annotation <-
     str_replace_all(human_lung_ref$free_annotation, c("/" = "_",
@@ -54,11 +56,11 @@ human_lung_ref$free_annotation <-
           "^Natural Killer$" = "NK_cells",
           "^Natural Killer T$" = "NKT_cells",
           "^NK cells T$" = "NKT_cells",
-          "^CD4_plus Memory/Effector T$" = "CD4T_Memory",
-          "^CD4_plus Naive T$" = "CD4_Naive",
-          "^CD8_plus Memory_Effector T$" = "CD8T_Memory",
-          "^CD4_plus Memory_Effector T$" = "CD4T_Memory",
-          "^CD8_plus Naive T$" = "CD8T_Naive",
+          "^CD4_plus Memory/Effector T$" = "CD4_plus_MemoryT",
+          "^CD4_plus Naive T$" = "CD4_plus_NaiveT",
+          "^CD8_plus Memory_Effector T$" = "CD8_plus_MemoryT",
+          "^CD4_plus Memory_Effector T$" = "CD4_plus_MemoryT",
+          "^CD8_plus Naive T$" = "CD8_plus_NaiveT",
           "^Proliferating NK_T$" = "Prolif_NKT",
           "^TREM2_plus Dendritic$" = "TREM2_plus_Dendritic_cells",
           "^Proliferating Macrophage$" = "Prolif_Macrophages",
@@ -71,11 +73,11 @@ human_lung_ref$free_annotation <-
           "^Alveolar Fibroblast$" = "Alveolar_Fibroblasts",
           "^Capillary Aerocyte$" = "Capillary_Aerocytes",
           "^Plasmacytoid Dendritic$" = "Plasmacytoid_Dendritic_cells",
-          "^Signalling Alveolar Epithelial$" = "Epithelial_cells",
-          "^Adventitial Fibroblast$" = "Fibroblasts",
+          "^Signalling Alveolar Epithelial$" = "Signalling_AlvEpithelial_cells",
+          "^Adventitial Fibroblast$" = "Adventitial_Fibroblasts",
           "^Signaling Alveolar_Epithelial$" = "Signalling_AlvEpithelial",
           "^Macrophage$" = "Macrophages",
-          "^Differentiating Basal$" = "Differ_Basal",
+          "^Differentiating Basal$" = "Differentiating_Basal",
           "^Airway Smooth Muscle$" = "Airway_SMC",
           "^Proximal Ciliated$" = "Proximal_Ciliated",
           "^Myofibroblast$" = "Myofibroblasts",
@@ -88,7 +90,11 @@ human_lung_ref$free_annotation <-
           "^Lymphatic$" = "Lymphatic_cells",
           "^Mucous$" = "Mucous_cells",
           "^Tcells$" = "T_cells",
-          "^Capillary$" = "Capillary_cells"))
+          "^Capillary$" = "Capillary_cells",
+          "^Capillary Intermediate 1$" = "Capillary_Intermediate1",
+          "^Capillary Intermediate 2$" = "Capillary_Intermediate2",
+          "^Intermediate Monocyte$" = "Intermediate_Monocytes",
+          "^EREG_plus Dendritic$" = "EREG_plus_Dendritic_cells"))
 
 # #load in the human tumor cell from xenograft primary fro documentation
 # sobj <- qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs") %>%
@@ -115,23 +121,23 @@ mouse_lung_ref$CellType <-
 
 mouse_lung_ref$CellType <-
     str_replace_all(mouse_lung_ref$CellType,
-                    c("^Col14a1_plus fibroblast$" = "Fibroblasts",
-                      "^Col13a1_plus fibroblast$" = "Fibroblasts",
+                    c("^Col14a1_plus fibroblast$" = "Col14a1_Fibroblasts",
+                      "^Col13a1_plus fibroblast$" = "Col13a1_Fibroblasts",
                       "^AT1$" = "AlvEpithelial_T1",
                       "^AT2 1$" = "AlvEpithelial_T2",
                       "^AT2 2$" = "AlvEpithelial_T2",
                       "^B cells$" = "B_cells",
                       "^Cap_a$" = "Capillary_Aerocytes", #capillary endothelial
-                      "^CD4$" = "CD4T_cells1",
-                      "^CD4 T cell 2$" = "CD4T_cells2",
-                      "^CD8$" = "CD8T_cells1",
-                      "^CD8 T cell 2$" = "CD8T_cells2",
+                      "^CD4$" = "CD4T_cells",
+                      "^CD4 T cell 2$" = "CD4T_cells",
+                      "^CD8$" = "CD8T_cells",
+                      "^CD8 T cell 2$" = "CD8T_cells",
                       "^DC1$" = "Dendritic_cells1",
                       "^DC2$" = "Dendritic_cells2",
                       "^gd T cell$" = "Tgd_cells",
                       "^Tgd$" = "Tgd_cells",
-                      "^Neut 1$" = "Neutrophils1",
-                      "^Neut 2$" = "Neutrophils2",
+                      "^Neut 1$" = "Neutrophils",
+                      "^Neut 2$" = "Neutrophils",
                       "^NK cells$" = "NK_cells",
                       "^Pericyte 1$" = "Pericyte1",
                       "^Pericyte 2$" = "Pericyte12",
@@ -140,24 +146,23 @@ mouse_lung_ref$CellType <-
                       "^Alv Mf$" = "Alv_Macrophages",
                       "^Int Mf$" = "Int_Macrophages",
                       "^B cells$" = "B_cells",
-                      "^AT$" = "Epithelial_cells",
+                      "^AT$" = "AlvEpithelial_cells",
                       "^Endothelial cells$" = "Endothelial_cells",
                       "^SMC$" = "Mural_cells",
                       "^ILC2$" = "Lymphoid_cells",
                       "^Dendritic cells$" = "Dendritic_cells",
-                      "^AT$" = "EAlvEpithelial",
                       "^Cap$" = "Capillary_cells",
                       "^Lymph$" = "Lymph_cells",
                       "^Art$" = "Artery_cells",
                       "^Vein$" = "Vein_cells",
                       "^Myofibroblast$" = "Myo_Fibroblasts",
                       "^Club$" = "Club_cells",
-                        "^Ionocyte$" = "Ionocyte",
-                        "^Ciliated$" = "Ciliated_cells",
-                        "^Pericytes$" = "Pericyte",
-                        "^Mesothelial$" = "Mesothelial_cells",
-                        "^Capillary$" = "Capillary_cells",
-                        "^Mast_Basophils$" = "Basophil_Mast"))
+                    "^Ionocyte$" = "Ionocyte",
+                    "^Ciliated$" = "Ciliated_cells",
+                    "^Pericytes$" = "Pericyte",
+                    "^Mesothelial$" = "Mesothelial_cells",
+                    "^Capillary$" = "Capillary_cells",
+                    "^Mast_Basophils$" = "Basophil_Mast"))
 
 # #make a reference for all tumor cells, using cell culture data documantation
 # mouse_tumor_cell <-
@@ -371,7 +376,7 @@ run_degs <- function(sobject,
     # run deseq2
     #for (cluster_no in unique(object$seurat_clusters)) {
     degs_output <-
-        parallel::mclapply(unique(sobject$seurat_clusters),
+        parallel::mclapply(sort(unique(sobject$seurat_clusters)),
                            mc.cores = parallelly::availableCores(),
                            mc.preschedule = FALSE,
                            function(cluster_no) {
@@ -433,7 +438,7 @@ run_degs <- function(sobject,
         )
     })
     # subset and name the degs_output by the group_by variables
-    names(degs_output) <- unique(sobject$seurat_clusters)
+    names(degs_output) <- sort(unique(sobject$seurat_clusters))
 
     return(degs_output)
 }
@@ -648,15 +653,6 @@ circle_plot <- function(sobj,
 
     ############### Use hclust to group genes and clusters
     # Calculate the distance matrix
-    cluster_tree <-
-        avg_expr %>%
-        pivot_wider(
-            names_from = gene,
-            values_from = expression
-        ) %>%
-        column_to_rownames("cluster") %>%
-        dist() %>%
-        hclust()
 
     gene_tree <-
         avg_expr %>%
@@ -669,8 +665,7 @@ circle_plot <- function(sobj,
         hclust()
 
     left_join(avg_expr, perc_expressed, by = c("gene", "cluster")) %>%
-        mutate(cluster = factor(cluster, levels = cluster_tree$label[cluster_tree$order]),
-               gene = factor(gene, levels = gene_tree$label[gene_tree$order])) %>%
+        mutate(gene = factor(gene, levels = gene_tree$label[gene_tree$order])) %>%
         ggplot(
             aes(
                 x = cluster,
@@ -703,7 +698,9 @@ cat_tib <- dplyr::tribble(
     "H",        "NA",          "Hallmark_paths",
     "C2",      "CP:KEGG",      "KEGG",
     "C3",      "TFT:GTRD",     "Transcription_factor_targets",
-    "C6",       "NA",          "Oncogenic_signature")
+    "C6",       "NA",          "Oncogenic_signature",
+    "C5",       "GO:BP",          "Biological_processes",
+    "C2",       "CP:REACTOME", "Reactome")
 
 make_panel_plot <- function(sobj, cluster_column, label, group) {
     volc_plots <- list()
@@ -769,6 +766,15 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
             scale_color_manual(values = c(plot_cols[1], "grey", plot_cols[2]),
                                name = "") +
             geom_text_repel(aes(label = gene))
+        
+        # save the volcano plot
+        ggsave(
+            paste0("output/figures/degs/", group, "/",
+                   cluster_name, "_volcano_plot.png"),
+            width = 15,
+            height = 15,
+            plot = volc_plots[[cluster_name]]
+        )
     }
 
     marker_genes <-
@@ -895,8 +901,10 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
                 display_numbers = TRUE,
                 silent = TRUE,
                 main = paste0(cat_expl),
-                fontsize_row = 5,
-                fontsize_number = 5
+                fontsize_row = 7,
+                fontsize_number = 7,
+                cluster_cols = FALSE,
+                cluster_rows = FALSE
             )
     }
 
@@ -910,12 +918,14 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
             ggplotify::as.ggplot(heatmap_plots$KEGG),
             ggplotify::as.ggplot(heatmap_plots$Oncogenic_signature),
             ggplotify::as.ggplot(heatmap_plots$Transcription_factor_targets),
+            ggplotify::as.ggplot(heatmap_plots$Biological_processes),
+            ggplotify::as.ggplot(heatmap_plots$Reactome),
             ncol = 2) +
         patchwork::plot_annotation(title = label)
     ggsave(
         paste0("output/figures/gsea/", group, "/", label, "_six_panels.png"),
         width = 30,
-        height = 50,
+        height = 70,
         limitsize = FALSE,
         plot = panel_plots[[label]])
 

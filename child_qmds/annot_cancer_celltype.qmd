@@ -16,11 +16,7 @@ cancer_celltypes <- list(patient_prim = c("MSC",
                                          "Tissue_stem_cells",
                                          "Osteoblasts",
                                          "Neurons",
-                                         "iPS_cells",
-                                         "Myofibroblasts",
-                                         "Alveolar_Fibroblasts",
-                                         "Fibroblasts",
-                                         "Smooth_muscle_cells"),
+                                         "iPS_cells"),
                         xeno_prim_human = c(),
                         xeno_mets_human = c(),
                         xeno_prim_mouse = c(),
@@ -29,13 +25,14 @@ cancer_celltypes <- list(patient_prim = c("MSC",
                         mm_prim = c("Tumor_cells"),
                         mm_mets = c("Tumor_cells"))
 
+
 #parallel::mclapply(unique(all_samples_csv$unique), function(group)
 for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
     object <-
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
-
+    #dimplot_better(object, group_by = "celltype_tumor_call")
     Idents(object) <-
         object$new_annot_clust
 
@@ -55,8 +52,329 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         select(cell, cancer_normal, celltype_tumor_call) %>%
         write_tsv(paste0("output/id_tumor/celltype/",
                          group,
-                         "_metadata.tsv"))
+                         "_metadata_", Sys.Date(), ".tsv"))
+
+    object@meta.data %>%
+        as.data.frame() %>%
+        rownames_to_column("cell") %>%
+        select(cell, cancer_normal, celltype_tumor_call) %>%
+        subset(celltype_tumor_call == "cancer_cells") %>%
+        write_tsv(paste0("output/id_tumor/celltype/tumor_IDs/",
+                 group,
+                 "_metadata_", Sys.Date(), ".tsv"))
 }
 
 
+```
+
+```{r}
+annotations_cell_list <-
+    list(patient_prim = c("Dendritic_cells",
+                          "Endothelial_cells",
+                          "Fibroblasts",
+                          "Macrophages",
+                          "T_cells"),
+        patient_mets = c("Adventitial_Fibroblasts",
+                         "Airway_SMC",
+                         "Alveolar_Fibroblasts",
+                         "Artery_cells",
+                         "Bronchial_Vessel1",
+                         "Endothelial_cells",
+                         "EREG_plus Dendritic",
+                         "Fibroblasts",
+                         "IGSF21_plus_Dendritic_cells",
+                         "Ionocyte",
+                         "Lipofibroblast",
+                         "Lymphatic_cells",
+                         "Mesothelial",
+                         "Pericyte",
+                         "Proximal_Ciliated",
+                         "Vascular_SMC",
+                         "Vein_cells"),
+        xeno_prim_human = c(),
+        xeno_mets_human = c(),
+        xeno_prim_mouse = c(),
+        xeno_mets_mouse = c(),
+        normal_bone = c(),
+        mm_prim = c("Fibroblasts",
+                    "Macrophages"),
+        mm_mets = c("Fibroblasts",
+                    "Int_Macrophages"))
+
+for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        group,
+                        ".qs"))
+    #dimplot_better(object, group_by = "annotations")
+    contaminated_tumor_ids <-
+        read_tsv(paste0("output/id_tumor/celltype/tumor_IDs/",
+                 group,
+                 "_metadata_", Sys.Date(), ".tsv"))
+
+    contaminated_tumor <- 
+        subset(object,
+               cell = contaminated_tumor_ids$cell)
+
+    celltypes_for_subset <-
+        table(contaminated_tumor$annotations) %>%
+        subset(., . >= 50)
+
+    less_contaminated_tumor <-
+        subset(contaminated_tumor, annotations %in% names(celltypes_for_subset))
+
+    Idents(less_contaminated_tumor) <- less_contaminated_tumor$annotations
+
+    subset_normals <- 
+        subset(less_contaminated_tumor,
+               ident = annotations_cell_list[[group]])
+
+    contaminated_dimplot <- 
+        dimplot_better(subset_normals, group_by = "annotations")
+
+    ggsave(paste0("output/figures/combined_plots/",
+                  group, "/",
+                  "normals_contaminated_in_cancer_dimplot.png"),
+            plot = contaminated_dimplot,
+            width = 10,
+            height = 10)
+
+    not_contaminated_tumor <- 
+        subset(less_contaminated_tumor,
+               ident = annotations_cell_list[[group]],
+               invert = TRUE)
+    
+    not_contaminated_tumor$celltype_tumor_call <- "cancer_cells"
+
+    not_contaminated_dimplot <-
+        dimplot_better(not_contaminated_tumor, group_by = "annotations")
+
+    ggsave(paste0("output/figures/combined_plots/",
+                  group, "/",
+                  "not_contaminated_tumor_dimplot.png"),
+            plot = not_contaminated_dimplot,
+            width = 10,
+            height = 10)
+
+    # save purified tumor ids
+    not_contaminated_tumor@meta.data %>%
+        as.data.frame() %>%
+        rownames_to_column("cell") %>%
+        write_tsv(paste0("output/id_tumor/celltype/purified_tumor_ids/",
+                 group,
+                 "_metadata_purified_", Sys.Date(), ".tsv"))
+
+    #this is where I grab for plots
+    not_contaminated_tumor@meta.data %>%
+        as.data.frame() %>%
+        rownames_to_column("cell") %>%
+        write_tsv(paste0("output/id_tumor/celltype/purified_tumor_ids/",
+                 group,
+                 "_metadata",
+                 ".tsv"))
+
+    # rename the matdata celltype tumor call with the non-contaminated tumor ids
+    object$celltype_tumor_call <-
+        if_else(colnames(object) %in% colnames(not_contaminated_tumor),
+                "cancer_cells",
+                "normal_cells")
+
+    #this is where I grab for plots
+    object@meta.data %>%
+        as.data.frame() %>%
+        rownames_to_column("cell") %>%
+        select(cell, celltype_tumor_call) %>%
+        write_tsv(paste0("output/id_tumor/celltype/",
+                 group,
+                 "_metadata",
+                 ".tsv"))
+}
+
+```
+
+
+
+
+
+```{r}
+library(monocle3)
+for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        group,
+                        ".qs"))
+
+    # object of cell dataset class from seurat
+    cds_obj <-
+        SeuratWrappers::as.cell_data_set(object)
+    
+    #add the gene_short_name column
+    fData(cds_obj)$gene_short_name <- rownames(fData(cds_obj))
+    
+    # Need to add paritition 
+    recreate_partition <- c(rep(1, length(cds_obj@colData@rownames)))
+    names(recreate_partition) <- cds_obj@colData@rownames
+    recreate_partition <- as.factor(recreate_partition)
+    cds_obj@clusters$UMAP$partitions <- recreate_partition
+
+    # assign the cluster info
+    list_cluster <- object@active.ident
+    cds_obj@clusters$UMAP$clusters <- list_cluster
+
+    # assign the umap corodinates cell embeddings
+    cds_obj@int_colData@listData$reducedDims$UMAP <-
+        object@reductions$umap@cell.embeddings
+    cds_obj@int_colData@listData$reducedDims$HARMONY <-
+        object@reductions$harmony@cell.embeddings
+
+    # plot cell
+    cluster_before_trajectory <-
+        plot_cells(cds_obj,
+                   x = 1,
+                   y = 2,
+                   reduction_method = "UMAP",
+                    color_cells_by = "cluster",
+                    label_groups_by_cluster = "FALSE",
+                    group_label_size = 5) +
+            theme(legend.position = "right")
+
+    plot_cells(cds_obj,
+               color_cells_by = "redefined_cluster",
+               label_groups_by_cluster = "FALSE",
+               group_label_size = 5) +
+        theme(legend.position = "right")
+}
+
+
+library(SeuratWrappers)
+b.seu <- object
+
+cds <- SeuratWrappers::as.cell_data_set(b.seu)
+
+# since it misses the gene_short_name column, let's add it
+fData(cds)$gene_short_name <- rownames(fData(cds))
+
+# ...2. Cluster cells (using clustering info from seurat's UMAP)---------------------------
+# let's use the clustering information have
+
+# assign paritions
+reacreate.partition <- c(rep(1,length(cds@colData@rownames)))
+names(reacreate.partition) <- cds@colData@rownames
+reacreate.partition <- as.factor(reacreate.partition)
+
+
+cds@clusters$UMAP$partitions <- reacreate.partition
+
+# Assign the cluster info 
+
+list_cluster <- b.seu@active.ident
+cds@clusters$UMAP$clusters <- list_cluster
+
+
+# Assign UMAP coordinate - cell embeddings
+
+cds@int_colData@listData$reducedDims$UMAP <- b.seu@reductions$umap@cell.embeddings
+
+
+
+# plot
+
+cluster.before.trajectory <- plot_cells(cds,
+           color_cells_by = 'cluster',
+           label_groups_by_cluster = FALSE,
+           group_label_size = 5) +
+  theme(legend.position = "right")
+
+cluster.names <- plot_cells(cds,
+           color_cells_by = "redefined_cluster",
+           label_groups_by_cluster = FALSE,
+           group_label_size = 5) +
+  scale_color_manual(values = c('red', 'blue', 'green', 'maroon', 'yellow', 'grey', 'cyan')) +
+  theme(legend.position = "right")
+
+cluster.before.trajectory | cluster.names
+
+
+
+# ...3. Learn trajectory graph ------------------------
+cds <- learn_graph(cds, use_partition = FALSE)
+
+plot_cells(cds,
+           color_cells_by = 'redefined_cluster',
+           label_groups_by_cluster = FALSE,
+           label_branch_points = FALSE,
+           label_roots = FALSE,
+           label_leaves = FALSE,
+           group_label_size = 5)
+
+
+# ...4. Order the cells in pseudotime -------------------
+
+cds <- order_cells(cds, reduction_method = 'UMAP', root_cells = colnames(cds[,clusters(cds) == 5]))
+
+plot_cells(cds,
+           color_cells_by = 'pseudotime',
+           label_groups_by_cluster = FALSE,
+           label_branch_points = FALSE,
+           label_roots = FALSE,
+           label_leaves = FALSE)
+
+# cells ordered by monocle3 pseudotime
+
+pseudotime(cds)
+cds$monocle3_pseudotime <- pseudotime(cds)
+data.pseudo <- as.data.frame(colData(cds))
+
+ggplot(data.pseudo, aes(monocle3_pseudotime, reorder(redefined_cluster, monocle3_pseudotime, median), fill = redefined_cluster)) +
+  geom_boxplot()
+
+
+
+
+# ...5. Finding genes that change as a function of pseudotime --------------------
+deg_bcells <- graph_test(cds, neighbor_graph = 'principal_graph', cores = 4)
+
+deg_bcells %>% 
+  arrange(q_value) %>% 
+  filter(status == 'OK') %>% 
+  head()
+
+FeaturePlot(b.seu, features = c('E2F2', 'STMN1', 'CD52'))
+
+
+# visualizing pseudotime in seurat
+
+b.seu$pseudotime <- pseudotime(cds)
+Idents(b.seu) <- b.seu$redefined_cluster
+FeaturePlot(b.seu, features = "pseudotime", label = T)
+
+
+
+
+
+
+library(DDRTree)
+
+get_ddr <- function(harmony_Z, ndim=2) {
+    ncells <- nrow(harmony_Z)
+    ncenter <- round(2 * 100 * log(ncells) / (log(ncells) + log(100)))
+    ddr_args <- c(list(
+        X = harmony_Z, 
+        dimensions = ndim, ## LOW DIMENSIONALITY
+        ncenter = ncenter, 
+        verbose = FALSE))
+    ddrtree_res <- do.call(DDRTree, ddr_args)
+    ddrtree_res$Z <- t(ddrtree_res$Z)
+    row.names(ddrtree_res$Z) <- row.names(harmony_Z)
+    colnames(ddrtree_res$Z) <- colnames(harmony_Z)
+    return(ddrtree_res$Z)
+}
+
+
+#read this 
+https://github.com/immunogenomics/harmony/issues/74
+
+cell_by_PC_matrix <- 
+
+get_ddr(harmony_Z = object@assays$RNA$counts)
 ```
