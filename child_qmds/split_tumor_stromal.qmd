@@ -67,7 +67,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
             theme(plot.title = element_text(size = 7))
     combineplot4 <- 
         dimplot_better(object,
-                       group_by = "celltype_tumor_call") +
+                       group_by = "purified_tumorcall") +
             NoLegend() +
             theme(plot.title = element_text(size = 7))
     combineplot5 <- 
@@ -230,38 +230,13 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 
      for (cell_group_name in c("cancer_cells", "normal_cells")) {
         sub_group <- str_c(group, "_", cell_group_name)
-        ##change the date
-        # date <- "2024-07-26"
-        # cancer_ids <- 
-        #     read_tsv(paste0("output/id_tumor/celltype/purified_tumor_ids/",
-        #                     group,
-        #                     "_metadata_purified_",
-        #                     date,
-        #                     ".tsv")) %>%
-        #     pull(cell)
-        # if (cell_group_name == "cancer_cells") {
-        #     s_obj <- 
-        #         subset(object,
-        #                cell = cancer_ids) %>%
-        #         process_seurat() %>%
-        #         RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
-        #                    theta = harmony_params[[group]]$theta) %>%
-        #         process_seurat(reduction = "harmony")
-        # } else {
-        #     s_obj <-
-        #         subset(object,
-        #                cell = cancer_ids,
-        #                invert = TRUE) %>%
-        #         process_seurat() %>%
-        #         RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
-        #                    theta = harmony_params[[group]]$theta) %>%
-        #         process_seurat(reduction = "harmony")
-        # }
+
          s_obj <-
             subset(x = object,
-                   celltype_tumor_call == cell_group_name) %>%
+                   purified_tumorcall == cell_group_name) %>%
             process_seurat() %>%
-            RunHarmony(group.by.vars = harmony_params[[group]]$group_by) %>%
+            RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
+                       theta = harmony_params[[group]]$theta) %>%
             process_seurat(reduction = "harmony")
 
         dimplot1 <- 
@@ -281,7 +256,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                         group_by = "sample_name") +
                 NoLegend() +
                 theme(plot.title = element_text(size = 7))
-        
+
         dimplot4 <- 
             dimplot_better(s_obj,
                         group_by = "data_source") +
