@@ -94,7 +94,11 @@ human_lung_ref$free_annotation <-
           "^Capillary Intermediate 1$" = "Capillary_Intermediate1",
           "^Capillary Intermediate 2$" = "Capillary_Intermediate2",
           "^Intermediate Monocyte$" = "Intermediate_Monocytes",
-          "^EREG_plus Dendritic$" = "EREG_plus_Dendritic_cells"))
+          "^EREG_plus Dendritic$" = "EREG_plus_Dendritic_cells",
+          "^OLR1_plus Classical Monocyte$" = "OLR1_plus_Classical_Monocytes"))
+
+human_lung_ref$free_annotation <-
+    str_replace_all(human_lung_ref$free_annotation, c(" " = "_"))
 
 # #load in the human tumor cell from xenograft primary fro documentation
 # sobj <- qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs") %>%

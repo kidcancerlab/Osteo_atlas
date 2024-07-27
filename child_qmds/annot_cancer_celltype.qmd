@@ -1,3 +1,6 @@
+This will annotate celltypes for tumor and normal call
+
+## Annotate cells for cancer and normal by celltype call
 ```{r annot_cancer_celltypes}
 #| fig.width: 10
 #| fig.height: 10
@@ -10,7 +13,9 @@ cancer_celltypes <- list(patient_prim = c("MSC",
                                           "Chondrocytes",
                                           "Tissue_stem_cells",
                                           "Neurons",
-                                          "Osteoblasts"),
+                                          "Osteoblasts",
+                                          "Smooth_muscle_cells",
+                                          "Neuroepithelial_cell"),
                         patient_mets = c("MSC",
                                          "Chondrocytes",
                                          "Tissue_stem_cells",
@@ -32,7 +37,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
-    #dimplot_better(object, group_by = "celltype_tumor_call")
+    #dimplot_better(object, group_by = "annotations")
     Idents(object) <-
         object$new_annot_clust
 
@@ -67,28 +72,77 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 
 ```
 
-```{r}
+### purify cell annotations
+```{r remove_contaminated_cells}
 annotations_cell_list <-
-    list(patient_prim = c("Dendritic_cells",
+    list(patient_prim = c("B_cells",
+                          "Basophil_Mast",
+                          "CD34_plusB_cells",
+                          "CD4T_cells",
+                          "CD8T_cells",
+                          "Dendritic_cells",
                           "Endothelial_cells",
+                          "Epithelial_cells",
                           "Fibroblasts",
                           "Macrophages",
+                          "Monocytes",
+                          "Neutrophils",
                           "T_cells"),
         patient_mets = c("Adventitial_Fibroblasts",
                          "Airway_SMC",
                          "Alveolar_Fibroblasts",
+                         "AlvEpithelial_T1",
+                         "AlvEpithelial_T2",
                          "Artery_cells",
+                         "B_cells",
+                         "Basal",
+                         "Basophil_Mast1",
+                         "Basophil_Mast2",
                          "Bronchial_Vessel1",
+                         "Capillary_Aerocytes",
+                         "Capillary_cells",
+                         "Capillary_Intermediate1",
+                         "CD4_plus_MemoryT",
+                         "CD4_plus_NaiveT",
+                         "CD4T_cells",
+                         "CD8_plus_MemoryT",
+                         "Ciliated_cells",
+                         "Classical_Monocytes",
+                         "Club_cells",
+                         "Dendritic_cells",
+                         "Differentiating_Basal",
                          "Endothelial_cells",
                          "EREG_plus Dendritic",
                          "Fibroblasts",
+                         "Fibromyocyte",
                          "IGSF21_plus_Dendritic_cells",
                          "Ionocyte",
+                         "Intermediate_Monocytes",
                          "Lipofibroblast",
                          "Lymphatic_cells",
                          "Mesothelial",
+                         "Macrophages",
+                         "Monocytes",
+                         "Myeloid_Dendritic1",
+                         "Myeloid_Dendritic2",
+                         "Myofibroblasts",
+                         "Neutrophils",
+                         "NK_cells",
+                         "NonClassical_Monocytes",
+                         "OLR1_plus Classical Monocyte",
+                         "Plasma_Bcells",
+                         "Plasmacytoid_Dendritic_cells",
                          "Pericyte",
+                         "Platelet_Megakaryocyte",
+                         "Prolif_Basal",
+                         "Prolif_NKT",
+                         "Proximal Basal",
+                         "Serous",
+                         "Signalling_AlvEpithelial",
+                         "Prolif_Macrophages",
                          "Proximal_Ciliated",
+                         "T_cells",
+                         "TREM2_plus_Dendritic_cells",
                          "Vascular_SMC",
                          "Vein_cells"),
         xeno_prim_human = c(),
@@ -193,8 +247,38 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 ```
 
 
+### Force Directed Layout
+```{r fdl_large_objects}
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "xeno_prim_human", "xeno_mets_human",
+                "xeno_prim_mouse", "xeno_mets_mouse")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        group,
+                        ".qs"))
 
+# i feel like the time variable is notworking in srun
+    force_directed_layout <- 
+        run_fdl(sobject = object)
 
+    combined_fdl_plot <- 
+        dimplot_better(force_directed_layout,
+                       group_by= "new_annot_clust",
+                       reduction = "fdl") +
+            NoLegend()
+
+    ggsave(str_c("output/figures/combined_plots",
+                "/",
+                group,
+                "/",
+                "combined_fdl_plot.png"),
+            plot = combined_fdl_plot,
+            width = 10,
+            height = 10)
+}
+
+```
 
 ```{r}
 library(monocle3)
