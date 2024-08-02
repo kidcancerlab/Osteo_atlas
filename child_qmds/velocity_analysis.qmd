@@ -1,0 +1,75 @@
+We are interested in how cell types and states in each sample change are evolving based on splicing dynamics. For this purpose will perform velocity analysis.
+
+## Get .bam Files for Velocity Analysis
+
+Since we have external data for this project not all .bam files are in the same location. As a result, we will have to conditionally create bam paths.
+
+```{r get-bam-paths}
+#load in objects
+obj_names <- list.files("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/tumor_vs_stroma/")
+
+#making a list of bam paths, where each entry corresponds to an object and is a
+#vector of all bams associated with that object
+
+bam_list <- list()
+obj_list <- list()
+
+for (obj in obj_names) {
+    tmp_ob <-
+        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/tumor_vs_stroma/", obj)) #nolint
+
+    #strip .qs from end of name
+    obj <- gsub(".qs", "", obj)
+
+    obj_list[[obj]] <- tmp_ob
+
+    #get table of sample_names and the data source
+    s_ids <- table("sample_name" = tmp_ob$sample_name,
+                   "data_source" = tmp_ob$data_source) %>%
+        as.data.frame() %>%
+        subset(., Freq > 0) %>%
+        select(1:2)
+
+    ext_data_path <- "/home/gdrobertslab/lab/ExternalData/"
+
+    bams <-
+        ifelse(
+               s_ids$data_source %in% c("NCH", "GEO"),
+               paste0("/home/gdrobertslab/lab/Counts_2/",
+                      s_ids$sample_name,
+                      "/possorted_genome_bam.bam"),
+               ifelse(
+                      s_ids$data_source == "NCI_POB",
+                      paste0(ext_data_path,
+                             "McEachron_lab/BAMs/",
+                             s_ids$sample_name,
+                             "_gex_possorted_bam.bam"),
+                      paste0(ext_data_path,
+                             "Patel_lab/",
+                             s_ids$sample_name,
+                             "/possorted_genome_bam.bam")
+                             )
+                             )
+    
+    #fix paths for atac runs since bams have gex_ before possorted
+    bams <- ifelse(file.exists(bams),
+           bams,
+           gsub("possorted_genome", "gex_possorted", bams))
+
+    bam_list[[obj]] <- bams
+}
+
+lapply(bam_list, file.exists)
+```
+
+
+
+## Make Loom Files
+
+Now that we have our bams associated with each object we can make our loom files.
+
+```{r make-loom-files}
+lapply(obj_list,
+       r_make_loom_files,
+       )
+```
