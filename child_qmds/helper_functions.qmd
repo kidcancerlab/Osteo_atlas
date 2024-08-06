@@ -700,10 +700,10 @@ circle_plot <- function(sobj,
 cat_tib <- dplyr::tribble(
     ~category, ~subcategory,   ~cat_expl,
     "H",        "NA",          "Hallmark_paths",
-    "C2",      "CP:KEGG",      "KEGG",
-    "C3",      "TFT:GTRD",     "Transcription_factor_targets",
+    "C2",       "CP:KEGG",     "KEGG",
+    "C3",       "TFT:GTRD",    "Transcription_factor_targets",
     "C6",       "NA",          "Oncogenic_signature",
-    "C5",       "GO:BP",          "Biological_processes",
+    "C5",       "GO:BP",       "Biological_processes",
     "C2",       "CP:REACTOME", "Reactome")
 
 make_panel_plot <- function(sobj, cluster_column, label, group) {
@@ -871,45 +871,52 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
             pull(pathway) %>%
             unique()
 
-        max_abs_nes <-
-            gsea_result %>%
-            bind_rows() %>%
-            pull(NES) %>%
-            max() %>%
-            ceiling()
+        if (length(use_pathways) == 0) {
+            heatmap_plots[[cat_expl]] <-
+                ggplot(data = NULL) +
+                aes(x = as.factor(1), y = as.factor(1)) +
+                geom_text(aes(label = "No significant pathways"))
+        } else {
+            max_abs_nes <-
+                gsea_result %>%
+                bind_rows() %>%
+                pull(NES) %>%
+                max() %>%
+                ceiling()
 
-        breaks_use <-
-            seq(-max_abs_nes, max_abs_nes, length.out = 101)
+            breaks_use <-
+                seq(-max_abs_nes, max_abs_nes, length.out = 101)
 
-        heatmap_plots[[cat_expl]] <-
-            gsea_result %>%
-            bind_rows() %>%
-            filter(pathway %in% use_pathways) %>%
-            select(
-                -padj,
-                -log2err,
-                -ES,
-                -size,
-                -leadingEdge,
-                -pval,
-                -pathway_group) %>%
-            pivot_wider(
-                names_from = cluster,
-                values_from = NES,
-                values_fill = 0
-            ) %>%
-            column_to_rownames("pathway") %>%
-            pheatmap::pheatmap(
-                color = colors_use,
-                breaks = breaks_use,
-                display_numbers = TRUE,
-                silent = TRUE,
-                main = paste0(cat_expl),
-                fontsize_row = 7,
-                fontsize_number = 7,
-                cluster_cols = FALSE,
-                cluster_rows = FALSE
-            )
+            heatmap_plots[[cat_expl]] <-
+                gsea_result %>%
+                bind_rows() %>%
+                filter(pathway %in% use_pathways) %>%
+                select(
+                    -padj,
+                    -log2err,
+                    -ES,
+                    -size,
+                    -leadingEdge,
+                    -pval,
+                    -pathway_group) %>%
+                pivot_wider(
+                    names_from = cluster,
+                    values_from = NES,
+                    values_fill = 0
+                ) %>%
+                column_to_rownames("pathway") %>%
+                pheatmap::pheatmap(
+                    color = colors_use,
+                    breaks = breaks_use,
+                    display_numbers = TRUE,
+                    silent = TRUE,
+                    main = paste0(cat_expl),
+                    fontsize_row = 7,
+                    fontsize_number = 7,
+                    cluster_cols = FALSE,
+                    cluster_rows = FALSE
+                )
+        }
     }
 
     panel_plots <- list()

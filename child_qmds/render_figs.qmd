@@ -75,9 +75,10 @@ tumor cells are clustering after running harmony, how well the batch effect
 has been eliminated for visualization and the level of immune cell infiltration
 in the tumor samples.
 ```{r, after_harmony_figure_panels}
-#| cache.vars: c('postharmony_dimplot_list', 'posth_featureplot1_tumor_list', 'posth_eatureplot2_immune_list')
+#| cache.vars: c('postharmony_dimplot_list', 'posth_featureplot1_tumor_list', 'posth_eatureplot2_immune_list', 'force_directed_layout_list')
 
 postharmony_dimplot_list <- list()
+force_directed_layout_list <- list()
 posth_featureplot1_tumor_list <- list()
 posth_eatureplot2_immune_list <- list()
 
@@ -85,20 +86,22 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
     postharmony_dimplot_list[[group]] <- 
         knitr::include_graphics(str_c("output/figures/combined_plots/",
                 group,
-                "/",
-                "combined_plots.png"))
+                "/combined_plots.png"))
+    
+    force_directed_layout_list[[group]] <- 
+        knitr::include_graphics(str_c("output/figures/combined_plots/",
+                group,
+                "/combined_fdl_plot.png"))
 
     posth_featureplot1_tumor_list[[group]] <- 
         knitr::include_graphics(str_c("output/figures/combined_plots/",
                  group,
-                 "/",
-                 "tumor_featureplots.png"))
+                 "/tumor_featureplots.png"))
 
     posth_eatureplot2_immune_list[[group]] <-
         knitr::include_graphics(str_c("output/figures/combined_plots/",
                  group,
-                 "/",
-                 "immune_featureplots.png"))
+                 "/immune_featureplots.png"))
 }
 ```
 
@@ -107,6 +110,13 @@ Dimplots split by multiple relevant metadata after harmony integration
 ```{r print_panel_plots4, results = 'asis'}
 #| dependson: after_harmony_figure_panels
 qreport::maketabs(postharmony_dimplot_list)
+```
+
+### Post Harmony Force Directed Layout
+Force directed layout of the combined data after harmony integration
+```{r, fdl_panel_plots_main, results = 'asis'}
+#| dependson: after_harmony_figure_panels
+qreport::maketabs(force_directed_layout_list)
 ```
 
 ### Post Harmony Tumor Featureplot
@@ -131,9 +141,10 @@ the tumor markers and the third plot is the feature plot of the immune markers.
 This gives a general sense of how the tumor and stroma cells are clustering
 in general and whether the splitting was done correctly. 
 ```{r, split_tumor_stroma}
-#| cache.vars: c('all_dimplots_list', 'alltumor_featureplot_list', 'allimmune_featureplot_list')
+#| cache.vars: c('all_dimplots_list', 'alltumor_featureplot_list', 'allimmune_featureplot_list', 'force_directed_plots')
 
 all_dimplots_list <- list()
+force_directed_plots <- list()
 alltumor_featureplot_list <- list()
 allimmune_featureplot_list <- list()
 
@@ -147,6 +158,11 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                      "/",
                      cell_group_name,
                      "_dimplot.png"))
+        
+        force_directed_plots[[sub_group]] <-
+            knitr::include_graphics(str_c("output/figures/tumor_vs_stroma/",
+                     sub_group,
+                     "/fdl_plot.png"))
 
         alltumor_featureplot_list[[sub_group]] <- 
             knitr::include_graphics(str_c("output/figures/tumor_vs_stroma/",
@@ -165,26 +181,31 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 }
 
 
-for (subgroup in c("xeno_prim_human",
+for (sub_group in c("xeno_prim_human",
                 "xeno_prim_mouse",
                 "xeno_mets_human",
                 "xeno_mets_mouse")) {
 
-    all_dimplots_list[[subgroup]] <-
+    all_dimplots_list[[sub_group]] <-
         knitr::include_graphics(str_c("output/figures/tumor_vs_stroma/",
-                 subgroup,
+                 sub_group,
                  "/",
                  "dimplot.png"))
-
-    alltumor_featureplot_list[[subgroup]] <-
+    
+    force_directed_plots[[sub_group]] <-
         knitr::include_graphics(str_c("output/figures/tumor_vs_stroma/",
-                 subgroup,
+                 sub_group,
+                 "/fdl_plot.png"))
+
+    alltumor_featureplot_list[[sub_group]] <-
+        knitr::include_graphics(str_c("output/figures/tumor_vs_stroma/",
+                 sub_group,
                  "/",
                  "tumor_featureplot.png"))
 
-    allimmune_featureplot_list[[subgroup]] <-
+    allimmune_featureplot_list[[sub_group]] <-
         knitr::include_graphics(str_c("output/figures/tumor_vs_stroma/",
-                 subgroup,
+                 sub_group,
                  "/",
                  "immune_featureplot.png"))
 }
@@ -197,6 +218,14 @@ different groups, 6 for tumor and 6 for stroma.
 ```{r, print_panel_plots7, results = 'asis'}
 #| dependson: split_tumor_stroma
 qreport::maketabs(all_dimplots_list)
+```
+
+### Split Force Directed Layout
+Force directed layout of the combined data after harmony integration and split
+by tumor and stroma
+```{r, fdl_panel_plots, results = 'asis'}
+#| dependson: split_tumor_stroma
+qreport::maketabs(force_directed_plots)
 ```
 
 ### All Tumor Featureplot
@@ -329,7 +358,7 @@ to show the correlation between the different cell types and the AUCell scores f
 each cell type. The AUCell scores are a measure of the activity of the each genes
 in each cells to distinguish the celltypes by gene activity inference. 
 ```{r, reclustering_normals_plots}
-#| cache.vars: c('correlation_plot_list', 'Aucell_plot_list')
+#| cache.vars:  'Aucell_plot_list'
 all_groups <-
     c("patient_prim_normal_cells",
       "patient_mets_normal_cells",
@@ -338,22 +367,12 @@ all_groups <-
       "mm_prim_normal_cells",
       "mm_mets_normal_cells")
 
-correlation_plot_list <- list()
 Aucell_plot_list <- list()
 
 for (group in all_groups) {
     path <- str_c("output/figures/relustering_normals/",
                   group)
     for (celltypes in c("Macrophages", "T_cells", "Fibroblasts", "Dendritic_cells", "B_cells")) {
-        corr_file_path <- 
-            str_c(path,
-                  "/",
-                  celltypes,
-                  "_correlation.png")
-        if (file.exists(corr_file_path)) {
-            correlation_plot_list[[group]][[celltypes]] <-
-                knitr::include_graphics(corr_file_path)
-        }
         Aucell_file_path <- 
             str_c(path,
                   "/",
@@ -369,78 +388,36 @@ for (group in all_groups) {
 ```
 
 ### Patient primary Normal cells
-#### Correlation Plots: Patient primary Normal cells
-```{r, print_panel_plots12, results = 'asis'}
-#| dependson: reclustering_normals_plots
-qreport::maketabs(correlation_plot_list[["patient_prim_normal_cells"]])
-```
-
-#### AUCell Plots : Patient primary Normal cells
 ```{r, print_panel_plots13, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(Aucell_plot_list[["patient_prim_normal_cells"]])
 ```
 
 ### Patient Mets Normal cells
-#### Correlation Plots: Patient Mets Normal cells
-```{r, print_panel_plots14, results = 'asis'}
-#| dependson: reclustering_normals_plots
-qreport::maketabs(correlation_plot_list[["patient_mets_normal_cells"]])
-```
-
-#### AUCell Plots : Patient Mets Normal cells
 ```{r, print_panel_plots15, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(Aucell_plot_list[["patient_mets_normal_cells"]])
 ```
 
 ### Xeno Primary Mouse
-#### Correlation Plots: Xeno Primary Mouse
-```{r, print_panel_plots16, results = 'asis'}
-#| dependson: reclustering_normals_plots
-qreport::maketabs(correlation_plot_list[["xeno_prim_mouse"]])
-```
-
-#### AUCell Plots : Xeno Primary Mouse
 ```{r, print_panel_plots17, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(Aucell_plot_list[["xeno_prim_mouse"]])
 ```
 
 ### Xeno Mets Mouse
-#### Correlation Plots: Xeno Mets Mouse
-```{r, print_panel_plots18, results = 'asis'}
-#| dependson: reclustering_normals_plots
-qreport::maketabs(correlation_plot_list[["xeno_mets_mouse"]])
-```
-
-#### AUCell Plots : Xeno Mets Mouse
 ```{r, print_panel_plots19, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(Aucell_plot_list[["xeno_mets_mouse"]])
 ```
 
 ### MM Primary Normal cells
-#### Correlation Plots: MM Primary Normal cells
-```{r, print_panel_plots20, results = 'asis'}
-#| dependson: reclustering_normals_plots
-qreport::maketabs(correlation_plot_list[["mm_prim_normal_cells"]])
-```
-
-#### AUCell Plots : MM Primary Normal cells
 ```{r, print_panel_plots21, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(Aucell_plot_list[["mm_prim_normal_cells"]])
 ```
 
 ### MM Mets Normal cells
-#### Correlation Plots: MM Mets Normal cells
-```{r, print_panel_plots22, results = 'asis'}
-#| dependson: reclustering_normals_plots
-qreport::maketabs(correlation_plot_list[["mm_mets_normal_cells"]])
-```
-
-#### AUCell Plots : MM Mets Normal cells
 ```{r, print_panel_plots23, results = 'asis'}
 #| dependson: reclustering_normals_plots
 qreport::maketabs(Aucell_plot_list[["mm_mets_normal_cells"]])
@@ -464,9 +441,8 @@ all_groups <-
 
 normalcell_gsea_panelplots <- list()
 
-# the problem here is that I want to make a new plot list for each group and want to append the plots to it
 for (group in all_groups) {
-    for (celltypes in c("Macrophages", "T_cells", "Fibroblasts", "Dendritic_cells")) {
+    for (celltypes in c("Macrophages", "T_cells", "Fibroblasts", "Dendritic_cells", "B_cells")) {
         file_path <- 
             str_c("output/figures/gsea/",
                   group,

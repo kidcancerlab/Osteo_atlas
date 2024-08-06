@@ -13,7 +13,8 @@ samples_to_run <-
                                "SJOS016016_D1",
                                "SJOS030605_D1",
                                "SJOS030411_D1",
-                               "SJOS030605_D2"))
+                               "SJOS030605_D2")) %>%
+    filter(data_source == "NCI_POB")
 ```
 
 ## Run SNV calling on the pseudobulked clusters to try to ID tumor cells

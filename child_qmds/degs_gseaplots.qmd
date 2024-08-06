@@ -97,17 +97,17 @@ theme_set(
 cat_tib <- dplyr::tribble(
     ~category, ~subcategory,   ~cat_expl,
     "H",        "NA",          "Hallmark_paths",
-    "C2",      "CP:KEGG",      "KEGG",
-    "C3",      "TFT:GTRD",     "Transcription_factor_targets",
+    "C2",       "CP:KEGG",     "KEGG",
+    "C3",       "TFT:GTRD",    "Transcription_factor_targets",
     "C6",       "NA",          "Oncogenic_signature",
-    "C5",       "GO:BP",          "Biological_processes",
+    "C5",       "GO:BP",       "Biological_processes",
     "C2",       "CP:REACTOME", "Reactome")
 
 panel_plots <- list()
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.05,
+            "patient_prim_cancer_cells",    0.1,
             "patient_mets_cancer_cells",    0.05,
             "mm_prim_cancer_cells",         0.3,
             "mm_mets_cancer_cells",         0.3,
@@ -120,27 +120,18 @@ object_list <-
             "mm_prim_normal_cells",         0.25,
             "mm_mets_normal_cells",         0.2)
 
-# Run GSEA 
+# run force directed layout
+
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
     res_value <- object_list$res_value[i]
-
     object <-
         qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                         group,
                         ".qs"))
+    object <- 
+        FindClusters(object, resolution = res_value)
 
-    celltypes <-
-        table(object$annotations) %>%
-        subset(., . >= 50)
-
-    object <-
-        subset(object, annotations %in% names(celltypes)) %>%
-        FindClusters(resolution = res_value)
-    
-    dimplot_better(object, group_by = "annotations")
-
-    #run fdl
     force_directed_layout <- 
         run_fdl(sobject = object)
 
@@ -157,7 +148,31 @@ for (i in seq_len(nrow(object_list))) {
             plot = split_fdl_plot,
             width = 10,
             height = 10)
+}
 
+
+# Run GSEA 
+for (i in seq_len(nrow(object_list))) {
+    group <- object_list$group[i]
+    res_value <- object_list$res_value[i]
+
+    object <-
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    object <- 
+        FindClusters(object, resolution = res_value)
+
+    # celltypes <-
+    #     table(object$annotations) %>%
+    #     subset(., . >= 50)
+    # object <-
+    #     subset(object, annotations %in% names(celltypes)) %>%
+    #     FindClusters(resolution = res_value)
+    #dimplot_better(object, group_by = "annotations")
+
+    #run fdl
 
     make_panel_plot(sobj = object,
                     cluster_column = "seurat_clusters",
@@ -258,6 +273,6 @@ for (i in seq_len(nrow(celltype_table))) {
             read_tsv(str_c("output/metadata/", groups, ".tsv")) %>%
     }
 
-
+}
 ```
 

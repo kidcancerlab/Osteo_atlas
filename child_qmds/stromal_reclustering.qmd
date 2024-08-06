@@ -222,22 +222,34 @@ for (item in seq_len(nrow(object_list))) {
                               group,
                               ".qs"))
 
-    object$new_annot_clust <-
+    object$Ann_level1 <-
             stringr::str_replace_all(object$new_annot_clust,
-                                    c("^CD4T_cells$" = "T_cells",
-                                      "^CD4T_Memory$" = "T_cells",
+                                    c("^Alv_Macrophages$" = "Macrophages",
+                                      "^AlvEpithelial_cells$" = "Epithelial_cells",
+                                      "^Alveolar_Fibroblasts$" = "Fibroblasts",
+                                      "^AlvEpithelial_T1$" = "Epithelial_cells",
+                                      "^AlvEpithelial_T2$" = "Epithelial_cells",
+                                      "^Basophil_Mast1$" = "Basophil_Mast",
+                                      "^Basophil_Mast2$" = "Basophil_Mast",
+                                      "^Bronchial_Vessel1$" = "Endothelial_cells",
+                                      "^Capillary_Intermediate1$" = "Capillary_cells",
+                                      "^CD4_plus_MemoryT$" = "T_cells",
+                                      "^CD4T_cells$" = "T_cells",
                                       "^CD4T_Naive$" = "T_cells",
-                                      "^Myeloid_Dendritic2$" = "Dendritic_cells",
                                       "^CD8T_cells$" = "T_cells",
+                                      "^EREG_plus Dendritic$" = "Dendritic_cells",
+                                      "^IGSF21_plus_Dendritic_cells$" = "Dendritic_cells",
+                                      "^Int_Macrophages$" = "Macrophages",
+                                      "^Lipofibroblast$" = "Fibroblasts",
+                                      "^Myofibroblasts$" = "Fibroblasts",
                                       "^Plasma_Bcells$" = "B_cells",
                                       "^CD8T_Memory$" = "T_cells",
                                       "^CD4T_cells1$" = "T_cells",
                                       "^CD8T_cells1$" = "T_cells",
-                                      "^AlvEpithelial_T1$" = "Epithelial_cells",
-                                      "^AlvEpithelial_T2$" = "Epithelial_cells",
-                                      "^Signalling_AlvEpithelial$" = "Epithelial_cells",
-                                      "^Int_Macrophages$" = "Macrophages",
-                                      "^Alv_Macrophages$" = "Macrophages"))
+                                      "^Myeloid_Dendritic2$" = "Dendritic_cells",
+                                      "^Plasma_Bcells1$" = "B_cells",
+                                      "^Plasmacytoid_Dendritic_cells$" = "Dendritic_cells",
+                                      "^Signalling_AlvEpithelial$" = "Epithelial_cells"))
 
     object <- 
         FindClusters(object,
@@ -245,7 +257,7 @@ for (item in seq_len(nrow(object_list))) {
 
     dimplot_main <-
         dimplot_better(object,
-                      group_by = c("new_annot_clust")) +
+                      group_by = c("Ann_level1")) +
             ggtitle(group) +
             NoLegend()
 
@@ -304,10 +316,10 @@ for (item in seq_len(nrow(object_list))) {
 
     #subset ech celltype for reclustering and labelling the celltypes
     for (celltypes in c("Macrophages", "T_cells", "Fibroblasts", "Dendritic_cells", "B_cells")) {
-        if (celltypes %in% object$new_annot_clust) {
+        if (celltypes %in% object$Ann_level1) {
             subset_sobj <-
                 subset(object,
-                       new_annot_clust == celltypes)
+                       Ann_level1 == celltypes)
             if (length(unique(subset_sobj$sample_name)) > 1 &&
                 ncol(subset_sobj) > 50) {
                 subset_sobj <- 

@@ -107,6 +107,42 @@ annotations_cell_list <-
         mm_mets = c("Fibroblasts",
                     "Int_Macrophages"))
 
+harmony_params <-
+    list(patient_prim = list(group_by = c("sample_name",
+                                          "method",
+                                          "data_source"),
+                             theta = c(5, 5, 5),
+                             lambda = c(0.5, 0.5, 0.5)),
+        patient_mets = list(group_by = c("sample_name",
+                                         "method",
+                                         "data_source"),
+                            theta = c(7, 7, 7),
+                            lambda = c(0.5, 0.5, 0.5)),
+        xeno_prim_human = list(group_by = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                               theta = c(7, 7, 7)),
+        xeno_mets_human = list(group_by = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                               theta = c(7, 7, 7)),
+        xeno_prim_mouse = list(group_by = c("sample_name",
+                                            "data_source"),
+                                theta = c(7, 7)),
+        xeno_mets_mouse = list(group_by = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                               theta = c(7, 7, 7)),
+        mm_prim = list(group_by = c("sample_name",
+                                    "model"),
+                       theta = c(12, 12),
+                       lambda = c(0.1, 0.1)),
+        mm_mets = list(group_by = c("sample_name",
+                                    "model"),
+                       theta = c(7, 7),
+                       lambda = c(0.1, 0.1)),
+        normal_bone = list(group_by = c("sample_name"),
+                           theta = c(7)))
 
 #parallel::mclapply(unique(all_samples_csv$unique), function(group)
 for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
@@ -114,7 +150,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
-    #dimplot_better(object, group_by = "new_annot_clust") + NoLegend()
+    #dimplot_better(object, group_by = c("new_annot_clust", "annotations"), ncol=2) + NoLegend()
     Idents(object) <-
         object$new_annot_clust
 
@@ -127,67 +163,57 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         if_else(object$new_annot_clust %in% cancer_celltypes[[group]],
                 "cancer_cells",
                 "normal_cells")
-    
-    object@meta.data %>%
-        as.data.frame() %>%
-        rownames_to_column("cell") %>%
-        select(cell, cancer_normal, celltype_tumor_call) %>%
-        write_tsv(paste0("output/id_tumor/celltype/",
-                         group,
-                         "_metadata_", Sys.Date(), ".tsv"))
 
-    s_obj <-
-        subset(x = object,
-                celltype_tumor_call == "cancer_cells")
+    object$original_call <- object$celltype_tumor_call
+    if (group == "patient_prim" || group == "patient_mets") {
+        object$celltype_tumor_call[object$annotations %in% annotations_cell_list[[group]] & object$celltype_tumor_call == "cancer_cells"] <- "kick"
+        object$celltype_tumor_call[object$annotations %in% cancer_celltypes[[group]] & object$celltype_tumor_call == "normal_cells"] <- "kick"
+        object <-
+            subset(object, celltype_tumor_call != "kick")
+    }
 
-    s_obj$purified_tumorcall <- 
-        if_else(s_obj$annotations %in% annotations_cell_list[[group]],
-                "normal_cells",
-                "cancer_cells")
-
-    s_obj_new <-
-            subset(x = s_obj,
-                purified_tumorcall == "cancer_cells")
-            # process_seurat() %>%
-            # RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
-            #         theta = harmony_params[[group]]$theta) %>%
-            # process_seurat(reduction = "harmony")
-
-    #this is where I grab for plots
-    purified <- 
-        colnames(s_obj_new)
-
-    object$purified_tumorcall <-
-        if_else(colnames(object) %in% purified,
-                "cancer_cells",
-                "normal_cells")
+    object <- object %>%
+        process_seurat() %>%
+        RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
+                   theta = harmony_params[[group]]$theta,
+                   lambda = harmony_params[[group]]$lambda) %>%
+        process_seurat(reduction = "harmony")
 
     object@meta.data %>%
         as.data.frame() %>%
         rownames_to_column("cell") %>%
-        select(cell, celltype_tumor_call, purified_tumorcall) %>%
+        select(cell, celltype_tumor_call) %>%
         write_tsv(paste0("output/id_tumor/celltype/",
                  group,
                  "_metadata",
                  ".tsv"))
+
+    qs::qsave(x = object,
+              file = str_c("output/seurat_objects/harmony_sobjs_annot/",
+                           group,
+                           ".qs"))
 }
 
 ```
 
 
-
 ### Force Directed Layout
 ```{r fdl_large_objects}
-for (group in c("patient_prim", "patient_mets",
+
+list_object <- c("patient_prim", "patient_mets",
                 "mm_prim", "mm_mets",
                 "xeno_prim_human", "xeno_mets_human",
-                "xeno_prim_mouse", "xeno_mets_mouse")) {
+                "xeno_prim_mouse", "xeno_mets_mouse")
+
+fdl_results <-
+    parallel::mclapply((list_object),
+                       mc.cores = parallelly::availableCores(),
+                       function(group) {
     object <-
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
 
-# i feel like the time variable is notworking in srun
     force_directed_layout <- 
         run_fdl(sobject = object)
 
@@ -205,25 +231,217 @@ for (group in c("patient_prim", "patient_mets",
             plot = combined_fdl_plot,
             width = 10,
             height = 10)
-}
+})
 
 ```
 
 ```{r}
 library(monocle3)
+library(reticulate)
+py_install("scanpy", pip=T)
+sc <- import("scanpy")
+library(loomR)
+library(Matrix)
+
+
+seurat_obj <- qs::qread("output/seurat_objects/tumor_vs_stroma/mm_prim_cancer_cells.qs")
+
+
+
+# Add metadata to carry over the clustering information to the new object
+seurat_obj$monocle3_clusters <- seurat_obj$new_annot_clust
+seurat_obj$monocle3_partitions <- "p1"
+
+# Convert the Seurat object to a Monocle (cell_data_set) object
+cds_obj <- SeuratWrappers::as.cell_data_set(seurat_obj)
+
+# View the transferred metadata, dimensional reductions, and assays
+as_tibble(colData(cds_obj))
+reducedDims(cds_obj)
+assayNames(cds_obj)
+
+# Calculate the pseudotime/trajectories, then
+# Test different parameters for ncenter ("resolution" of the trajectory graph)
+g <- list()
+g <- parallel::mclapply(c(200, 300, 400, 500), function(s) {
+    p <- cluster_cells(cds_obj) %>%
+        learn_graph(use_partition = FALSE,
+        learn_graph_control = list(ncenter = s)) %>%
+        plot_cells(graph_label_size = 5) +
+        ggtitle(paste("ncenter =", s)) +
+        coord_fixed()
+    return(p)
+}, mc.cores = 4)
+(g[[1]] | g[[2]]) / (g[[3]] | g[[4]])
+
+# Choose ncenter = 300 -- it picks up the inflammatory cluster as a leaf
+cds_obj <- cluster_cells(cds_obj) %>%
+    learn_graph(use_partition = FALSE,
+    learn_graph_control = list(ncenter = 400))
+
+# Plot cells colored by pesudotime (have to order first [interactive])
+cds_obj <- order_cells(cds_obj,
+    reduction_method = "UMAP")
+plot_cells(cds_obj,
+    color_cells_by = "pseudotime",
+    cell_size = 0.75,
+    graph_label_size = 5,
+    trajectory_graph_segment_size = 1.5) +
+    ggtitle("Osteoshark connected with pseudotime") +
+    coord_fixed()
+
+# Do it with Monocle-generated processing
+cds_obj <- cds_obj %>%
+    preprocess_cds(num_dim = 30) %>%
+    align_cds(alignment_group = "src") %>%
+    reduce_dimension() %>%
+    cluster_cells() %>%
+    learn_graph(use_partition = FALSE)
+plot_cells(cds_obj,
+    color_cells_by = "assignment")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+library(DDRTree)
+
+harmony_Z <- object@reductions$pca@cell.embeddings
+#object@reductions$harmony@cell.embeddings
+
+DDRTree <-
+    function(X, dimensions = 2, initial_method = NULL, maxIter = 20, 
+            sigma = 0.001, lambda = NULL, ncenter = NULL, param.gamma = 10, 
+            tol = 0.001, verbose = F, no_reduction = FALSE, ...) {
+    D <- nrow(X)
+    N <- ncol(X)
+    if (no_reduction) {
+        W = diag(D)
+    } else {
+        W <- pca_projection_R(X %*% t(X), dimensions)
+    }
+    if (is.null(initial_method)) {
+        Z <- t(W) %*% X
+    }
+    else {
+        tmp <- initial_method(X, ...)
+        if (ncol(tmp) > D | nrow(tmp) > N) 
+            stop("The dimension reduction method passed need to return correct dimensions")
+        Z <- tmp[, 1:dimensions]
+        Z <- t(Z)
+    }
+    if (is.null(ncenter)) {
+        K <- N
+        Y <- Z[, 1:K]
+    }
+    else {
+        K <- ncenter
+        if (K > ncol(Z)) 
+            stop("Error: ncenters must be greater than or equal to ncol(X)")
+        centers = t(Z)[seq(1, ncol(Z), length.out = K), ]
+        kmean_res <- kmeans(t(Z), K, centers = centers)
+        Y <- kmean_res$centers
+        Y <- t(Y)
+    }
+    if (is.null(lambda)) {
+        lambda = 5 * ncol(X)
+    }
+    ddrtree_res <- DDRTree_reduce_dim(X, Z, Y, W, dimensions, 
+        maxIter, K, sigma, lambda, param.gamma, tol, no_reduction, 
+        verbose)
+    return(list(W = ddrtree_res$W, Z = ddrtree_res$Z, stree = ddrtree_res$stree, 
+        Y = ddrtree_res$Y, X = ddrtree_res$X, R = ddrtree_res$R, 
+        Q = ddrtree_res$Q, objective_vals = ddrtree_res$objective_vals, 
+        history = NULL))
+}
+
+get_ddr <- function(harmony_Z, ndim=2) {
+    ncells <- nrow(harmony_Z)
+    ncenter <- round(2 * 100 * log(ncells) / (log(ncells) + log(100)))
+    ddr_args <- c(list(
+        X = harmony_Z, 
+        dimensions = ndim, ## LOW DIMENSIONALITY
+        ncenter = ncenter, 
+        verbose = FALSE))
+    ddrtree_res <- do.call(DDRTree, ddr_args)
+    ddrtree_res$Z <- t(ddrtree_res$Z)
+    row.names(ddrtree_res$Z) <- row.names(harmony_Z)
+    colnames(ddrtree_res$Z) <- colnames(harmony_Z)
+    return(ddrtree_res$Z)
+}
+
+result <- get_ddr(harmony_Z)
+
+
+cell_attrs <- list(pca = Embeddings(seurat_DS1,"pca")[,1:20],
+                   umap = Embeddings(seurat_DS1,"umap"),
+                   celltype = seurat_DS1@active.ident)
+
+loom <- loomR::create("loom_obj.loom",
+                      data = seurat_DS1[['RNA']]@data,
+                      layers = list(counts = seurat[['RNA']]@counts),
+                      cell.attrs = cell_attrs)
+loom$close_all()
+
+
 for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
     object <-
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
+    object <- qs::qread("/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/tumor_vs_stroma/mm_prim_cancer_cells.qs")
 
-    # object of cell dataset class from seurat
-    cds_obj <-
-        SeuratWrappers::as.cell_data_set(object)
+    object_list <- 
+        SplitObject(object, split.by = "orig.ident")
     
+    object_list <- 
+        lapply(object_list, function(x) {
+            x <- process_seurat(x)
+        })
+
+    features <-
+        SelectIntegrationFeatures(object_list)
+    anchors <-
+        FindIntegrationAnchors(object_list,
+                               anchor.features = features)
+    integrated <- 
+        IntegrateData(anchorset = anchors,
+                      dims = 1:50)
+
+    DefaultAssay(integrated) <- "integrated"
+
+    integrated <- 
+        process_seurat(integrated)
+
+    cds_obj <-
+        SeuratWrappers::as.cell_data_set(integrated)
+
+    DefaultAssay(integrated) <- "RNA"
+
+    plot_cells(cds_obj,
+               color_cells_by = "seurat_clusters",
+               label_groups_by_cluster = FALSE) +
+        theme(legend.position = "right")
+
+    # cds_obj <- 
+    #     monocle3::cluster_cells(cds_obj)
+
     #add the gene_short_name column
     fData(cds_obj)$gene_short_name <- rownames(fData(cds_obj))
-    
+
     # Need to add paritition 
     recreate_partition <- c(rep(1, length(cds_obj@colData@rownames)))
     names(recreate_partition) <- cds_obj@colData@rownames
@@ -242,17 +460,12 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 
     # plot cell
     cluster_before_trajectory <-
-        plot_cells(cds_obj,
-                   x = 1,
-                   y = 2,
-                   reduction_method = "UMAP",
+        monocle3::plot_cells(cds_obj,
                     color_cells_by = "cluster",
-                    label_groups_by_cluster = "FALSE",
-                    group_label_size = 5) +
-            theme(legend.position = "right")
+                    label_groups_by_cluster = "FALSE")
 
     plot_cells(cds_obj,
-               color_cells_by = "redefined_cluster",
+               color_cells_by = "pseudotime",
                label_groups_by_cluster = "FALSE",
                group_label_size = 5) +
         theme(legend.position = "right")

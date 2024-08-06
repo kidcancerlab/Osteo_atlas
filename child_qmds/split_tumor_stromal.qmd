@@ -60,22 +60,22 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                        group_by = "scevan_tumor_call") +
             NoLegend() +
             theme(plot.title = element_text(size = 7))
-    combineplot3 <- 
+    combineplot3 <-
         dimplot_better(object,
                        group_by = "final_snv_call") +
             NoLegend() +
             theme(plot.title = element_text(size = 7))
-    combineplot4 <- 
+    combineplot4 <-
         dimplot_better(object,
-                       group_by = "purified_tumorcall") +
+                       group_by = "celltype_tumor_call") +
             NoLegend() +
             theme(plot.title = element_text(size = 7))
-    combineplot5 <- 
+    combineplot5 <-
         dimplot_better(object,
                        group_by = "new_annot_clust") +
             NoLegend() +
             theme(plot.title = element_text(size = 7))
-    combineplot6 <- 
+    combineplot6 <-
         dimplot_better(object,
                        group_by = "sample_name") +
             NoLegend() +
@@ -115,7 +115,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 #make feature plots for all the groups
 for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
     object <-
-        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
                         group,
                         ".qs"))
     # plot feature plots
@@ -210,10 +210,12 @@ harmony_params <-
                                theta = c(7, 7, 7)),
         mm_prim = list(group_by = c("sample_name",
                                     "model"),
-                       theta = c(12, 12)),
+                       theta = c(12, 12),
+                       lambda = c(0.1, 0.1)),
         mm_mets = list(group_by = c("sample_name",
                                     "model"),
-                       theta = c(7, 7)),
+                       theta = c(7, 7),
+                       lambda = c(0.1, 0.1)),
         normal_bone = list(group_by = c("sample_name"),
                            theta = c(7)))
 
@@ -227,16 +229,32 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         object <- subset(object,
                          sample_name != "S0200" & sample_name != "S0201")
     }
+    # cancer_normal_ids <-
+    #     str_c(paste0("output/id_tumor/celltype/",
+    #             group,
+    #             "_metadata",
+    #             ".tsv"))
+    
+    # if (file.exists(cancer_normal_ids)) {
+    #     cancer_normal_ids <-
+    #         readr::read_tsv(cancer_normal_ids) %>%
+    #         filter(cell %in% colnames(object)) %>%
+    #         select(cell, purified_tumorcall) %>%
+    #         column_to_rownames("cell")
+    #     object <- object %>%
+    #         AddMetaData(metadata = cancer_normal_ids)
+    # }
 
-     for (cell_group_name in c("cancer_cells", "normal_cells")) {
+    for (cell_group_name in c("cancer_cells", "normal_cells")) {
         sub_group <- str_c(group, "_", cell_group_name)
 
-         s_obj <-
+        s_obj <-
             subset(x = object,
-                   purified_tumorcall == cell_group_name) %>%
+                    celltype_tumor_call == cell_group_name) %>% 
             process_seurat() %>%
             RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
-                       theta = harmony_params[[group]]$theta) %>%
+                        theta = harmony_params[[group]]$theta,
+                        lambda = harmony_params[[group]]$lambda) %>%
             process_seurat(reduction = "harmony")
 
         dimplot1 <- 
@@ -273,7 +291,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                                   heights = 14) +
             patchwork::plot_annotation(title = str_c(group, " ", cell_group_name)) +
             theme(plot.title = element_text(size = 10))
-    
+
         ggsave(str_c("output/figures/tumor_vs_stroma/",
                     group,
                     "/",
@@ -322,7 +340,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                     plot = tumor_featureplot,
                     width = 21,
                     height = 21)
-        
+
         #save as qs
         qs::qsave(tumor_featureplot,
                   str_c("output/figures/tumor_vs_stroma/",
@@ -352,18 +370,6 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                                 group, "_",
                                 cell_group_name,
                                 ".qs"))
-
-        #save the cancer object metadata with the cell barcodes
-        date_time <- 
-            format(Sys.time(), "%Y%m%d_%H%M%S")
-        s_obj$cell_barcodes <- 
-            colnames(s_obj)
-        readr::write_tsv(x = s_obj@meta.data,
-                        file = str_c("output/metadata/",
-                                        group,
-                                        "_cancer",
-                                        date_time,
-                                        ".tsv"))
     }
     print(str_c(group, " labelled with cancer_vs_normal cells and subsetted and saved"))
 }
@@ -378,30 +384,12 @@ for (group in c("xeno_prim_human",
                         group,
                         ".qs"))
 
-    force_directed_layout <- 
-        run_fdl(sobject = object)
-
-    combined_fdl_plot <- 
-        dimplot_better(force_directed_layout,
-                       group_by= "new_annot_clust",
-                       reduction = "fdl") +
-            NoLegend()
-
-    ggsave(str_c("output/figures/combined_plots",
-                "/",
-                group,
-                "/",
-                "combined_fdl_plot.png"),
-            plot = combined_fdl_plot,
-            width = 10,
-            height = 10)
-
     dimplot1 <- 
         dimplot_better(object,
                 group_by = "seurat_clusters") +
             NoLegend() +
             theme(plot.title = element_text(size = 7))
-    
+
     dimplot2 <-
         dimplot_better(object,
                     group_by = "annotations") +
@@ -502,15 +490,6 @@ for (group in c("xeno_prim_human",
     qs::qsave(object, str_c("output/seurat_objects/tumor_vs_stroma/",
                             group,
                             ".qs"))
-
-    #save the cancer object metadata with the cell barcodes
-    object$cell_barcodes <-
-        colnames(object)
-    readr::write_tsv(x = object@meta.data,
-                    file = str_c("output/metadata/",
-                                 group,
-                                 format(Sys.time(), "%Y%m%d_%H%M%S"),
-                                 ".tsv"))
 }
 ```
 
