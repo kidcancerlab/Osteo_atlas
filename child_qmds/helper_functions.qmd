@@ -34,7 +34,8 @@ https://www.synapse.org/Synapse:syn21560554
 We kept only the normoxic samples for the analysis
 ```{r celltype_annotation_data}
 #| cache.vars = c('human_lung_ref', 'mouse_lung_ref', 'human_tumor_cell', 'mouse_tumor_cell')
-human_lung_ref <- qs::qread("input/downloads/human_lung.qs")
+human_lung_ref <- 
+    qs::qread("input/downloads/human_lung.qs")
 
 human_lung_ref$free_annotation <-
     str_replace_all(human_lung_ref$free_annotation, c("/" = "_",
@@ -117,11 +118,14 @@ human_tumor_cell <- qs::qread("input/downloads/human_tumor_fromxenograft.qs")
 #mouse lung normal cells reference
 mouse_lung_ref <- qs::qread("input/downloads/mouse_lung.qs")
 
+# mouse_lung_ref <- qs::qread("input/downloads/normal_mouselung.qs")
+
 mouse_lung_ref$CellType <-
-            str_replace_all(mouse_lung_ref$CellType,
+            str_replace_all(mouse_lung_ref$free_annotation,
                             c("/" = "_",
                               "\\+" = "_plus",
-                              "-" = "_"))
+                              "-" = "_",
+                              " " = "_"))
 
 mouse_lung_ref$CellType <-
     str_replace_all(mouse_lung_ref$CellType,
@@ -166,7 +170,9 @@ mouse_lung_ref$CellType <-
                     "^Pericytes$" = "Pericyte",
                     "^Mesothelial$" = "Mesothelial_cells",
                     "^Capillary$" = "Capillary_cells",
-                    "^Mast_Basophils$" = "Basophil_Mast"))
+                    "^Mast_Basophils$" = "Basophil_Mast",
+                    "^CD8_plus_T$" = "CD8T_cells",
+                    "^CD4_plus_T$" = "CD4T_cells"))
 
 # #make a reference for all tumor cells, using cell culture data documantation
 # mouse_tumor_cell <-
@@ -197,6 +203,16 @@ hpca$label.main <-
                             c("/" = "_",
                               "\\+" = "_plus",
                               "-" = "_"))
+hpca$label.fine <-
+            str_replace_all(hpca$label.fine,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_",
+                              " " = "_",
+                              ":" = "_",
+                              "\\(" = "_",
+                              "\\)" = "_",
+                              "," = "_"))
 hpca$label.main <-
             stringr::str_replace_all(hpca$label.main,
                                      c("^T_cells$" = "T_cells",
@@ -214,7 +230,7 @@ hpca$label.main <-
                                        "^CMP$" = "CMP_Progenitors",
                                        "^BM & Prog.$" = "Bone_marrow",
                                        "^Macrophage$" = "Macrophages",
-                                       "^Capillary$" = "Capillary_cells"))
+                                       "^Capillary$" = "Capillary_cells")) 
 
 huim$label.main <-
             str_replace_all(huim$label.main,
@@ -272,6 +288,30 @@ moim$label.main <-
                             "^ILC$" = "Lymphoid_cells",
                             "^Microglia$" = "Macrophages",
                             "^Capillary$" = "Capillary_cells"))
+
+moim$label.fine <-
+            str_replace_all(moim$label.fine,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_",
+                              " " = "_",
+                              ":" = "_",
+                              "\\(" = "_",
+                              "\\)" = "_",
+                              "," = "_",
+                              "\\." = "_"))
+
+mord$label.fine <-
+            str_replace_all(mord$label.fine,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_",
+                              " " = "_",
+                              ":" = "_",
+                              "\\(" = "_",
+                              "\\)" = "_",
+                              "," = "_",
+                              "\\." = "_"))
 
 #function to annotate celltypes
 annotate_celltypes <- function(sobject,

@@ -159,7 +159,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                     group,
                     "/",
                     "tumor_featureplots.qs"))
-    
+
     ggsave(str_c("output/figures/combined_plots/",
                  group,
                  "/",
@@ -167,7 +167,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
            plot = featureplot2_immune,
            width = 21,
            height = 14)
-    
+
     qs::qsave(featureplot2_immune,
               str_c("output/figures/combined_plots/",
                     group,
@@ -219,6 +219,27 @@ harmony_params <-
         normal_bone = list(group_by = c("sample_name"),
                            theta = c(7)))
 
+
+
+#reference for annotating mets
+human_lung_ref <-
+    qs::qread("input/downloads/ds_human_lung_atlas.qs") %>%
+    subset(free_annotation != "Lymphatic_EC_differentiating")
+
+mets_ref <- list(GetAssayData(human_lung_ref), hpca)
+mets_label <- list(human_lung_ref$free_annotation, hpca$label.fine)
+
+mouse_lung_ref_new <- qs::qread("input/downloads/normal_mouselung.qs")
+
+mouse_lung_ref_new$CellType <-
+            str_replace_all(mouse_lung_ref_new$free_annotation,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_",
+                              " " = "_",
+                              "^Alveolar_Epithelial_Type_2$" = "Alveolar_Epithelial"))
+
+
 for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
@@ -229,39 +250,130 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         object <- subset(object,
                          sample_name != "S0200" & sample_name != "S0201")
     }
-    # cancer_normal_ids <-
+    # cancer_normal_metadata <-
     #     str_c(paste0("output/id_tumor/celltype/",
     #             group,
     #             "_metadata",
     #             ".tsv"))
-    
-    # if (file.exists(cancer_normal_ids)) {
-    #     cancer_normal_ids <-
-    #         readr::read_tsv(cancer_normal_ids) %>%
+
+    # if (file.exists(cancer_normal_metadata)) {
+    #     cancer_normal_metadata <-
+    #         readr::read_tsv(cancer_normal_metadata) %>%
     #         filter(cell %in% colnames(object)) %>%
-    #         select(cell, purified_tumorcall) %>%
+    #         select(cell, celltype_tumor_call) %>%
     #         column_to_rownames("cell")
     #     object <- object %>%
-    #         AddMetaData(metadata = cancer_normal_ids)
+    #         AddMetaData(metadata = cancer_normal_metadata)
     # }
+    #dimplot_better(object, group_by = "celltype_tumor_call")
 
     for (cell_group_name in c("cancer_cells", "normal_cells")) {
         sub_group <- str_c(group, "_", cell_group_name)
 
-        s_obj <-
-            subset(x = object,
-                    celltype_tumor_call == cell_group_name) %>% 
-            process_seurat() %>%
-            RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
-                        theta = harmony_params[[group]]$theta,
-                        lambda = harmony_params[[group]]$lambda) %>%
-            process_seurat(reduction = "harmony")
+        if  (cell_group_name == "normal_cells") {
+            s_obj <-
+                subset(x = object,
+                        celltype_tumor_call == cell_group_name) %>%
+                process_seurat() %>%
+                RunHarmony(group.by.vars = harmony_params[[group]]$group_by) %>%
+                process_seurat(reduction = "harmony")
+
+            if (sub_group == "patient_mets_normal_cells") {
+                ref_lung <- 
+                    SingleR::SingleR(test = as.SingleCellExperiment(s_obj),
+                                    ref = GetAssayData(human_lung_ref),
+                                    labels = human_lung_ref$free_annotation,
+                                    aggr.ref = TRUE)
+            } else if (sub_group == "patient_prim_normal_cells") {
+                ref_lung <- 
+                    SingleR::SingleR(test = as.SingleCellExperiment(s_obj),
+                                    ref = list(hpca, huim),
+                                    labels = list(hpca$label.fine, huim$label.fine),
+                                    aggr.ref = TRUE)
+            } else if (sub_group == "mm_mets_normal_cells") {
+                ref_lung <- 
+                    SingleR::SingleR(test = as.SingleCellExperiment(s_obj),
+                                    ref = GetAssayData(mouse_lung_ref_new),
+                                    labels = mouse_lung_ref_new$CellType,
+                                    aggr.ref = TRUE)
+            } else {
+                ref_lung <- 
+                    SingleR::SingleR(test = as.SingleCellExperiment(s_obj),
+                                    ref = list(moim, mord),
+                                    labels = list(moim$label.fine, mord$label.fine),
+                                    aggr.ref = TRUE)
+            }
+            s_obj$annotations <- ref_lung$labels
+
+            Idents(s_obj) <- s_obj$seurat_clusters
+            clust_info <- tibble()
+            for (cluster in unique(s_obj$seurat_clusters)) {
+                subset_object <- subset(s_obj, ident = cluster) %>%
+                    FindVariableFeatures() %>%
+                    ScaleData() %>%
+                    # don't ask for more PCs than there are cells
+                    RunPCA(npcs = min(50,
+                                    sum(s_obj$seurat_clusters == cluster) - 1))
+
+                if (length(unique(subset_object$sample_name)) > 1 &&
+                    ncol(subset_object) > 50) {
+                    subset_object <- RunHarmony(subset_object,
+                                                group.by.vars = "sample_name") %>%
+                        process_seurat(reduction = "harmony")
+                } else {
+                    subset_object <- subset_object
+                }
+
+                subset_object$re_cluster <- str_c(cluster,
+                                                ".",
+                                                subset_object$seurat_clusters)
+
+                print(str_c("Done reclustering ", group, " ", cluster))
+                clust_info <- subset_object@meta.data %>%
+                        as.data.frame() %>%
+                        select(re_cluster) %>%
+                        rbind(clust_info)
+            }
+
+            s_obj <- AddMetaData(s_obj, metadata = clust_info)
+            s_obj$new_annot_clust <- s_obj$re_cluster
+
+            cluster_celltypes <-
+                table(s_obj$re_cluster, s_obj$annotations) %>%
+                as.data.frame() %>%
+                group_by(Var1) %>%
+                arrange(desc(Freq), .by_group = TRUE) %>%
+                slice_head(n = 1)
+
+            for (i in seq_len(nrow(cluster_celltypes))) {
+                seurat_clust <- str_c("^", cluster_celltypes$Var1[i], "$") %>%
+                    as.character()
+
+                celltype <- cluster_celltypes$Var2[i] %>%
+                    as.character()
+
+                s_obj$new_annot_clust <-
+                    str_replace_all(string = s_obj$new_annot_clust,
+                                    pattern = seurat_clust,
+                                    replacement = celltype)
+            }
+        } else {
+            s_obj <-
+                subset(x = object,
+                        celltype_tumor_call == cell_group_name) %>% 
+                process_seurat() %>%
+                RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
+                            theta = harmony_params[[group]]$theta,
+                            lambda = harmony_params[[group]]$lambda) %>%
+                process_seurat(reduction = "harmony")
+        } 
 
         dimplot1 <- 
             dimplot_better(s_obj,
                         group_by = "seurat_clusters") +
                 NoLegend() +
                 theme(plot.title = element_text(size = 7))
+
 
         dimplot2 <- 
             dimplot_better(s_obj,
@@ -392,7 +504,7 @@ for (group in c("xeno_prim_human",
 
     dimplot2 <-
         dimplot_better(object,
-                    group_by = "annotations") +
+                    group_by = "new_annot_clust") +
             NoLegend() +
             theme(plot.title = element_text(size = 7))
 

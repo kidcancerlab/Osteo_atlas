@@ -150,7 +150,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
-    #dimplot_better(object, group_by = c("new_annot_clust", "annotations"), ncol=2) + NoLegend()
+    #dimplot_better(object, group_by = c("celltype_tumor_call")) + NoLegend()
     Idents(object) <-
         object$new_annot_clust
 
@@ -179,14 +179,14 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                    lambda = harmony_params[[group]]$lambda) %>%
         process_seurat(reduction = "harmony")
 
-    object@meta.data %>%
-        as.data.frame() %>%
-        rownames_to_column("cell") %>%
-        select(cell, celltype_tumor_call) %>%
-        write_tsv(paste0("output/id_tumor/celltype/",
-                 group,
-                 "_metadata",
-                 ".tsv"))
+    # object@meta.data %>%
+    #     as.data.frame() %>%
+    #     rownames_to_column("cell") %>%
+    #     select(cell, celltype_tumor_call) %>%
+    #     write_tsv(paste0("output/id_tumor/celltype/",
+    #              group,
+    #              "_metadata",
+    #              ".tsv"))
 
     qs::qsave(x = object,
               file = str_c("output/seurat_objects/harmony_sobjs_annot/",

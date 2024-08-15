@@ -6,12 +6,12 @@ Recluster the normal cell types and annotate the types.
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.1,
-            "mm_prim_cancer_cells",         0.3,
-            "mm_mets_cancer_cells",         0.3,
-            "xeno_prim_human",              0.2,
-            "xeno_mets_human",              0.1,
+            # "patient_prim_cancer_cells",    0.1,
+            # "patient_mets_cancer_cells",    0.1,
+            # "mm_prim_cancer_cells",         0.3,
+            # "mm_mets_cancer_cells",         0.3,
+            # "xeno_prim_human",              0.2,
+            # "xeno_mets_human",              0.1,
             "patient_prim_normal_cells",    0.15,
             "patient_mets_normal_cells",    0.05,
             "xeno_prim_mouse",              0.1,
@@ -81,14 +81,17 @@ Macrophages <- list(LA_TAMs = c("APOC1", "APOE", "APC5", "FABP5"),
 
 #https://www.nature.com/articles/s41467-021-23324-4
 #https://www.biocompare.com/Editorial-Articles/569888-A-Guide-to-T-Cell-Markers/
-T_cells <- list(CD4_cells = c("CD4", "IL7R", "IL21"),
-                CD8_cells = c("CD8A", "CD8B", "GZMK", "GZMB", "PRF1"),
-                Naïve = c("CCR7", "LEF1", "SELL", "TCF7"),
-                Cytotoxic = c("CST7", "GZMA", "GZMB", "IFNG", "PRF1", "TNFSF10"),
-                T_reg = c("FOXP3", "IL2RA", "CTLA4", "CD25", "IL4R", "IL7", "TGFB1", "TGFB3", "TGFBR1"),
-                Exhausted = c("PD1", "TOX", "TIGIT", "BTLA", "CTLA4", "HAVCR2", "LAG3", "PDCD1", "TIGIT"),
-                Prolif_T = c("MKI67", "CDK1", "CDK4", "TK1", "DIAPH3"),
-                IFN_signature = c("CXCL10", "IFI44", "OAS1", "ISG15", "IFI44L", "IFGGB2"))
+#https://www.abcam.com/en-us/technical-resources/research-areas/marker-guides/t-cell-markers
+T_cells <-
+    list(CD4_cells = c("CD4", "IL7R", "IL21"),
+        CD8_cells = c("CD8A", "CD8B", "GZMK", "GZMB", "PRF1"),
+        Naïve = c("CCR7", "LEF1", "SELL", "TCF7", "CD3", "CD62L", "CD197"),
+        Cytotoxic = c("CST7", "GZMA", "GZMB", "IFNG", "PRF1", "TNFSF10"),
+        T_reg = c("FOXP3", "IL2RA", "CTLA4", "CD25", "IL4R", "IL7", "TGFB1",
+                "TGFB3", "TGFBR1", "CD4", "STAT5", "CD127", "IL12", "IL10"),
+        Exhausted = c("PD1", "TOX", "TIGIT", "BTLA", "CTLA4", "HAVCR2", "LAG3", "PDCD1", "TIGIT"),
+        Prolif_T = c("MKI67", "CDK1", "CDK4", "TK1", "DIAPH3"),
+        IFN_signature = c("CXCL10", "IFI44", "OAS1", "ISG15", "IFI44L", "IFGGB2"))
 
 #https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9192344/
 Fibroblasts <- list(MyoFibroblasts = c("FBLN1", "TAGLN", "ASPN", "MYLK", "WIF1", "ACTA2"),
@@ -106,21 +109,53 @@ Dendritic_cells <- list(PreDC = c("IL3RA", "PGLYRP2", "DDR2"),
                         cDC2 = c("CD300H", "PID1", "CD1C"))
 
 #https://www.abcam.com/en-us/technical-resources/research-areas/marker-guides/b-cell-markers
+#panglodb markers
 B_cells <- list(Immature_B = c("CD19", "CD20", "CD34", "CD38", "CD45R"),
+                Memory_B_cells = c("CD38", "CD80", "CD84", "CD86", "NT5E", "PAX5",
+                                "PTPRC", "SPIB", "ADAM28", "AIM2", "ALOX5", "BACH2",
+                                "BANK1", "BLK", "CCR6", "CD180", "CD19", "CD1C",
+                                "CD22", "CD27", "CD37", "CD69", "CD72", "CD79A",
+                                "CD79B", "CLCA3P", "CR2", "CXCR5", "DENND5B", "FCGR2B",
+                                "FCRL2", "FRK", "GNG7", "GPR18", "GUSBP11", "HHEX",
+                                "HLA-DOB", "IFNA10", "IGHD", "IGHM", "IGKC", "IGLL3P",
+                                "IL7", "IRF8", "LTB", "LY86", "MBL2", "MS4A1",
+                                "NMBR", "NPIPB15", "P2RX5", "PNOC", "PTPRCAP", "RALGPS2",
+                                "RASGRP2", "SIK1", "SIT1", "SLC12A1", "SP140", "STAP1",
+                                "TMEM156", "TNFRSF13B", "TNFRSF17", "TRAF4", "VPREB3", "ZBTB32"),
                 Plasm_B = c("CD38", "CD138", "IgG", "CD45", "CD184", "TNFRSF17"),
-                Memory =c("CD19", "CD20", "CD21", "CD27", "CD69", "CD95"),
-                Regulatory = c("IgM", "CD19", "CD1d", "CD21", "CD5"))
+                Regulatory = c("IgM", "CD19", "CD1d", "CD21", "CD5"),
+                B_cells_naive <- c("CD19", "CD2", "CD72", "IL2RA", "MME", "ABCB4", "ADAM28",
+                                "BACH2", "BANK1", "BCL7A", "BEND5", "BLK", "BRAF", "CD180",
+                                "CD1C", "CD22", "CD37", "CD69", "CD79A", "CD79B", "CR2",
+                                "CXCR5", "EAF2", "FCER2", "FCGR2B", "FCRL2", "FRK", "GPR18",
+                                "GUSBP11", "HHEX", "HLA-DOB", "IGHD", "IGHM", "IGKC",
+                                "IGLL3P", "IL4R", "IRF8", "LTB", "LY86", "MEP1A", "MICAL3",
+                                "MS4A1", "NMBR", "P2RX5", "P2RY14", "PNOC", "PSG2", "PTPRCAP",
+                                "RALGPS2", "RASGRP2", "SELL", "SIK1", "SLC12A1", "SPIB",
+                                "STAP1", "TCL1A", "UGT1A8", "VPREB3", "ZNF286A", "TNFSF8",
+                                "FOXP1", "MITF", "CD52", "HLA-DQB1", "TNFRSF13C", "LINC00926",
+                                "STAG3", "BIRC3", "CD74"))
 
+
+#https://www.ahajournals.org/doi/10.1161/CIRCULATIONAHA.120.052318
+Endothelial_cells <- list(Artery = c("SOX17","BMX", "SEMA3G","HEY1","LTBP4","FBLN5","GJA5","GJA4"),
+                        Vein = c("NR2F220", "COUP-TFII", "VCAM1", "ACKR128", "SELP28", "ACKR1",
+                                 "FAM174B", "LHX6", "ADAMTS18", "VWF", "IGFBP7", "CLU"),
+                        Capillary = c("CA416", "PRX", "RGCC", "SPARC", "SGK1"),
+                        Lymphatic = c("LYVE1", "PDPN", "FLT4", "PROX1", "PDPN16", "SEMA3A",
+                                      "TBX1", "HOXD3", "NR2F1", "NR2F2", "KDR", "GPR182", "TEK"))
 
 markers_list <-
     read_tsv("input/downloads/PanglaoDB_markers_27_Mar_2020.tsv") %>%
     select(`official gene symbol`, `cell type`) %>% 
     subset(`cell type` %in% c("Alveolar macrophages",
+                              "Airway epithelial cells",
                               "B cells",
                               "B cells memory",
                               "B cells naive",
                               "Basal cells",
                               "Basophils",
+                              "Cardiomyocytes",
                               "Ciliated cells",
                               "Dendritic cells",
                               "Endothelial cells",
@@ -159,8 +194,8 @@ markers_list1 <- markers_list %>%
     mutate(General_celltypes = str_replace_all(`cell type`,
                                         c("^Alveolar macrophages$" = "Macrophages",
                                           "^B cells$" = "B_cells",
-                                          "^B cells memory$" = "B_cells",
-                                          "^B cells naive$" = "B_cells",
+                                          "^B cells memory$" = "B_cells_memory",
+                                          "^B cells naive$" = "B_cells_naive",
                                           "^Basal cells$" = "Epithelial_cells",
                                           "^Basophils$" = "Granulocytes",
                                           "^Ciliated cells$" = "Epithelial_cells",
@@ -190,12 +225,12 @@ markers_list1 <- markers_list %>%
                                           "^Pulmonary vascular smooth muscle cells$" = "Smooth_muscle_cells",
                                           "^Stromal cells$" = "Stromal_cells",
                                           "^T cells$" = "T_cells",
-                                          "^T cells naive$" = "T_cells",
-                                          "^T cytotoxic cells$" = "T_cells",
-                                          "^T follicular helper cells$" = "T_cells",
-                                          "^T helper cells$" = "T_cells",
-                                          "^T memory cells$" = "T_cells",
-                                          "^T regulatory cells$" = "T_cells",
+                                          "^T cells naive$" = "T_cells_naive",
+                                          "^T cytotoxic cells$" = "T_cells_cytotoxic",
+                                          "^T follicular helper cells$" = "Tfhelper_cells",
+                                          "^T helper cells$" = "Th_cells",
+                                          "^T memory cells$" = "T_cells_memory",
+                                          "^T regulatory cells$" = "Treg_cells",
                                           "^Vascular smooth muscle cells$" = "Smooth_muscle_cells"))) %>%
     mutate(cell_types = str_replace_all(`cell type`, " ", "_"))
 
@@ -206,13 +241,6 @@ markers_list_summary <- markers_list1 %>%
 my_new_list <- markers_list_summary$markers_list
 names(my_new_list) <- markers_list_summary$cell_types
 
-# Fibroblasts <- list(Normal_Fibroblasts = ,
-#                     Cancer_associated_Fibroblasts = ,
-#                     Inflam_Fibroblasts = ,
-#                     Matrix_Fibroblasts = ,
-#                     Angio_Fibroblasts = ,
-#                     Adventitial_Fibroblasts = ,
-#                     Alveolar_Fibroblasts = )
 
 for (item in seq_len(nrow(object_list))) {
     group <- object_list$group[item]
@@ -222,42 +250,9 @@ for (item in seq_len(nrow(object_list))) {
                               group,
                               ".qs"))
 
-    object$Ann_level1 <-
-            stringr::str_replace_all(object$new_annot_clust,
-                                    c("^Alv_Macrophages$" = "Macrophages",
-                                      "^AlvEpithelial_cells$" = "Epithelial_cells",
-                                      "^Alveolar_Fibroblasts$" = "Fibroblasts",
-                                      "^AlvEpithelial_T1$" = "Epithelial_cells",
-                                      "^AlvEpithelial_T2$" = "Epithelial_cells",
-                                      "^Basophil_Mast1$" = "Basophil_Mast",
-                                      "^Basophil_Mast2$" = "Basophil_Mast",
-                                      "^Bronchial_Vessel1$" = "Endothelial_cells",
-                                      "^Capillary_Intermediate1$" = "Capillary_cells",
-                                      "^CD4_plus_MemoryT$" = "T_cells",
-                                      "^CD4T_cells$" = "T_cells",
-                                      "^CD4T_Naive$" = "T_cells",
-                                      "^CD8T_cells$" = "T_cells",
-                                      "^EREG_plus Dendritic$" = "Dendritic_cells",
-                                      "^IGSF21_plus_Dendritic_cells$" = "Dendritic_cells",
-                                      "^Int_Macrophages$" = "Macrophages",
-                                      "^Lipofibroblast$" = "Fibroblasts",
-                                      "^Myofibroblasts$" = "Fibroblasts",
-                                      "^Plasma_Bcells$" = "B_cells",
-                                      "^CD8T_Memory$" = "T_cells",
-                                      "^CD4T_cells1$" = "T_cells",
-                                      "^CD8T_cells1$" = "T_cells",
-                                      "^Myeloid_Dendritic2$" = "Dendritic_cells",
-                                      "^Plasma_Bcells1$" = "B_cells",
-                                      "^Plasmacytoid_Dendritic_cells$" = "Dendritic_cells",
-                                      "^Signalling_AlvEpithelial$" = "Epithelial_cells"))
-
-    object <- 
-        FindClusters(object,
-                     resolution = res_value)
-
     dimplot_main <-
         dimplot_better(object,
-                      group_by = c("Ann_level1")) +
+                      group_by = c("new_annot_clust")) +
             ggtitle(group) +
             NoLegend()
 
@@ -313,9 +308,398 @@ for (item in seq_len(nrow(object_list))) {
             width = 14,
             height = height,
             limitsize = FALSE)
+}
+
+
+
+for (item in seq_len(nrow(object_list))) {
+    group <- object_list$group[item]
+    res_value <- object_list$res_value[item]
+
+    object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                              group,
+                              ".qs"))
+
+    dimplot_better(object,
+                   group_by = c("Ann_level1")) +
+        ggtitle(group) +
+        NoLegend()
+
+    object$Ann_level3 <-
+        stringr::str_replace_all(object$annotations,
+                c("^DC__DC_$" = "Dendritic_cells",
+                    "^DC__DC_103_11B_plus24_plus_$" = "Dendritic_cells",
+                    "^DC__DC_PDC_8_plus_$" = "Plasmacytoid_Dendritic",
+                    "^DC__DC_8_4_11B_plus_$" = "Dendritic_cells",
+                    "^B_cell_Plasma_cell$" = "Plasma_Bcells",
+                    "^Macrophages__MF_103_11B_plus24__$" = "Macrophages",
+                    "^Macrophages__MF_11C_11B_plus_$" = "Macrophages",
+                    "^DC_monocyte_derived_AEC_conditioned$" = "DC_monocyte_derived",
+                    "^Mast_cells__MC.ES_$" = "Mast_cells",
+                    "^Neutrophils__GN.Thio_$" = "Neutrophils",
+                    "^Stromal_cells__ST.31_38_44__$" = "Stromal_cells",
+                    "^T_cells__T.Tregs_$" = "Regulatory_T",
+                    "^CD4_plus_T$" = "CD4T_cells",
+                    "^CD8_plus_T$" = "CD8T_cells",
+                    "^Capillary_Aerocyte$" = "EC_capillary_aerocyte",
+                    "^Capillary$" = "EC_capillary",
+                    "^Lympatic$" = "EC_Lympatic",
+                    "^Myeloid_Dendritic_Type_1$" = "Myeloid_Dendritic",
+                    "^Myofibroblast$" = "Myofibroblasts",
+                    "^Natural_Killer$" = "NK_cells",
+                    "^Plasma$" = "Plasma_Bcells",
+                    "^B_cell_Plasma_cell$" = "Plasma_Bcells",
+                    "^B$" = "B_cells",
+                    "^Ciliated$" = "Ciliated_cells",
+                    "^DC_monocyte_derived_AEC_conditioned$" = "DC_monocyte_derived",
+                    "^DC_monocyte_derived_antiCD40_VAF347$" = "DC_monocyte_derived",
+                    "^DC_monocyte_derived_mature$" = "DC_monocyte_derived",
+                    "^Effector memory CD8 T cells$" = "Effector_memory_CD8T",
+                    "^Endothelial_cells_blood_vessel" = "EC_blood_vessel",
+                    "^Endothelial_cells_HUVEC_VEGF$" = "EC_HUVEC_VEGF",
+                    "^Endothelial_cells_lymphatic$" = "EC_lymphatic",
+                    "^Endothelial_cells_lymphatic_KSHV$" = "EC_lymphatic",
+                    "^Fibroblasts_breast$" = "Fibroblasts",
+                    "^Intermediate monocytes$" = "Intermediate_monocytes",
+                    "^Low-density basophils$" = "Basophils",
+                    "^Low-density neutrophils$" = "Neutrophils",
+                    "^Macrophage_monocyte_derived_IL_4_Dex_TGFb$" = "Macrophage_monocyte_derived",
+                    "^Macrophage_monocyte_derived_M_CSF$" = "Macrophage_monocyte_derived",
+                    "^MAIT cells$" = "MAI_Tcells",
+                    "^Monocyte_CD16_$" = "Monocytes_CD16_minus",
+                    "^Monocyte_S._typhimurium_flagellin$" = "Monocytes",
+                    "^Neutrophil_commensal_E._coli_MG1655$" = "Neutrophils",
+                    "^Myeloid dendritic cells$" = "Myeloid_Dendritic",
+                    "^Naive B cells$" = "Naive_Bcells",
+                    "^Naive CD8 T cells$" = "Naive_CD8T",
+                    "^NK_cell$" = "NK_cells",
+                    "^Plasmablasts$" = "Plasmablasts_Bcells",
+                    "^Plasmacytoid dendritic cells$" = "Plasmacytoid_Dendritic",
+                    "^Switched memory B cells$" = "Memory_Bcells",
+                    "^T regulatory cells$" = "Regulatory_T",
+                    "^T_cell_CD4_plus_central_memory$" = "Central_memory_CD4T",
+                    "^T_cell_CD4_plus_effector_memory$" = "Effector_memory_CD4T",
+                    "^T_cell_CD4_plus_Naive$" = "Naive_CD4T",
+                    "^T_cell_CD8_plus_Central_memory$" = "Central_memory_CD8T",
+                    "^T_cell_CD8_plus_naive$" = "Naive_CD8T",
+                    "^T_cell_gamma_delta$" = "GammaDelta_Tcells",
+                    "^AT1$" = "AlvEpithelial_T1",
+                    "^AT2$" = "AlvEpithelial_T2",
+                    "^CD4_T_cells$" = "CD4T_cells",
+                    "^CD8_T_cells$" = "CD8T_cells",
+                    "^DC1$" = "Dendritic_cells1",
+                    "^DC2$" = "Dendritic_cells2",
+                    "^EC_arterial$" = "EC_artery",
+                    "^EC_general_capillary$" = "EC_capillary",
+                    "^EC_venous_pulmonary$" = "EC_vein",
+                    "^EC_venous_systemic$" = "EC_vein",
+                    "^Lymphatic_EC_mature$" = "EC_lymphatic",
+                    "^Multiciliated$" = "Ciliated_cells",
+                    "^Non_classical_monocytes$" = "Nonclassical_monocytes",
+                    "^Nonclassical_Monocyte$" = "Nonclassical_monocytes",
+                    "^Classical_Monocyte$" = "Classical_monocytes",
+                    "^Plasma_cells$" = "Plasma_Bcells",
+                    "^Plasmacytoid_DCs$" = "Plasmacytoid_Dendritic",
+                    "^T_cells_proliferating$" = "Proliferating_T",
+                    "^Neutrophil$" = "Neutrophils",
+                    "^Pericyte$" = "Pericytes",
+                    "^Astrocytes$" = "Neurons",
+                    "^Stem_cells$" = "Progenitors",
+                    "^Basophil_Mast" = "Basophils",
+                    "^Capillary_cells$" = "EC_capillary",
+                    "^Artery_cells$" = "EC_artery",
+                    "^Vein_cells$" = "EC_vein",
+                    "^Lymph_cells$" = "EC_lymphatic",
+                    "^Alv_Macrophages$" = "Alveolar_macrophages",
+                    "^Int_Macrophages$" = "Interstitial_macrophage",
+                    "^Myo_Fibroblasts$" = "Myofibroblasts",
+                    "^Oligodendrocytes$" = "Stromal_cells"))
+
+        object$Ann_level2 <-
+            stringr::str_replace_all(object$Ann_level3,
+                    c("^Fibroblasts_activated$" = "Fibroblasts",
+                        "^Fibroblasts_senescent$" = "Fibroblasts",
+                        "^Macrophages_activated$" = "Macrophages",
+                        "^Plasmacytoid_Dendritic$" = "Dendritic_cells",
+                        "^Regulatory_T$" = "T_cells",
+                        "^Alox5_plus_Lymphocytes$" = "Lymphocytes",
+                        "^Alveolar_Epithelial$" = "Epithelial_cells",
+                        "^Alveolar_Fibroblast$" = "Fibroblasts",
+                        "^Alveolar_Macrophage$" = "Macrophages",
+                        "^Ccr7_plus_Dendritic$" = "Dendritic_cells",
+                        "^Ciliated_cells$" = "Epithelial_cells",
+                        "^Classical_monocytes" = "Monocytes",
+                        "^EC_capillary$" = "Endothelial_cells",
+                        "^EC_capillary_aerocyte$" = "Endothelial_cells",
+                        "^EC_Lympatic$" = "Endothelial_cells",
+                        "^Interstitial_Macrophage$" = "Macrophages",
+                        "^Interstital_macrophage$" = "Macrophages",
+                        "^Myeloid_Dendritic$" = "Dendritic_cells",
+                        "^Myofibroblasts$" = "Fibroblasts",
+                        "^Nonclassical_monocytes$" = "Monocytes",
+                        "^Plasma_Bcells$" = "B_cells",
+                        "^Proliferating_Alveolar_Macrophage" = "Macrophages",
+                        "^Proliferating_T$" = "T_cells",
+                        "^Proliferating_Dendritic$" = "Dendritic_cells",
+                        "^Zbtb32_plus_B$" = "B_cells",
+                        "^Central_memory_CD4T$" = "T_cells",
+                        "^Central_memory_CD8T$" = "T_cells",
+                        "^DC_monocyte_derived$" = "Dendritic_cells",
+                        "^EC_blood_vessel$" = "Endothelial_cells",
+                        "^EC_HUVEC_VEGF$" = "Endothelial_cells",
+                        "^Effector_memory_CD4T$" = "T_cells",
+                        "^Effector_memory_CD8T$" = "T_cells",
+                        "^GammaDelta_Tcells$" = "T_cells",
+                        "^Intermediate_monocytes$" = "Monocytes",
+                        "^Macrophage_monocyte_derived$" = "Macrophages",
+                        "^MAI_Tcells$" = "T_cells",
+                        "^Memory_Bcells$" = "B_cells",
+                        "^Monocyte_CD16_plus$" = "Monocytes",
+                        "^Monocyte_leukotriene_D4$" = "Monocytes",
+                        "^Monocytes_CD16_minus$" = "Monocytes",
+                        "^Naive_Bcells$" = "B_cells",
+                        "^Naive_CD8T$" = "T_cells",
+                        "^Plasmablasts_Bcells$" = "B_cells",
+                        "^Alveolar_fibroblasts$" = "Fibroblasts",
+                        "^Alveolar_macrophages$" = "Macrophages",
+                        "^AlvEpithelial_T1$" = "Epithelial_cells",
+                        "^AlvEpithelial_T2$" = "Epithelial_cells",
+                        "^CD4T_cells$" = "T_cells",
+                        "^CD8T_cells$" = "T_cells",
+                        "^Dendritic_cells1$" = "Dendritic_cells",
+                        "^Dendritic_cells2$" = "Dendritic_cells",
+                        "^EC_artery$" = "Endothelial_cells",
+                        "^EC_capillary$" = "Endothelial_cells",
+                        "^EC_vein$" = "Endothelial_cells",
+                        "^EC_lymphatic$" = "Endothelial_cells",
+                        "^Interstitial_macrophage$" = "Macrophages",
+                        "^Peribronchial_fibroblasts$" = "Fibroblasts",
+                        "^SM_activated_stress_response$" = "Smooth_muscle",
+                        "^Subpleural_fibroblasts$" = "Fibroblasts",
+                        "^Transitional_Club_AT2$" = "Epithelial_cells",
+                        "^Tuft$" = "Epithelial_cells",
+                        "^Proliferating_NK$" = "NK_cells",
+                        "^Tgd_cells$" = "T_cells",
+                        "^AlvEpithelial_cells$" = "Epithelial_cells",
+                        "^Club_cells$" = "Epithelial_cells"))
+
+        object$Ann_level1 <-
+            stringr::str_replace_all(object$Ann_level2,
+                        c("^B_cells$" = "Immune_Lymphoid",
+                        "^Dendritic_cells$" = "Immune_Myeloid",
+                        "^Erythrocytes$" = "Immune_Myeloid",
+                        "^Macrophages$" = "Immune_Myeloid",
+                        "^Mast_cells$" = "Immune_Myeloid",
+                        "^Monocytes$" = "Immune_Myeloid",
+                        "^Neutrophils$" = "Immune_Myeloid",
+                        "^NK_cells$" = "Immune_Lymphoid",
+                        "^Fibroblasts$" = "Stroma",
+                        "^Stromal_cells$" = "Stroma",
+                        "^T_cells$" = "Immune_Lymphoid",
+                        "^Lymphocytes$" = "Immune_Lymphoid",
+                        "^Pericytes$" = "Stroma",
+                        "^Basophils$" = "Immune_Myeloid",
+                        "^Osteoblasts$" = "Stroma",
+                        "^Smooth_muscle$" = "Stroma",
+                        "^Cardiomyocytes$" = "Stroma",
+                        "^Adipocytes$" = "Stroma",
+                        "^Neurons$" = "Stroma",
+                        "^Granulocytes$" = "Immune_Myeloid",
+                        "^Progenitors$" = "Immune_Myeloid",
+                        "^Lymphoid_cells$" = "Immune_Lymphoid",
+                        "^Mesothelial_cells$" = "Stroma",
+                        "^Mural_cells$" = "Stroma"))
+
+    object <- 
+        FindClusters(object,
+                     resolution = res_value)
+
+    qs::qsave(x = object,
+              file = str_c("output/seurat_objects/Annotation_level1/",
+                           group,
+                           ".qs"))
+
+    dimplot_sc <-
+        dimplot_better(object,
+                      group_by = c("seurat_clusters")) +
+            ggtitle(group) +
+            NoLegend()
+
+    dimplot_ann_level1 <-
+        dimplot_better(object,
+                      group_by = c("Ann_level1")) +
+            ggtitle(group) +
+            NoLegend()
+    
+    dimplot_ann_level2 <-
+        dimplot_better(object,
+                      group_by = c("Ann_level2")) +
+            ggtitle(group) +
+            NoLegend()
+    
+    dimplot_ann_level3 <-
+        dimplot_better(object,
+                      group_by = c("Ann_level3")) +
+            ggtitle(group) +
+            NoLegend()
+
+    big_panel_plot <- 
+        cowplot::plot_grid(dimplot_sc,
+                            dimplot_ann_level1,
+                            dimplot_ann_level2,
+                            dimplot_ann_level3,
+                            ncol = 2)
+
+     ggsave(filename = str_c("output/figures/relustering_normals/",
+                            group,
+                            "/",
+                            "level3_annotation",
+                            ".png"),
+            plot = big_panel_plot,
+            width = 16,
+            height = 16,
+            limitsize = FALSE,
+            bg = "white")
+}
+
+
+
+
+
+
+object_list_annot <-
+    tribble(~group,                         ~ref,                   ~labels,
+            "patient_prim_normal_cells",    list("human", FALSE),
+            "patient_mets_normal_cells",    0.05,
+            "xeno_prim_mouse",              0.1,
+            "xeno_mets_mouse",              0.1,
+            "mm_prim_normal_cells",         0.25,
+            "mm_mets_normal_cells",         0.2)
+
+
+
+
+human_lung_ref <-
+    qs::qread("input/downloads/ds_human_lung_atlas.qs") %>%
+    subset(free_annotation != "Lymphatic_EC_differentiating")
+
+dimplot_better(human_lung_ref,
+              group_by = c("ann_level_5")) +
+    ggtitle("Human lung reference") +
+    NoLegend()
+
+
+ref_lung <-
+    SingleR::SingleR(test = as.SingleCellExperiment(object),
+            ref = SeuratObject::GetAssayData(human_lung_ref),
+            labels = human_lung_ref$free_annotation,
+            aggr.ref = TRUE)
+object$new_ref_ann <- ref_lung$labels
+
+s_obj <- object
+s_obj$annotations <- object$new_ref_ann
+
+Idents(s_obj) <- s_obj$seurat_clusters
+clust_info <- tibble()
+for (cluster in unique(s_obj$seurat_clusters)) {
+    subset_object <- subset(s_obj, ident = cluster) %>%
+        FindVariableFeatures() %>%
+        ScaleData() %>%
+        # don't ask for more PCs than there are cells
+        RunPCA(npcs = min(50,
+                        sum(s_obj$seurat_clusters == cluster) - 1))
+
+    if (length(unique(subset_object$sample_name)) > 1 &&
+        ncol(subset_object) > 50) {
+        subset_object <- RunHarmony(subset_object,
+                                    group.by.vars = "sample_name") %>%
+            process_seurat(reduction = "harmony")
+    } else {
+        subset_object <- subset_object
+    }
+
+    subset_object$re_cluster <- str_c(cluster,
+                                    ".",
+                                    subset_object$seurat_clusters)
+
+    print(str_c("Done reclustering ", group, " ", cluster))
+    clust_info <- subset_object@meta.data %>%
+            as.data.frame() %>%
+            select(re_cluster) %>%
+            rbind(clust_info)
+}
+
+s_obj <- AddMetaData(s_obj, metadata = clust_info)
+s_obj$new_annot_clust <- s_obj$re_cluster
+
+cluster_celltypes <-
+    table(s_obj$re_cluster, s_obj$annotations) %>%
+    as.data.frame() %>%
+    group_by(Var1) %>%
+    arrange(desc(Freq), .by_group = TRUE) %>%
+    slice_head(n = 1)
+
+for (i in seq_len(nrow(cluster_celltypes))) {
+    seurat_clust <- str_c("^", cluster_celltypes$Var1[i], "$") %>%
+        as.character()
+
+    celltype <- cluster_celltypes$Var2[i] %>%
+        as.character()
+
+    s_obj$new_annot_clust <-
+        str_replace_all(string = s_obj$new_annot_clust,
+                        pattern = seurat_clust,
+                        replacement = celltype)
+}
+
+s_objr <-
+    process_seurat(s_obj) %>%
+    RunHarmony(group.by.vars = c("data_source")) %>%
+    process_seurat(reduction = "harmony")
+
+
+dimplot_better(s_objr,
+                      group_by = c("new_annot_clust")) +
+            ggtitle(group)
+
+
+
+prim <-
+    process_seurat(object) %>%
+    RunHarmony(group.by.vars = c("model")) %>%
+    process_seurat(reduction = "harmony")
+
+dimplot_better(prim,
+               group_by = c("new_annot_clust")) +
+            ggtitle(group)
+
+
+model for mouse
+data_source for others
+
+
+
+
+
+
+for (item in seq_len(nrow(object_list))) {
+    group <- object_list$group[item]
+    res_value <- object_list$res_value[item]
+
+    object <-
+        qs::qread(str_c("output/seurat_objects/Annotation_level1/",
+                        group,
+                        ".qs"))
+
+    dimplot_main <-
+        dimplot_better(object,
+                      group_by = c("Ann_level1")) +
+            ggtitle(group) +
+            NoLegend()
 
     #subset ech celltype for reclustering and labelling the celltypes
-    for (celltypes in c("Macrophages", "T_cells", "Fibroblasts", "Dendritic_cells", "B_cells")) {
+    for (celltypes in c("Macrophages", "T_cells", "Fibroblasts",
+                        "Dendritic_cells", "B_cells", "Endothelial_cells")) {
         if (celltypes %in% object$Ann_level1) {
             subset_sobj <-
                 subset(object,
@@ -467,5 +851,7 @@ for (item in seq_len(nrow(object_list))) {
     print(str_c("Finished ", group, " ", celltypes))
     }
 }
+
+
 
 ```
