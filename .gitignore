@@ -66,3 +66,11 @@ osteo_atlas_files
 rfiles
 tmp
 
+
+#velocity analysis files
+loom_output
+loom_files_old
+sbatch
+tmp_bams
+tmp_bcs
+analyze_looms_files
