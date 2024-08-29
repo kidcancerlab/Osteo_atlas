@@ -74,3 +74,4 @@ sbatch
 tmp_bams
 tmp_bcs
 analyze_looms_files
+*genes.gtf
