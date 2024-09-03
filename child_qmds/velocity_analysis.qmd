@@ -124,18 +124,6 @@ lapply(names(non_null), function(ob_name) {
 ## Write off Metadata for Velocity Analysis
 
 ```{r write-off-md}
-lapply(names(obj_list), function(ob_name) {
-    ob <- obj_list[[ob_name]]
-    write_off_md(ob,
-                 id_col = "sample_name",
-                 output_dir = paste0("loom_output/", ob_name),
-                 vars_to_keep = c("sample_name",
-                                  "seurat_clusters",
-                                  "Ann_level1",
-                                  "Ann_level2",
-                                  "Ann_level3"))
-})
-
 lapply(names(obj_list), function(obj_name) {
     write_off_md(sobj = obj_list[[obj_name]],
                  id_col = "sample_name",
