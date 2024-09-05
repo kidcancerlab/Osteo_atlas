@@ -121,6 +121,27 @@ lapply(names(non_null), function(ob_name) {
 })
 ```
 
+## Add Metadata Columns to Objects
+
+### Cell Cycle
+
+I'm going to add cell cycle phases as a metadata feature to ensure that cell cycle effects aren't contributing to RNA velocity.
+
+```{r add-cc}
+obj_list <- lapply(obj_list, function(x) {
+    CellCycleScoring(x,
+                     s.features = cc.genes$s.genes,
+                     g2m.features = cc.genes$g2m.genes)
+})
+```
+
+### FDL
+
+```{r add-fdl}
+obj_list <- lapply(obj_list, run_fdl)
+qs::qsave(obj_list, "output/matt_obj_list.qs")
+```
+
 ## Write off Metadata for Velocity Analysis
 
 ```{r write-off-md}
@@ -134,7 +155,8 @@ lapply(names(obj_list), function(obj_name) {
                                   "seurat_clusters",
                                   "Ann_level1",
                                   "Ann_level2",
-                                  "Ann_level3"))
+                                  "Ann_level3",
+                                  "Phase"))
 })
 ```
 
