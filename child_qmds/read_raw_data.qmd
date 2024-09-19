@@ -357,3 +357,66 @@ results <-
 ```
 
 
+
+# Count before the QC
+Count the number of cells per sample before the QC
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
+single_sobjs <- 
+    list.files(path = "output/seurat_objects/sobj_preprocess/",
+               full.names = FALSE)
+counts <- tibble()
+for (item in single_sobjs){
+    sobj <- qs::qread(str_c("output/seurat_objects/sobj_preprocess/",
+                            item))
+    sobj$ncount_median_before <- median(sobj$nCount_RNA)
+    unique <- sobj@meta.data$unique %>%
+        head(n=1)
+    Hmeta_data <- sobj@meta.data %>%
+        as.data.table %>%
+        group_by(sample_name, unique) %>%
+        summarize(ncount_median_before = median(nCount_RNA),
+                  N_cells_before = n(),
+                  .groups = "drop")
+
+    counts <- Hmeta_data %>%
+        select("sample_name", "unique", "ncount_median_before", "N_cells_before") %>%
+        rbind(counts) %>% 
+        arrange(unique)
+}
+```
+
+# Count post QC
+some of the samples are discarded as the ncountmin was set 500 and number of 
+cells limit was set to 200 cells and above per sample. The upper cutoff was set 
+as 5000 max cells per sample for similar dataset representation 
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+counts_afterQC <- tibble()
+
+for (group in unique(all_samples_csv$unique)) {
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                              group,
+                              ".qs"))
+    #DimPlot(object)
+    #extract meta data
+    Hmeta_data <- object@meta.data %>%
+        as.data.table %>%
+        group_by(sample_name, unique) %>% 
+        summarise(ncount_median_after = median(nCount_RNA),
+                  N_cells_after = n(),
+                  .groups = "drop")
+
+    counts_afterQC <- Hmeta_data %>% 
+        select("N_cells_after", "sample_name", "unique", "ncount_median_after") %>%
+        rbind(counts_afterQC) %>%
+        arrange(unique)
+}
+
+combined_table <- 
+    dplyr::full_join(counts, counts_afterQC, by = c("sample_name", "unique")) %>%
+    select("sample_name", "unique", "ncount_median_before",
+            "ncount_median_after", "N_cells_before", "N_cells_after")
+
+DT::datatable(arrange(combined_table, unique, desc(N_cells_before)))
+
+write_tsv(combined_table, "output/counts/cell_counts.txt")
+```

@@ -3,7 +3,7 @@
 ```{r dimplot_better_function}
 #| cache.vars = 'dimplot_better'
 dimplot_better <- function(object,
-                           group_by,
+                           group_by = NULL,
                            cols,
                            ncol = 1,
                            label.size = 2.5,

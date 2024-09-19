@@ -4,62 +4,6 @@ Recluster the normal cell types and annotate the types.
 
 ```{r normal_reclustering, include=FALSE}
 
-object_list <-
-    tribble(~group,                         ~res_value,
-            # "patient_prim_cancer_cells",    0.1,
-            # "patient_mets_cancer_cells",    0.1,
-            # "mm_prim_cancer_cells",         0.3,
-            # "mm_mets_cancer_cells",         0.3,
-            # "xeno_prim_human",              0.2,
-            # "xeno_mets_human",              0.1,
-            "patient_prim_normal_cells",    0.15,
-            "patient_mets_normal_cells",    0.05,
-            "xeno_prim_mouse",              0.1,
-            "xeno_mets_mouse",              0.1,
-            "mm_prim_normal_cells",         0.25,
-            "mm_mets_normal_cells",         0.2)
-
-group_celltype_list <- 
-    list(patient_prim_normal_cells = c("Macrophages",
-                                        "Endothelial_cells",
-                                        "T_cells",
-                                        "NK_cells",
-                                        "Dendritic cells",
-                                        "B_cells"),
-        patient_mets_normal_cells = c("Macrophage",
-                                        "Endothelial_cells",
-                                        "Tcells",
-                                        "NK cells",
-                                        "Monocytes",
-                                        "Dendritic cells",
-                                        "B cells"),
-        xeno_prim_mouse = c("Macrophages",
-                            "Endothelial_cells",
-                            "T_cells",
-                            "NK_cells",
-                            "Dendritic cells",
-                            "B_cells"),
-        xeno_mets_mouse = c("Macrophages",
-                            "Endothelial_cells",
-                            "T_cells",
-                            "NK_cells",
-                            "Dendritic cells",
-                            "B_cells"),
-        mm_prim_normal_cells = c("Macrophages",
-                                "Endothelial_cells",
-                                "T_cells",
-                                "NK_cells",
-                                "Dendritic cells",
-                                "B_cells",
-                                "Fibroblasts"),
-        mm_mets_normal_cells = c("Macrophages",
-                                "Endothelial_cells",
-                                "T_cells",
-                                "NK_cells",
-                                "Dendritic cells",
-                                "B_cells"))
-
-
 #https://www.cell.com/trends/immunology/fulltext/S1471-4906(22)00094-1
 Macrophages <- list(LA_TAMs = c("APOC1", "APOE", "APC5", "FABP5"),
                    Inflam_TAMs = c("IL1B", "CCL3", "CXCL1", "CXCL2", "CXCL3", "CXCL5"),
@@ -242,6 +186,16 @@ my_new_list <- markers_list_summary$markers_list
 names(my_new_list) <- markers_list_summary$cell_types
 
 
+object_list <-
+    tribble(~group,                         ~res_value,
+            "patient_prim_normal_cells",    0.1,
+            "patient_mets_normal_cells",    0.1,
+            "xeno_prim_mouse",              0.1,
+            "xeno_mets_mouse",              0.1,
+            "mm_prim_normal_cells",         0.25,
+            "mm_mets_normal_cells",         0.2)
+
+
 for (item in seq_len(nrow(object_list))) {
     group <- object_list$group[item]
     res_value <- object_list$res_value[item]
@@ -252,7 +206,7 @@ for (item in seq_len(nrow(object_list))) {
 
     dimplot_main <-
         dimplot_better(object,
-                      group_by = c("new_annot_clust")) +
+                      group_by = c("Ann_level3")) +
             ggtitle(group) +
             NoLegend()
 
@@ -312,6 +266,7 @@ for (item in seq_len(nrow(object_list))) {
 
 
 
+
 for (item in seq_len(nrow(object_list))) {
     group <- object_list$group[item]
     res_value <- object_list$res_value[item]
@@ -319,196 +274,6 @@ for (item in seq_len(nrow(object_list))) {
     object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                               group,
                               ".qs"))
-
-    dimplot_better(object,
-                   group_by = c("Ann_level1")) +
-        ggtitle(group) +
-        NoLegend()
-
-    object$Ann_level3 <-
-        stringr::str_replace_all(object$annotations,
-                c("^DC__DC_$" = "Dendritic_cells",
-                    "^DC__DC_103_11B_plus24_plus_$" = "Dendritic_cells",
-                    "^DC__DC_PDC_8_plus_$" = "Plasmacytoid_Dendritic",
-                    "^DC__DC_8_4_11B_plus_$" = "Dendritic_cells",
-                    "^B_cell_Plasma_cell$" = "Plasma_Bcells",
-                    "^Macrophages__MF_103_11B_plus24__$" = "Macrophages",
-                    "^Macrophages__MF_11C_11B_plus_$" = "Macrophages",
-                    "^DC_monocyte_derived_AEC_conditioned$" = "DC_monocyte_derived",
-                    "^Mast_cells__MC.ES_$" = "Mast_cells",
-                    "^Neutrophils__GN.Thio_$" = "Neutrophils",
-                    "^Stromal_cells__ST.31_38_44__$" = "Stromal_cells",
-                    "^T_cells__T.Tregs_$" = "Regulatory_T",
-                    "^CD4_plus_T$" = "CD4T_cells",
-                    "^CD8_plus_T$" = "CD8T_cells",
-                    "^Capillary_Aerocyte$" = "EC_capillary_aerocyte",
-                    "^Capillary$" = "EC_capillary",
-                    "^Lympatic$" = "EC_Lympatic",
-                    "^Myeloid_Dendritic_Type_1$" = "Myeloid_Dendritic",
-                    "^Myofibroblast$" = "Myofibroblasts",
-                    "^Natural_Killer$" = "NK_cells",
-                    "^Plasma$" = "Plasma_Bcells",
-                    "^B_cell_Plasma_cell$" = "Plasma_Bcells",
-                    "^B$" = "B_cells",
-                    "^Ciliated$" = "Ciliated_cells",
-                    "^DC_monocyte_derived_AEC_conditioned$" = "DC_monocyte_derived",
-                    "^DC_monocyte_derived_antiCD40_VAF347$" = "DC_monocyte_derived",
-                    "^DC_monocyte_derived_mature$" = "DC_monocyte_derived",
-                    "^Effector memory CD8 T cells$" = "Effector_memory_CD8T",
-                    "^Endothelial_cells_blood_vessel" = "EC_blood_vessel",
-                    "^Endothelial_cells_HUVEC_VEGF$" = "EC_HUVEC_VEGF",
-                    "^Endothelial_cells_lymphatic$" = "EC_lymphatic",
-                    "^Endothelial_cells_lymphatic_KSHV$" = "EC_lymphatic",
-                    "^Fibroblasts_breast$" = "Fibroblasts",
-                    "^Intermediate monocytes$" = "Intermediate_monocytes",
-                    "^Low-density basophils$" = "Basophils",
-                    "^Low-density neutrophils$" = "Neutrophils",
-                    "^Macrophage_monocyte_derived_IL_4_Dex_TGFb$" = "Macrophage_monocyte_derived",
-                    "^Macrophage_monocyte_derived_M_CSF$" = "Macrophage_monocyte_derived",
-                    "^MAIT cells$" = "MAI_Tcells",
-                    "^Monocyte_CD16_$" = "Monocytes_CD16_minus",
-                    "^Monocyte_S._typhimurium_flagellin$" = "Monocytes",
-                    "^Neutrophil_commensal_E._coli_MG1655$" = "Neutrophils",
-                    "^Myeloid dendritic cells$" = "Myeloid_Dendritic",
-                    "^Naive B cells$" = "Naive_Bcells",
-                    "^Naive CD8 T cells$" = "Naive_CD8T",
-                    "^NK_cell$" = "NK_cells",
-                    "^Plasmablasts$" = "Plasmablasts_Bcells",
-                    "^Plasmacytoid dendritic cells$" = "Plasmacytoid_Dendritic",
-                    "^Switched memory B cells$" = "Memory_Bcells",
-                    "^T regulatory cells$" = "Regulatory_T",
-                    "^T_cell_CD4_plus_central_memory$" = "Central_memory_CD4T",
-                    "^T_cell_CD4_plus_effector_memory$" = "Effector_memory_CD4T",
-                    "^T_cell_CD4_plus_Naive$" = "Naive_CD4T",
-                    "^T_cell_CD8_plus_Central_memory$" = "Central_memory_CD8T",
-                    "^T_cell_CD8_plus_naive$" = "Naive_CD8T",
-                    "^T_cell_gamma_delta$" = "GammaDelta_Tcells",
-                    "^AT1$" = "AlvEpithelial_T1",
-                    "^AT2$" = "AlvEpithelial_T2",
-                    "^CD4_T_cells$" = "CD4T_cells",
-                    "^CD8_T_cells$" = "CD8T_cells",
-                    "^DC1$" = "Dendritic_cells1",
-                    "^DC2$" = "Dendritic_cells2",
-                    "^EC_arterial$" = "EC_artery",
-                    "^EC_general_capillary$" = "EC_capillary",
-                    "^EC_venous_pulmonary$" = "EC_vein",
-                    "^EC_venous_systemic$" = "EC_vein",
-                    "^Lymphatic_EC_mature$" = "EC_lymphatic",
-                    "^Multiciliated$" = "Ciliated_cells",
-                    "^Non_classical_monocytes$" = "Nonclassical_monocytes",
-                    "^Nonclassical_Monocyte$" = "Nonclassical_monocytes",
-                    "^Classical_Monocyte$" = "Classical_monocytes",
-                    "^Plasma_cells$" = "Plasma_Bcells",
-                    "^Plasmacytoid_DCs$" = "Plasmacytoid_Dendritic",
-                    "^T_cells_proliferating$" = "Proliferating_T",
-                    "^Neutrophil$" = "Neutrophils",
-                    "^Pericyte$" = "Pericytes",
-                    "^Astrocytes$" = "Neurons",
-                    "^Stem_cells$" = "Progenitors",
-                    "^Basophil_Mast" = "Basophils",
-                    "^Capillary_cells$" = "EC_capillary",
-                    "^Artery_cells$" = "EC_artery",
-                    "^Vein_cells$" = "EC_vein",
-                    "^Lymph_cells$" = "EC_lymphatic",
-                    "^Alv_Macrophages$" = "Alveolar_macrophages",
-                    "^Int_Macrophages$" = "Interstitial_macrophage",
-                    "^Myo_Fibroblasts$" = "Myofibroblasts",
-                    "^Oligodendrocytes$" = "Stromal_cells"))
-
-        object$Ann_level2 <-
-            stringr::str_replace_all(object$Ann_level3,
-                    c("^Fibroblasts_activated$" = "Fibroblasts",
-                        "^Fibroblasts_senescent$" = "Fibroblasts",
-                        "^Macrophages_activated$" = "Macrophages",
-                        "^Plasmacytoid_Dendritic$" = "Dendritic_cells",
-                        "^Regulatory_T$" = "T_cells",
-                        "^Alox5_plus_Lymphocytes$" = "Lymphocytes",
-                        "^Alveolar_Epithelial$" = "Epithelial_cells",
-                        "^Alveolar_Fibroblast$" = "Fibroblasts",
-                        "^Alveolar_Macrophage$" = "Macrophages",
-                        "^Ccr7_plus_Dendritic$" = "Dendritic_cells",
-                        "^Ciliated_cells$" = "Epithelial_cells",
-                        "^Classical_monocytes" = "Monocytes",
-                        "^EC_capillary$" = "Endothelial_cells",
-                        "^EC_capillary_aerocyte$" = "Endothelial_cells",
-                        "^EC_Lympatic$" = "Endothelial_cells",
-                        "^Interstitial_Macrophage$" = "Macrophages",
-                        "^Interstital_macrophage$" = "Macrophages",
-                        "^Myeloid_Dendritic$" = "Dendritic_cells",
-                        "^Myofibroblasts$" = "Fibroblasts",
-                        "^Nonclassical_monocytes$" = "Monocytes",
-                        "^Plasma_Bcells$" = "B_cells",
-                        "^Proliferating_Alveolar_Macrophage" = "Macrophages",
-                        "^Proliferating_T$" = "T_cells",
-                        "^Proliferating_Dendritic$" = "Dendritic_cells",
-                        "^Zbtb32_plus_B$" = "B_cells",
-                        "^Central_memory_CD4T$" = "T_cells",
-                        "^Central_memory_CD8T$" = "T_cells",
-                        "^DC_monocyte_derived$" = "Dendritic_cells",
-                        "^EC_blood_vessel$" = "Endothelial_cells",
-                        "^EC_HUVEC_VEGF$" = "Endothelial_cells",
-                        "^Effector_memory_CD4T$" = "T_cells",
-                        "^Effector_memory_CD8T$" = "T_cells",
-                        "^GammaDelta_Tcells$" = "T_cells",
-                        "^Intermediate_monocytes$" = "Monocytes",
-                        "^Macrophage_monocyte_derived$" = "Macrophages",
-                        "^MAI_Tcells$" = "T_cells",
-                        "^Memory_Bcells$" = "B_cells",
-                        "^Monocyte_CD16_plus$" = "Monocytes",
-                        "^Monocyte_leukotriene_D4$" = "Monocytes",
-                        "^Monocytes_CD16_minus$" = "Monocytes",
-                        "^Naive_Bcells$" = "B_cells",
-                        "^Naive_CD8T$" = "T_cells",
-                        "^Plasmablasts_Bcells$" = "B_cells",
-                        "^Alveolar_fibroblasts$" = "Fibroblasts",
-                        "^Alveolar_macrophages$" = "Macrophages",
-                        "^AlvEpithelial_T1$" = "Epithelial_cells",
-                        "^AlvEpithelial_T2$" = "Epithelial_cells",
-                        "^CD4T_cells$" = "T_cells",
-                        "^CD8T_cells$" = "T_cells",
-                        "^Dendritic_cells1$" = "Dendritic_cells",
-                        "^Dendritic_cells2$" = "Dendritic_cells",
-                        "^EC_artery$" = "Endothelial_cells",
-                        "^EC_capillary$" = "Endothelial_cells",
-                        "^EC_vein$" = "Endothelial_cells",
-                        "^EC_lymphatic$" = "Endothelial_cells",
-                        "^Interstitial_macrophage$" = "Macrophages",
-                        "^Peribronchial_fibroblasts$" = "Fibroblasts",
-                        "^SM_activated_stress_response$" = "Smooth_muscle",
-                        "^Subpleural_fibroblasts$" = "Fibroblasts",
-                        "^Transitional_Club_AT2$" = "Epithelial_cells",
-                        "^Tuft$" = "Epithelial_cells",
-                        "^Proliferating_NK$" = "NK_cells",
-                        "^Tgd_cells$" = "T_cells",
-                        "^AlvEpithelial_cells$" = "Epithelial_cells",
-                        "^Club_cells$" = "Epithelial_cells"))
-
-        object$Ann_level1 <-
-            stringr::str_replace_all(object$Ann_level2,
-                        c("^B_cells$" = "Immune_Lymphoid",
-                        "^Dendritic_cells$" = "Immune_Myeloid",
-                        "^Erythrocytes$" = "Immune_Myeloid",
-                        "^Macrophages$" = "Immune_Myeloid",
-                        "^Mast_cells$" = "Immune_Myeloid",
-                        "^Monocytes$" = "Immune_Myeloid",
-                        "^Neutrophils$" = "Immune_Myeloid",
-                        "^NK_cells$" = "Immune_Lymphoid",
-                        "^Fibroblasts$" = "Stroma",
-                        "^Stromal_cells$" = "Stroma",
-                        "^T_cells$" = "Immune_Lymphoid",
-                        "^Lymphocytes$" = "Immune_Lymphoid",
-                        "^Pericytes$" = "Stroma",
-                        "^Basophils$" = "Immune_Myeloid",
-                        "^Osteoblasts$" = "Stroma",
-                        "^Smooth_muscle$" = "Stroma",
-                        "^Cardiomyocytes$" = "Stroma",
-                        "^Adipocytes$" = "Stroma",
-                        "^Neurons$" = "Stroma",
-                        "^Granulocytes$" = "Immune_Myeloid",
-                        "^Progenitors$" = "Immune_Myeloid",
-                        "^Lymphoid_cells$" = "Immune_Lymphoid",
-                        "^Mesothelial_cells$" = "Stroma",
-                        "^Mural_cells$" = "Stroma"))
 
     object <- 
         FindClusters(object,
@@ -523,25 +288,30 @@ for (item in seq_len(nrow(object_list))) {
         dimplot_better(object,
                       group_by = c("seurat_clusters")) +
             ggtitle(group) +
-            NoLegend()
+            NoLegend() +
+        ggtitle("Seurat clusters")
 
     dimplot_ann_level1 <-
         dimplot_better(object,
                       group_by = c("Ann_level1")) +
             ggtitle(group) +
-            NoLegend()
-    
+            NoLegend() +
+            ggtitle("Annotation level 1")
+        
+
     dimplot_ann_level2 <-
         dimplot_better(object,
                       group_by = c("Ann_level2")) +
             ggtitle(group) +
-            NoLegend()
+            NoLegend() +
+            ggtitle("Annotation level 2")
     
     dimplot_ann_level3 <-
         dimplot_better(object,
                       group_by = c("Ann_level3")) +
             ggtitle(group) +
-            NoLegend()
+            NoLegend() +
+            ggtitle("Annotation level 3")
 
     big_panel_plot <- 
         cowplot::plot_grid(dimplot_sc,
@@ -567,37 +337,56 @@ for (item in seq_len(nrow(object_list))) {
 
 
 
-object_list_annot <-
-    tribble(~group,                         ~ref,                   ~labels,
-            "patient_prim_normal_cells",    list("human", FALSE),
-            "patient_mets_normal_cells",    0.05,
-            "xeno_prim_mouse",              0.1,
-            "xeno_mets_mouse",              0.1,
-            "mm_prim_normal_cells",         0.25,
-            "mm_mets_normal_cells",         0.2)
+human_macs <- 
+    qs::qread("/gpfs0/home2/gdrobertslab/lab/Analysis/Ryan/epithelial/output/rdata/human_macs_final.qs")
 
 
+dimplot_better(human_macs, group_by = "macs_assignment")
+
+obj <- qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_normal_cells.qs")
+
+dimplot_better(obj, group_by = "seurat_clusters")
+
+
+sobj <-
+    obj %>%
+    subset(Ann_level1 == "Immune_Myeloid") %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = "model") %>%
+    process_seurat(reduction = "harmony")
+
+dimplot_better(sobj, group_by = "Ann_level3")
 
 
 human_lung_ref <-
-    qs::qread("input/downloads/ds_human_lung_atlas.qs") %>%
-    subset(free_annotation != "Lymphatic_EC_differentiating")
+    qs::qread("input/downloads/ds_human_lung_atlas.qs")
+Idents(human_lung_ref) <- human_lung_ref$free_annotation
+human_lung_subset <-
+    human_lung_ref %>%
+    subset(ident = c("Alveolar_macrophages",
+                         "DC1",
+                         "Classical_monocytes",
+                         "DC2",
+                         "Interstitial_macrophages",
+                         "Mast_cells",
+                         "Migratory_DCs",
+                         "Non_classical_monocytes"))
 
-dimplot_better(human_lung_ref,
-              group_by = c("ann_level_5")) +
-    ggtitle("Human lung reference") +
-    NoLegend()
+human_lung_subset$CellType <-
+    str_replace_all(human_lung_subset$free_annotation,
+                    c("^Classical_monocytes" = "cMonocyte",
+                     "^Non_classical_monocytes$" = "ncMonocyte",
+                     "^Alveolar_macrophages$" = "Alveolar",
+                     "^Interstitial_macrophages$" = "Interstitial"))
+ref <-
+    SingleR::SingleR(test = as.SingleCellExperiment(sobj),
+                    ref = list(GetAssayData(human_macs), GetAssayData(human_lung_subset)),
+                    labels = list(human_macs$macs_assignment, human_lung_subset$CellType),
+                    aggr.ref = TRUE)
 
+s_obj <- sobj
 
-ref_lung <-
-    SingleR::SingleR(test = as.SingleCellExperiment(object),
-            ref = SeuratObject::GetAssayData(human_lung_ref),
-            labels = human_lung_ref$free_annotation,
-            aggr.ref = TRUE)
-object$new_ref_ann <- ref_lung$labels
-
-s_obj <- object
-s_obj$annotations <- object$new_ref_ann
+s_obj$annotations <- ref$labels
 
 Idents(s_obj) <- s_obj$seurat_clusters
 clust_info <- tibble()
@@ -622,7 +411,6 @@ for (cluster in unique(s_obj$seurat_clusters)) {
                                     ".",
                                     subset_object$seurat_clusters)
 
-    print(str_c("Done reclustering ", group, " ", cluster))
     clust_info <- subset_object@meta.data %>%
             as.data.frame() %>%
             select(re_cluster) %>%
@@ -652,30 +440,803 @@ for (i in seq_len(nrow(cluster_celltypes))) {
                         replacement = celltype)
 }
 
-s_objr <-
-    process_seurat(s_obj) %>%
-    RunHarmony(group.by.vars = c("data_source")) %>%
+dimplot_better(s_obj, group_by = "new_annot_clust")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ref <-
+    SingleR::SingleR(test = as.SingleCellExperiment(sobj),
+                    ref = list(GetAssayData(human_macs), GetAssayData(human_lung_subset)),
+                    labels = list(human_macs$macs_assignment, human_lung_subset$CellType),
+                    aggr.ref = TRUE)
+
+
+sobj$macs_assignment <- ref$labels
+
+
+
+
+
+
+
+
+
+
+
+
+
+dimplot1 <- 
+    dimplot_better(sobj, group_by = "Ann_level1") +
+        NoLegend() +
+        ggtitle("Annotation level 1")
+
+dimplot2 <-
+    dimplot_better(sobj, group_by = "Ann_level2") +
+        NoLegend() +
+        ggtitle("Annotation level 2")
+
+dimplot3 <- 
+    dimplot_better(sobj, group_by = "Ann_level3") +
+        NoLegend() +
+        ggtitle("Annotation level 3")
+
+dimplot4 <-
+    dimplot_better(sobj, group_by = "macs_assignment") +
+        NoLegend()
+
+plot <- 
+        cowplot::plot_grid(dimplot1,
+                            dimplot2,
+                            dimplot3,
+                            dimplot4,
+                            ncol = 2)
+
+dimplot_better(sobj, group_by = "new_annot_clust") +
+        NoLegend()
+
+#load the reference
+murine_macs <- 
+    qs::qread("/home/gdrobertslab/lab/Analysis/Matt/epithelial/output/rdata/final_murine_macs.qs")
+
+ref <-
+    SingleR::SingleR(test = as.SingleCellExperiment(sobj),
+                    ref = GetAssayData(murine_macs),
+                    labels = murine_macs$macs_assignment,
+                    aggr.ref = TRUE)
+
+sobj$macs_assignment <- ref$labels
+    
+dimplot1 <- 
+    dimplot_better(sobj, group_by = "Ann_level1") +
+        NoLegend() +
+        ggtitle("Annotation level 1")
+
+dimplot2 <-
+    dimplot_better(sobj, group_by = "Ann_level2") +
+        NoLegend() +
+        ggtitle("Annotation level 2")
+
+dimplot3 <- 
+    dimplot_better(sobj, group_by = "Ann_level3") +
+        NoLegend() +
+        ggtitle("Annotation level 3")
+
+dimplot4 <-
+    dimplot_better(sobj, group_by = "macs_assignment") +
+        NoLegend()
+
+dimplot_better(sobj, group_by=c("macs_assignment", "Ann_level3", "seurat_clusters"), ncol=2)
+
+
+excel <-
+    readxl::read_excel("/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/Finalmacrophage_and_monocyte_subsets.xlsx")
+
+mac_marks <- excel %>%
+        filter(Species == "Human") %>%
+        select(Annotation, ID) %>%
+        group_by(Annotation) %>%
+        nest() %>%
+        as.list()
+
+names(mac_marks$data) <- mac_marks$Annotation
+mac_marks <- mac_marks$data
+
+my_new_list <- mac_marks
+
+my_new_list <- list(
+    cMonocyte = c("S100a8", "Sell", "Ifitm6"),  # cMonocyte
+    ncMonocyte = c("Itgal", "Ace", "Spn"),  # ncMonocyte
+    TAMs = c("C1qa"),  # TAMs, Osteoclast-like?, https://doi.org/10.1186/s41232-022-00213-x
+    Int_Mac = c("Lyve1", "Mrc1"),  # Tissue resident/interstitial
+    Scar_Mac = c("Trem2", "Cd9", "Gpnmb", "Spp1"),  # Scar-associated, see https://doi.org/10.1038/s41586-019-1631-3
+    Ifn_TAMs = c("Ifit1", "Ifit2", "Cxcl10"), # IFN-TAMs
+    Angio_TAMs = c("Il1a", "Fn1", "Arg1"),  # Angio-TAMs
+    LA_TAMs = c("Acp5", "Ctsk"), # LA-TAMs
+    Infla_TAMs = c("Fos", "Jun", "Atf3"), # Inflammatory TAMs
+    Cycling = c("Top2a", "Hist1h1b", "Birc5"),  # Cycling
+    Pre_DC = c("Cd209a", "Ccr7", "Dcstamp"), # Pre-DC
+    DC1 = c("H2-Ab1", "Clec9a", "Irf8"),  # DC1
+    DC2 = c("Fscn1", "Ccl5")) # DC2
+
+
+entire_matrix <- GetAssayData(sobj, layer="counts")
+object <- sobj
+
+big_featureplot_list<-list()
+for (module in names(my_new_list)) {
+            genelist <- 
+                nichenetr::convert_human_to_mouse_symbols(my_new_list[[module]]) %>%
+                na.omit() %>%
+                unique()
+        cell_ranks <-
+            AUCell::AUCell_run(exprMat = entire_matrix,
+                            geneSets = genelist)
+        object[[module]] <- AUCell::getAUC(cell_ranks)[1,]
+
+        feature_plot <-
+                FeaturePlot(object,
+                            module,
+                            cols = c("#EEEEEE", "#ae0600"),
+                            min.cutoff = 0.15,
+                            pt.size = 1,
+                            order = TRUE) +
+                    coord_fixed() +
+                    ggtitle(paste0(module))
+
+        big_featureplot_list[[module]] <- feature_plot
+}
+
+cowplot::plot_grid(plotlist = big_featureplot_list,
+                            ncol = 5)
+
+
+
+#reference for annotating mets human
+human_lung_ref <-
+    qs::qread("input/downloads/ds_human_lung_atlas.qs") %>%
+    subset(free_annotation != "Lymphatic_EC_differentiating")
+
+mets_ref <- list(GetAssayData(human_lung_ref), hpca)
+mets_label <- list(human_lung_ref$free_annotation, hpca$label.fine)
+
+#mouse lung ref
+mouse_lung_ref_new <- qs::qread("input/downloads/normal_mouselung.qs")
+mouse_lung_ref_new$CellType <-
+            str_replace_all(mouse_lung_ref_new$free_annotation,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_",
+                              " " = "_"))
+Idents(mouse_lung_ref_new) <- mouse_lung_ref_new$CellType
+
+#subset for myeloid immune
+#tumor associated DC: https://www.nature.com/articles/s41467-024-44787-1
+mouse_lung_subset <-
+    mouse_lung_ref_new %>%
+    subset(ident = c("Alveolar_Macrophage",
+                         "Ccr7_plus_Dendritic",
+                         "Classical_Monocyte",
+                         "Intermediate_Monocyte",
+                         "Interstitial_Macrophage",
+                         "Myeloid_Dendritic_Type_1",
+                         "Myeloid_Dendritic_Type_2",
+                         "Nonclassical_Monocyte",
+                         "Plasmacytoid_Dendritic",
+                         "Proliferating_Alveolar_Macrophage",
+                         "Proliferating_Classical_Monocyte",
+                         "Proliferating_Dendritic",
+                         "Neutrophil",
+                         "Basophil"))
+
+mouse_lung_subset$CellType <-
+    str_replace_all(mouse_lung_subset$CellType,
+                    c("^Myeloid_Dendritic_Type_1" = "Myeloid_Dendritic",
+                     "^Myeloid_Dendritic_Type_2$" = "Myeloid_Dendritic",
+                     "^Ccr7_plus_Dendritic$" = "TumorAssociated_Dendritic"))
+
+#load the another reference
+murine_macs <- 
+    qs::qread("input/downloads/murine_macrophages.qs")
+
+murine_macs$CellType <-
+    str_replace_all(murine_macs$macs_assignment,
+                    c("^scarMac$" = "Scar_Macrophages",
+                      "^IFN-TAM$" = "TumorAssociated_Macrophages",
+                      "^TAM$" = "TumorAssociated_Macrophages",
+                      "^cMonocyte$" = "Classical_Monocyte",
+                      "^ncMonocyte$" = "Nonclassical_Monocyte",
+                      "^Interstitial$" = "Interstitial_Macrophage",
+                      "^Pre-DC$" = "Myeloid_Dendritic",
+                      "^DC1$" = "Dendritic_cells1",
+                      "^Cycling$" = "Proliferating_Dendritic"))
+
+#load the object to be annotated
+obj <- qs::qread("output/seurat_objects/tumor_vs_stroma/mm_mets_normal_cells.qs")
+sobj <-
+    obj %>%
+    subset(Ann_level1 == "Immune_Myeloid") %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = "model") %>%
     process_seurat(reduction = "harmony")
 
+ref <-
+    SingleR::SingleR(test = as.SingleCellExperiment(sobj),
+                    ref = list(GetAssayData(murine_macs), GetAssayData(mouse_lung_subset)),
+                    labels = list(murine_macs$CellType, mouse_lung_subset$CellType),
+                    aggr.ref = TRUE)
 
-dimplot_better(s_objr,
-                      group_by = c("new_annot_clust")) +
-            ggtitle(group)
+sobj$macs_assignment <- ref$labels
+
+dimplot4 <-
+    dimplot_better(sobj, group_by=c("macs_assignment")) +NoLegend() +
+    ggtitle("Refined assignment")
+
+plot <- 
+        cowplot::plot_grid(dimplot1,
+                            dimplot2,
+                            dimplot3,
+                            dimplot4,
+                            ncol = 2)
+
+ggsave(filename = str_c("output/figures/relustering_normals/",
+                            group,
+                            "/",
+                            "macrophages_sub",
+                            ".png"),
+            plot = plot,
+            width = 16,
+            height = 16,
+            limitsize = FALSE,
+            bg = "white")
 
 
 
-prim <-
-    process_seurat(object) %>%
-    RunHarmony(group.by.vars = c("model")) %>%
+obj1 <-
+    qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs") %>%
+    FindClusters(resolution = 0.05)
+
+
+obj1$tumor_type <- "patient_mets"
+
+obj2 <- 
+    qs::qread("output/seurat_objects/tumor_vs_stroma/patient_prim_cancer_cells.qs")
+obj2$tumor_type <- "patient_prim"
+
+combine_sobj2 <-
+    merge(x = obj1,
+          y = obj2) %>%
+    JoinLayers() %>%
+    process_seurat() 
+
+harm_obj2 <- combine_sobj2 %>%
+    RunHarmony(group.by.vars = c("data_source", "sample_name"),
+                theta = c(7,7)) %>%
     process_seurat(reduction = "harmony")
 
-dimplot_better(prim,
-               group_by = c("new_annot_clust")) +
-            ggtitle(group)
+dimplot_better(harm_obj2,
+            group_by = c("tumor_type"),
+            ncol=3) + NoLegend()
+
+#pseudobulk
+pseudobulk <- harm_obj2 %>%
+        Seurat::AggregateExpression(
+            group.by = c("sample_name", "tumor_type"),
+            slot = "counts",
+            assay = "RNA")
+
+pseudobulk_new <- pseudobulk[[1]]
+
+pseudobulk_new <- pseudobulk_new %>%
+    t() %>%
+    as.data.frame()
+
+entire_matrix <- pseudobulk_new %>%
+                tibble::rownames_to_column(var = "groups")
+
+runx2_matrix <- entire_matrix[ , c("groups", "SP7", "JUN", "RUNX2", "FOS", "KLF4")]
+
+runx2_matrix$tumor_type <- runx2_matrix$groups %>%
+    str_split("_") %>%
+    map_chr(2) %>%
+    str_replace_all("-", "_")
+
+# runx2_matrix <- runx2_matrix %>%
+#     mutate(RUNX2 = scale(RUNX2))
 
 
-model for mouse
-data_source for others
+runx2_matrix_long <- runx2_matrix %>%
+    pivot_longer(cols = c(SP7, JUN, RUNX2, FOS, KLF4), names_to = "Gene", values_to = "Expression")
+
+patient_based <- ggplot(runx2_matrix_long,
+    aes(x = tumor_type,
+        y = log2(Expression+1),
+        fill = tumor_type)) +
+    geom_violin() +
+    geom_point(position = position_jitter(width = 0.2), size = 2) +
+    facet_wrap(~ Gene, scales = "free_y", nrow = 1) +
+    theme_minimal() +
+    labs(title = "Expression of Selected Genes by Tumor Type", y = "log2 Expression Level", x = "Tumor Type")
+
+ggsave(filename = "output/figures/allgenes_expression.pdf",
+        plot = patient_based,
+        width = 16,
+        height = 4,
+        limitsize = FALSE,
+        bg = "white")
+
+patient_tumor_type_based <- 
+    ggplot(runx2_matrix,
+        aes(x = groups,
+            y = SP7,
+            fill = interaction(groups, tumor_type))) +
+        geom_violin()
+
+ggsave(filename = "output/figures/RUNX2_expression_try.png",
+        plot = patient_based,
+        width = 14,
+        height = 14,
+        limitsize = FALSE)
+
+
+
+#get assay data
+runx2_subset <-
+    subset(harm_obj2,
+           features = "RUNX2") %>%
+    GetAssayData(layer = "data")
+
+
+
+
+
+entire_matrix <- GetAssayData(harm_obj2,
+                              layer="data") %>%
+                t() %>%
+                as.data.frame()
+
+entire_matrix <- entire_matrix %>%
+                tibble::rownames_to_column(var = "cell_ids")
+
+
+runx2_matrix <- entire_matrix[ , c("cell_ids", "RUNX2")]
+
+runx2_matrix$tumor_type <- combine_sobj2$tumor_type
+runx2_matrix$method <- combine_sobj2$method
+runx2_matrix$patient <- combine_sobj2$sample_name
+runx2_matrix$data_source <- combine_sobj2$data_source
+
+#save as a csv file
+write_tsv(runx2_matrix,
+          "output/metadata/RUNX2_expression.csv")
+
+overall <- 
+    ggplot(runx2_matrix,
+        aes(x = tumor_type,
+            y = RUNX2,
+            fill = tumor_type)) +
+        geom_violin() +
+        stat_summary(fun.y=median,
+                     geom="point",
+                     size=2,
+                     color="red") +
+        geom_boxplot(width=0.1)
+
+patient_based <- 
+    ggplot(runx2_matrix,
+        aes(x = patient,
+            y = RUNX2,
+            fill = tumor_type)) +
+        geom_violin()
+
+patient_tumor_type_based <- 
+    ggplot(runx2_matrix,
+        aes(x = patient,
+            y = RUNX2,
+            fill = interaction(tumor_type, method))) +
+        geom_violin()
+
+plots_new <- 
+    patchwork::wrap_plots(overall,
+                            patient_based,
+                            patient_tumor_type_based,
+                            ncol = 1)
+
+ggsave(filename = "output/figures/RUNX2_expression_ggplot.png",
+        plot = plots_new,
+        width = 14,
+        height = 35,
+        limitsize = FALSE)
+
+#save as a pdf file
+ggsave(filename = "output/figures/RUNX2_expression.pdf",
+        plot = ggplot(runx2_matrix,
+                    aes(x = RUNX2,
+                        fill = tumor_type)) +
+            geom_density(alpha = 0.5) +
+            facet_wrap(~method) +
+            ggtitle("RUNX2 expression in patient mets and primary tumors"),
+        width = 14,
+        height = 14,
+        limitsize = FALSE)
+
+
+feature_plot <-
+    FeaturePlot(harm_obj,
+            feature = "RUNX2",
+            split.by = "tumor_type",
+            order = TRUE,
+            min.cutoff = 0.5)
+
+vln_plot <-
+    VlnPlot(harm_obj,
+            features = "RUNX2",
+            #split.by = "tumor_type",
+            group.by = "tumor_type") +
+    ggtitle("Violin plot for RUNX2 all averaged")
+
+patient_based_vln <-
+    VlnPlot(harm_obj,
+            features = "RUNX2",
+            split.by = "tumor_type",
+            group.by = "sample_name") +
+    ggtitle("Patient based violin plot all together")
+
+nuclear <-
+    subset(harm_obj,
+           method == "single_nucleus")
+
+patient_based_vln_nuc <-
+    VlnPlot(nuclear,
+            features = "RUNX2",
+            split.by = "tumor_type",
+            group.by = "sample_name") +
+    ggtitle("Patient based violin plot for single nucleus")
+
+patient_based_vln_sc <-
+    VlnPlot(single_cell,
+            features = "RUNX2",
+            split.by = "tumor_type",
+            group.by = "sample_name") +
+    ggtitle("Patient based violin plot for single cell")
+single_cell <-
+    subset(harm_obj,
+           method == "single_cell")
+
+violinplot <-
+    VlnPlot(nuclear,
+            features = "RUNX2",
+            group.by = "tumor_type")
+
+final_plot <-
+    patchwork::wrap_plots(feature_plot,
+                        vln_plot,
+                        patient_based_vln,
+                        patient_based_vln_nuc,
+                        patient_based_vln_sc,
+                        ncol = 1)
+
+ggsave(filename = "output/figures/RUNX2_plots.png",
+        plot = final_plot,
+        width = 14,
+        height = 35,
+        limitsize = FALSE)
+
+#run the DEGs
+one_sample <-
+    obj1 %>%
+    subset(sample_name == "CCDI0053_445") %>%
+    process_seurat() 
+
+# sil_val <-
+#     optimize_silhouette(sobject = one_sample,
+#                         test_res = seq(0.05, 0.9, by = 0.05),
+#                         summary_plot = TRUE,
+#                         reduction = "harmony") %>%
+#     filter(!is.na(sil_vals)) %>%
+#     filter(sil_vals == max(sil_vals)) %>%
+#     slice_head(n=1) %>%
+#     dplyr::pull(res_vals)
+
+
+# one_sample <- 
+#     FindClusters(one_sample,
+#                 resolution = 0.3)
+
+dimplot_better(one_sample,
+            group_by = c("seurat_clusters", "annotations"),
+            ncol=2)
+object <- one_sample
+panel_plots <- list()
+
+big_degs_result <- 
+    run_degs(sobject = obj1,
+            group_by = "seurat_clusters",
+            prefix =  "patient_mets_cancer_cells")
+
+for (group in object_list) {
+    # object <- qs::qread(str_c("output/seurat_objects/resolution_optimized/",
+    #                           group,
+    #                           ".qs"))
+    # #object <- JoinLayers(object)
+
+    volc_plot <- list()
+    gsea_plot <- list()
+    gsea_result <- list()
+
+    dimplot <- dimplot_better(object, group_by = "seurat_clusters")
+
+    degs_result <- run_degs(sobject = object,
+                            group_by = "seurat_clusters",
+                            prefix =  "patient_mets_cancer_cells")
+
+    for (item in names(degs_result)) {
+        if (!dir.exists(str_c("output/degs/", group))) {
+            dir.create(str_c("output/degs/", group), recursive = TRUE)
+        }
+        write_tsv(degs_result[[item]],
+                 str_c("output/degs/", group, "/", item, "_degs.tsv"))
+        logfc_cutoff <- 0.6
+        degs_result[[item]]$diffexpressed <- "Not Significant"
+        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange > logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "Upregulated"
+        degs_result[[item]]$diffexpressed[degs_result[[item]]$log2FoldChange < -1 * logfc_cutoff & degs_result[[item]]$padj < 0.05] <- "Downregulated"
+#make the volcano plot
+        volc_plot[[item]] <- ggplot(data=degs_result[[item]],
+                            aes(x=log2FoldChange,
+                                y=-log10(pvalue),
+                                color = diffexpressed)) + 
+            geom_vline(xintercept = c(-1 * logfc_cutoff, logfc_cutoff), col = "gray", linetype = "dashed") + 
+            geom_hline(yintercept = c(0.05), col = "gray", linetype = "dashed") +
+            geom_point(size = 2) +
+            scale_color_manual(values = c(plot_cols[1], "grey", plot_cols[2]),
+                               name = "") +
+            geom_text_repel(aes(label = gene))
+    }
+#GSEA analysis for the dotplots
+    for (i in seq_len(nrow(cat_tib))){
+        category <- cat_tib$category[i]
+        subcategory <- cat_tib$subcategory[i]
+        cat_expl <- cat_tib$cat_expl[i]
+        if (subcategory == "NA") {
+            gsea_result <- run_gsea(degs_result = degs_result,
+                                    category = category,
+                                    species = object$organism[1])
+        } else {
+            gsea_result <- run_gsea(degs_result = degs_result,
+                                    category = category,
+                                    subcategory = subcategory,
+                                    species = object$organism[1])
+        }
+        for (item in names(gsea_result)) {
+            rows <- gsea_result[[item]] %>% 
+                nrow()
+            if (rows >= 1) {
+                top5up_down <- rbind(gsea_result[[item]] %>%
+                                        slice_head(n = 7),
+                                    gsea_result[[item]] %>%
+                                        slice_tail(n = 7)) %>%
+                                dplyr::select(pathway, NES, size, padj) %>%
+                                arrange(desc(NES)) %>%
+                                mutate(pathway = as.factor(pathway) %>%
+                                            str_replace_all("_", " ") %>%
+                                            str_wrap(65) %>%
+                                            fct_reorder(NES),
+                                       sample = item,
+                                       order = seq_len(n()),
+                                       justify_y = if_else(NES > 0, 1, 0),
+                                       y_pos = if_else(NES > 0, -0.1, 0.1))
+                gsea_plot[[cat_expl]][[item]] <- 
+                    local({cat_expl = cat_expl
+                          two_way_dotplot(top5up_down, x_col = "NES") +
+                    ggtitle(str_c(cat_expl, " for ", item))})
+            } else {
+                print(str_c("No Pathways up or down in ", item, " for ", cat_expl))
+                gsea_plot[[cat_expl]][[item]] <- 
+                local({cat_expl = cat_expl
+                      ggplot(data = NULL,
+                            aes(x = as.factor(1),
+                            y = as.factor(1))) +
+                        geom_text(aes(label = str_c("No pathways for ", cat_expl, " in ", item)),
+                                  size = 4)})
+            }
+        }
+    }
+#make panel plots
+    for (clusters in names(volc_plot)) {
+        panel_plots[[group]][[clusters]] <- 
+            patchwork::wrap_plots(dimplot,
+            volc_plot[[clusters]],
+            gsea_plot$KEGG[[clusters]],
+            gsea_plot$Hallmark_paths[[clusters]] ,
+            gsea_plot$Oncogenic_signature[[clusters]],
+            gsea_plot$Transcription_factor_targets[[clusters]],
+            ncol = 2,
+            widths = c(6, 6),
+            heights = unit(c(8,8,8), c("cm", "cm", "cm"))) +
+            patchwork::plot_annotation(title = clusters)
+
+        ggsave(str_c("output/gsea/test/", group, "/", clusters, ".png"),
+                width = 12,
+                height = 18,
+                plot = panel_plots[[group]][[clusters]])
+    }
+}
+
+
+
+
+
+
+
+
+
+
+#keep all the genes in scale data
+all_sample <-
+    qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs") %>%
+    FindClusters(resolution = 0.1)
+
+all_sample <- all_sample %>%
+    FindVariableFeatures(nfeatures = 5000) %>%
+    ScaleData()
+
+
+
+for (samples in unique(all_sample$sample_name)) {
+    if (ncol(subset(all_sample, sample_name == samples)) < 1000) {
+        next
+    }
+    subset_obj <-
+        subset(all_sample,
+               sample_name == samples) %>%
+        process_seurat()
+
+    sil_val <-
+        optimize_silhouette(sobject = subset_obj,
+                            test_res = seq(0.1, 0.9, by = 0.05),
+                            summary_plot = FALSE,
+                            reduction = "harmony") %>%
+        filter(!is.na(sil_vals)) %>%
+        filter(sil_vals == max(sil_vals)) %>%
+        slice_head(n=1) %>%
+        dplyr::pull(res_vals)
+
+    subset_obj <- 
+        FindClusters(subset_obj,
+                    resolution = sil_val)
+
+    aver_exp1 <- AverageExpression(one_sample,
+                                layer = "scale.data",
+                                group.by = "seurat_clusters")$RNA %>%
+                as.data.frame() %>%
+                rename_with(~str_replace(., "g", "clust")) %>%
+                tibble::rownames_to_column(var = "gene")
+
+
+}
+
+
+
+
+dimplot_better(all_sample,
+              group_by = c("seurat_clusters", "sample_name"),
+              ncol=2) 
+
+one_sample <-
+    all_sample %>%
+    subset(sample_name == "CCDI0058_16183") %>%
+    process_seurat()
+
+
+dimplot_better(one_sample,
+        group_by = "seurat_clusters")
+
+one_sample <- one_sample %>%
+    ScaleData(features = VariableFeatures(all_sample))
+sil_val <-
+    optimize_silhouette(sobject = one_sample,
+                        test_res = seq(0.1, 0.9, by = 0.05),
+                        summary_plot = TRUE,
+                        reduction = "harmony") %>%
+    filter(!is.na(sil_vals)) %>%
+    filter(sil_vals == max(sil_vals)) %>%
+    slice_head(n=1) %>%
+    dplyr::pull(res_vals)
+
+one_sample <-
+    FindClusters(one_sample,
+                resolution = sil_val)
+
+dimplot_better(one_sample,
+            group_by = c("seurat_clusters"))
+
+aver_exp1 <- AverageExpression(one_sample,
+                                layer = "scale.data",
+                                group.by = "seurat_clusters")$RNA %>%
+                as.data.frame() %>%
+                rename_with(~str_replace(., "g", "clust")) %>%
+                tibble::rownames_to_column(var = "gene")
+
+aver_exp2 <- AverageExpression(all_sample,
+                                layer = "scale.data",
+                                group.by = "seurat_clusters")$RNA %>%
+                as.data.frame() %>%
+                tibble::rownames_to_column(var = "gene")
+
+combine_exp <- 
+    left_join(aver_exp1, aver_exp2, by = "gene") %>%
+    column_to_rownames(var = "gene")
+
+correlation <- tibble::tibble()
+for (clusters in colnames(aver_exp1)[-1]) {
+    for (cluster_names in colnames(aver_exp2)[-1]) {
+        correlation_calc <-
+            cor(combine_exp[[clusters]],
+            combine_exp[[cluster_names]])
+
+        #append the correlations
+        correlation <- 
+            tibble::tibble(corr_val = correlation_calc) %>%
+            mutate(small_cluster = str_c("single_", clusters),
+                   big_cluster = str_c("whole_", cluster_names)) %>%
+            rbind(correlation)
+    }
+}
+#make a heatmap
+correlation <-
+    correlation %>%
+    pivot_wider(names_from = big_cluster,
+                values_from = corr_val) %>%
+    column_to_rownames(var = "small_cluster") %>%
+    pheatmap::pheatmap(display_numbers = TRUE)
+
+
+
+for (clusters in unique(one_sample$seurat_clusters)) {
+    subset_obj <-
+        subset(one_sample,
+               seurat_clusters == clusters) %>%
+               AverageExpression(layer = "scale.data",
+                                group.by = "seurat_clusters")
+
+    for (new_clust in unique(all_sample$seurat_clusters)) {
+        subset_new <-
+            subset(all_sample,
+                   seurat_clusters == new_clust)
+        correlation <-
+            cor(subset_obj@assays$RNA$counts,
+                subset_new@assays$RNA$counts)
+
+    }
+}
+
+if (length(unique(subset_sobj$seurat_clusters)) > 1) {
+                    correlation_plot <- 
+                        AverageExpression(subset_sobj,
+                                        layer = "scale.data",
+                                        group.by = "seurat_clusters")$RNA %>%
+                            as.matrix() %>%
+                            cor() %>%
+                            pheatmap::pheatmap(display_numbers = TRUE,
+                                            silent = TRUE)
+
+
+
+
+
+
+
+
 
 
 

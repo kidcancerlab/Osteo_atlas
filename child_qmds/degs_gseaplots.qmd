@@ -108,7 +108,7 @@ panel_plots <- list()
 object_list <-
     tribble(~group,                         ~res_value,
             "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.05,
+            "patient_mets_cancer_cells",    0.1,
             "mm_prim_cancer_cells",         0.3,
             "mm_mets_cancer_cells",         0.3,
             "xeno_prim_human",              0.15,
@@ -163,16 +163,6 @@ for (i in seq_len(nrow(object_list))) {
 
     object <- 
         FindClusters(object, resolution = res_value)
-
-    # celltypes <-
-    #     table(object$annotations) %>%
-    #     subset(., . >= 50)
-    # object <-
-    #     subset(object, annotations %in% names(celltypes)) %>%
-    #     FindClusters(resolution = res_value)
-    #dimplot_better(object, group_by = "annotations")
-
-    #run fdl
 
     make_panel_plot(sobj = object,
                     cluster_column = "seurat_clusters",
@@ -257,22 +247,4 @@ write_tsv(x = all_data_celltypes, file = filename)
 
 ```
 
-
-```{r, echo = FALSE}
-# Celltype assignment from organizations
-celltype_table <-
-    read_tsv("output/cluster_and_celltype/First_revised_all_data_celltypes.txt")
-
-for (i in seq_len(nrow(celltype_table))) {
-    seurat_clusters <- celltype_table$seurat_clusters[i]
-    group <- celltype_table$group[i]
-
-    #hopefully we will match date and time later on down the line
-    for (groups in unique(celltype_table$group)) {
-        metadata_group <- 
-            read_tsv(str_c("output/metadata/", groups, ".tsv")) %>%
-    }
-
-}
-```
 

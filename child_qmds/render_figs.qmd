@@ -322,7 +322,7 @@ The AUCell markers for each cell type in each group was generated to show the
 activity of the each genes in each cells to distinguish the celltypes by gene
 activity inference. The markers were obtained from PanglaoDB_markers_27_Mar_2020.
 ```{r, celltype_aucell_plots}
-#| cache.vars: c('stroma_celltype_aucell_plots')
+#| cache.vars: c('stroma_celltype_aucell_plots', 'levels_of_annotations')
 all_groups <-
     c("patient_prim_normal_cells",
       "patient_mets_normal_cells",
@@ -332,6 +332,7 @@ all_groups <-
       "mm_mets_normal_cells")
 
 stroma_celltype_aucell_plots <- list()
+levels_of_annotations <- list()
 
 for (group in all_groups) {
     file_path <- 
@@ -342,6 +343,18 @@ for (group in all_groups) {
     if (file.exists(file_path)) {
         stroma_celltype_aucell_plots[[group]] <-
             knitr::include_graphics(file_path)
+    }
+
+    file_path_new <- 
+        str_c("output/figures/relustering_normals/",
+                            group,
+                            "/",
+                            "level3_annotation",
+                            ".png")
+
+    if (file.exists(file_path_new)) {
+        levels_of_annotations[[group]] <- 
+            knitr::include_graphics(file_path_new)
     }
 }
 ```
@@ -492,6 +505,7 @@ qreport::maketabs(normalcell_gsea_panelplots[["mm_prim_normal_cells"]])
 #| dependson: celltype_panel_plots
 qreport::maketabs(normalcell_gsea_panelplots[["mm_mets_normal_cells"]])
 ```
+
 
 ## Regulon Analysis Plots
 Regulon analysis was performed using the SCENIC plus package to determine the
