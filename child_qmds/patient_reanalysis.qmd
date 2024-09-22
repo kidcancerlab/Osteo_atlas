@@ -56,307 +56,6 @@ dimplot_better(combined_lung, group_by = c("CellType", "seurat_clusters")) +
 
 ```{r}
 
-#Markers
-Immune_Myeloid <- 
-    list(LA_TAMs = c("APOC1", "APOE", "APC5", "FABP5"),
-        Inflam_TAMs = c("IL1B", "CCL3", "CXCL1", "CXCL2", "CXCL3", "CXCL5"),
-        IFN_TAMs = c("IDO", "ISG15", "CXCL8", "CXCL9", "CXCL10"),
-        Reg_TAMs = c("AGR1", "MRC1", "CD274", "CX3CR1"),
-        Prolif_TAMs = c("MKI67", "CDK1"),
-        RTM_TAMs = c("LYVE1", "HES1", "FOLR2"),
-        Angio_TAMs = c("VEGFA", "ANGPT2", "ANGPTL4", "SSP1"),
-        Osteoclast_TAMs = c("MMP9", "CTSK", "CKB", "CST3"),
-        Scar_Macs = c("CD9", "SPP1", "TREM2", "GPNMB"),
-        TAMs = c("MERTK", "FOLR2", "SELENOP"),
-        IFN_TAMs = c("CXCL10", "IFIT2"),
-        Inflammatory_TIMs = c("IL1B", "CXCL8"),
-        cMonocyte = c("S100A12", "CCR2", "CD14", "LYZ"),
-        Monocyte = c("S100A8", "S100A9"),
-        ncMonocyte = c("FCGR3A", "NR4A1", "CX3CR1"),
-        DC1 = c("CD1C", "CADM1", "CLEC1B", "DNASE1L3"),
-        DC2 = c("FCER1A", "CD1C", "FCER1A", "HLA-DRA", "HLA-DPB1", "HLA-DPA1"),
-        preDC = c("FLT3", "IDO1", "CLEC9A"),  #myeloid DC
-        Alveolar_Mac = c("MARCO", "TNFAIP2", "OLR1", "MCEMP1"),
-        Interstitial_Mac = c("SELENOP", "SPARC", "LYVE1", "FABP5", "CXCL10"),
-        plasmocytoid_DC = c("CLEC4C", "IRF7", "PTPRS", "TLR7", "TLR9", 
-                            "GZMB", "LILRA4", "IRF8", "IDO1"),
-        Mast_cells = c("TPSAB1", "KIT", "CPA3", "MS4A2", "IL1RL1"),
-        Mast_cells1 = c("ASIC4", "C1RL", "HGF", "CDK15", "GRAP2", "CADPS", "C2CD5"),
-        Basophils = c("CD123", "CD203c", "FCER1A", "IL-4", "IL-13", "MPO",
-                            "KIT", "CD34", "CD45", "CD49d"),
-        Neutrophils = c("CD66b", "CD16", "CD11b", "CD18", "MPO", "NE",
-                        "CXCR1", "CXCR2", "IL-8", "S100A8"))
-
-Immune_Lymphoid <- 
-    list(CD4_cells = c("CD4", "IL7R", "IL21"),
-        CD8_cells = c("CD8A", "CD8B", "GZMK", "GZMB", "PRF1"),
-        Naïve = c("CCR7", "LEF1", "SELL", "TCF7", "CD3", "CD62L", "CD197"),
-        Cytotoxic = c("CST7", "GZMA", "GZMB", "IFNG", "PRF1", "TNFSF10"),
-        T_reg = c("FOXP3", "IL2RA", "CTLA4", "CD25", "IL4R", "IL7", "TGFB1",
-                "TGFB3", "TGFBR1", "CD4", "STAT5", "CD127", "IL12", "IL10"),
-        Exhausted = c("PD1", "TOX", "TIGIT", "BTLA", "CTLA4", "HAVCR2", "LAG3",
-                        "PDCD1", "TIGIT"),
-        Prolif_T = c("MKI67", "CDK1", "CDK4", "TK1", "DIAPH3"),
-        IFN_signature = c("CXCL10", "IFI44", "OAS1", "ISG15", "IFI44L", "IFGGB2"),
-        Memory_B_cells = c("PAX5", "CD86", "ADAM28", "AIM2", "BANK1", "BLK",
-                        "CD19", "CD37", "CD22", "CD79A", "MS4A1"),
-        Plasma_B_Cells = c("DENND5B", "IGKC", "IGHM", "EAF2", "CD38"),
-        B_cells_naive = c("CD19", "BACH2", "CD79A", "CD79B", "CR2", "IL4R", "IRF8",
-                        "MICAL3", "RALGPS2", "RASGRP2", "SELL",  "SPIB", "CD74"),
-        NK_cells = c("ITGAX", "KLRD1", "GNLY", "GZMB", "KLRF1", "KLRC1", "KLRC2",
-                    "KLRC3", "KLRC4", "KLRD1", "KLRK1", "KLRL1", "KLRB1", "KLRD1", "NCAM1"))
-
-Mesenchymal <- 
-    list(Subpleural_fibroblasts = c("MFAP5", "COL6A3", "COL1A1", "PDGFRA", "MMP2",
-                                "SPARC", "THY1", "FAP", "LOX", "TNC"),
-        Smooth_muscle = c("ACTA2", "MYH11", "TAGLN", "CNN1", "DES", "MYLK",
-                            "CALD1", "CAV1", "LMOD1", "SMTN"),
-        Alveolar_fibroblasts = c("COL1A1", "COL3A1", "FN1", "PDGFRA", "VIM",
-                                "TGFBR2", "MMP2", "CTGF", "SPARC", "THY1",
-                                "SFTPC", "AQP5", "PDPN", "KRT5", "MMP2", "VIM"),
-        Peribronchial_fibroblasts = c("MGP", "ELN", "FBLN1", "PDGFRA", "COL14A1",
-                                    "LUM", "VCAN", "COL5A1", "DPT", "DCN"),
-        Myofibroblasts = c("ACTA2", "TAGLN", "POSTN", "PDGFRA", "CNN1", "COL1A1",
-                            "TGFBR1", "THY1", "FAP", "SERPINE1",
-                            "FBLN1", "TAGLN", "ASPN", "MYLK", "WIF1", "ACTA2"),
-        SM_activated_stress_response = c("HSPA1A", "DNAJB1", "HSPB1", "ATF3",
-                            "HSPA6", "HSPE1", "DDIT3", "HSP90AA1", "HSPA8", "XBP1"),
-        Pericytes = c("PDGFRB", "RGS5", "MCAM", "ACTA2", "CD146", "NG2", "NOTCH3",
-                        "ANGPT2", "VEGFA", "CXCL12"),
-        Osteoblast = c("RUNX2", "OSX", "ALPL", "COL1A1", "SOST", "BGLAP",
-                                "IBSP", "SPP1", "WNT1"))
-
-Epithelial_Endothelial <-
-    list(Capillary_EC = c("CD31", "VEGFA", "VEGFR2", "CD34", "PLVAP", "CLDN5",
-                    "ESM1", "ICAM1", "ANGPT2", "ADGRL4"),
-        Arterial_EC = c("KDR", "NOTCH1", "CD34", "VEGFA",
-                        "ICAM1", "EGR1", "CAV1", "ANGPT1", "CD146"),
-        Venous_EC = c("VWF", "NRP1", "EphB4", "CD31", "ICAM1",
-                    "ADGRL4", "TIE2", "KDR", "VEGFR2"),
-        Lymphatic_EC = c("LYVE1", "PROX1", "VEGFR3", "MRC1", "FLT4",
-                        "LYVE1", "FSTL1", "CCL21"),
-        AlvEpithelial_T1 = c("ICAM1", "SEMA3B", "SCNN1B", "SEMA3E", "CLIC5",
-                    "GPRC5A", "CLDN18", "AGER", "EMP2", "VEGFA", "KRT7", "PDPN"),
-         AlvEpithelial_T2 = c("NKX2-1", "MUC1", "SFTPB", "SLC34A2", "LAMP3",
-                            "ADGRF5", "ABCD3", "LPCAT1", "NAPSA", "ABCA3", "CXCL2"),
-         Bronchial_Epithelial = c("CK14", "CK5", "CK7", "MUC5AC", "MUC5B",
-                                    "TP63", "FOXJ1", "KRT19", "SCGB1A1", "CCSP"),
-         Club_Cells = c("SCGB1A1", "CCSP", "MUC5B", "TP63", "KRT19", "SFTPA1", "MMP7",
-                            "ABCA3", "MUC1", "GSTA1"),
-         Ciliated_Cells = c("FOXJ1", "DNAI1", "DNAI2", "TP63", "KRT5", "KRT13",
-                            "MUC5AC", "RSPH1", "RSPH9", "TUBA1A", "CCDC17", "CCDC39", "CCDC181"),
-        Tuft_Cells = c("TRPM5", "DCLK1", "CLCA1", "TFF3"))
-
-clusterbased_annot <- function(s_obj) {
-    Idents(s_obj) <- s_obj$seurat_clusters
-    clust_info <- tibble()
-    for (cluster in unique(s_obj$seurat_clusters)) {
-        subset_object <- subset(s_obj, ident = cluster) %>%
-            FindVariableFeatures() %>%
-            ScaleData() %>%
-            # don't ask for more PCs than there are cells
-            RunPCA(npcs = min(50,
-                            sum(s_obj$seurat_clusters == cluster) - 1))
-
-        if (length(unique(subset_object$sample_name)) > 1 &&
-            ncol(subset_object) > 50) {
-            subset_object <- RunHarmony(subset_object,
-                                        group.by.vars = "sample_name") %>%
-                process_seurat(reduction = "harmony")
-        } else {
-            subset_object <- subset_object
-        }
-
-        subset_object$re_cluster <- str_c(cluster,
-                                        ".",
-                                        subset_object$seurat_clusters)
-
-        clust_info <- subset_object@meta.data %>%
-                as.data.frame() %>%
-                select(re_cluster) %>%
-                rbind(clust_info)
-    }
-
-    s_obj <- AddMetaData(s_obj, metadata = clust_info)
-    s_obj$new_annot_clust <- s_obj$re_cluster
-
-    cluster_celltypes <-
-        table(s_obj$re_cluster, s_obj$annotations) %>%
-        as.data.frame() %>%
-        group_by(Var1) %>%
-        arrange(desc(Freq), .by_group = TRUE) %>%
-        slice_head(n = 1)
-
-    for (i in seq_len(nrow(cluster_celltypes))) {
-        seurat_clust <- str_c("^", cluster_celltypes$Var1[i], "$") %>%
-            as.character()
-
-        celltype <- cluster_celltypes$Var2[i] %>%
-            as.character()
-
-        s_obj$new_annot_clust <-
-            str_replace_all(string = s_obj$new_annot_clust,
-                            pattern = seurat_clust,
-                            replacement = celltype)
-    }
-    return(s_obj)
-}
-
-object_list <-
-    tribble(~group,                         ~res_value,
-            "patient_prim_normal_cells",    0.1,
-            "patient_mets_normal_cells",    0.1,
-            "xeno_prim_mouse",              0.1,
-            "xeno_mets_mouse",              0.1,
-            "mm_prim_normal_cells",         0.25,
-            "mm_mets_normal_cells",         0.2)
-
-
-for (item in seq_len(nrow(object_list))) {
-    group <- object_list$group[item]
-    res_value <- object_list$res_value[item]
-
-    object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
-                              group,
-                              ".qs"))
-    species <- object$organism[1]
-
-    object$Ann_level1 <-
-        str_replace_all(object$Ann_level1,
-                        c("Endothelial_cells" = "Epithelial_Endothelial",
-                          "Epithelial_cells" = "Epithelial_Endothelial",
-                          "Stroma" = "Mesenchymal"))
-
-    for (cell_type in unique(object$Ann_level1)) {
-        s_obj <-
-            object %>%
-            subset(Ann_level1 == cell_type) %>%
-            process_seurat() %>%
-            RunHarmony(group.by.vars = "model") %>%
-            process_seurat(reduction = "harmony")
-
-        sil_val <-
-            optimize_silhouette(sobject = s_obj,
-                                test_res = seq(0.05, 0.9, by = 0.05),
-                                summary_plot = FALSE,
-                                reduction = "harmony") %>%
-            filter(!is.na(sil_vals)) %>%
-            filter(sil_vals == max(sil_vals)) %>%
-            slice_head(n=1) %>%
-            dplyr::pull(res_vals)
-
-        s_obj <- 
-            FindClusters(s_obj,
-                        resolution = sil_val)
-
-        dimplot_seurat <-
-            dimplot_better(s_obj,
-                          group_by = "seurat_clusters") +
-                ggtitle(str_c("Res=", sil_val)) +
-                NoLegend()
-
-        s_obj <- clusterbased_annot(s_obj)
-
-        dimplot_celltype <-
-            dimplot_better(s_obj,
-                          group_by = "new_annot_clust") +
-                ggtitle(str_c("new_annot_clust")) +
-                NoLegend()
-
-        if ("scATOMIC_pred" %in% colnames(s_obj@meta.data)) {
-            scAtomic_call <-
-                dimplot_better(s_obj,
-                            group_by = "scATOMIC_pred") +
-                    ggtitle(str_c("SCATOMIC_celltype")) +
-                    NoLegend()
-        } else {
-            scAtomic_call <- 
-                ggplot(data = NULL) +
-                    aes(x = as.factor(1), y = as.factor(1)) +
-                    geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
-        }
-
-        if ("CNV_status" %in% colnames(s_obj@meta.data)){
-            dimplot_CNV <-
-                dimplot_better(s_obj,
-                            group_by = "CNV_status") +
-                    NoLegend() +
-                    theme(plot.title = element_text(size = 7))
-        } else {
-            dimplot_CNV <- 
-                ggplot(data = NULL) +
-                    aes(x = as.factor(1), y = as.factor(1)) +
-                    geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
-        }
-        dimplot_sample <-
-            dimplot_better(s_obj,
-                          group_by = "sample_name") +
-                ggtitle(str_c("sample_name")) +
-                NoLegend()
-
-        entire_matrix <- s_obj@assays$RNA$counts
-
-        big_featureplot_list <- list()
-
-        for (module in names(get(cell_type))) {
-            genelist <- get(cell_type)[[module]]
-            if(species == "mouse") {
-                genelist <- 
-                    nichenetr::convert_human_to_mouse_symbols(genelist) %>%
-                    na.omit() %>%
-                    unique()
-            }
-            cell_ranks <-
-                AUCell::AUCell_run(exprMat = entire_matrix,
-                                geneSets = genelist)
-
-            s_obj[[module]] <- AUCell::getAUC(cell_ranks)[1,]
-
-            feature_plot <-
-                    FeaturePlot(s_obj,
-                                module,
-                                cols = c("#EEEEEE", "#ae0600"),
-                                min.cutoff = 0.15,
-                                pt.size = 1,
-                                order = TRUE) +
-                        coord_fixed() +
-                        ggtitle(module)
-
-            big_featureplot_list[[module]] <- feature_plot
-        }
-    }
-    big_panel_plot <- 
-        cowplot::plot_grid(dimplot_seurat,
-                            dimplot_celltype,
-                            scAtomic_call,
-                            dimplot_CNV,
-                            dimplot_sample,
-                            plotlist = big_featureplot_list,
-                            ncol = 2)
-
-    #calculate height and length
-    length_var <- 
-        if (length(big_featureplot_list) %% 2 == 1) {
-            length(big_featureplot_list) + 1
-        } else {
-            length(big_featureplot_list)
-        }
-
-    height <- (length_var/2 * 7) + 14
-
-    ggsave(filename = str_c("output/figures/relustering_normals/",
-                            group,
-                            "/",
-                            cell_type,
-                            "_group_plots.png"),
-            plot = big_panel_plot,
-            width = 16,
-            height = height,
-            limitsize = FALSE,
-            bg = "white")
-}
-
-
 
 
 
@@ -389,37 +88,6 @@ for (module in names(my_new_list)) {
 }
 
 
-
-
-
-
-dimplot_better(xy, group_by = c("new_annot_clust")) + NoLegend()
-FeaturePlot(s_obj, features= unique_capillary_markers, ncol=6)
-
-entire_matrix <- s_obj@assays$RNA$counts
-big_featureplot_list <- list()
-
-for (module in names(Epi_Endo_cells)) {
-
-    genelist <- Epi_Endo_cells[[module]]
-
-    cell_ranks <-
-        AUCell::AUCell_run(exprMat = entire_matrix,
-                        geneSets = genelist)
-    s_obj[[module]] <- AUCell::getAUC(cell_ranks)[1,]
-
-    feature_plot <-
-            FeaturePlot(s_obj,
-                        module,
-                        cols = c("#EEEEEE", "#ae0600"),
-                        min.cutoff = 0.15,
-                        pt.size = 1,
-                        order = TRUE) +
-                coord_fixed() +
-                ggtitle(module)
-
-    big_featureplot_list[[module]] <- feature_plot
-}
 
 #tested resolution 0.8 looked good
 set.seed(123444)
@@ -1158,11 +826,9 @@ for (i in seq_len(nrow(object_list))) {
                         object_list$group[i],
                         ".qs")) 
 
-    
     all_sample <- all_sample %>%
         FindVariableFeatures(nfeatures = 5000) %>%
         ScaleData()
-
 
     dimplot_main <-
         dimplot_better(all_sample,
@@ -1170,12 +836,14 @@ for (i in seq_len(nrow(object_list))) {
             ggtitle("whole_dimplot") 
 
     all_sample$aver_col <- "whole"
+
     ave_expression <-
-        RowMeans(all_sample,
-                        layer = "scale.data")$RNA %>%
-                as.data.frame() %>%
-                rename(!!group := "V1") %>%
-                tibble::rownames_to_column(var = "gene")
+        GetAssayData(all_sample,
+                     layer = "data") %>%
+        rowMeans() %>%
+        as.data.frame() %>%
+        rename(!!group := ".") %>%
+        tibble::rownames_to_column(var = "gene")
 
     if (all_sample$organism[[1]] == "mouse") {
         ave_expression$gene <-
@@ -1212,6 +880,59 @@ for (i in seq_len(ncol(combined_AveExp_plot))) {
                 geom_smooth(method = "lm", color = "blue", se = FALSE) +
                 ggtitle(paste0("Correlation: ", round(correlation_value, 2))) +
                 theme_minimal()
+            
+            correlation_plots[[paste0(group1, "_vs_", group2)]] <- scatter_plot
+        }
+    }
+}
+
+for (i in seq_len(ncol(combined_AveExp_plot))) {
+    for (j in seq_len(ncol(combined_AveExp_plot))) {
+        if (i < j) {
+            group1 <- colnames(combined_AveExp_plot)[i]
+            group2 <- colnames(combined_AveExp_plot)[j]
+            
+            correlation_value <- cor(combined_AveExp_plot[[group1]], combined_AveExp_plot[[group2]])
+            
+            scatter_plot <- ggplot(combined_AveExp_plot, aes_string(x = group1, y = group2)) +
+                geom_point(alpha = 0.5, size = 1, color = "darkred") +
+                geom_smooth(method = "lm", color = "blue", se = FALSE) +
+                ggtitle(paste0("Correlation: ", round(correlation_value, 2))) +
+                theme_minimal() +
+                theme(plot.title = element_text(color = "darkgreen", size = 10, face = "bold"),
+                      axis.title.x = element_text(color = "blue", size = 10, face = "bold"),
+                      axis.title.y = element_text(color = "red", size = 10, face = "bold"))
+            
+            correlation_plots[[paste0(group1, "_vs_", group2)]] <- scatter_plot
+        }
+    }
+}
+
+# Define unique colors for each group
+group_colors <- c("patient_prim_cancer_cells" = "blue",
+                  "patient_mets_cancer_cells" = "red",
+                  "mm_prim_cancer_cells" = "green",
+                  "mm_mets_cancer_cells" = "purple",
+                  "xeno_prim_human" = "orange",
+                  "xeno_mets_human" = "brown")
+
+# Generate scatter plots with unique axis title colors
+for (i in seq_len(ncol(combined_AveExp_plot))) {
+    for (j in seq_len(ncol(combined_AveExp_plot))) {
+        if (i < j) {
+            group1 <- colnames(combined_AveExp_plot)[i]
+            group2 <- colnames(combined_AveExp_plot)[j]
+            
+            correlation_value <- cor(combined_AveExp_plot[[group1]], combined_AveExp_plot[[group2]])
+            
+            scatter_plot <- ggplot(combined_AveExp_plot, aes_string(x = group1, y = group2)) +
+                geom_point(alpha = 0.5, size = 1, color = "black") +
+                geom_smooth(method = "lm", color = "black", se = FALSE) +
+                ggtitle(paste0("Correlation: ", round(correlation_value, 2))) +
+                theme_minimal() +
+                theme(plot.title = element_text(color = "black", size = 10, face = "bold"),
+                      axis.title.x = element_text(color = group_colors[group1], size = 10, face = "bold"),
+                      axis.title.y = element_text(color = group_colors[group2], size = 10, face = "bold"))
             
             correlation_plots[[paste0(group1, "_vs_", group2)]] <- scatter_plot
         }
