@@ -116,9 +116,9 @@ human_lung_ref$free_annotation <-
 human_tumor_cell <- qs::qread("input/downloads/human_tumor_fromxenograft.qs")
 
 #mouse lung normal cells reference
-mouse_lung_ref <- qs::qread("input/downloads/mouse_lung.qs")
+# mouse_lung_ref <- qs::qread("input/downloads/mouse_lung.qs")
 
-# mouse_lung_ref <- qs::qread("input/downloads/normal_mouselung.qs")
+mouse_lung_ref <- qs::qread("input/downloads/normal_mouselung.qs")
 
 mouse_lung_ref$CellType <-
             str_replace_all(mouse_lung_ref$free_annotation,

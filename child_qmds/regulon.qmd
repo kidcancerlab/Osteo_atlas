@@ -18,7 +18,7 @@ object_list <-
             "patient_mets_cancer_cells",    0.1,        "hgnc",
             "mm_prim_cancer_cells",         0.3,        "mgi",
             "mm_mets_cancer_cells",         0.3,        "mgi",
-            "xeno_prim_human",              0.2,        "hgnc",
+            "xeno_prim_human",              0.15,        "hgnc",
             "xeno_mets_human",              0.1,        "hgnc")
 
 for (i in seq_len(nrow(object_list))) {

@@ -271,6 +271,46 @@ write_tsv(x = all_data_celltypes, file = filename)
 
 
 ## Annotate the cancer clusters manually
+labelling the clusters based on the cell types and the cell cycle phase
+1. Tumor_Inflammatory: The supopulation of tumor that have the following pathways up: 
+    Kegg_graft_vs_host_disease,
+    Kegg_autoimmune_thyroid_disease,
+    Kegg_graft_vs_host_disease,
+    Kegg_Allograft _rejection,
+    Kegg_ccomplement_and_coagulation_cascades
+2. Tumor_Metablolic: pathways up: 
+    Kegg_oxidative_phosphorylation,
+    Kegg_preoteasome,
+    Kegg_glutathione_metabolism,
+    kegg_ribosome,
+    Kegg_parkinsons_disease
+3. Tumor_Interractive: pathways up:
+    Kegg_neurotropin_signalling_pathway,
+    Kegg_insulin_signalling_pathway,
+    Kegg_ERBB_signalling_pathway,
+    Kegg_TGF_beta_signalling_pathway,
+    KEGG_ECM_receptor_interaction,
+    KEGG_TOll_like_receptor_signalling_pathway,
+    LEGG_cell_adhesion_molecules,
+    Kegg_focal_adhesion,
+    Kegg_cytokine_cytokine_receptor_interaction
+4. Tumor_Cycling: pathways up:
+    Kegg_cell_cycle,
+    Kegg_DNA_replication,
+    Kegg_p53_signalling_pathway,
+    Kegg_oocyte_meiosis,
+    Kegg_mismatch_repair,
+    Kegg_base_excision_repair,
+    Kegg_nucleotide_excision_repair
+5. Tumor_Secretory: pathways up: Kegg_protein_processing_in_endoplasmic_reticulum, Kegg_endocytosis, Kegg_phagosome, Kegg_Lysosome, Kegg_autophagy, Kegg_mTOR_signalling_pathway, Kegg_AMPK_signalling_pathway
+6. Tumor_Quiescent: pathways up: not much
+7. Tumor_Invasive: pathways up: This seems to be interractive as well
+    Reactome degradation of ECM
+    Raactome_collagen_degradation,
+    Kegg_TGF_beta_signalling_pathway, 
+    Reactome_Collagen_modification
+
+
 ```{r annotate_cancer_clusters, echo = FALSE}
 
 object_list <-
@@ -322,71 +362,71 @@ for (i in seq_len(nrow(object_list))) {
     if (group == "patient_prim_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Growth-Metabolism and Recovery",
-                            "1" = "Matrix Producing",
-                            "2" = "Growth-Actively Cycling",
-                            "3" = "Inflammatory/Interractive",
-                            "4" = "Basal/Quiescent",
-                            "5" = "Immune Regulatory",
-                            "6" = "Basal/Quiescent",
-                            "7" = "Basal/Quiescent"))
+                          c("0" = "Tumor_Metabolic",
+                            "1" = "Tumor_Interractive",
+                            "2" = "Tumor_Cycling",
+                            "3" = "Tumor_Quiescent",
+                            "4" = "Tumor_Interractive",
+                            "5" = "Tumor_Inflammatory",
+                            "6" = "Tumor_ImmuneRegulatory",
+                            "7" = "Tumor_ImmuneRegulatory"))
     }
     if (group == "patient_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Growth-Metabolism and Recovery",
-                            "1" = "Growth-Actively Cycling",
-                            "2" = "Basal/Quiescent",
-                            "3" = "Inflammatory/Interractive",
-                            "4" = "Basal/Quiescent",
-                            "5" = "Basal/Quiescent",
-                            "6" = "Basal/Quiescent",
-                            "7" = "Immune Regulatory",
-                            "8" = "Matrix Producing",
-                            "9" = "Basal/Quiescent"))
+                          c("0" = "Tumor_Metabolic",
+                            "1" = "Tumor_Cycling",
+                            "2" = "Tumor_Quiescent",
+                            "3" = "Tumor_Inflammatory",
+                            "4" = "Tumor_Quiescent",
+                            "5" = "Tumor_Quiescent",
+                            "6" = "Tumor_Quiescent",
+                            "7" = "Tumor_ImmuneRegulatory",
+                            "8" = "Tumor_Secretory",
+                            "9" = "Tumor_Quiescent"))
     }
     if (group == "mm_prim_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Actively_Cycling",
-                            "1" = "Metabolic",
-                            "2" = "Interractive",
-                            "3" = "Secretory",
-                            "4" = "Inflammatory",
-                            "5" = "Quiescent"))
+                          c("0" = "Tumor_Cycling",
+                            "1" = "Tumor_Metabolic",
+                            "2" = "Tumor_Interractive",
+                            "3" = "Tumor_Secretory",   #invasive or ECM degradation and hedgehog signaling
+                            "4" = "Tumor_Inflammatory",
+                            "5" = "Tumor_Quiescent"))
     }
     if (group == "mm_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Actively_Cycling",
-                            "1" = "Interractive",
-                            "2" = "Metabolic",
-                            "3" = "Secretory",
-                            "4" = "Inflammatory",
-                            "5" = "Quiescent"))
+                          c("0" = "Tumor_Metabolic",
+                            "1" = "Tumor_Interractive",
+                            "2" = "Tumor_Cycling",
+                            "3" = "Tumor_Secretory",
+                            "4" = "Tumor_Inflammatory",
+                            "5" = "Tumor_Quiescent"))
     }
     if (group == "xeno_prim_human") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Actively_Cycling",
-                            "1" = "Secretory",
-                            "2" = "Quiescent",
-                            "3" = "Metabolic",
-                            "4" = "Quiescent",
-                            "5" = "Quiescent",
-                            "6" = "Inflammatory",
-                            "7" = "Quiescent"))
+                          c("0" = "Tumor_Cycling",
+                            "1" = "Tumor_Secretory",
+                            "2" = "Tumor_Secretory",
+                            "3" = "Tumor_Metabolic",
+                            "4" = "Tumor_Quiescent",
+                            "5" = "Tumor_Quiescent",
+                            "6" = "Tumor_Inflammatory",
+                            "7" = "Tumor_Quiescent"))
     }
     if (group == "xeno_mets_human") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Interractive",
-                            "1" = "Quiescent",
-                            "2" = "Metabolic",
-                            "3" = "Infammatory",
+                          c("0" = "Tumor_Interractive",
+                            "1" = "Tumor_Quiescent",
+                            "2" = "Tumor_Metabolic",
+                            "3" = "Tumor_Inflammatory",
                             "4" = "Actively_Cycling",
                             "5" = "Actively_Cycling",
-                            "6" = "Quiescent"))
+                            "6" = "Tumor_Quiescent"))
     }
 
     object$Ann_Level2<- object$Ann_Level3
@@ -423,27 +463,3 @@ for (i in seq_len(nrow(object_list))) {
 
 
 
-```{r}
-
-library(drc)
-
-# Example data: concentrations and corresponding fold change responses
-conc <- c(0, 0.01, 0.1, 1, 10, 100)
-response <- c(4.318400041, 0.867375468, 0.831270818, 0.867279015, 0.844729305)
-
-# Fit a four-parameter logistic (4PL) model
-dose_response_model <- drm(response ~ conc, fct = LL.4(names = c("Slope", "Lower", "Upper", "IC50")))
-
-# Summarize the model to see the IC50
-summary(dose_response_model)
-
-# Extract the IC50 value
-ic50_value <- ED(dose_response_model, 50, interval = "delta")
-print(ic50_value)
-
-# Plot the dose-response curve
-plot(dose_response_model, log = "x", main = "Dose-Response Curve", xlab = "Concentration (µM)", ylab = "Fold Change")
-
-
-
-```

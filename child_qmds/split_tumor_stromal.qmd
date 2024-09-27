@@ -667,6 +667,15 @@ for (group in c("xeno_prim_human",
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
+    if (group == "xeno_prim_human") {
+        object <- subset(object, 
+                        sample_name != "SJOS030279_X1") %>%
+            process_seurat() %>%
+            RunHarmony(group.by.vars = c("sample_name", "data_source", "method"),
+                        theta = c(7, 7, 7)) %>%
+        process_seurat(reduction = "harmony",
+                       resolution = 0.15)
+    }
     object$Ann_level3 <-
         stringr::str_replace_all(object$annotations,
                     c("^DC__DC_$" = "Dendritic_cells",
