@@ -34,7 +34,7 @@ https://www.synapse.org/Synapse:syn21560554
 We kept only the normoxic samples for the analysis
 ```{r celltype_annotation_data}
 #| cache.vars = c('human_lung_ref', 'mouse_lung_ref', 'human_tumor_cell', 'mouse_tumor_cell')
-human_lung_ref <- 
+human_lung_ref <-
     qs::qread("input/downloads/human_lung.qs")
 
 human_lung_ref$free_annotation <-
@@ -230,7 +230,7 @@ hpca$label.main <-
                                        "^CMP$" = "CMP_Progenitors",
                                        "^BM & Prog.$" = "Bone_marrow",
                                        "^Macrophage$" = "Macrophages",
-                                       "^Capillary$" = "Capillary_cells")) 
+                                       "^Capillary$" = "Capillary_cells"))
 
 huim$label.main <-
             str_replace_all(huim$label.main,
@@ -810,7 +810,7 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
             scale_color_manual(values = c(plot_cols[1], "grey", plot_cols[2]),
                                name = "") +
             geom_text_repel(aes(label = gene))
-        
+
         # save the volcano plot
         ggsave(
             paste0("output/figures/degs/", group, "/",
@@ -844,7 +844,7 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
                 cluster_column = cluster_column,
                 features = marker_genes)
     } else {
-        circle_plot_out <- 
+        circle_plot_out <-
             ggplot(data = NULL) +
                    aes(x = as.factor(1), y = as.factor(1)) +
                    geom_text(aes(label = str_c("No marker genes for ", label)))
@@ -1075,5 +1075,38 @@ Run_GRA <- function(sobject,
                 cellInfo = cellInfo,
                 colVars = colVars,
                 exprMat_log = exprMat_log))
+}
+```
+
+```{r helper_confirm_mclapply_worked}
+#| cache.vars: confirm_mclapply_worked
+#' Confirm mclapply Worked And Dump Error Messages If Not
+#'
+#' This function checks if the `mclapply` function executed successfully on the provided input list.
+#'
+#' @param input_list A list that was processed by `mclapply`.
+#' @return The input list if `mclapply` was successful or the error messages if it failed.
+confirm_mclapply_worked <- function(input_list) {
+    if (length(input_list) == 0) {
+        stop("Empty input list")
+    }
+
+    has_error <- FALSE
+    for (item in input_list) {
+        if (inherits(item, "try-error")) {
+                warning(
+                    "mclapply failed with error: ",
+                    item[[1]],
+                    immediate. = TRUE
+                )
+            has_error <- TRUE
+        }
+    }
+
+    if (has_error) {
+        stop("mclapply failed")
+    } else {
+        return(input_list)
+    }
 }
 ```

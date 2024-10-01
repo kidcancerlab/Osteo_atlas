@@ -1,0 +1,567 @@
+
+## Functions to perform analysis on cell expression correlation
+```{r helper_corr_gsea}
+#| cache.vars: gsea_on_pseuobulked_sobjs
+
+#' Perform GSEA on Pseudobulked Seurat Objects
+#'
+#' This function performs Gene Set Enrichment Analysis (GSEA) on pseudobulked
+#' Seurat objects.
+#'
+#' @param aggregation_column Character. The column name in the metadata used
+#'  for aggregation. Default is "Ann_Level3".
+#' @param mouse_sample_regex Character. Regular expression to identify mouse
+#'  samples. Default is "mouse|^mm".
+#' @param qs_list List. A named list of paths to qs files of Seurat objects to
+#'  be pseudobulked and analyzed.
+#' @param figure_dir Character. Directory to save the correlation figures.
+#'  Default is "output/figures/stromal_species_correlations/".
+#' @param corr_figure_name_stub Character. Stub for naming the correlation
+#'  figures. Default is "celltype_correlation_".
+#' @param parallel_threads Integer. Number of threads to use for parallel
+#'  processing. Default is 4.
+#' @param gsea_categories List. Categories for GSEA analysis.
+#' @param gsea_output Character. File path to save the GSEA results. Default is
+#'  "output/stromal_species_correlations/gsea_results.tsv".
+#'
+#' @return Invisible NULL. The function performs operations and saves results
+#'  to files.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' gsea_on_pseuobulked_sobjs(
+#'     aggregation_column = "Ann_Level3",
+#'     mouse_sample_regex = "mouse|^mm",
+#'     qs_list = my_qs_list,
+#'     figure_dir = "output/figures/stromal_species_correlations/",
+#'     corr_figure_name_stub = "celltype_correlation_",
+#'     parallel_threads = 4,
+#'     gsea_categories = my_gsea_categories,
+#'     gsea_output = "output/stromal_species_correlations/gsea_results.tsv"
+#' )
+#' }
+gsea_on_pseuobulked_sobjs <-
+    function(
+        aggregation_column = "Ann_Level3",
+        mouse_sample_regex = "mouse|^mm",
+        qs_list,
+        figure_dir = "output/figures/stromal_species_correlations/",
+        corr_figure_name_stub = "celltype_correlation_",
+        parallel_threads = 4,
+        gsea_categories,
+        gsea_output = "output/stromal_species_correlations/gsea_results.tsv"
+    ) {
+    if (missing(gsea_categories) || missing(qs_list)) {
+        stop("gsea_categories and qs_list must be provided.")
+    }
+
+
+    all_groups <- names(qs_list)
+
+    # Pseudobulk all the sobjs in target folder, grouping by aggregate_by column
+    # in the metadata. Returns a Seurat object
+    s_objs_list <-
+        pseudobulk_sobjs_by_col(
+            aggregation_column = aggregation_column,
+            mouse_sample_regex = mouse_sample_regex,
+            qs_list = qs_list,
+            parallel_threads = parallel_threads
+        ) |>
+        confirm_mclapply_worked()
+
+    # Identify genes present in all datasets
+    shared_genes <- Reduce(intersect, lapply(s_objs_list, rownames))
+
+    # Identify all cell types present in any dataset
+    all_cell_types <-
+        lapply(s_objs_list, function(x) colnames(x)) |>
+        unlist() |>
+        unique()
+
+    merged_expr_data <-
+        merge(
+            s_objs_list[[1]],
+            s_objs_list[-1],
+            add.cell.ids = all_groups
+        ) |>
+        SeuratObject::JoinLayers() |>
+        Seurat::NormalizeData() |>
+        SeuratObject::GetAssayData(layer = "data") |>
+        as.data.frame()
+
+    merged_expr_data <- merged_expr_data[shared_genes, ]
+
+    log_offset <- 0.0001
+
+    fold_changes <-
+        save_fc_and_pairs_plot(
+            merged_expr_data,
+            all_cell_types,
+            all_groups,
+            log_offset,
+            figure_dir = figure_dir,
+            figure_name_stub = corr_figure_name_stub,
+            width = 12,
+            height = 12
+        )
+
+    gsea_results <-
+        gsea_from_fc_list(
+            fold_changes,
+            gsea_categories,
+            parallel_threads = parallel_threads
+        )
+
+    readr::write_tsv(
+        gsea_results,
+        file = gsea_output
+    )
+
+    return(invisible())
+}
+```
+
+## Generate a new Seurat object containing pseudobulked data
+```{r helper_corr_pseudobulk_sobjs_by_col}
+#| cache.vars: pseudobulk_sobjs_by_col
+
+#' Pseudobulk Seurat Objects by Column
+#'
+#' This function aggregates single-cell RNA-seq data into pseudobulk samples
+#' based on a specified column.
+#'
+#' @param aggregation_column A character string specifying the column to
+#'  aggregate by. Default is "Ann_Level3".
+#' @param mouse_sample_regex A character string specifying the regex pattern to
+#'  identify mouse samples. Default is "mouse|^mm".
+#' @param qs_list A named list of file paths to serialized Seurat objects
+#'  (in .qs format).
+#' @param parallel_threads An integer specifying the number of parallel threads
+#'  o use. Default is 4.
+#'
+#' @return A list of pseudobulk Seurat objects, one for each element in
+#' `qs_list`.
+#'
+#' @details
+#' The function reads in Seurat objects from the provided file paths, merges
+#'  them, and aggregates the expression data based on the specified column. If
+#'  the sample is identified as mouse data (based on the regex pattern), the
+#'  gene names are converted to human gene names. The aggregated expression data
+#'  is then used to create a new Seurat object.
+#' @examples
+#' \dontrun{
+#' qs_list <- list(
+#'     sample1 = c("path/to/sample1_part1.qs", "path/to/sample1_part2.qs"),
+#'     sample2 = c("path/to/sample2_part1.qs", "path/to/sample2_part2.qs")
+#' )
+#' pseudobulk_sobjs <- pseudobulk_sobjs_by_col(
+#'     aggregation_column = "cell_type",
+#'     mouse_sample_regex = "mouse|^mm",
+#'     qs_list = qs_list,
+#'     parallel_threads = 4
+#' )
+#' }
+pseudobulk_sobjs_by_col <-
+    function(
+        aggregation_column = "Ann_Level3",
+        mouse_sample_regex = "mouse|^mm",
+        qs_list,
+        parallel_threads = 4
+    ) {
+    parallel::mclapply(
+        names(qs_list),
+        mc.preschedule = FALSE,
+        mc.cores = parallel_threads,
+        function(x) {
+            s_obj_list <-
+                lapply(
+                    qs_list[[x]],
+                    function(y) {
+                        qs::qread(y)
+                    }
+                )
+            if (length(s_obj_list) > 0) {
+                s_obj <-
+                    merge(s_obj_list[[1]], y = s_obj_list[-1]) |>
+                    SeuratObject::JoinLayers()
+
+                Seurat::Idents(s_obj) <- aggregation_column
+
+                # Convert the gene names to human if mouse data
+                if (grepl(mouse_sample_regex, x)) {
+                    s_obj <-
+                        convert_sobj_gene_name_species(
+                            s_obj,
+                            from = "mouse",
+                            to = "human"
+                        )
+                }
+                s_obj <-
+                    SeuratObject::CreateSeuratObject(
+                        counts = Seurat::AggregateExpression(
+                            s_obj,
+                            group.by = aggregation_column
+                        )$RNA
+                    )
+                s_obj$group <- x
+
+            } else {
+                s_obj <- NULL
+            }
+            rm(s_obj_list)
+
+            return(s_obj)
+        }
+    )
+}
+```
+
+## Convert gene names between species and create a new Seurat object
+```{r helper_corr_convert_gene_names}
+#| cache.vars: convert_gene_names
+#' Convert Gene Names Between Species and Create a New Seurat Object
+#'
+#' This function converts gene names in a Seurat object from one species to
+#' another (mouse to human or human to mouse), removes genes with NA values or
+#' genes that appear multiple times, and creates a new Seurat object with the
+#' converted gene names.
+#'
+#' @param s_obj A Seurat object containing the gene expression data.
+#' @param from A character string specifying the source species. Default is
+#' "mouse".
+#' @param to A character string specifying the target species. Default is
+#' "human".
+#'
+#' @return A new Seurat object with gene names converted to the target species.
+#'
+#' @details
+#' The function first extracts the gene names from the Seurat object and
+#' converts them to the target species using the `nichenetr` package. It then
+#' filters out genes with NA values and genes that appear multiple times.
+#' Finally, it creates a new Seurat object with the converted gene names and
+#' the original metadata.
+#'
+#' @examples
+#' \dontrun{
+#' # Convert gene names from mouse to human
+#' new_s_obj <-
+#'  convert_sobj_gene_name_species(
+#'      s_obj,
+#'      from = "mouse",
+#'      to = human"
+#'  )
+#' }
+convert_sobj_gene_name_species <- function(s_obj,
+                                           from = "mouse",
+                                           to = "human") {
+    # Pull the raw counts out
+    # raw_counts <-
+    #     Seurat::GetAssayData(s_obj, layer = "counts")
+
+    keep_key_df <- data.frame(gene = rownames(s_obj))
+    if (from == "mouse" && to == "human") {
+        keep_key_df <-
+            keep_key_df |>
+            dplyr::mutate(
+                gene = (nichenetr::convert_mouse_to_human_symbols(gene))
+            ) |>
+            dplyr::group_by(gene) |>
+            mutate(n = dplyr::n()) |>
+            mutate(keep = dplyr::if_else(!is.na(gene) & n == 1, TRUE, FALSE))
+
+    } else if (from == "human" && to == "mouse") {
+        keep_key_df <-
+            keep_key_df |>
+            dplyr::mutate(
+                gene = nichenetr::convert_human_to_mouse_symbols(gene)
+            ) |>
+            dplyr::group_by(gene) |>
+            mutate(n = dplyr::n()) |>
+            mutate(keep = dplyr::if_else(!is.na(gene) & n == 1, TRUE, FALSE))
+    } else {
+        stop("Invalid from/to conversion. Only mouse and human are supported.")
+    }
+
+    s_obj <- s_obj[keep_key_df$keep, ]
+    rownames(s_obj) <-
+        keep_key_df |>
+        dplyr::filter(keep == TRUE) |>
+        dplyr::pull(gene)
+
+    s_obj_new <-
+        Seurat::CreateSeuratObject(
+            counts = Seurat::GetAssayData(s_obj, layer = "counts"),
+            meta.data = s_obj@meta.data
+        )
+
+    return(s_obj_new)
+}
+```
+
+## Get pairwise fold changes between columns of data
+```{r helper_corr_pairwise_fc}
+#| cache.vars: get_pairwise_fold_changes
+get_pairwise_fold_changes <- function(input, cell_type) {
+    fold_changes <- list()
+    for (i in 1:(length(input) - 1)) {
+        for (j in (i + 1):length(input)) {
+            label <-
+                paste0(
+                    colnames(input)[i],
+                    "_",
+                    colnames(input)[j]
+                )
+            fold_changes[[paste0(cell_type, "__", label)]] <-
+                input[, i] - input[, j]
+            names(fold_changes[[paste0(cell_type, "__", label)]]) <-
+                rownames(input)
+        }
+    }
+
+    return(fold_changes)
+}
+```
+
+## Save the pairwise scatter plots
+```{r helper_corr_ggpairs}
+#| cache.vars: save_ggpairs_plot
+save_ggpairs_plot <-
+    function(
+        expr_data,
+        cell_type,
+        figure_dir = "output/figures/stromal_species_correlations/",
+        figure_name_stub = "celltype_correlation_",
+        width = 12,
+        height = 12
+    ) {
+    pairs_plot <-
+        GGally::ggpairs(
+            expr_data,
+            lower = list(continuous = "points"),
+            diag = list(continuous = "barDiag"),
+            title = cell_type
+        )
+    ggplot2::ggsave(
+        paste0(
+            figure_dir,
+            figure_name_stub,
+            cell_type,
+            ".png"
+        ),
+        pairs_plot,
+        width = width,
+        height = height
+    )
+    return(invisible())
+}
+```
+
+## Perform GSEA analysis from a list of fold changes
+```{r helper_corr_gsea_from_fc}
+#| cache.vars: gsea_from_fc_list
+
+#' Perform GSEA Analysis from Fold Change List
+#'
+#' This function performs Gene Set Enrichment Analysis (GSEA) on a list of fold
+#' changes.
+#'
+#' @param fold_changes A list of named vectors, where the names are the gene
+#'  names and the values are the fold changes between the two columns of the
+#'  data.
+#' @param gsea_categories A tibble containing the GSEA categories with columns
+#'  "category", "subcategory", and "cat_expl".
+#' @param species A character string specifying the species. Default is "Homo
+#'  sapiens".
+#' @param parallel_threads An integer specifying the number of parallel threads
+#'  to use. Default is 1.
+#'
+#' @return A tibble with the results of the GSEA analysis, including columns
+#'  for NES, p-value, adjusted p-value, and additional metadata.
+#'
+#' @details
+#' The function uses the `msigdbr` package to retrieve gene sets for the
+#'  specified species and categories. It then performs GSEA using the `fgsea`
+#'  package, filtering results with an adjusted p-value less than 0.05. The
+#'  results are arranged by normalized enrichment score (NES) and include
+#'  additional metadata such as category, subcategory, and comparison
+#'  information.
+#'
+#' @examples
+#' \dontrun{
+#' fold_changes <- list(
+#'   comparison1 = c(GeneA = 2.5, GeneB = -1.2),
+#'   comparison2 = c(GeneA = 1.8, GeneC = -2.3)
+#' )
+#' gsea_categories <- tibble::tibble(
+#'   category = c("C2", "C5"),
+#'   subcategory = c("CP:KEGG", "BP"),
+#'   cat_expl = c("KEGG Pathways", "Biological Processes")
+#' )
+#' results <- gsea_from_fc_list(fold_changes, gsea_categories)
+#' }
+gsea_from_fc_list <- function(fold_changes,
+                              gsea_categories,
+                              species = "Homo sapiens",
+                              parallel_threads = 1) {
+    gsea_results <- parallel::mclapply(
+        names(fold_changes),
+        mc.cores = parallel_threads,
+        mc.preschedule = FALSE,
+        function(comparison) {
+            gsea_partial_results <- tibble::tibble()
+            for (i in seq_len(nrow(gsea_categories))) {
+                category <- gsea_categories[["category"]][i]
+                sub_cat <- gsea_categories[["subcategory"]][i]
+                cat_expl <- gsea_categories[["cat_expl"]][i]
+
+                gsea_ref <- msigdbr::msigdbr(
+                    species = species,
+                    category = category,
+                    subcategory = sub_cat
+                ) %>%
+                    split(x = .$gene_symbol, f = .$gs_name)
+
+                gsea_partial_results <- fgsea::fgseaMultilevel(
+                    gsea_ref,
+                    fold_changes[[comparison]],
+                    minSize = 10,
+                    maxSize = 500,
+                    nPermSimple = 10000
+                ) |>
+                    filter(padj < 0.05) |>
+                    dplyr::arrange(dplyr::desc(NES)) |>
+                    dplyr::select(-leadingEdge) |>
+                    dplyr::mutate(
+                        order = seq_len(dplyr::n()),
+                        justify_y = dplyr::if_else(NES > 0, 1, 0),
+                        y_pos = dplyr::if_else(NES > 0, -0.1, 0.1),
+                        category = cat_expl,
+                        subcategory = sub_cat,
+                        comparison = comparison
+                    ) |>
+                    mutate(
+                        cell_type = stringr::str_remove(comparison, "__.+"),
+                        groups = stringr::str_remove(comparison, ".+__")
+                    ) |>
+                    dplyr::bind_rows(gsea_partial_results)
+            }
+            return(gsea_partial_results)
+        }
+    ) |>
+        confirm_mclapply_worked() |>
+        bind_rows()
+
+    return(gsea_results)
+}
+# and the values are the fold changes between the two columns of the data
+# Output is a tibble with the results of the GSEA analysis
+gsea_from_fc_list <- function(fold_changes,
+                              gsea_categories,
+                              species = "Homo sapiens",
+                              parallel_threads = 1) {
+    gsea_results <-
+        parallel::mclapply(
+            names(fold_changes),
+            mc.cores = parallel_threads,
+            mc.preschedule = FALSE,
+            function(comparison) {
+                gsea_partial_results <- tibble::tibble()
+                for (i in seq_len(nrow(gsea_categories))) {
+                    category <- gsea_categories[["category"]][i]
+                    sub_cat <- gsea_categories[["subcategory"]][i]
+                    cat_expl <- gsea_categories[["cat_expl"]][i]
+
+                    gsea_ref <-
+                        msigdbr::msigdbr(
+                            species = species,
+                            category = category,
+                            subcategory = sub_cat
+                        ) %>%
+                            split(x = .$gene_symbol, f = .$gs_name)
+
+                    gsea_partial_results <-
+                        fgsea::fgseaMultilevel(
+                            gsea_ref,
+                            fold_changes[[comparison]],
+                            minSize = 10,
+                            maxSize = 500,
+                            nPermSimple = 10000
+                        ) |>
+                        filter(padj < 0.05) |>
+                        dplyr::arrange(dplyr::desc(NES)) |>
+                        dplyr::select(-leadingEdge) |>
+                        dplyr::mutate(
+                            order = seq_len(dplyr::n()),
+                            justify_y = dplyr::if_else(NES > 0, 1, 0),
+                            y_pos = dplyr::if_else(NES > 0, -0.1, 0.1),
+                            category = cat_expl,
+                            subcategory = sub_cat,
+                            comparison = comparison
+                        ) |>
+                        mutate(
+                            cell_type = stringr::str_remove(comparison, "__.+"),
+                            groups = stringr::str_remove(comparison, ".+__")
+                        ) |>
+                        dplyr::bind_rows(gsea_partial_results)
+                }
+                return(gsea_partial_results)
+        }) |>
+        confirm_mclapply_worked() |>
+        bind_rows()
+
+    return(gsea_results)
+}
+```
+
+
+## Calculate the fold change values and save off the pairwise scatter plots
+```{r helper_corr_save_fc_and_pairs_plot}
+save_fc_and_pairs_plot <-
+    function(
+        merged_expr_data,
+        all_cell_types,
+        all_groups,
+        log_offset,
+        figure_dir = "output/figures/stromal_species_correlations/",
+        figure_name_stub = "celltype_correlation_",
+        width = 12,
+        height = 12
+    ) {
+    fold_changes <- list()
+    for (cell_type in all_cell_types) {
+        sub_data <-
+            merged_expr_data |>
+            dplyr::select(tidyr::any_of(paste0(all_groups, "_", cell_type))) |>
+            dplyr::rename_with(~ str_remove(.x, paste0("_", cell_type)))
+
+        if (ncol(sub_data) > 1) {
+            save_ggpairs_plot(
+                sub_data,
+                cell_type,
+                figure_dir = figure_dir,
+                figure_name_stub = figure_name_stub,
+                width = width,
+                height = height
+            )
+
+            # Calculate pairwise fold changes between each column of the data
+            fold_changes <-
+                c(
+                    fold_changes,
+                    get_pairwise_fold_changes(
+                        input = sub_data |>
+                            dplyr::mutate(
+                                dplyr::across(
+                                    tidyr::everything(),
+                                    ~ log2(. + log_offset)
+                                )
+                            ),
+                        cell_type
+                    )
+                )
+        }
+    }
+    return(fold_changes)
+}
+```
