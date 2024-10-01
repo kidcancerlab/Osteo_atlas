@@ -116,9 +116,9 @@ human_lung_ref$free_annotation <-
 human_tumor_cell <- qs::qread("input/downloads/human_tumor_fromxenograft.qs")
 
 #mouse lung normal cells reference
-mouse_lung_ref <- qs::qread("input/downloads/mouse_lung.qs")
+# mouse_lung_ref <- qs::qread("input/downloads/mouse_lung.qs")
 
-# mouse_lung_ref <- qs::qread("input/downloads/normal_mouselung.qs")
+mouse_lung_ref <- qs::qread("input/downloads/normal_mouselung.qs")
 
 mouse_lung_ref$CellType <-
             str_replace_all(mouse_lung_ref$free_annotation,
@@ -402,7 +402,7 @@ annotate_celltypes <- function(sobject,
 
 ## RUN differential expression analysis on a Seurat object
 ```{r run_degs_function}
-#| cache.vars: all_samples_csv, run_degs
+#| cache.vars: c('all_samples_csv', 'run_degs')
 all_samples_csv <- read_tsv("misc/allsample_details.txt",
                             show_col_types = FALSE)
 
@@ -734,7 +734,7 @@ circle_plot <- function(sobj,
 ```
 
 ```{r panel_plot_function}
-#| cache.vars: c('make_panel_plot', 'cat_tib')
+#| cache.vars = c('make_panel_plot', 'cat_tib')
 
 #GSEA Miltilevel
 cat_tib <- dplyr::tribble(
