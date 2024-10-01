@@ -1,6 +1,6 @@
 ---
 title: "Osteosarcoma scAtlas"
-author: "Yogesh Budhathoki, Matt Cannon and Matt Gust"
+author: "Yogesh Budhathoki and Matt Cannon"
 date: "`r format(Sys.time(), '%m/%d/%Y')`"
 format:
     html:
@@ -11,6 +11,7 @@ format:
         code-fold: true
         code-link: true
         df-print: kable
+        embed-resources: true
 execute:
     cache: true
 knitr:
@@ -22,9 +23,11 @@ knitr:
 lightbox: true
 ---
 
-```{r setup}
+```{r setup_main}
 #| include: FALSE
+library(monocle3)
 library(rrrSingleCellUtils)
+library(rrrSnvs)
 library(Seurat)
 library(ggrepel)
 library(tidyverse)
@@ -37,6 +40,7 @@ library(Rmagic)
 library(knitr)
 library(scATOMIC)
 library(copykat)
+library(SCENIC)
 ```
 
 # Load in functions
@@ -60,6 +64,7 @@ for directoryName in \
     output/seurat_objects/tumor_vs_stroma \
     output/id_tumor/scATOMIC \
     output/id_tumor/SCEVAN \
+    output/id_tumor/snv_calling \
     output/id_tumor/snvs/plots \
     output/id_tumor/celltype
 do
@@ -68,6 +73,7 @@ do
         mkdir -p ${directoryName}
     fi
 done
+
 ```
 
 # Read in raw data and process to Seurat objects
@@ -83,10 +89,16 @@ Harmonized datasets are saved to `output/seurat_objects/sobj_preprocess_merged/`
 
 {{< include child_qmds/read_raw_data.qmd >}}
 
+
 # Use SingleR and reference datasets to annotate cell types
 The output of this is written to `output/seurat_objects/harmony_sobjs_annot/`
 
-{{< include child_qmds/annotate_celltypes.qmd >}}
+ {{< include child_qmds/annotate_celltypes.qmd >}}
+
+# Use SNV calling to try to ID tumor cells
+Run Matts SNV calling pipeline to try to ID tumor cells
+
+{{< include child_qmds/variants.qmd >}}
 
 # Use SCEVAN and scATOMIC to try to identify tumor cells
 This will help in splitting the cancer cells from the stroma cells.
@@ -101,10 +113,29 @@ This will help in splitting the cancer cells from the stroma cells.
 
 {{< include child_qmds/split_tumor_stromal.qmd >}}
 
-# Run differential expression and GSEA
+# DEGS and GSEA
+Run the differential expression and GSEA
 
 {{< include child_qmds/degs_gseaplots.qmd >}}
 
+# Regulon Analysis
+Perform the regulon analysis using the SCENIC package. The regulon analysis is
+
+{{< include child_qmds/regulon.qmd >}}
+
+# Stromal Reclustering
+Recluster the stromal cells
+
+{{< include child_qmds/stromal_reclustering.qmd >}}
+
+# Patient Reanalysis
+Reanalyze the patient samples for validation such as harmony integration validation
+
+{{< include child_qmds/patient_reanalysis.qmd >}}
+
+# render to make figures html
+<!-- 
+{{< include child_qmds/render_figs.qmd >}} -->
 
 
 # Session info

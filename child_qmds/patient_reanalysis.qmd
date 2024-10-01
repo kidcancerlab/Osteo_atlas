@@ -1,0 +1,272 @@
+
+
+
+## Validation of clustering and harmony
+Testing the clustering and harmony of the data using the heatmap for each 
+sample.
+```{r, validation_clustering_batch_correction}
+
+object_list <-
+    tribble(~group,                         ~res_value,
+            "patient_prim_cancer_cells",    0.1,
+            "patient_mets_cancer_cells",    0.1)
+
+for (i in seq_len(nrow(object_list))) {
+    all_sample <- 
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                        object_list$group[i],
+                        ".qs")) %>%
+        FindClusters(resolution = object_list$res_value[i])
+
+    all_sample <- all_sample %>%
+        FindVariableFeatures(nfeatures = 5000) %>%
+        ScaleData()
+    
+    dimplot_main <-
+        dimplot_better(all_sample,
+                      group_by = c("seurat_clusters")) +
+            ggtitle("whole_dimplot") 
+
+    aver_exp2 <- AverageExpression(all_sample,
+                        layer = "scale.data",
+                        group.by = "seurat_clusters")$RNA %>%
+        as.data.frame() %>%
+        tibble::rownames_to_column(var = "gene")
+    
+    combined_corr <- tibble::tibble()
+
+    for (samples in unique(all_sample$sample_name)) {
+        if (ncol(subset(all_sample, sample_name == samples)) < 1000) {
+            next
+        }
+        one_sample <-
+            subset(all_sample,
+                sample_name == samples) %>%
+                process_seurat()
+
+        one_sample <- one_sample %>%
+            ScaleData(features = VariableFeatures(all_sample))
+
+        sil_val <-
+            optimize_silhouette(sobject = one_sample,
+                                test_res = seq(0.05, 0.9, by = 0.05),
+                                summary_plot = FALSE,
+                                reduction = "harmony") %>%
+            filter(!is.na(sil_vals)) %>%
+            filter(sil_vals == max(sil_vals)) %>%
+            slice_head(n=1) %>%
+            dplyr::pull(res_vals)
+
+        one_sample <- 
+            FindClusters(one_sample,
+                        resolution = sil_val)
+        
+        dimplot_subset <-
+            dimplot_better(one_sample,
+                        group_by = c("seurat_clusters")) +
+                ggtitle(samples)
+
+        aver_exp1 <- AverageExpression(one_sample,
+                                    layer = "scale.data",
+                                    group.by = "seurat_clusters")$RNA %>%
+                    as.data.frame() %>%
+                    rename_with(~str_replace(., "g", "clust")) %>%
+                    tibble::rownames_to_column(var = "gene")
+
+        combine_exp <- 
+            left_join(aver_exp1, aver_exp2, by = "gene") %>%
+            column_to_rownames(var = "gene")
+
+        correlation <- tibble::tibble()
+        for (clusters in colnames(aver_exp1)[-1]) {
+            for (cluster_names in colnames(aver_exp2)[-1]) {
+                correlation_calc <-
+                    cor(combine_exp[[clusters]],
+                    combine_exp[[cluster_names]])
+                #append the correlations
+                correlation <- 
+                    tibble::tibble(corr_val = correlation_calc) %>%
+                    mutate(small_cluster = str_c(samples, "_", clusters),
+                        big_cluster = str_c("whole_", cluster_names)) %>%
+                    rbind(correlation)
+            }
+        }
+        #make a combined heatmap
+        combined_corr <- correlation %>%
+            group_by(small_cluster) %>%
+            slice_max(corr_val) %>%
+            rbind(combined_corr)
+            
+
+        #make individual heatmaps
+        correlation <-
+            correlation %>%
+            pivot_wider(names_from = big_cluster,
+                        values_from = corr_val) %>%
+            column_to_rownames(var = "small_cluster") %>%
+            pheatmap::pheatmap(display_numbers = TRUE,
+                                cluster_cols = FALSE,
+                                cluster_rows = FALSE,
+                                fontsize = 8,
+                                fontsize_number = 8,
+                                fontsize_row = 8,
+                                fontsize_col = 8,
+                                breaks = c(-1, -0.5, -0.1, 0.1, 0.5, 1),
+                                silent = TRUE,
+                                color = rev(RColorBrewer::brewer.pal(5, name = "PiYG")))
+        
+        combine_plot <-
+            cowplot::plot_grid(dimplot_main,
+                                dimplot_subset,
+                                ggplotify::as.ggplot(correlation),
+                                ncol = 1)
+
+        ggsave(str_c("output/figures/validation/integration_validation/",
+                    object_list$group[i],
+                    "/",
+                    samples,
+                    "_",
+                    object_list$group[i],
+                    ".png"),
+            plot = combine_plot,
+            width = 10,
+            height = 30,
+            bg = "white")
+    }
+    combined_corr_plot <-
+        combined_corr %>%
+        mutate(cluster = str_remove(small_cluster, ".+_"),
+                sample_name = str_remove(small_cluster, "_clust.+")) %>%
+        ggplot(aes(x = cluster,
+                    y = sample_name,
+                    fill = corr_val)) +
+        geom_tile() +
+        geom_text(aes(label = str_c(big_cluster, "=", round(corr_val, 2))),
+                size = 3) +
+        theme(axis.text.x = element_text(angle = 0, size = 20),
+              axis.text.y = element_text(angle = 0, size = 20)) +
+        scale_fill_gradient2(low = "blue", mid = "white", high = "red") +
+        theme_bw()
+
+    ggsave(str_c("output/figures/validation/integration_validation/",
+                object_list$group[i],
+                "/",
+                "All_combined_heatmap.png"),
+        plot = combined_corr_plot,
+        width = 12,
+        height = 10,
+        bg = "white")
+}
+
+
+```
+
+
+## Tumor subpopulations in different groups
+Testing the clustering and harmony of the data using the heatmap for each 
+sample.
+```{r, validation_clustering_tumor_subpopulation}
+
+object_list <-
+    tribble(~group,                         ~res_value,
+            "patient_prim_cancer_cells",    0.1,
+            "patient_mets_cancer_cells",    0.1,
+            "mm_prim_cancer_cells",         0.3,
+            "mm_mets_cancer_cells",         0.3,
+            "xeno_prim_human",              0.15,
+            "xeno_mets_human",              0.1)
+
+
+combined_AveExp <- tibble::tibble(gene = character())
+for (i in seq_len(nrow(object_list))) {
+    group <- object_list$group[i]
+    all_sample <- 
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                        object_list$group[i],
+                        ".qs")) 
+
+    all_sample <- all_sample %>%
+        FindVariableFeatures(nfeatures = 5000) %>%
+        ScaleData()
+
+    dimplot_main <-
+        dimplot_better(all_sample,
+                      group_by = c("seurat_clusters")) +
+            ggtitle("whole_dimplot") 
+
+    all_sample$aver_col <- "whole"
+
+    ave_expression <-
+        GetAssayData(all_sample,
+                     layer = "data") %>%
+        rowMeans() %>%
+        as.data.frame() %>%
+        rename(!!group := ".") %>%
+        tibble::rownames_to_column(var = "gene")
+
+    if (all_sample$organism[[1]] == "mouse") {
+        ave_expression$gene <-
+            nichenetr::convert_mouse_to_human_symbols(ave_expression$gene)
+        ave_expression <- 
+            ave_expression %>%
+            filter(!is.na(gene)) %>%
+            distinct(gene, .keep_all = TRUE)
+    }
+    combined_AveExp <- combined_AveExp %>%
+            full_join(ave_expression, by = "gene")
+}
+
+
+# Remove NA values from all columns
+combined_AveExp_plot <- combined_AveExp %>%
+    na.omit() %>%
+    distinct(gene, .keep_all = TRUE) %>%
+    column_to_rownames(var = "gene")
+
+# Perform correlation analysis for each group and generate scatterplots
+correlation_plots <- list()
+
+# Define unique colors for each group
+group_colors <- c("patient_prim_cancer_cells" = "blue",
+                  "patient_mets_cancer_cells" = "red",
+                  "mm_prim_cancer_cells" = "green",
+                  "mm_mets_cancer_cells" = "purple",
+                  "xeno_prim_human" = "orange",
+                  "xeno_mets_human" = "brown")
+
+# Generate scatter plots with unique axis title colors
+for (i in seq_len(ncol(combined_AveExp_plot))) {
+    for (j in seq_len(ncol(combined_AveExp_plot))) {
+        if (i < j) {
+            group1 <- colnames(combined_AveExp_plot)[i]
+            group2 <- colnames(combined_AveExp_plot)[j]
+            
+            correlation_value <- cor(combined_AveExp_plot[[group1]], combined_AveExp_plot[[group2]])
+            
+            scatter_plot <- ggplot(combined_AveExp_plot, aes_string(x = group1, y = group2)) +
+                geom_point(alpha = 0.5, size = 1, color = "black") +
+                geom_smooth(method = "lm", color = "black", se = FALSE) +
+                ggtitle(paste0("Correlation: ", round(correlation_value, 2))) +
+                theme_minimal() +
+                theme(plot.title = element_text(color = "black", size = 10, face = "bold"),
+                      axis.title.x = element_text(color = group_colors[group1], size = 10, face = "bold"),
+                      axis.title.y = element_text(color = group_colors[group2], size = 10, face = "bold"))
+            
+            correlation_plots[[paste0(group1, "_vs_", group2)]] <- scatter_plot
+        }
+    }
+}
+
+# Combine all scatter plots into a single plot
+combined_scatter_plot <- cowplot::plot_grid(plotlist = correlation_plots, ncol = 4)
+
+# Save the combined scatter plot
+ggsave(filename = "output/figures/validation/correlation_scatter_plots.png",
+       plot = combined_scatter_plot,
+       width = 21,
+       height = 14,
+       limitsize = FALSE,
+       bg = "white")
+
+```
+

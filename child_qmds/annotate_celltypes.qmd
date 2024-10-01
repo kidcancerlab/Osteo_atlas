@@ -10,17 +10,15 @@ assigned by highest number of celltype per each seurat cluster
 #| fig.align: "center"
 #| dependson: merge_harmony
 
-annotation_type <- list(patient_prim = "human",
-                        patient_mets = "human_lung",
-                        mm_prim = "mouse",
-                        mm_mets = "mouse_lung",
-                        xeno_prim_human = "human",
-                        xeno_mets_human = "human_lung",
-                        xeno_prim_mouse = "mouse",
-                        xeno_mets_mouse = "mouse_lung",
-                        normal_bone = "human")
-
-# for (group in unique(all_samples_csv$unique)){
+annotation_type <- list(patient_prim = list("human", FALSE),
+                        patient_mets = list("human_lung", FALSE),
+                        mm_prim = list("mouse", TRUE),
+                        mm_mets = list("mouse_lung", TRUE),
+                        xeno_prim_human = list("human", FALSE),
+                        xeno_mets_human = list("human_lung", FALSE),
+                        xeno_prim_mouse = list("mouse", FALSE),
+                        xeno_mets_mouse = list("mouse_lung", FALSE),
+                        normal_bone = list("human", FALSE))
 results <-
     parallel::mclapply(unique(all_samples_csv$unique),
                        mc.cores = parallelly::availableCores(),
@@ -29,8 +27,8 @@ results <-
                                     group,
                                     ".qs"))
         ann_sobj <- annotate_celltypes(sobject = ann_sobj,
-                                       species = annotation_type[group][1],
-                                       with_tumor = FALSE,
+                                       species = annotation_type[[group]][[1]],
+                                       with_tumor = annotation_type[[group]][[2]],
                                        aggr_ref = TRUE)
 
         Idents(ann_sobj) <- ann_sobj$seurat_clusters
@@ -89,6 +87,6 @@ results <-
                   file = str_c("output/seurat_objects/harmony_sobjs_annot/",
                                group,
                                ".qs"))
-    })
+})
 
 ```

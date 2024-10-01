@@ -1,0 +1,14 @@
+Here we clean and redefine some of the contaminating IDs in the data.
+
+```{r clean_IDs}
+
+for (group in c("patient_prim", "patient_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        group,
+                        ".qs"))
+
+
+
+
+```
