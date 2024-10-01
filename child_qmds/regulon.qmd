@@ -4,7 +4,7 @@
 Perform the regulon analysis using the SCENIC package. The regulon analysis is 
 performed on the following groups:
 
-```{r, eval = FALSE}
+```{r regulon_analysis, eval = FALSE}
 #load the motif annotations
 data(list="motifAnnotations_hgnc", package="RcisTarget")
 motifAnnotations_hgnc <- motifAnnotations

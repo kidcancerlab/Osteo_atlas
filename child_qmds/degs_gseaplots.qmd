@@ -66,7 +66,7 @@ for (i in seq_len(length(all_groups))) {
 ```
 
 ##  Differential expression analysis for tumor cells and GSEA
-```{r, echo = FALSE}
+```{r degs_analysis_tumor, echo = FALSE}
 #| cache.vars: panel_plot_list
 theme_set(
     theme_classic(base_size = 20) +
@@ -278,12 +278,21 @@ labelling the clusters based on the cell types and the cell cycle phase
     Kegg_graft_vs_host_disease,
     Kegg_Allograft _rejection,
     Kegg_ccomplement_and_coagulation_cascades
+    Reactome_Defensis pathways.
+    reactome_interferon_gamma_signaling,
+    GOBP_antibacterial_humoral_immune_reponse
+
 2. Tumor_Metablolic: pathways up: 
     Kegg_oxidative_phosphorylation,
     Kegg_preoteasome,
     Kegg_glutathione_metabolism,
     kegg_ribosome,
-    Kegg_parkinsons_disease
+    Kegg_parkinsons_disease,
+    reactone_resporatory_electron_transport,
+    Reactome_mitochondrial_electron_transport,
+    Reactome_the_citric_acid_TCA_cycle
+    reactome_selenoamino_acid_metabolism
+
 3. Tumor_Interractive: pathways up:
     Kegg_neurotropin_signalling_pathway,
     Kegg_insulin_signalling_pathway,
@@ -294,6 +303,7 @@ labelling the clusters based on the cell types and the cell cycle phase
     LEGG_cell_adhesion_molecules,
     Kegg_focal_adhesion,
     Kegg_cytokine_cytokine_receptor_interaction
+
 4. Tumor_Cycling: pathways up:
     Kegg_cell_cycle,
     Kegg_DNA_replication,
@@ -302,13 +312,37 @@ labelling the clusters based on the cell types and the cell cycle phase
     Kegg_mismatch_repair,
     Kegg_base_excision_repair,
     Kegg_nucleotide_excision_repair
-5. Tumor_Secretory: pathways up: Kegg_protein_processing_in_endoplasmic_reticulum, Kegg_endocytosis, Kegg_phagosome, Kegg_Lysosome, Kegg_autophagy, Kegg_mTOR_signalling_pathway, Kegg_AMPK_signalling_pathway
+
+5. Tumor_Secretory: pathways up:
+    Kegg_protein_processing_in_endoplasmic_reticulum,
+    Kegg_endocytosis,
+    Kegg_phagosome,
+    Kegg_Lysosome,
+    Kegg_autophagy,
+    Kegg_mTOR_signalling_pathway,
+    Kegg_AMPK_signalling_pathway
+
 6. Tumor_Quiescent: pathways up: not much
+
 7. Tumor_Invasive: pathways up: This seems to be interractive as well
     Reactome degradation of ECM
     Raactome_collagen_degradation,
     Kegg_TGF_beta_signalling_pathway, 
     Reactome_Collagen_modification
+    Reactome_ECM_proteolysis
+    Reactine_non_integrin_membrane_ecm_interactions
+    Reactome_cellular_response_to_chemical_stimulus
+    Reactome_ECM_pro
+    Reactome_MET_promotes_cell_motility
+
+
+
+8. Tumor_ImmuneRegulatory: pathways up:
+    Reactome_Interluken_10_signalling, #anti-inflammatory IL10
+    Reactome_Immuneorelatory_interactions_between_lymphoid_and_non_lymphoid_cells,
+    Reactome_antimicrobial_peptides,
+    Reactome_PD1_signalling,
+    Reacton_interferon_alpha_beta_signalling : regulate NK cells activation
 
 
 ```{r annotate_cancer_clusters, echo = FALSE}
@@ -321,7 +355,6 @@ object_list <-
             "mm_mets_cancer_cells",         0.3,
             "xeno_prim_human",              0.15,
             "xeno_mets_human",              0.1)
-
 
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
@@ -362,19 +395,19 @@ for (i in seq_len(nrow(object_list))) {
     if (group == "patient_prim_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Metabolic",
-                            "1" = "Tumor_Interractive",
-                            "2" = "Tumor_Cycling",
-                            "3" = "Tumor_Quiescent",
-                            "4" = "Tumor_Interractive",
-                            "5" = "Tumor_Inflammatory",
-                            "6" = "Tumor_ImmuneRegulatory",
-                            "7" = "Tumor_ImmuneRegulatory"))
+                          c("0" = "Tumor_Metabolic",    #metabolic phenotype
+                            "1" = "Tumor_Interactive",   #collagen and ECM phenotype
+                            "2" = "Tumor_Cycling",   #actively dividing G2M phase
+                            "3" = "Tumor_Quiescent",   
+                            "4" = "Tumor_Interractive",   #
+                            "5" = "Tumor_ImmuneRegulatory",  #Immune regulatory interraction, IL10
+                            "6" = "Tumor_Inflammatory",
+                            "7" = "Tumor_Inflammatory"))
     }
     if (group == "patient_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Metabolic",
+                          c("0" = "Tumor_Interractive",
                             "1" = "Tumor_Cycling",
                             "2" = "Tumor_Quiescent",
                             "3" = "Tumor_Inflammatory",
@@ -382,50 +415,51 @@ for (i in seq_len(nrow(object_list))) {
                             "5" = "Tumor_Quiescent",
                             "6" = "Tumor_Quiescent",
                             "7" = "Tumor_ImmuneRegulatory",
-                            "8" = "Tumor_Secretory",
+                            "8" = "Tumor_Interactive",
                             "9" = "Tumor_Quiescent"))
     }
-    if (group == "mm_prim_cancer_cells") {
+    if (group == "mm_prim_cancer_cells") {       #KEGG pathways are good to differentiate the clusters
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
                           c("0" = "Tumor_Cycling",
                             "1" = "Tumor_Metabolic",
-                            "2" = "Tumor_Interractive",
-                            "3" = "Tumor_Secretory",   #invasive or ECM degradation and hedgehog signaling
-                            "4" = "Tumor_Inflammatory",
+                            "2" = "Tumor_Inflammatory",    #not sure about this, Rho_gtpase pathways
+                            "3" = "Tumor_Interactive",   #invasive or ECM degradation and hedgehog signaling
+                            "4" = "Tumor_ImmuneRegulatory",
                             "5" = "Tumor_Quiescent"))
     }
     if (group == "mm_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Metabolic",
+                          c("0" = "Tumor_Inflammatory",    #rho family up
                             "1" = "Tumor_Interractive",
                             "2" = "Tumor_Cycling",
-                            "3" = "Tumor_Secretory",
-                            "4" = "Tumor_Inflammatory",
+                            "3" = "Tumor_Metabolic",
+                            "4" = "Tumor_ImmuneRegulatory",
                             "5" = "Tumor_Quiescent"))
     }
     if (group == "xeno_prim_human") {
         object$Ann_Level3 <-
-            str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Cycling",
-                            "1" = "Tumor_Secretory",
-                            "2" = "Tumor_Secretory",
-                            "3" = "Tumor_Metabolic",
-                            "4" = "Tumor_Quiescent",
+            str_replace_all(object$seurat_clusters,         #need to work more on this, its hard
+                          c("0" = "Tumor_Metabolic",
+                            "1" = "Tumor_Interractive",
+                            "2" = "Tumor_Quiescent",
+                            "3" = "Tumor_Cycling",
+                            "4" = "Tumor_Inflammatory",
                             "5" = "Tumor_Quiescent",
-                            "6" = "Tumor_Inflammatory",
-                            "7" = "Tumor_Quiescent"))
+                            "6" = "Tumor_ImmuneRegulatory",
+                            "7" = "Tumor_Inflammatory",
+                            "8" = "Tumor_Quiescent"))
     }
     if (group == "xeno_mets_human") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
                           c("0" = "Tumor_Interractive",
-                            "1" = "Tumor_Quiescent",
+                            "1" = "Tumor_ImmuneRegulatory",
                             "2" = "Tumor_Metabolic",
                             "3" = "Tumor_Inflammatory",
-                            "4" = "Actively_Cycling",
-                            "5" = "Actively_Cycling",
+                            "4" = "Tumor_Cycling",
+                            "5" = "Tumor_Cycling",
                             "6" = "Tumor_Quiescent"))
     }
 

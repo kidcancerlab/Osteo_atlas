@@ -828,7 +828,7 @@ celltype_list <-
                                                         "^17$" = "Int_Macrophages",
                                                         "^18$" = "Alv_Fibroblasts",
                                                         "^19$" = "Plasmocytoid_DC",
-                                                        "^20$" = "TAMs"),
+                                                        "^20$" = "Osteoclast_TAMs"),
                                     Epithelial_Endothelial = c("^0$" = "EC_Blood",
                                                             "^1$" = "Alv_EpithelialT2",
                                                             "^2$" = "Alv_EpithelialT1",
@@ -909,6 +909,7 @@ for (item in seq_len(nrow(object_list))) {
         print(str_c("Finished processing ", cell_type, " for ", group))
     }
 }
+
 ```
 
 
@@ -995,7 +996,9 @@ object_list <-
             "patient_prim_normal_cells",    "patient_prim_cancer_cells",   "patient_prim",
             "patient_mets_normal_cells",    "patient_mets_cancer_cells",   "patient_mets",
             "mm_prim_normal_cells",         "mm_prim_cancer_cells",        "mm_prim",
-            "mm_mets_normal_cells",         "mm_mets_cancer_cells",        "mm_mets")
+            "mm_mets_normal_cells",         "mm_mets_cancer_cells",        "mm_mets",
+            "xeno_prim_mouse",              "xeno_prim_human",             "dont_use",
+            "xeno_mets_mouse",              "xeno_mets_human",             "dont_use")
 
 for (item in seq_len(nrow(object_list))) {
     group1 <- object_list$group1[item]
@@ -1071,27 +1074,34 @@ for (item in seq_len(nrow(object_list))) {
                           "^Epithelial_Endothelial$" = "Host",
                           "^Immune_Lymphoid$" = "Host",
                           "^Mesenchymal$" = "Host"))
-    
+
+    qs::qsave(x = stroma_obj,
+              file = str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                            group1,
+                            ".qs"))
+
     tumor_obj <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group2,
                         ".qs"))
+    if (group3 != "dont_use") {
+        combined_obj <-
+            merge(x = stroma_obj,
+                y = tumor_obj) %>%
+            JoinLayers() %>%
+            process_seurat() %>%
+            RunHarmony(group.by.vars = harmony_params[[group3]]$group_by,
+                        theta = harmony_params[[group3]]$theta,
+                        lambda = harmony_params[[group3]]$lambda) %>%
+            process_seurat(reduction = "harmony")
 
-    combined_obj <-
-        merge(x = stroma_obj,
-              y = tumor_obj) %>%
-        JoinLayers() %>%
-        process_seurat() %>%
-        RunHarmony(group.by.vars = harmony_params[[group3]]$group_by,
-                    theta = harmony_params[[group3]]$theta,
-                    lambda = harmony_params[[group3]]$lambda) %>%
-        process_seurat(reduction = "harmony")
-
-    qs::qsave(x = combined_obj,
-              file = str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                            group3,
-                            ".qs"))
+        qs::qsave(x = combined_obj,
+                file = str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                                group3,
+                                ".qs"))
+    }
 }
+
 
 ```
 
@@ -1106,23 +1116,19 @@ for (group in c("patient_prim", "patient_mets",
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
+    
+    metadata <- object@meta.data
+    timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+    write_tsv(metadata,
+              str_c("output/metadata/Idents_used/",
+                    group,
+                    "_metadata_",
+                    timestamp,
+                    ".tsv"))
 
     combined_plot1 <-
         dimplot_better(object, group_by = "Ann_Level3") + NoLegend()
-    
-    if (group == "xeno_prim_human" || group == "xeno_prim_human" || 
-        group == "xeno_prim_human" || group == "xeno_prim_human") {
-        ggsave(filename = str_c("output/figures/Final_Annotations/",
-                                group,
-                                "/AnnL3_plots.png"),
-                plot = combined_plot1,
-                width = 8,
-                height = 8,
-                limitsize = FALSE,
-                ncol=2,
-                bg = "white")
-    }
-    
+
     combined_plot2 <-
         dimplot_better(object, group_by = "Ann_Level2") + NoLegend()
 
@@ -1137,7 +1143,7 @@ for (group in c("patient_prim", "patient_mets",
                     combined_plot2,
                     combined_plot3,
                     combined_plot4,
-                    ncol = 2) +
+                    nrow = 2) +
             patchwork::plot_annotation(title = group)
 
     ggsave(filename = str_c("output/figures/Final_Annotations/",
@@ -1173,36 +1179,9 @@ for (group in c("patient_prim", "patient_mets",
     }
 }
 
-#plots for tumor panel
-tumor_plot_list <- list()
-for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
-                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
-                "xeno_prim_human", "xeno_mets_human")) {
-    object <- 
-        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                        group,
-                        ".qs"))
-    tumor_plot <-
-        dimplot_better(object, group_by = "Ann_Level3") +
-            NoLegend() +
-            ggtitle(str_c(group, " Ann_Level3"))
 
-    tumor_plot_list[[group]] <- tumor_plot
-}
-
-tumor_panel_plot <- 
-    patchwork::wrap_plots(plotlist = tumor_plot_list,
-                        ncol = 2)
-
-ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.png",
-        plot = tumor_panel_plot,
-        width = 16,
-        height = 24,
-        limitsize = FALSE,
-        bg = "white")
-
-
-stromal_plot_list <- list()
+#plots for stromal panel
+sobj_list <-  list()
 
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
@@ -1211,17 +1190,52 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
-    stromal_plot <-
-        dimplot_better(object, group_by = "Ann_Level3") +
-            NoLegend() +
-            ggtitle(str_c(group, " Ann_Level3"))
 
-    stromal_plot_list[[group]] <- stromal_plot
+    sobj_list[[group]] <- object
 }
 
-stromal_panel_plot <- 
-    cowplot::plot_grid(plotlist = stromal_plot_list,
-                        ncol = 2)
+#prepare colors for the plot
+celltypes <-
+    c(unique(sobj_list$patient_prim_normal_cells$Ann_Level3),
+    unique(sobj_list$patient_mets_normal_cells$Ann_Level3),
+    unique(sobj_list$mm_prim_normal_cells$Ann_Level3),
+    unique(sobj_list$mm_mets_normal_cells$Ann_Level3),
+    unique(sobj_list$xeno_prim_mouse$Ann_Level3),
+    unique(sobj_list$xeno_mets_mouse$Ann_Level3))
+cols <- c(plot_cols, sample(rainbow(length(celltypes))))
+
+names(cols) <- celltypes
+
+dimplot_list <- list()
+
+for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                "xeno_prim_mouse", "xeno_mets_mouse")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    dimplot <-
+        DimPlot(object,
+                group.by = "Ann_Level3",
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = cols,
+                label.size = 2.5) +
+            coord_fixed() +
+            #scale_color_manual(values = cols) +
+            NoLegend() +
+            ggtitle(group)
+
+    dimplot_list[[group]] <- dimplot
+}
+
+stromal_panel_plot <-
+    patchwork::wrap_plots(plotlist = dimplot_list,
+            ncol = 2) +
+        patchwork::plot_annotation(title = "Stromal cell types Ann_Level3")
 
 ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
         plot = stromal_panel_plot,
@@ -1231,4 +1245,69 @@ ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
         bg = "white")
 
 
+# load the cancer final object
+cancer_sobj_list <-  list()
+
+for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
+                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
+                "xeno_prim_human", "xeno_mets_human")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    cancer_sobj_list[[group]] <- object
+}
+
+#prepare colors for the plot
+celltypes <-
+    c(unique(cancer_sobj_list$patient_prim_cancer_cells$Ann_Level3),
+    unique(cancer_sobj_list$patient_mets_cancer_cells$Ann_Level3),
+    unique(cancer_sobj_list$mm_prim_cancer_cells$Ann_Level3),
+    unique(cancer_sobj_list$mm_mets_cancer_cells$Ann_Level3),
+    unique(cancer_sobj_list$xeno_prim_human$Ann_Level3),
+    unique(cancer_sobj_list$xeno_mets_human$Ann_Level3))
+cols <- c(plot_cols, sample(rainbow(length(celltypes))))
+
+names(cols) <- celltypes
+
+#plots for cancer panel
+cancer_plot_list <- list()
+
+for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
+                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
+                "xeno_prim_human", "xeno_mets_human")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    cancer_plot <-
+        DimPlot(object,
+                group.by = "Ann_Level3",
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = cols,
+                label.size = 2.5) +
+            coord_fixed() +
+            NoLegend() +
+            ggtitle(group)
+
+    cancer_plot_list[[group]] <- cancer_plot
+}
+
+cancer_panel_plot <-
+    patchwork::wrap_plots(plotlist = cancer_plot_list,
+            ncol = 2) +
+        patchwork::plot_annotation(title = "Tumor subpopulations Ann_Level3")
+
+ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.png",
+        plot = cancer_panel_plot,
+        width = 20,
+        height = 30,
+        limitsize = FALSE,
+        bg = "white")
+
 ```
+
