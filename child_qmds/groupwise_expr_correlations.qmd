@@ -1,4 +1,3 @@
-
 ## Test the correlation of expression within stromal cell types between groups
 This is using pseudobulked data per stromal cell type per group as input. It is plotting a scatterplot of the genes between two groups for each stromal cell type to show how well they correlate across species/model and primary/met. It is also calculating fold change expression values for each comparison and using this as input for GSEA to show what pathways are differentially expressed between the two groups.
 
@@ -47,9 +46,6 @@ gsea_on_pseuobulked_sobjs(
     gsea_output = "output/stromal_species_correlations/gsea_results_normal.tsv"
 )
 ```
-
-
-
 
 ## Test the correlation between within tumor subtypes between groups
 This is using pseudobulked data per tumor subtype per group as input. It is plotting a scatterplot of the genes between two groups for each tumor subtype to show how well they correlate across species/model and primary/met. It is also calculating fold change expression values for each comparison and using this as input for GSEA to show what pathways are differentially expressed between the two groups.
