@@ -54,6 +54,8 @@ for directoryName in \
     output/figures \
     output/figures/gsea \
     output/figures/tumor_vs_stroma/clustree \
+    output/figures/stromal_species_correlations \
+    output/figures/tumor_subtypes_correlations \
     output/counts \
     output/metadata \
     output/seurat_objects/sobj_preprocess \
@@ -66,7 +68,9 @@ for directoryName in \
     output/id_tumor/SCEVAN \
     output/id_tumor/snv_calling \
     output/id_tumor/snvs/plots \
-    output/id_tumor/celltype
+    output/id_tumor/celltype \
+    output/stromal_species_correlations \
+    output/tumor_subtypes_correlations
 do
     if [ ! -d ${directoryName} ]
     then
@@ -118,6 +122,12 @@ Run the differential expression and GSEA
 
 {{< include child_qmds/degs_gseaplots.qmd >}}
 
+# Investigate the expression correlation between subgroups of the data
+
+{{< include child_qmds/helper_functions_correlation.qmd >}}
+
+{{< include child_qmds/groupwise_expr_correlations.qmd >}}
+
 # Regulon Analysis
 Perform the regulon analysis using the SCENIC package. The regulon analysis is
 
@@ -134,8 +144,9 @@ Reanalyze the patient samples for validation such as harmony integration validat
 {{< include child_qmds/patient_reanalysis.qmd >}}
 
 # render to make figures html
-<!-- 
+
 {{< include child_qmds/render_figs.qmd >}} -->
+
 
 
 # Session info
