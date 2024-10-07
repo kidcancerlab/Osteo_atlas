@@ -193,7 +193,7 @@ mouse_tumor_cell <- qs::qread("input/downloads/mm_tumor_cellculture.qs")
 
 ## Function to annotate cell types with mouse and human lung
 ```{r annotate_function}
-#| cache.vars = 'annotate_celltypes'
+#| cache.vars = c('annotate_celltypes', 'hpca', 'huim', 'mord', 'moim', 'ref4')
 hpca <- celldex::HumanPrimaryCellAtlasData()
 huim <- celldex::MonacoImmuneData()
 ref4 <- SeuratObject::GetAssayData(human_tumor_cell)
@@ -402,7 +402,7 @@ annotate_celltypes <- function(sobject,
 
 ## RUN differential expression analysis on a Seurat object
 ```{r run_degs_function}
-#| cache.vars: c('all_samples_csv', 'run_degs')
+#| cache.vars = c('all_samples_csv', 'run_degs')
 all_samples_csv <- read_tsv("misc/allsample_details.txt",
                             show_col_types = FALSE)
 

@@ -26,6 +26,7 @@ results <-
         ann_sobj <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
                                     group,
                                     ".qs"))
+        set.seed(199820)
         ann_sobj <- annotate_celltypes(sobject = ann_sobj,
                                        species = annotation_type[[group]][[1]],
                                        with_tumor = annotation_type[[group]][[2]],

@@ -124,7 +124,7 @@ for (item in seq_len(nrow(object_list))) {
 
     dimplot_main <-
         dimplot_better(object,
-                      group_by = c("Ann_level3")) +
+                      group_by = c("SingleR_Ann3")) +
             ggtitle(group) +
             NoLegend()
 
@@ -211,7 +211,7 @@ for (item in seq_len(nrow(object_list))) {
 
     dimplot_ann_level1 <-
         dimplot_better(object,
-                      group_by = c("Ann_level1")) +
+                      group_by = c("SingleR_Ann1")) +
             ggtitle(group) +
             NoLegend() +
             ggtitle("Annotation level 1")
@@ -219,14 +219,14 @@ for (item in seq_len(nrow(object_list))) {
 
     dimplot_ann_level2 <-
         dimplot_better(object,
-                      group_by = c("Ann_level2")) +
+                      group_by = c("SingleR_Ann2")) +
             ggtitle(group) +
             NoLegend() +
             ggtitle("Annotation level 2")
     
     dimplot_ann_level3 <-
         dimplot_better(object,
-                      group_by = c("Ann_level3")) +
+                      group_by = c("SingleR_Ann3")) +
             ggtitle(group) +
             NoLegend() +
             ggtitle("Annotation level 3")
@@ -443,16 +443,17 @@ for (item in seq_len(nrow(object_list))) {
                               ".qs"))
     species <- object$organism[1]
 
-    object$Ann_level1 <-
-        str_replace_all(object$Ann_level1,
-                        c("Endothelial_cells" = "Epithelial_Endothelial",
-                          "Epithelial_cells" = "Epithelial_Endothelial",
-                          "Stroma" = "Mesenchymal"))
+    # object$SingleR_Ann1 <-
+    #     str_replace_all(object$SingleR_Ann1,
+    #                     c("Endothelial_cells" = "Epithelial_Endothelial",
+    #                       "Epithelial_cells" = "Epithelial_Endothelial",
+    #                       "Stroma" = "Mesenchymal",
+    #                       "Epithelial_cells" = "Alveolar_Epithelial_Type_2"))
 
-    for (cell_type in unique(object$Ann_level1)) {
+    for (cell_type in unique(object$SingleR_Ann1)) {
         s_obj <-
             object %>%
-            subset(Ann_level1 == cell_type) %>%
+            subset(SingleR_Ann1 == cell_type) %>%
             process_seurat() %>%
             RunHarmony(group.by.vars = "model") %>%
             process_seurat(reduction = "harmony")
@@ -511,8 +512,8 @@ for (item in seq_len(nrow(object_list))) {
 
         big_featureplot_list <- list()
 
-        for (module in names(get(cell_type))) {
-            genelist <- get(cell_type)[[module]]
+        for (module in names(base::get(cell_type))) {
+            genelist <- base::get(cell_type)[[module]]
             if(species == "mouse") {
                 genelist <- 
                     nichenetr::convert_human_to_mouse_symbols(genelist) %>%
@@ -763,7 +764,7 @@ celltype_list <-
                                                         "^10$" = "EC_Blood",
                                                         "^11$" = "Alv_EpithelialT2",
                                                         "^12$" = "Ciliated_Cells",
-                                                        "^13$" = "Lymphatic_EC")),
+                                                        "^13$" = "EC_Lymphatic")),
         mm_prim_normal_cells = list(Mesenchymal = c("^0$" = "Normal_Fibroblasts",
                                                     "^1$" ="CAF",
                                                     "^2$"= "Pericytes"),
@@ -786,7 +787,7 @@ celltype_list <-
                                                     "^9$" = "Erythrocytes",
                                                     "^10$" = "DC",
                                                     "^11$" = "TAMs",
-                                                    "^12$" = "Neutrphils",
+                                                    "^12$" = "Neutrophils",
                                                     "^13$" = "Inflam_TAMs",
                                                     "^14$" = "Mast",
                                                     "^15$" = "PreDC",
@@ -855,16 +856,16 @@ for (item in seq_len(nrow(object_list))) {
                               ".qs"))
     species <- object$organism[1]
 
-    object$Ann_level1 <-
-        str_replace_all(object$Ann_level1,
-                        c("Endothelial_cells" = "Epithelial_Endothelial",
-                          "Epithelial_cells" = "Epithelial_Endothelial",
-                          "Stroma" = "Mesenchymal"))
+    # object$SingleR_Ann1 <-
+    #     str_replace_all(object$SingleR_Ann1,
+    #                     c("Endothelial_cells" = "Epithelial_Endothelial",
+    #                       "Epithelial_cells" = "Epithelial_Endothelial",
+    #                       "Stroma" = "Mesenchymal"))
 
-    for (cell_type in unique(object$Ann_level1)) {
+    for (cell_type in unique(object$SingleR_Ann1)) {
         s_obj <-
             object %>%
-            subset(Ann_level1 == cell_type) %>%
+            subset(SingleR_Ann1 == cell_type) %>%
             process_seurat() %>%
             RunHarmony(group.by.vars = "model") %>%
             process_seurat(reduction = "harmony")
@@ -1042,7 +1043,7 @@ for (item in seq_len(nrow(object_list))) {
                           "^preDC$" = "DC",
                           "^Proli_TAMs$" = "Macrophages",
                           "^Myofibroblasts$" = "Fibroblasts"))
-    
+
     stroma_obj$Ann_Level1 <- 
         str_replace_all(stroma_obj$Ann_Level2,
                         c("^B_cells$" = "Immune_Myeloid",
@@ -1179,9 +1180,14 @@ for (group in c("patient_prim", "patient_mets",
     }
 }
 
+```
 
+
+## plot the stromal cells for figures
+```{r figure_stroma_panel, echo = FALSE}
 #plots for stromal panel
 sobj_list <-  list()
+cell_count_table <- tibble::tibble(celltypes = character())
 
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
@@ -1192,9 +1198,49 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                         ".qs"))
 
     sobj_list[[group]] <- object
+
+    cell_count <-
+        object$Ann_Level3 %>%
+        table() %>%
+        as.data.frame() %>%
+        arrange(desc(Freq)) %>%
+        dplyr::rename(!!group := Freq,
+                      celltypes := ".")
+
+    cell_count_table <- cell_count_table %>%
+        dplyr::full_join(cell_count, by = "celltypes")
+
 }
 
-#prepare colors for the plot
+cell_count_prep <- cell_count_table %>%
+    mutate_all(~replace_na(., 0)) %>%
+    column_to_rownames("celltypes") %>%
+    t() 
+
+# Calculate the percentage for each cell type
+cell_count_percent <-
+    sweep(cell_count_prep, 1, rowSums(cell_count_prep), FUN = "/") * 100
+
+stromal_celltype_heatmap<-
+    pheatmap::pheatmap(cell_count_percent,
+                        cluster_rows = FALSE,
+                        cluster_cols = FALSE,
+                        display_numbers = TRUE,
+                        fontsize_number = 10,
+                        main = "Cell Count Percentage Heatmap",
+                        scale = "none",
+                        number_format = "%.1f",
+                        silent = TRUE,
+                        color = colorRampPalette(c("white", "red"))(100))
+
+ggsave(filename = "output/figures/Final_Annotations/stromal_celltype_heatmap.png",
+        plot = stromal_celltype_heatmap,
+        width = 30,
+        height = 5,
+        limitsize = FALSE,
+        bg = "white")
+
+#prepare colors for the dimplot
 celltypes <-
     c(unique(sobj_list$patient_prim_normal_cells$Ann_Level3),
     unique(sobj_list$patient_mets_normal_cells$Ann_Level3),
@@ -1227,7 +1273,8 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
             coord_fixed() +
             #scale_color_manual(values = cols) +
             NoLegend() +
-            ggtitle(group)
+            ggtitle(group) +
+            theme(aspect.ratio=1)
 
     dimplot_list[[group]] <- dimplot
 }
@@ -1244,9 +1291,17 @@ ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
         limitsize = FALSE,
         bg = "white")
 
+# celltypes table tree from ann level0 to 4
 
+
+```
+
+
+## Plot the cancer cells for figures
+```{r, figure_cancer_panel, echo = FALSE}
 # load the cancer final object
 cancer_sobj_list <-  list()
+cell_count_table <- tibble::tibble(celltypes = character())
 
 for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 "mm_prim_cancer_cells", "mm_mets_cancer_cells",
@@ -1257,7 +1312,37 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                         ".qs"))
 
     cancer_sobj_list[[group]] <- object
+
+    cell_count <-
+        object$Ann_Level3 %>%
+        table() %>%
+        as.data.frame() %>%
+        arrange(desc(Freq)) %>%
+        dplyr::rename(!!group := Freq,
+                      celltypes := ".")
+
+    cell_count_table <- cell_count_table %>%
+        dplyr::full_join(cell_count, by = "celltypes")
 }
+
+# Generate a heatmap of the cell count data
+cell_count_prep <- cell_count_table %>%
+    mutate_all(~replace_na(., 0)) %>%
+    column_to_rownames("celltypes") %>%
+    t()
+
+# Calculate the percentage for each cell type
+cell_count_percent <- sweep(cell_count_prep, 1, rowSums(cell_count_prep), FUN = "/") * 100
+
+pheatmap::pheatmap(cell_count_percent,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         display_numbers = TRUE,
+         fontsize_number = 10,
+         main = "Cell Count Percentage Heatmap",
+         scale = "none",
+         number_format = "%.1f",
+         color = colorRampPalette(c("white", "red"))(100))
 
 #prepare colors for the plot
 celltypes <-
@@ -1292,7 +1377,8 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 label.size = 2.5) +
             coord_fixed() +
             NoLegend() +
-            ggtitle(group)
+            ggtitle(group) +
+            theme(aspect.ratio=1)
 
     cancer_plot_list[[group]] <- cancer_plot
 }

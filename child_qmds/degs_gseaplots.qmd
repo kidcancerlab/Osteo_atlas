@@ -108,7 +108,7 @@ panel_plots <- list()
 object_list <-
     tribble(~group,                         ~res_value,
             "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.1,
+            "patient_mets_cancer_cells",    0.15,
             "mm_prim_cancer_cells",         0.3,
             "mm_mets_cancer_cells",         0.3,
             "xeno_prim_human",              0.15,
@@ -131,13 +131,13 @@ for (i in seq_len(nrow(object_list))) {
                         ".qs"))
     object <- 
         FindClusters(object, resolution = res_value)
-
+    
     force_directed_layout <- 
         run_fdl(sobject = object)
 
     split_fdl_plot <- 
         dimplot_better(force_directed_layout,
-                       group_by= "new_annot_clust",
+                       group_by= "seurat_clusters",
                        reduction = "fdl") +
             NoLegend()
 
@@ -148,6 +148,10 @@ for (i in seq_len(nrow(object_list))) {
             plot = split_fdl_plot,
             width = 10,
             height = 10)
+    qs::qsave(force_directed_layout,
+              str_c("output/seurat_objects/tumor_vs_stroma/",
+                    group,
+                    "_fdl.qs"))
 }
 
 
@@ -170,8 +174,6 @@ for (i in seq_len(nrow(object_list))) {
                     group = group)
 }
 
-
-
 ```
 
 
@@ -181,7 +183,7 @@ for (i in seq_len(nrow(object_list))) {
 object_list <-
     tribble(~group,                         ~res_value,
             "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.1,
+            "patient_mets_cancer_cells",    0.15,
             "mm_prim_cancer_cells",         0.3,
             "mm_mets_cancer_cells",         0.3,
             "xeno_prim_human",              0.15,
@@ -350,7 +352,7 @@ labelling the clusters based on the cell types and the cell cycle phase
 object_list <-
     tribble(~group,                         ~res_value,
             "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.1,
+            "patient_mets_cancer_cells",    0.15,
             "mm_prim_cancer_cells",         0.3,
             "mm_mets_cancer_cells",         0.3,
             "xeno_prim_human",              0.15,
