@@ -278,8 +278,8 @@ plts <- lapply(plt_paths, function(x) {
     tmp <- magick::image_read(x)
     tmp_gg <- magick::image_ggplot(tmp)
     return(tmp_gg)
-}
-)
+    })
+
 names(plts) <- str_remove(plt_paths,
                           pattern = "figures/scvelo_mm_mets_cancer_cells_") %>%
     str_remove(pattern = ".png")

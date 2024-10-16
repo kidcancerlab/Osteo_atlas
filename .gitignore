@@ -73,5 +73,6 @@ loom_files_old
 sbatch
 tmp_bams
 tmp_bcs
-analyze_looms_files
+analyze_looms*
 *genes.gtf
+figures

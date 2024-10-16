@@ -986,6 +986,7 @@ def make_plots(ad_ob):
     scv.pl.velocity_embedding_stream(ad_ob, basis = "fdl", color = "seurat_clusters")
 
 def save_velo_plots(ad_ob, ob_name):
+    #by default it saves the figures to a directory called ./figures/
     scv.tl.velocity_graph(ad_ob, backend = "threading")
     plotdict = {
         "umap_clusters": ["umap", "seurat_clusters"],
