@@ -111,7 +111,7 @@ object_list <-
             "patient_mets_cancer_cells",    0.15,
             "mm_prim_cancer_cells",         0.3,
             "mm_mets_cancer_cells",         0.3,
-            "xeno_prim_human",              0.15,
+            "xeno_prim_human",              0.1,
             "xeno_mets_human",              0.1,
             "patient_prim_normal_cells",    0.15,
             "patient_mets_normal_cells",    0.05,
@@ -186,7 +186,7 @@ object_list <-
             "patient_mets_cancer_cells",    0.15,
             "mm_prim_cancer_cells",         0.3,
             "mm_mets_cancer_cells",         0.3,
-            "xeno_prim_human",              0.15,
+            "xeno_prim_human",              0.1,
             "xeno_mets_human",              0.1,
             "patient_prim_normal_cells",    0.15,
             "patient_mets_normal_cells",    0.05,
@@ -355,7 +355,7 @@ object_list <-
             "patient_mets_cancer_cells",    0.15,
             "mm_prim_cancer_cells",         0.3,
             "mm_mets_cancer_cells",         0.3,
-            "xeno_prim_human",              0.15,
+            "xeno_prim_human",              0.1,
             "xeno_mets_human",              0.1)
 
 for (i in seq_len(nrow(object_list))) {
@@ -398,71 +398,67 @@ for (i in seq_len(nrow(object_list))) {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
                           c("0" = "Tumor_Metabolic",    #metabolic phenotype
-                            "1" = "Tumor_Interactive",   #collagen and ECM phenotype
-                            "2" = "Tumor_Cycling",   #actively dividing G2M phase
-                            "3" = "Tumor_Quiescent",   
-                            "4" = "Tumor_Interractive",   #
+                            "1" = "Tumor_Osteoblastic",   #collagen and ECM phenotype
+                            "2" = "Tumor_Proliferative",   #actively dividing G2M phase
+                            "3" = "Tumor_Ground",   
+                            "4" = "Tumor_Inflammatory",   #
                             "5" = "Tumor_ImmuneRegulatory",  #Immune regulatory interraction, IL10
-                            "6" = "Tumor_Inflammatory",
-                            "7" = "Tumor_Inflammatory"))
+                            "6" = "Tumor_ImmuneRegulatory", # or low quality
+                            "7" = "Tumor_ImmuneRegulatory"))
     }
     if (group == "patient_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Interractive",
-                            "1" = "Tumor_Cycling",
-                            "2" = "Tumor_Quiescent",
+                          c("0" = "Tumor_Metabolic",
+                            "1" = "Tumor_Proliferative",
+                            "2" = "Tumor_Ground",
                             "3" = "Tumor_Inflammatory",
-                            "4" = "Tumor_Quiescent",
-                            "5" = "Tumor_Quiescent",
-                            "6" = "Tumor_Quiescent",
+                            "4" = "Tumor_Proliferative",
+                            "5" = "Tumor_Ground",
+                            "6" = "Tumor_Inflammatory",
                             "7" = "Tumor_ImmuneRegulatory",
-                            "8" = "Tumor_Interactive",
-                            "9" = "Tumor_Quiescent"))
+                            "8" = "Tumor_Ground"))
     }
     if (group == "mm_prim_cancer_cells") {       #KEGG pathways are good to differentiate the clusters
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Cycling",
+                          c("0" = "Tumor_Proliferative",
                             "1" = "Tumor_Metabolic",
-                            "2" = "Tumor_Inflammatory",    #not sure about this, Rho_gtpase pathways
-                            "3" = "Tumor_Interactive",   #invasive or ECM degradation and hedgehog signaling
+                            "2" = "Tumor_Metabolic", 
+                            "3" = "Tumor_Osteoblastic",   
                             "4" = "Tumor_ImmuneRegulatory",
-                            "5" = "Tumor_Quiescent"))
+                            "5" = "Tumor_Ground"))
     }
     if (group == "mm_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Inflammatory",    #rho family up
-                            "1" = "Tumor_Interractive",
-                            "2" = "Tumor_Cycling",
-                            "3" = "Tumor_Metabolic",
+                          c("0" = "Tumor_Metabolic",    #rho family up
+                            "1" = "Tumor_Osteoblastic",
+                            "2" = "Tumor_Proliferative",
+                            "3" = "Tumor_Proliferative",    #not sure
                             "4" = "Tumor_ImmuneRegulatory",
-                            "5" = "Tumor_Quiescent"))
+                            "5" = "Tumor_Ground"))
     }
     if (group == "xeno_prim_human") {
         object$Ann_Level3 <-
-            str_replace_all(object$seurat_clusters,         #need to work more on this, its hard
+            str_replace_all(object$seurat_clusters,       #need to work more on this, its hard
                           c("0" = "Tumor_Metabolic",
-                            "1" = "Tumor_Interractive",
-                            "2" = "Tumor_Quiescent",
-                            "3" = "Tumor_Cycling",
-                            "4" = "Tumor_Inflammatory",
-                            "5" = "Tumor_Quiescent",
-                            "6" = "Tumor_ImmuneRegulatory",
-                            "7" = "Tumor_Inflammatory",
-                            "8" = "Tumor_Quiescent"))
+                            "1" = "Tumor_Osteoblastic",   #not sure
+                            "2" = "Tumor_Ground",
+                            "3" = "Tumor_Proliferative",
+                            "4" = "Tumor_ImmuneRegulatory",
+                            "5" = "Tumor_ImmuneRegulatory"))
     }
     if (group == "xeno_mets_human") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Interractive",
-                            "1" = "Tumor_ImmuneRegulatory",
-                            "2" = "Tumor_Metabolic",
-                            "3" = "Tumor_Inflammatory",
-                            "4" = "Tumor_Cycling",
-                            "5" = "Tumor_Cycling",
-                            "6" = "Tumor_Quiescent"))
+                          c("0" = "Tumor_Metabolic",
+                            "1" = "Tumor_Ground",
+                            "2" = "Tumor_Osteoblastic",   #not sure
+                            "3" = "Tumor_ImmuneRegulatory",
+                            "4" = "Tumor_Proliferative",
+                            "5" = "Tumor_Proliferative",
+                            "6" = "Tumor_Ground"))
     }
 
     object$Ann_Level2<- object$Ann_Level3
