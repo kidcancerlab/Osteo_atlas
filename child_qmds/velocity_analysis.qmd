@@ -53,8 +53,9 @@ for (obj in obj_names) {
     
     #fix paths for atac runs since bams have gex_ before possorted
     bams <- ifelse(file.exists(bams),
-           bams,
-           gsub("possorted_genome", "gex_possorted", bams))
+                   bams,
+                   gsub("possorted_genome", "gex_possorted", bams))
+    names(bams) <- s_ids$sample_name
 
     bam_list[[obj]] <- bams
 }
@@ -62,14 +63,32 @@ for (obj in obj_names) {
 lapply(bam_list, file.exists)
 ```
 
-
-
 ## Make Loom Files
 
 Now that we have our bams associated with each object we can make our loom files.
 
 ```{r make-loom-files}
+lapply(names(obj_list), function(ob_name) {
+    ob <- obj_list[[ob_name]]
+    r_make_loom_files(sobj = ob,
+                      id_col = "sample_name",
+                      species = unique(ob$organism),
+                      bam_paths = bam_list[[ob_name]],
+                      cluster_account = "gdrobertslab",
+                      slurm_base = "output/velocity_analysis/slurmOut",
+                      sbatch_base = "output/velocity_analysis/sbatch_",
+                      sobj_name = ob_name
+                      )
+    }
+)
+
 lapply(obj_list,
-       r_make_loom_files,
-       )
+       write_off_md,
+       id_col = "sample_name",
+       output_dir = "loom_output/metadata",
+       vars_to_keep = c("sample_name",
+                        "seurat_clusters",
+                        "Ann_level1",
+                        "Ann_level2",
+                        "Ann_level3"))
 ```
