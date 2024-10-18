@@ -279,7 +279,9 @@ ob_names = ["mm_mets_cancer_cells",
             "mm_prim_cancer_cells",
             "patient_mets_cancer_cells",
             "patient_prim_cancer_cells",
-            "patient_mets_normal_cells"]
+            "patient_mets_normal_cells",
+            "xeno_mets_human",
+            "xeno_prim_human"]
 ob_list = []
 for ob_name in ob_names:
     loom_path = "loom_output/" + ob_name + "/loom_files"
@@ -382,6 +384,54 @@ names(plts) <- str_remove(plt_paths,
 ```
 
 ```{r patient_prim_cancer_tabs, results = "asis", cache=FALSE}
+qreport::maketabs(plts)
+```
+
+### xeno_mets_human
+
+```{r xeno-mets-human}
+plt_paths <- paste0("figures/",
+                    list.files("figures")[grep("xeno_mets_human",
+                                               list.files("figures"))]) %>%
+    as.list()
+
+plts <- lapply(plt_paths, function(x) {
+    tmp <- magick::image_read(x)
+    tmp_gg <- magick::image_ggplot(tmp)
+    return(tmp_gg)
+}
+)
+    
+names(plts) <- str_remove(plt_paths,
+                          pattern = "figures/scvelo_xeno_mets_human_") %>%
+    str_remove(pattern = ".png")
+```
+
+```{r xeno_mets_human_tabs, results="asis"}
+qreport::maketabs(plts)
+```
+
+### xeno_prim_human
+
+```{r xeno-prim-human}
+plt_paths <- paste0("figures/",
+                    list.files("figures")[grep("xeno_prim_human",
+                                               list.files("figures"))]) %>%
+    as.list()
+
+plts <- lapply(plt_paths, function(x) {
+    tmp <- magick::image_read(x)
+    tmp_gg <- magick::image_ggplot(tmp)
+    return(tmp_gg)
+}
+)
+    
+names(plts) <- str_remove(plt_paths,
+                          pattern = "figures/scvelo_xeno_prim_human_") %>%
+    str_remove(pattern = ".png")
+```
+
+```{r xeno_mets_human_tabs, results="asis"}
 qreport::maketabs(plts)
 ```
 
