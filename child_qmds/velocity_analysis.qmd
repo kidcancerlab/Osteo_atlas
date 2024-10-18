@@ -123,6 +123,32 @@ lapply(names(non_null), function(ob_name) {
 
 ## Add Metadata Columns to Objects
 
+### Re-cluster
+
+I realized that my seurat clusters are different from Yogesh's because I'm not using the same resultion as him for clustering. So I'm going to recreate these clusters using his resolutions.
+
+```{r re-run-clustering-velo}
+res_list <-
+    list("patient_prim_cancer_cells" = 0.1,
+         "patient_mets_cancer_cells" = 0.1,
+         "mm_prim_cancer_cells" = 0.3,
+         "mm_mets_cancer_cells" = 0.3,
+         "xeno_prim_human" = 0.15,
+         "xeno_mets_human" = 0.1,
+         "patient_prim_normal_cells" = 0.15,
+         "patient_mets_normal_cells" = 0.05,
+         "xeno_prim_mouse" = 0.1,
+         "xeno_mets_mouse" = 0.1,
+         "mm_prim_normal_cells" = 0.25,
+         "mm_mets_normal_cells" = 0.2)
+
+ob_names <- names(obj_list)
+obj_list <- lapply(ob_names, function(ob_name) {
+    process_seurat(obj_list[[ob_name]], resolution = res_list[[ob_name]])
+})
+names(obj_list) <- ob_names
+```
+
 ### Cell Cycle
 
 I'm going to add cell cycle phases as a metadata feature to ensure that cell cycle effects aren't contributing to RNA velocity.
@@ -181,47 +207,237 @@ import os
 import re
 ```
 
-Lastly I'm going to define a function that will reduce the amount of code needed
-to create an anndata object from the loom file and metadata
-
-```{python loom_to_ann}
-def loom_to_an(loom_path, metadata_path):
-    loom_files=os.listdir(loom_path)
-    #initialize list to hold anndata objects
-    ad_obs = []
-    for one_loom in loom_files:
-        #get sample id from file name
-        sample_id = re.sub(".loom", "", one_loom)
-        #add object to list
-        tmp = anndata.read_loom(loom_path + "/" + one_loom)
-        #read in metadata file
-        md_path = metadata_path + "/" + sample_id + "_metadata.csv"
-        metadata = pd.read_csv(md_path, index_col = "bc")
-        tmp.obs = metadata.filter(regex = '^(?!umap_|PC_|fdl_|harmony_).*$').reindex(tmp.obs.index)
-        #Add pca embeddings
-        tmp.obsm["X_pca"] = metadata.filter(regex = "PC_").reindex(tmp.obs.index).to_numpy()
-        #Add umap embeddings
-        tmp.obsm["X_umap"] = metadata.filter(regex = "umap_").reindex(tmp.obs.index).to_numpy()
-        #add fdl embeddings
-        tmp.obsm["X_fdl"] = metadata.filter(regex = "fdl_").reindex(tmp.obs.index).to_numpy()
-        #add harmony embeddings
-        tmp.obsm["X_harmony"] = metadata.filter(regex = "harmony_").reindex(tmp.obs.index).to_numpy ()
-        #make var names unique (this step is necessary to merge anndata list)
-        tmp.var_names_make_unique()
-        #add object to list
-        ad_obs.append(tmp)
-    #merge anndata list
-    merged_anndata = anndata.concat(ad_obs)
-    #return merged anndata
-    return merged_anndata
-
-
-```
-
 ### mm_mets_cancer_cells
 
 ```{python analyze-mm-mets-cancer-cells}
 #get names of loom files
 merged_ad = loom_to_an(loom_path = "loom_output/mm_mets_cancer_cells/loom_files",
                        metadata_path = "loom_output/mm_mets_cancer_cells/metadata")
+```
+
+### patient_mets_normal_cells
+
+We're also interested in how the normal cells in our patient met samples are behaving, particularly the macrophages. We're gonna write off some metadata for the objects to be able to reconstruct it in python.
+
+```{r macrophage-metadata}
+patient_mets_normal_cells <- obj_list[["patient_mets_normal_cells"]]
+
+patient_mets_myeloid <- subset(patient_mets_normal_cells,
+                               Ann_level1 %in% c("Immune_Myeloid",
+                                                 "Interstitial macrophages")) %>%
+    process_seurat()
+
+patient_mets_myeloid <- run_fdl(patient_mets_myeloid)
+
+write_off_md(sobj = patient_mets_myeloid,
+             id_col = "sample_name",
+             output_dir = "loom_output/patient_mets_normal_cells/macs",
+             vars_to_keep = c("sample_name",
+                                  "seurat_clusters",
+                                  "Ann_level1",
+                                  "Ann_level2",
+                                  "Ann_level3",
+                                  "Phase"),
+             handle_n_of_1 = FALSE)
+```
+
+## Cancer Cells
+
+First we'll examine the different cancer cell datasets.
+
+We're gonna look at cancer cells first.
+
+```{python make-cancer-obs-and-plts}
+ob_names = ["mm_mets_cancer_cells",
+            "mm_prim_cancer_cells",
+            "patient_mets_cancer_cells",
+            "patient_prim_cancer_cells",
+            "patient_mets_normal_cells"]
+ob_list = []
+for ob_name in ob_names:
+    loom_path = "loom_output/" + ob_name + "/loom_files"
+    md_path = "loom_output/" + ob_name + "/metadata"
+    ob = loom_to_an(loom_path,
+                    md_path)
+    calc_velo(ob)
+    save_velo_plots(ob, ob_name = ob_name)
+    ob_list.append(ob)
+
+
+```
+
+### mm_mets_cancer_cells
+
+```{r load-plots-mm-mets-cancer, cache=FALSE}
+plt_paths <- paste0("figures/",
+                    list.files("figures")[grep("mm_mets_cancer_cells",
+                                               list.files("figures"))]) %>%
+    as.list()
+
+plts <- lapply(plt_paths, function(x) {
+    tmp <- magick::image_read(x)
+    tmp_gg <- magick::image_ggplot(tmp)
+    return(tmp_gg)
+}
+)
+names(plts) <- str_remove(plt_paths,
+                          pattern = "figures/scvelo_mm_mets_cancer_cells_") %>%
+    str_remove(pattern = ".png")
+```
+
+```{r mm_mets_cancer_cells_tabs, results = "asis", cache=FALSE}
+qreport::maketabs(plts)
+```
+
+### mm_prim_cancer_cells
+
+```{r load-plots-mm-prim-cancer, cache=FALSE}
+plt_paths <- paste0("figures/",
+                    list.files("figures")[grep("mm_prim_cancer_cells",
+                                               list.files("figures"))]) %>%
+    as.list()
+
+plts <- lapply(plt_paths, function(x) {
+    tmp <- magick::image_read(x)
+    tmp_gg <- magick::image_ggplot(tmp)
+    return(tmp_gg)
+}
+)
+names(plts) <- str_remove(plt_paths,
+                          pattern = "figures/scvelo_mm_prim_cancer_cells_") %>%
+    str_remove(pattern = ".png")
+```
+
+```{r mm_prim_cancer_cells_tabs, results = "asis", cache=FALSE}
+qreport::maketabs(plts)
+```
+
+
+### patient_mets_cancer_cells
+```{r load-plots-patient-mets-cancer, cache=FALSE}
+plt_paths <- paste0("figures/",
+                    list.files("figures")[grep("patient_mets_cancer_cells",
+                                               list.files("figures"))]) %>%
+    as.list()
+
+plts <- lapply(plt_paths, function(x) {
+    tmp <- magick::image_read(x)
+    tmp_gg <- magick::image_ggplot(tmp)
+    return(tmp_gg)
+}
+)
+names(plts) <- str_remove(plt_paths,
+                          pattern = "figures/scvelo_patient_mets_cancer_cells_") %>%
+    str_remove(pattern = ".png")
+```
+
+```{r patient_mets_cancer_tabs, results = "asis", cache=FALSE}
+qreport::maketabs(plts)
+```
+
+### patient_prim_cancer_cells
+
+```{r load-plots-patient-prim-cancer, cache=FALSE}
+plt_paths <- paste0("figures/",
+                    list.files("figures")[grep("patient_prim_cancer_cells",
+                                               list.files("figures"))]) %>%
+    as.list()
+
+plts <- lapply(plt_paths, function(x) {
+    tmp <- magick::image_read(x)
+    tmp_gg <- magick::image_ggplot(tmp)
+    return(tmp_gg)
+}
+)
+names(plts) <- str_remove(plt_paths,
+                          pattern = "figures/scvelo_patient_prim_cancer_cells_") %>%
+    str_remove(pattern = ".png")
+```
+
+```{r patient_prim_cancer_tabs, results = "asis", cache=FALSE}
+qreport::maketabs(plts)
+```
+
+## Normal Cells
+
+### patient_mets_normal_cells
+
+```{python patient-mets-normal}
+ob_name = "patient_mets_normal_cells"
+patient_mets_normal_cells = loom_to_an(loom_path= "loom_output/patient_mets_normal_cells/loom_files", metadata_path="loom_output/patient_mets_normal_cells/metadata")
+calc_velo(patient_mets_normal_cells)
+
+
+scv.tl.velocity_graph(patient_mets_normal_cells, backend = "threading")
+plotdict = {
+    "umap_ann1": ["umap", "Ann_level1"],
+    "umap_ann2": ["umap", "Ann_level2"],
+    "fdl_ann1": ["fdl", "Ann_level1"],
+    "fdl_ann2": ["fdl", "Ann_level2"]
+}
+for plt_name, plt_type in plotdict.items():
+    file_end = ob_name + "_" + plt_name + ".png"
+    scv.pl.velocity_embedding_stream(patient_mets_normal_cells,
+                                     basis = plt_type[0],
+                                     color = plt_type[1],
+                                     show = False,
+                                     save = file_end)
+file_end = ob_name + "_embedding.png"
+scv.pl.velocity_embedding(patient_mets_normal_cells,
+                          basis = "umap",
+                          color = "seurat_clusters",
+                          show = False,
+                          save = file_end)
+```
+
+
+```{r load-plts-patient-mets-normal, cache=FALSE}
+plts <- get_plot_list("patient_mets_normal_cells")
+```
+
+```{r patient-mets-normal-tabset, results="asis", cache=FALSE}
+qreport::maketabs(plts)
+```
+
+#### MACtion
+
+The macrophages are always a mess, so naturally we are interested in them. To do so I'm going to drill down further into the "Immune_Myeloid" group of Ann_level1.
+
+```{python load-patient-mets-myeloid, cache=FALSE}
+
+myeloid=loom_to_an(loom_path="loom_output/patient_mets_normal_cells/loom_files",
+                metadata_path="loom_output/patient_mets_normal_cells/macs")
+
+calc_velo(myeloid)
+scv.tl.velocity_graph(myeloid, backend = "threading")
+#going to use same plotdict as patient_mets_normal chunk
+ob_name = "patient_mets_myeloid"
+plotdict = {
+    "umap_ann2": ["umap", "Ann_level2"],
+    "umap_ann3": ["umap", "Ann_level3"],
+    "fdl_ann2": ["fdl", "Ann_level2"],
+    "fdl_ann3": ["fdl", "Ann_level3"]
+}
+for plt_name, plt_type in plotdict.items():
+    file_end = ob_name + "_" + plt_name + ".png"
+    scv.pl.velocity_embedding_stream(myeloid,
+                                     basis = plt_type[0],
+                                     color = plt_type[1],
+                                     show = False,
+                                     save = file_end)
+file_end = ob_name + "_embedding.png"
+scv.pl.velocity_embedding(myeloid,
+                          basis = "umap",
+                          color = "seurat_clusters",
+                          show = False,
+                          save = file_end)
+```
+
+```{r load-patient-mets-myeloid-plts, cache=FALSE}
+plts_new <- get_plot_list("patient_mets_myeloid")
+names(plts_new)
+```
+
+```{r patient-mets-myeloid-tabset, results="asis", cache=FALSE}
+qreport::maketabs(plts_new)
 ```
