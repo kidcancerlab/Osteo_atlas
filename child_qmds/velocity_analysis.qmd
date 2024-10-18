@@ -67,10 +67,16 @@ Now that we have our bams associated with each object we can make our loom files
 ```{r make-loom-files}
 lapply(names(obj_list), function(ob_name) {
     ob <- obj_list[[ob_name]]
+    if (grepl("xenograft", unique(ob$organism))) {
+        species <- "mixed"
+    } else {
+        species <- unique(ob$organism)
+    }
+
     r_make_loom_files(sobj = ob,
                       id_col = "sample_name",
                       out_dir = "loom_output",
-                      species = unique(ob$organism),
+                      species = sepcies,
                       bam_paths = bam_list[[ob_name]],
                       cluster_account = "gdrobertslab",
                       slurm_base = "output/velocity_analysis/slurmOut",
@@ -113,6 +119,27 @@ lapply(names(non_null), function(ob_name) {
                       id_col = "sample_name",
                       out_dir = "loom_output",
                       species = unique(ob$organism),
+                      bam_paths = bam_list[[ob_name]],
+                      cluster_account = "gdrobertslab",
+                      slurm_base = "output/velocity_analysis/slurmOut",
+                      sbatch_base = "output/velocity_analysis/sbatch_",
+                      sobj_name = ob_name)
+})
+```
+
+### Re-Do it for Xenografts
+
+Earlier my function couldn't handle PDX's since the only options for species were mouse or human, and the xenografts needed the mixed reference gtf since the chromosomes and genes have the species appended to them.
+
+```{r}
+pdxs <- obj_list[which(grepl("xeno", x = names(obj_list)))]
+
+lapply(names(pdxs), function(ob_name) {
+    ob <- obj_list[[ob_name]]
+    r_make_loom_files(sobj = ob,
+                      id_col = "sample_name",
+                      out_dir = "loom_output",
+                      species = "mixed",
                       bam_paths = bam_list[[ob_name]],
                       cluster_account = "gdrobertslab",
                       slurm_base = "output/velocity_analysis/slurmOut",
@@ -252,7 +279,9 @@ ob_names = ["mm_mets_cancer_cells",
             "mm_prim_cancer_cells",
             "patient_mets_cancer_cells",
             "patient_prim_cancer_cells",
-            "patient_mets_normal_cells"]
+            "patient_mets_normal_cells",
+            "xeno_mets_human",
+            "xeno_prim_human"]
 ob_list = []
 for ob_name in ob_names:
     loom_path = "loom_output/" + ob_name + "/loom_files"
@@ -355,6 +384,54 @@ names(plts) <- str_remove(plt_paths,
 ```
 
 ```{r patient_prim_cancer_tabs, results = "asis", cache=FALSE}
+qreport::maketabs(plts)
+```
+
+### xeno_mets_human
+
+```{r xeno-mets-human}
+plt_paths <- paste0("figures/",
+                    list.files("figures")[grep("xeno_mets_human",
+                                               list.files("figures"))]) %>%
+    as.list()
+
+plts <- lapply(plt_paths, function(x) {
+    tmp <- magick::image_read(x)
+    tmp_gg <- magick::image_ggplot(tmp)
+    return(tmp_gg)
+}
+)
+    
+names(plts) <- str_remove(plt_paths,
+                          pattern = "figures/scvelo_xeno_mets_human_") %>%
+    str_remove(pattern = ".png")
+```
+
+```{r xeno_mets_human_tabs, results="asis"}
+qreport::maketabs(plts)
+```
+
+### xeno_prim_human
+
+```{r xeno-prim-human}
+plt_paths <- paste0("figures/",
+                    list.files("figures")[grep("xeno_prim_human",
+                                               list.files("figures"))]) %>%
+    as.list()
+
+plts <- lapply(plt_paths, function(x) {
+    tmp <- magick::image_read(x)
+    tmp_gg <- magick::image_ggplot(tmp)
+    return(tmp_gg)
+}
+)
+    
+names(plts) <- str_remove(plt_paths,
+                          pattern = "figures/scvelo_xeno_prim_human_") %>%
+    str_remove(pattern = ".png")
+```
+
+```{r xeno_mets_human_tabs, results="asis"}
 qreport::maketabs(plts)
 ```
 
