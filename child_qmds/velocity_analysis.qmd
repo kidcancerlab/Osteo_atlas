@@ -67,10 +67,16 @@ Now that we have our bams associated with each object we can make our loom files
 ```{r make-loom-files}
 lapply(names(obj_list), function(ob_name) {
     ob <- obj_list[[ob_name]]
+    if (grepl("xenograft", unique(ob$organism))) {
+        species <- "mixed"
+    } else {
+        species <- unique(ob$organism)
+    }
+
     r_make_loom_files(sobj = ob,
                       id_col = "sample_name",
                       out_dir = "loom_output",
-                      species = unique(ob$organism),
+                      species = sepcies,
                       bam_paths = bam_list[[ob_name]],
                       cluster_account = "gdrobertslab",
                       slurm_base = "output/velocity_analysis/slurmOut",
@@ -113,6 +119,27 @@ lapply(names(non_null), function(ob_name) {
                       id_col = "sample_name",
                       out_dir = "loom_output",
                       species = unique(ob$organism),
+                      bam_paths = bam_list[[ob_name]],
+                      cluster_account = "gdrobertslab",
+                      slurm_base = "output/velocity_analysis/slurmOut",
+                      sbatch_base = "output/velocity_analysis/sbatch_",
+                      sobj_name = ob_name)
+})
+```
+
+### Re-Do it for Xenografts
+
+Earlier my function couldn't handle PDX's since the only options for species were mouse or human, and the xenografts needed the mixed reference gtf since the chromosomes and genes have the species appended to them.
+
+```{r}
+pdxs <- obj_list[which(grepl("xeno", x = names(obj_list)))]
+
+lapply(names(pdxs), function(ob_name) {
+    ob <- obj_list[[ob_name]]
+    r_make_loom_files(sobj = ob,
+                      id_col = "sample_name",
+                      out_dir = "loom_output",
+                      species = "mixed",
                       bam_paths = bam_list[[ob_name]],
                       cluster_account = "gdrobertslab",
                       slurm_base = "output/velocity_analysis/slurmOut",
