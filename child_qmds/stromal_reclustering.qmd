@@ -1150,7 +1150,7 @@ for (group in c("patient_prim", "patient_mets",
 
     combined_plot4 <-
         dimplot_better(object, group_by = "Ann_Level0") + NoLegend()
-    
+
     all_plots <- 
         patchwork::wrap_plots(combined_plot1,
                     combined_plot2,

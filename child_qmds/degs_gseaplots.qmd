@@ -494,4 +494,42 @@ for (i in seq_len(nrow(object_list))) {
 ```
 
 
+## Trial for marker based annotation of tumor subpopulations
+```{r markers_based_tumor_annot, echo = FALSE}
+## Annotate the cancer clusters based on the markers
+tumor_markers <- list(
+  Tumor_Metabolic = c("SLC2A1", "HK2", "LDHA", "CA9", "IDH1", "IDH2"),
+  Tumor_Proliferative = c("MKI67", "PCNA", "CCND1", "MYC", "E2F1", "TOP2A"),
+  Tumor_Ground = c("CD44", "CD24", "EPCAM", "CDH2", "VIM"),
+  Tumor_Inflammatory = c("IL6", "TNF", "CCL2", "NFKB1", "PTGS2"),
+  Tumor_Osteoblastic = c("ALPL", "RUNX2", "SPP1", "BGLAP", "COL1A1"),
+  Tumor_ImmuneRegulatory = c("CD274", "CTLA4", "FOXP3", "TGFB1", "IL10")
+)
+
+
+object_list <-
+    tribble(~group,                         ~res_value,
+            "patient_prim_cancer_cells",    0.1,
+            "patient_mets_cancer_cells",    0.15,
+            "mm_prim_cancer_cells",         0.3,
+            "mm_mets_cancer_cells",         0.3,
+            "xeno_prim_human",              0.1,
+            "xeno_mets_human",              0.1)
+
+for (i in seq_len(nrow(object_list))) {
+    group <- object_list$group[i]
+    res_value <- object_list$res_value[i]
+
+    object <-
+        qs::qread(
+            str_c(
+                "output/seurat_objects/final_tumor_vs_stroma/",
+                group,
+                ".qs"
+            )
+        ) %>%
+        FindClusters(resolution = res_value)
+
+}
+```
 

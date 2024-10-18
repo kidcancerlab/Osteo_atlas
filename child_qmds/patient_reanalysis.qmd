@@ -1,6 +1,4 @@
 
-
-
 ## Validation of clustering and harmony
 Testing the clustering and harmony of the data using the heatmap for each 
 sample.
