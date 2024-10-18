@@ -1,0 +1,76 @@
+## Test the correlation of expression within stromal cell types between groups
+This is using pseudobulked data per stromal cell type per group as input. It is plotting a scatterplot of the genes between two groups for each stromal cell type to show how well they correlate across species/model and primary/met. It is also calculating fold change expression values for each comparison and using this as input for GSEA to show what pathways are differentially expressed between the two groups.
+
+Mouse samples have their genes converted to human for this, and all samples are filtered to include only genes found across all datasets.
+```{r group_corr_normal_subtypes}
+cat_tib <- dplyr::tribble(
+    ~category, ~subcategory,   ~cat_expl,
+    "H",        "",            "Hallmark_paths",
+    "C2",      "CP:KEGG",      "KEGG",
+    "C3",      "TFT:GTRD",     "Transcription_factor_targets",
+    "C5",      "GO:BP",        "GO Biological Process",
+    "C5",      "GO:MF",        "GO Molecular Function",
+    "C6",       "",            "Oncogenic_signature")
+
+groups <-
+    list.dirs(
+        "output/seurat_objects/stromal_subtypes/",
+        full.names = FALSE
+    )[-1]
+
+qs_file_list <-
+    lapply(
+        groups,
+        function(group_name) {
+            list.files(
+                paste0(
+                    "output/seurat_objects/stromal_subtypes/",
+                    group_name,
+                    "/"
+                ),
+                pattern = "qs",
+                full.names = TRUE
+            )
+        }
+    )
+names(qs_file_list) <- groups
+
+gsea_on_pseuobulked_sobjs(
+    aggregation_column = "Ann_Level3",
+    mouse_sample_regex = "mouse|^mm",
+    qs_list = qs_file_list,
+    parallel_threads = 4,
+    gsea_categories = cat_tib,
+    figure_dir = "output/figures/stromal_species_correlations/",
+    corr_figure_name_stub = "celltype_correlation_",
+    gsea_output = "output/stromal_species_correlations/gsea_results_normal.tsv"
+)
+```
+
+## Test the correlation between within tumor subtypes between groups
+This is using pseudobulked data per tumor subtype per group as input. It is plotting a scatterplot of the genes between two groups for each tumor subtype to show how well they correlate across species/model and primary/met. It is also calculating fold change expression values for each comparison and using this as input for GSEA to show what pathways are differentially expressed between the two groups.
+
+Mouse samples have their genes converted to human for this, and all samples are filtered to include only genes found across all datasets.
+```{r tumor_subtypes_corr}
+base_dir <- "output/seurat_objects/final_tumor_vs_stroma/"
+tumor_qs_files <-
+    list(
+        mm_prim = paste0(base_dir, "mm_prim_cancer_cells.qs"),
+        mm_mets = paste0(base_dir, "mm_mets_cancer_cells.qs"),
+        xeno_prim = paste0(base_dir, "xeno_prim_human.qs"),
+        xeno_mets = paste0(base_dir, "xeno_mets_human.qs"),
+        patient_prim = paste0(base_dir, "patient_prim_cancer_cells.qs"),
+        patient_mets = paste0(base_dir, "patient_mets_cancer_cells.qs")
+    )
+
+gsea_on_pseuobulked_sobjs(
+    aggregation_column = "Ann_Level3",
+    mouse_sample_regex = "^mm",
+    qs_list = tumor_qs_files,
+    parallel_threads = 4,
+    gsea_categories = cat_tib,
+    figure_dir = "output/figures/tumor_subtypes_correlations/",
+    corr_figure_name_stub = "tumor_subtypes_correlation_",
+    gsea_output = "output/tumor_subtypes_correlations/gsea_results_tumor.tsv"
+)
+```

@@ -1,29 +1,31 @@
 ## Load in the list of samples to run SNV calling on
 We're only running on patient and mouse model samples that are primary tumors or lung metastases. We're also excluding samples from the NCI-POB data source because we don't have the bam files for these samples. We're also excluding samples with low reads.
 ```{r load_sample_meta}
+#| cache.vars = 'samples_to_run'
 samples_to_run <-
     read_tsv("misc/allsample_details.txt",
              show_col_types = FALSE) %>%
     filter(species %in% c("patient", "mousemodel") &
            location != "cc_alltumor" &
            (tumor_type == "primary" |
-            (tumor_type == "metastatic" & location == "lung")) &
-           data_source != "NCI-POB") %>% # No bam files for these samples
+            (tumor_type == "metastatic" & location == "lung"))) %>% # No bam files for these samples
     filter(!sample_name %in% c("SJOS013768_D1", # drop samples with low reads
                                "SJOS016016_D1",
                                "SJOS030605_D1",
                                "SJOS030411_D1",
-                               "SJOS030605_D2"))
+                               "SJOS030605_D2")) %>%
+    filter(data_source == "NCI_POB")
 ```
 
 ## Run SNV calling on the pseudobulked clusters to try to ID tumor cells
 This portion requires https://github.com/kidcancerlab/rrrSnvs
-```{r}
+```{r run_rrrSnvs}
 file_loc_key <-
     list("X0" = "/home/gdrobertslab/lab/Counts_2/",
          "S0" = "/home/gdrobertslab/lab/Counts_2/",
          "SC" = "/home/gdrobertslab/lab/Counts_2/",
-         "SJ" = "/home/gdrobertslab/lab/ExternalData/Patel_lab/")
+         "SJ" = "/home/gdrobertslab/lab/ExternalData/Patel_lab/",
+         "CC" = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/BAMs/")
 
 ploidy_key <-
     list("human" = "GRCh38",
@@ -53,7 +55,11 @@ output <-
     message(sample_id)
 
     bam_file <- "possorted_genome_bam.bam"
+
     if (method == "single_nucleus" && data_source == "NCH") {
+        bam_file <- "gex_possorted_bam.bam"
+    }
+    if (data_source == "NCI_POB") {
         bam_file <- "gex_possorted_bam.bam"
     }
     message("loading data")
@@ -100,11 +106,19 @@ output <-
 
         s_obj <- FindClusters(s_obj, resolution = opt_res)
 
-        full_bam_file <-
-            paste0(file_loc,
+        if (data_source == "NCI_POB") {
+            full_bam_file <- 
+                paste0(file_loc,
                    sample_id,
-                   "/",
+                   "_",
                    bam_file)
+        } else {
+            full_bam_file <-
+                paste0(file_loc,
+                    sample_id,
+                    "/",
+                    bam_file)
+        }
 
         if (!file.exists(full_bam_file)) {
             return(
@@ -123,13 +137,11 @@ output <-
         s_obj$cell_group <- paste0("cluster_", s_obj$seurat_clusters)
         message("Making DimPlot")
         dim_plot_name <-
-            DimPlot(
-                s_obj,
-                group.by = c("seurat_clusters", "annotations"),
-                label = TRUE,
-                repel = TRUE,
-                ncol = 1
-            )
+            dimplot_better(
+                            s_obj,
+                            group_by = c("seurat_clusters", "annotations"),
+                            label.size = 2.5) +
+                        NoLegend()
 
         ggsave(
             paste0(
@@ -138,8 +150,8 @@ output <-
                 "_dim_plot.png"
             ),
             plot = dim_plot_name,
-            width = 20,
-            height = 20
+            width = 7,
+            height = 14
         )
 
         c_b_t <-
@@ -193,6 +205,10 @@ output <-
         # downstream processing
         if (length(snp_tree) == 0) {
             snp_tree <- NULL
+        }
+
+        if (is.character(snp_tree)) {
+            return(snp_tree)
         }
 
         if (is.null(snp_tree)) {
@@ -257,9 +273,9 @@ output <-
         message("Dimplots of calls")
         if (!is.null(snp_tree)) {
             plot_name <-
-                DimPlot(
+                dimplot_better(
                     s_obj,
-                    group.by = c(
+                    group_by = c(
                         "snp_min_depth_5",
                         "snp_min_depth_10",
                         "snp_min_depth_20"
@@ -272,8 +288,8 @@ output <-
                     "_dim_plot_calls.png"
                     ),
                 plot = plot_name,
-                width = 20,
-                height = 15
+                width = 7,
+                height = 21
             )
 
             s_obj@meta.data %>%
@@ -290,4 +306,7 @@ output <-
     }
     return("Completed successfully")
 })
+
+qs::qsave(output, "output/id_tumor/snvs/output.qs")
 ```
+
