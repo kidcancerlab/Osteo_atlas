@@ -66,6 +66,12 @@ osteo_atlas_files
 rfiles
 tmp
 
-#Velocity analysis stuff
+
+#velocity analysis files
 loom_output
-*genes.gtf
+loom_files_old
+sbatch
+tmp_bams
+tmp_bcs
+analyze_looms_files
+*gtf
