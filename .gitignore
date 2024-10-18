@@ -73,9 +73,11 @@ loom_files_old
 sbatch
 tmp_bams
 tmp_bcs
-analyze_looms_files
+analyze_looms*
 <<<<<<< HEAD
 *gtf
 =======
 *genes.gtf
 >>>>>>> cf14430 (added checks for failed runs)
+
+figures
