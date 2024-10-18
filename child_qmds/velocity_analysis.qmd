@@ -5,21 +5,15 @@ We are interested in how cell types and states in each sample change are evolvin
 Since we have external data for this project not all .bam files are in the same location. As a result, we will have to conditionally create bam paths.
 
 ```{r get-bam-paths}
-#load in objects
-obj_names <- list.files("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/tumor_vs_stroma/")
-
 #making a list of bam paths, where each entry corresponds to an object and is a
 #vector of all bams associated with that object
 
 bam_list <- list()
-obj_list <- list()
+obj_list <- qs::qread("output/matt_obj_list.qs")
+obj_names <- names(obj_list)
 
 for (obj in obj_names) {
-    tmp_ob <-
-        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/tumor_vs_stroma/", obj)) #nolint
-
-    #strip .qs from end of name
-    obj <- gsub(".qs", "", obj)
+    tmp_ob <- obj_list[[obj]] #nolint
 
     obj_list[[obj]] <- tmp_ob
 
@@ -87,18 +81,60 @@ lapply(names(obj_list), function(ob_name) {
 )
 ```
 
+### Figure out Which Samples Failed
+
+Not all samples had loom files successfully created, so I'm going to identify these and rerun `r_make_loom_files`.
+
+Some more remained after this, so I'm running once more before digging deeper into this issue
+
+```{r re-make-looms}
+obj_list <- qs::qread("output/matt_obj_list.qs")
+
+failed_runs <- lapply(names(obj_list), function(ob_name) {
+    sids <- obj_list[[ob_name]]$sample_name %>% unique()
+    failed <- sids[!file.exists(paste0("loom_output/",
+                       ob_name,
+                       "/loom_files/",
+                       sids,
+                       ".loom"))]
+    if (length(failed) > 0) return(failed)
+})
+names(failed_runs) <- names(obj_list)
+
+non_null <- list()
+for (id in names(failed_runs)) {
+    if (!is.null(failed_runs[[id]])) non_null[[id]] <- failed_runs[[id]]
+}
+
+lapply(names(non_null), function(ob_name) {
+    ob <- obj_list[[ob_name]] %>%
+        subset(sample_name %in% non_null[[ob_name]])
+    r_make_loom_files(sobj = ob,
+                      id_col = "sample_name",
+                      out_dir = "loom_output",
+                      species = unique(ob$organism),
+                      bam_paths = bam_list[[ob_name]],
+                      cluster_account = "gdrobertslab",
+                      slurm_base = "output/velocity_analysis/slurmOut",
+                      sbatch_base = "output/velocity_analysis/sbatch_",
+                      sobj_name = ob_name)
+})
+```
+
 ## Write off Metadata for Velocity Analysis
 
 ```{r write-off-md}
-lapply(obj_list,
-       write_off_md,
-       id_col = "sample_name",
-       output_dir = "loom_output/metadata",
-       vars_to_keep = c("sample_name",
-                        "seurat_clusters",
-                        "Ann_level1",
-                        "Ann_level2",
-                        "Ann_level3"))
+lapply(names(obj_list), function(ob_name) {
+    ob <- obj_list[[ob_name]]
+    write_off_md(ob,
+                 id_col = "sample_name",
+                 output_dir = paste0("loom_output/", ob_name),
+                 vars_to_keep = c("sample_name",
+                                  "seurat_clusters",
+                                  "Ann_level1",
+                                  "Ann_level2",
+                                  "Ann_level3"))
+})
 
 lapply(names(obj_list), function(obj_name) {
     write_off_md(sobj = obj_list[[obj_name]],
@@ -176,6 +212,6 @@ def loom_to_an(loom_path, metadata_path):
 
 ```{python analyze-mm-mets-cancer-cells}
 #get names of loom files
-merged_ad = loom_to_an(loom_path = "loom_files/mm_mets_cancer_cells",
+merged_ad = loom_to_an(loom_path = "loom_output/mm_mets_cancer_cells/loom_files",
                        metadata_path = "loom_output/mm_mets_cancer_cells/metadata")
 ```
