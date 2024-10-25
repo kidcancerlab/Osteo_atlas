@@ -5,13 +5,20 @@ format: html
 ## Results 1 - stromal_panel_plot
 ```{r result1}
 # patchwork
-patchwork::wrap_plots(
+stromal_combined <-
+    patchwork::wrap_plots(
     get_plot("stromal_panel_plot"),
     get_plot("stromal_celltype_heatmap"),
-    heights = c(3, 1),
+    heights = c(4, 1),
     ncol = 1
 )
 
+ggsave(filename = "output/figures/Final_Annotations/stromal_panel_heatmap_plot.png",
+        plot = stromal_combined,
+        width = 14,
+        height = 25,
+        limitsize = FALSE,
+        bg = "white")
 
 # gridExtra
 gridExtra::grid.arrange(
