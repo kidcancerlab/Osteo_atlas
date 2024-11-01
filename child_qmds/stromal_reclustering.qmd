@@ -595,52 +595,6 @@ for (item in seq_len(nrow(object_list))) {
 
 ## Manual annotation of each celltypes
 ```{r manual_annotation_celltypes}
-item = 1
-
-FeaturePlot(xeno_merge, 
-    features = nichenetr::convert_human_to_mouse_symbols(macrophage_features_cells$Inflam_TAMs))
-
-
-
-                
-
-c11 <-
-    subset(sobj, seurat_clusters == 3) %>%
-    colnames()
-DimPlot(mouse_merge, cells.highlight = c11) +
-    NoLegend()
-DimPlot(mouse_merge, group.by = "annotations") +
-    NoLegend()
-
-
-
-
-
-
-c11 <-
-    subset(sobj, seurat_clusters == 3) %>%
-    colnames()
-
-DimPlot(mouse_merge, cells.highlight = c11) +
-    NoLegend()
-
-dimplot_better(xeno_merge, group_by = "annotations") +
-    NoLegend()
-
-dimplot_better(xeno_merge, group_by = "Ann_Level3") +
-    NoLegend()
-
-DimPlot(stroma_obj, cells.highlight = c11) +
-    NoLegend() 
-DimPlot(object, cells.highlight = c11) +
-    NoLegend() 
-
-dimplot_better(stroma_obj, group_by = "Ann_Level3") +
-    NoLegend()
-dimplot_better(object, group_by = "Ann_Level3") +
-    NoLegend()
-
-
 
 # went over the aucell plots for manual annotations
 celltype_list <-
@@ -667,7 +621,7 @@ celltype_list <-
                                                             "^1$" = "Osteoclast_TAMs",
                                                             "^2$" = "Inflam_TAMs",
                                                             "^3$" = "Prolif_TAMs",
-                                                            "^4$" = "Inflam_TAMs",
+                                                            "^4$" = "Scar_TAMs",
                                                             "^5$" = "Monocytes",
                                                             "^6$" = "TAMs",
                                                             "^7$" = "Normal_Fibroblasts",
@@ -675,7 +629,7 @@ celltype_list <-
                                                             "^9$" = "DC",
                                                             "^10$" = "Osteoclast_TAMs",
                                                             "^11$" = "CD8_T",
-                                                            "^12$" = "Scar_TAMs",
+                                                            "^12$" = "Inflam_TAMs",
                                                             "^13$" = "EC_Lymphatic",
                                                             "^14$" = "Mast",
                                                             "^15$" = "Plasmocytoid_DC"),
@@ -719,7 +673,7 @@ celltype_list <-
                                                             "^14$" = "CD8_T"),
                                          Immune_Myeloid = c("^0$" = "TAMs",
                                                             "^1$" = "TAMs",
-                                                            "^2$" = "TAMs",
+                                                            "^2$" = "Scar_TAMs",
                                                             "^3$" = "Scar_TAMs",
                                                             "^4$" = "Osteoclast_TAMs",
                                                             "^5$" = "TAMs",
@@ -734,7 +688,7 @@ celltype_list <-
                                                             "^14$" = "Pericytes",
                                                             "^15$" = "IFN_TAMs",
                                                             "^16$" = "Alv_Macrophages",
-                                                            "^17$" = "Prolif_TAMs",
+                                                            "^17$" = "Scar_TAMs",
                                                             "^18$" = "Mast",
                                                             "^19$" = "Scar_TAMs",
                                                             "^20$" = "Plasmocytoid_DC",
@@ -767,12 +721,12 @@ celltype_list <-
                                                 "^1$" = "NK_cells",
                                                 "^2$" = "Naive_T"),
                             Immune_Myeloid = c("^0$" = "Inflam_TAMs",
-                                                "^1$" = "TAMs",
+                                                "^1$" = "Inflam_TAMs",
                                                 "^2$" = "TAMs",
                                                 "^3$" = "TAMs",
                                                 "^4$" = "TAMs",
                                                 "^5$" = "Prolif_TAMs",
-                                                "^6$" = "TAMs",
+                                                "^6$" = "Inflam_TAMs",
                                                 "^7$" = "Osteoclast_TAMs",
                                                 "^8$" = "Prolif_TAMs",
                                                 "^9$" = "TAMs",
@@ -806,7 +760,7 @@ celltype_list <-
                                                 "^7$" = "Scar_TAMs",
                                                 "^8$" = "DC",
                                                 "^9$" = "Scar_TAMs",
-                                                "^10$" = "TAMs",
+                                                "^10$" = "Inflam_TAMs",
                                                 "^11$" = "Inflam_TAMs",
                                                 "^12$" = "EC_Blood",
                                                 "^13$" = "Prolif_TAMs"),
@@ -876,7 +830,7 @@ celltype_list <-
                                     Immune_Myeloid = c("^0$" = "TAMs",
                                                         "^1$" = "Inflam_TAMs",
                                                         "^2$" = "Alv_Macrophages",
-                                                        "^3$" = "Inflam_TAMs",
+                                                        "^3$" = "Scar_TAMs",
                                                         "^4$" = "Scar_TAMs",
                                                         "^5$" = "Alv_Macrophages",
                                                         "^6$" = "DC",
@@ -994,28 +948,6 @@ for (item in seq_len(nrow(object_list))) {
 
 ## Combine the objects and create one
 ```{r combine_objects_to_one}
-
-item = 1
-
-c11 <-
-    subset(sobj, seurat_clusters == 16) %>%
-    colnames()
-
-DimPlot(stroma_obj, cells.highlight = c11) +
-    NoLegend() +
-dimplot_better(stroma_obj, group_by = "Ann_Level3")
-
-DimPlot(object, cells.highlight = c11) +
-    NoLegend() +
-dimplot_better(object, group_by = "Ann_Level3")
-
-DimPlot(patient_merge, cells.highlight = c11) +
-    NoLegend()
-dimplot_better(patient_merge, group_by = "SingleR_Ann3", split_by = "tumor_type")
-
-
-
-
 
 object_list <-
     tribble(~group,                         ~res_value,

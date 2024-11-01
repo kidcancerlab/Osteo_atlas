@@ -1,12 +1,12 @@
 
-
-
 ## Result 3 figures
+This qmd will be used to do TAMs analysis within and across the different groups
 
 ```{r, final_macrophage_panel, echo = FALSE}
 
 mac_obj_list <- list()
 mac_obj_list_merge <- list()
+TAM_cell_count_table <- tibble::tibble(celltypes = character())
 
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
@@ -26,46 +26,51 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
 
     mac_obj_list[[group]] <- mac_obj
 
+    # Merge the normal and cancer cells
+    cell_count <-
+        mac_obj$Ann_Level3 %>%
+        table() %>%
+        as.data.frame() %>%
+        arrange(desc(Freq)) %>%
+        dplyr::rename(!!group := Freq,
+                      celltypes := ".")
+
+    TAM_cell_count_table <- 
+        TAM_cell_count_table %>%
+        dplyr::full_join(cell_count, by = "celltypes")
+
 }
 
-patient_merge <-
-    merge(mac_obj_list$patient_prim_normal_cells,
-          mac_obj_list$patient_mets_normal_cells) %>%
-    JoinLayers() %>%
-    process_seurat() %>%
-    RunHarmony(group.by.vars = c("sample_name", "data_source")) %>%
-    process_seurat(reduction = "harmony")
+# Generate a heatmap of the cell count data
+cell_count_prep <- 
+    TAM_cell_count_table %>%
+    mutate_all(~replace_na(., 0)) %>%
+    column_to_rownames("celltypes") %>%
+    t()
 
-DimPlot(patient_merge,
-        group.by = "new_annot_clust",
-        split.by = "tumor_type",
-        label.box = T,
-        label = T,
-        repel = T,
-        #cols = cols,
-        label.size = 2.5) +
-    coord_fixed() +
-    NoLegend() +
-    ggtitle(title_replacement[group][1]) +
-    theme(aspect.ratio=1)
+# Calculate the percentage for each cell type
+cell_count_percent <- sweep(cell_count_prep, 1, rowSums(cell_count_prep), FUN = "/") * 100
 
-DimPlot(patient_merge, cells.highlight = c11)
-    
-mouse_merge <-
-    merge(mac_obj_list$mm_prim_normal_cells,
-          mac_obj_list$mm_mets_normal_cells) %>%
-    JoinLayers() %>%
-    process_seurat() %>%
-    RunHarmony(group.by.vars = c("sample_name", "data_source")) %>%
-    process_seurat(reduction = "harmony")
+TAMs_cell_percent <-
+    pheatmap::pheatmap(cell_count_percent,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         display_numbers = TRUE,
+         fontsize_number = 10,
+         main = "Cell Count Percentage Heatmap",
+         scale = "none",
+         number_format = "%.1f",
+         color = colorRampPalette(c("white", "red"))(100))
 
-xeno_merge <-
-    merge(mac_obj_list$xeno_prim_mouse,
-          mac_obj_list$xeno_mets_mouse) %>%
-    JoinLayers() %>%
-    process_seurat() %>%
-    RunHarmony(group.by.vars = c("sample_name", "data_source")) %>%
-    process_seurat(reduction = "harmony")
+stash_plot(TAMs_cell_percent[[4]], "TAMs_celltype_heatmap")
+
+ggsave(filename = "output/figures/Final_Annotations/TAMs_celltype_heatmap.png",
+        plot = TAMs_cell_percent,
+        width = 7,
+        height = 5,
+        limitsize = FALSE,
+        bg = "white")
+
 
 #prepare theme for the celltypes color
 mac_celltypes <-
@@ -79,6 +84,14 @@ mac_celltypes <-
 cols <- c(plot_cols, sample(rainbow(length(mac_celltypes))))
 
 names(cols) <- mac_celltypes
+
+title_replacement <- 
+    list(patient_prim_normal_cells = "Patient Primary Stroma",
+        patient_mets_normal_cells = "Patient Metatatic Stroma",
+        mm_prim_normal_cells = "Mouse Primary Stroma",
+        mm_mets_normal_cells = "Mouse Metatatic Stroma",
+        xeno_prim_mouse = "Xenograft Primary Stroma",
+        xeno_mets_mouse = "Xenograft Metastatic Stroma")
 
 # make dimplot list
 macs_dimplot_list <- list()
@@ -104,6 +117,22 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
         mac_obj %>%
         RunHarmony(group.by.vars = c("sample_name")) %>%
         process_seurat(reduction = "harmony")
+    
+    #  force_directed_layout <- 
+    #     run_fdl(sobject = harm_mac_obj)
+
+    # split_fdl_plot <- 
+    #     dimplot_better(force_directed_layout,
+    #                    group_by= "Ann_Level3",
+    #                    reduction = "fdl") +
+    #         NoLegend()
+        
+    # ggsave(filename = str_c("output/figures/TAMs_analysis/", group, "_mac_fdl_plot.png"),
+    #         plot = split_fdl_plot,
+    #         width = 10,
+    #         height = 10,
+    #         limitsize = FALSE,
+    #         bg = "white")
 
     # Plot the dimplot
     dimplot <-
@@ -116,7 +145,7 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 label.size = 2.5) +
             coord_fixed() +
             NoLegend() +
-            #ggtitle(title_replacement[group][1]) +
+            ggtitle(title_replacement[group][1]) +
             theme(aspect.ratio=1)
 
     macs_dimplot_list[[group]] <- dimplot
@@ -136,8 +165,6 @@ ggsave(filename = "output/figures/Final_Annotations/macrophage_panel_plots.png",
         height = 30,
         limitsize = FALSE,
         bg = "white")
-
-
 
 ## Dotplot for the macrophages
 macrophage_features_cells <- list(
@@ -232,8 +259,5 @@ ggsave(filename = "output/figures/Final_Annotations/macrophage_dotplot_panel.png
         limitsize = FALSE,
         bg = "white")
 
-
-merged_obj <- 
-    
 
 ```

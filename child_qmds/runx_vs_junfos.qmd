@@ -1,0 +1,127 @@
+## Analysis for RUNX and JUN/FOS subtypes
+We will compare the runx2 vs jun/fos subtypes of osteosarcoma patients in here
+
+```{r runx_vs_junfos, echo = FALSE}
+
+for (group in c("patient_prim_cancer_cells",
+                "patient_mets_cancer_cells")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    
+    obj <-
+        process_seurat(object)
+    FeaturePlot(obj, features = c("RUNX2", "JUN", "FOS"), order=T, ncol=1)
+    dimplot_better(obj,
+                   group_by = c("data_source", "method", "sample_name"),
+                   ncol = 1) +
+        NoLegend()
+    
+    VlnPlot(object,
+            features = c("RUNX2", "JUN", "FOS"),
+            group.by = "sample_name",
+            ncol = 1,
+            pt.size = 0.1,
+            slot = "data")
+
+
+    # Create a patient by patient plot for Ann_Level3 cell types barplot
+    celltype_counts <- obj@meta.data %>%
+        dplyr::count(sample_name, Ann_Level3) %>%
+        tidyr::spread(key = Ann_Level3, value = n, fill = 0)
+
+    celltype_counts_long <- celltype_counts %>%
+        tidyr::pivot_longer(cols = -sample_name,
+                            names_to = "celltype",
+                            values_to = "count")
+
+    ggplot(celltype_counts_long,
+          aes(x = sample_name, y = count, fill = celltype)) +
+        geom_bar(stat = "identity", position = "stack") +
+        theme_minimal() +
+        labs(title = paste("Cell type distribution for", group),
+             x = "Patient",
+             y = "Cell count",
+             fill = "Cell Type") +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+    # Create a violin plot for RUNX2, JUN, FOS
+    pseudobulk <- 
+        object %>%
+        Seurat::AggregateExpression(
+            group.by = c("sample_name"),
+            slot = "data",
+            assay = "RNA")
+
+    pseudobulk_new <- pseudobulk[[1]]
+
+    pseudobulk_new <-
+        pseudobulk_new %>%
+        t() %>%
+        as.data.frame()
+
+    entire_matrix <- 
+        pseudobulk_new %>%
+        tibble::rownames_to_column(var = "groups")
+
+    runx2_matrix <- 
+        entire_matrix[ , c("groups", "RUNX2", "JUN", "FOS")]
+    
+    ggplot(runx2_matrix,
+          aes(x = RUNX2,
+           y = FOS,
+           fill = groups)) +
+        geom_point() +
+        geom_text(aes(label = groups)) 
+
+        
+
+    runx2_matrix$JUN_FOS <-
+        rowMeans(runx2_matrix[ , c("JUN", "FOS")])
+
+    runx2_matrix <-
+        runx2_matrix %>% dplyr::select(-JUN, -FOS)
+
+    runx2_matrix_long <-
+        runx2_matrix %>%
+        tidyr::pivot_longer(cols = c("RUNX2",
+                                    #"JUN", "FOS",
+                                    "JUN_FOS"), 
+                            names_to = "gene", 
+                            values_to = "expression")
+
+    
+    ggplot(runx2_matrix_long,
+          aes(x = gene,
+           y = log2(expression),
+           fill = gene)) +
+        geom_violin(trim = FALSE) +
+        geom_jitter(shape = 16,
+                    position = position_jitter(0.2),
+                    alpha = 0.5) +
+        theme_minimal() +
+        labs(title = paste("Violin plot for", group),
+                x = "Gene",
+                y = "Expression") +
+        theme(legend.position = "none")
+
+    ggplot(runx2_matrix_long,
+          aes(x = gene,
+           y = log2(expression),
+           fill = gene)) +
+        geom_violin(trim = FALSE) +
+        geom_jitter(shape = 16,
+                    position = position_jitter(0.2),
+                    alpha = 0.5) +
+        theme_minimal() +
+        labs(title = paste("Violin plot for", group),
+                x = "Gene",
+                y = "Expression") +
+        theme(legend.position = "none")
+
+}
+
+
+
+```

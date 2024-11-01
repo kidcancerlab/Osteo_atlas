@@ -19,9 +19,10 @@ dimplot_better <- function(object,
             shuffle = T,
             label.box = T,
             #raster.dpi = c(500, 500),
-            cols = c(plot_cols, sample(rainbow(1000))),
+            cols = c(plot_cols, sample(rainbow(50))),
             ...) +
-        coord_fixed()
+        coord_fixed() +
+        theme(aspect.ratio=1)
 }
 ```
 
