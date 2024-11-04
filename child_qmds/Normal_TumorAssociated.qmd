@@ -175,7 +175,8 @@ all_samples_csv <-
 run_degs <- function(sobject = combined_sobj,
                      aggregate_by = c("sample_name", "Comparison_col"),
                      comparison_col = "Comparison_col",
-                     organism_col = "organism") {
+                     organism_col = "organism",
+                     subset = FALSE) {
 
     pseudobulk <- sobject %>%
         Seurat::AggregateExpression(
@@ -192,7 +193,22 @@ run_degs <- function(sobject = combined_sobj,
                            mc.cores = parallelly::availableCores(),
                            mc.preschedule = FALSE,
                            function(cluster_no) {
-        batch_df <- data.frame(sample_name = colnames(pseudobulk))
+
+        #subset here for the specfic celltytpe
+        if (subset == TRUE) {
+            Idents(sobject) <- comparison_col
+            pseudobulk <- sobject %>%
+                subset(idents = cluster_no) %>%
+                Seurat::AggregateExpression(
+                    group.by = c("sample_name", "tissue_type"),
+                    slot = "counts",
+                    assay = "RNA"
+                )
+            pseudobulk <- pseudobulk[[1]]
+        }
+
+        batch_df <- 
+            data.frame(sample_name = colnames(pseudobulk))
 
         batch_df_new <-
             tibble(col_label = colnames(pseudobulk),
@@ -224,6 +240,12 @@ run_degs <- function(sobject = combined_sobj,
         batch_df_new2$group <- "other"
         batch_df_new2$group[batch_df_new2$cluster_no == cluster_no] <- "target"
         batch_df_new2$group <- factor(batch_df_new2$group)
+    
+        if (subset == TRUE) {
+            batch_df_new2$group <- "other"
+            batch_df_new2$group[batch_df_new2$cluster_no == "Tumor-associated"] <- "target"
+            batch_df_new2$group <- factor(batch_df_new2$group)
+        }
 
         for (columns in colnames(batch_df_new2)) {
             if (unique(batch_df_new2[[columns]]) %>% length() == 1) {
@@ -234,12 +256,12 @@ run_degs <- function(sobject = combined_sobj,
             as.formula(
                 paste0(
                     "~",
-                    paste(colnames(batch_df_new2)[c(-1, -2)], collapse = " + ")
+                    paste(colnames(batch_df_new2)[c(-1, -2, -4)], collapse = " + ")
                 )
             )
 
         return(
-            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
+             DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
                                            colData = batch_df_new2,
                                            design = design) %>%
             DESeq2::DESeq(quiet = TRUE) %>%
@@ -251,7 +273,7 @@ run_degs <- function(sobject = combined_sobj,
         )
     })
     # subset and name the degs_output by the group_by variables
-    names(degs_output) <- sort(unique(sobject$seurat_clusters))
+    names(degs_output) <- unique(sobject@meta.data[[comparison_col]])
 
     return(degs_output)
 }
@@ -261,8 +283,11 @@ run_degs <- function(sobject = combined_sobj,
 
 ```{r}
 
-sobj <-
-    qs::aread("output/seurat_objects/final_tumor_vs_storma/patient_prim.qs")
+patient_prim_ref <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim.qs"))
+
+patient_mets_ref <- 
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs"))
 
 
 ```
