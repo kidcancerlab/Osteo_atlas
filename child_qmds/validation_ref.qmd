@@ -47,13 +47,13 @@ dimplot_better(ref_obj, group_by = "Ann_Level2") +
 ref_lung <- 
     SingleR::SingleR(test = as.SingleCellExperiment(sobject),
                     ref = SeuratObject::GetAssayData(ref_obj),
-                    labels = ref_obj$Ann_Level1,
+                    labels = ref_obj$Ann_Level3,
                     aggr.ref = TRUE)
 
-sobject$Ann_Level1 <- ref_lung$labels
+sobject$Ann_Level3 <- ref_lung$labels
 
 dimplot_better(sobject,
-              group_by = c("Ann_Level2"),
+              group_by = c("Ann_Level3"),
               ncol=1) +
     NoLegend() 
 
@@ -166,9 +166,43 @@ for (names in c("Soragni", "Collins")) {
 
 ## Annotate one by one with reference
 ```{r annotate_one_by_one, echo=FALSE}
-patient_prim_ref <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim.qs")) %>%
-    subset(Ann_Level3 != "Osteoblasts")
+# patient_prim_ref <-
+#     qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim.qs")) 
+
+patient_prim_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim_normal_cells.qs")) %>% 
+    subset(scatomic_tumor_call != "cancer_cells") %>%
+    subset(scevan_tumor_call != "cancer_cells")
+
+patient_prim_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim_cancer_cells.qs"))
+
+patient_prim = list(group_by = c("sample_name",
+                                          "method",
+                                          "data_source"),
+                             theta = c(5, 5, 5),
+                             lambda = c(0.5, 0.5, 0.5))
+
+patient_prim_ref <- 
+    merge(x = patient_prim_tumor,
+        y = patient_prim_stroma) %>%
+    JoinLayers() %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = patient_prim$group_by,
+               theta = patient_prim$theta,
+               lambda = patient_prim$lambda) %>%
+    process_seurat(reduction = "harmony")
+
+
+
+dimplot_better(patient_prim_ref, group_by = "Ann_Level3") +
+    NoLegend()
+
+patient_mets_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets_normal_cells.qs"))
+
+patient_mets_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets_cancer_cells.qs"))
 
 patient_mets_ref <- 
     qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs"))

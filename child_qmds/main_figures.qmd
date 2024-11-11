@@ -203,12 +203,12 @@ names(cols) <- celltypes
 cancer_plot_list <- list()
 
 title_replacement <- 
-    list(patient_prim_cancer_cells = "Patient Primary Cancer",
-        patient_mets_cancer_cells = "Patient Metastatic Cancer",
-        mm_prim_cancer_cells = "Mouse Primary Cancer",
-        mm_mets_cancer_cells = "Mouse Metastatic Cancer",
-        xeno_prim_human = "Xenograft Primary Cancer",
-        xeno_mets_human = "Xenograft Metastatic Cancer")
+    list(patient_prim_cancer_cells = "Patient Primary Tumor",
+        patient_mets_cancer_cells = "Patient Metastatic Tumor",
+        mm_prim_cancer_cells = "Mouse Primary Tumor",
+        mm_mets_cancer_cells = "Mouse Metastatic Tumor",
+        xeno_prim_human = "Xenograft Primary Tumor",
+        xeno_mets_human = "Xenograft Metastatic Tumor")
 
 for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 "mm_prim_cancer_cells", "mm_mets_cancer_cells",
@@ -220,7 +220,7 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
 
     cancer_plot <-
         DimPlot(object,
-                group.by = "Ann_Level3",
+                group.by = "sample_name"),
                 label.box = T,
                 label = T,
                 repel = T,

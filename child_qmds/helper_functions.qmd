@@ -407,12 +407,16 @@ annotate_celltypes <- function(sobject,
 all_samples_csv <- read_tsv("misc/allsample_details.txt",
                             show_col_types = FALSE)
 
+#function to run DEGs
 run_degs <- function(sobject,
-                     group_by = "") {
+                     aggregate_by,
+                     comparison_col,
+                     organism_col = "organism",
+                     subset = TRUE) {
 
     pseudobulk <- sobject %>%
         Seurat::AggregateExpression(
-            group.by = c("sample_name", "seurat_clusters"),
+            group.by = aggregate_by,
             slot = "counts",
             assay = "RNA"
         )
@@ -421,25 +425,41 @@ run_degs <- function(sobject,
     # run deseq2
     #for (cluster_no in unique(object$seurat_clusters)) {
     degs_output <-
-        parallel::mclapply(sort(unique(sobject$seurat_clusters)),
+        parallel::mclapply(unique(sobject@meta.data[[comparison_col]]),
                            mc.cores = parallelly::availableCores(),
                            mc.preschedule = FALSE,
                            function(cluster_no) {
-        batch_df <- data.frame(sample_name = colnames(pseudobulk))
+
+        #subset here for the specfic celltytpe
+        if (subset == TRUE) {
+            Idents(sobject) <- comparison_col
+            pseudobulk <- sobject %>%
+                subset(idents = cluster_no) %>%
+                Seurat::AggregateExpression(
+                    group.by = c("sample_name", "tissue_type"),
+                    slot = "counts",
+                    assay = "RNA"
+                )
+            pseudobulk <- pseudobulk[[1]]
+        }
+
+        batch_df <- 
+            data.frame(sample_name = colnames(pseudobulk))
 
         batch_df_new <-
             tibble(col_label = colnames(pseudobulk),
                    sample_name = colnames(pseudobulk) %>%
-                   str_remove("_[0-9]+$"),
+                        sub("_.*", "", .),
                    cluster_no = str_remove(colnames(pseudobulk), ".+_")) %>%
             left_join(batch_df) %>%
             mutate(sample_name = str_replace_all(sample_name, "-", "_")) %>%
-            mutate(organism = sobject$organism[1])
+            mutate(organism = sobject@meta.data[[organism_col]][[1]])
 
         #add the datasource and method as batch in batch_df_new from all_samples_csv for each sample_name
-        new_all_samples_csv <- all_samples_csv %>%
+        new_all_samples_csv <- 
+            all_samples_csv %>%
             select(sample_name, method, data_source, model, location, organism)
-        if (sobject$organism[1] == "mouse") {
+        if (unique(sobject[[organism_col]][[1]]) == "mouse") {
             batch_df_new2 <- left_join(batch_df_new,
                                     new_all_samples_csv,
                                     by = c("sample_name", "organism")) %>%
@@ -456,6 +476,12 @@ run_degs <- function(sobject,
         batch_df_new2$group <- "other"
         batch_df_new2$group[batch_df_new2$cluster_no == cluster_no] <- "target"
         batch_df_new2$group <- factor(batch_df_new2$group)
+    
+        if (subset == TRUE) {
+            batch_df_new2$group <- "other"
+            batch_df_new2$group[batch_df_new2$cluster_no == "Tumor-associated"] <- "target"
+            batch_df_new2$group <- factor(batch_df_new2$group)
+        }
 
         for (columns in colnames(batch_df_new2)) {
             if (unique(batch_df_new2[[columns]]) %>% length() == 1) {
@@ -469,9 +495,18 @@ run_degs <- function(sobject,
                     paste(colnames(batch_df_new2)[c(-1, -2)], collapse = " + ")
                 )
             )
+        if (subset == TRUE) {
+            design <-
+                as.formula(
+                    paste0(
+                        "~",
+                        paste(colnames(batch_df_new2)[c(-1, -2, -4)], collapse = " + ")
+                    )
+                )
+        }
 
         return(
-            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
+             DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
                                            colData = batch_df_new2,
                                            design = design) %>%
             DESeq2::DESeq(quiet = TRUE) %>%
@@ -483,10 +518,11 @@ run_degs <- function(sobject,
         )
     })
     # subset and name the degs_output by the group_by variables
-    names(degs_output) <- sort(unique(sobject$seurat_clusters))
+    names(degs_output) <- unique(sobject@meta.data[[comparison_col]])
 
     return(degs_output)
 }
+
 ```
 
 ## Function to run GSEA
@@ -520,12 +556,17 @@ run_gsea <- function(degs_result,
                 output %>%
                 dplyr::arrange(desc(NES)) %>%
                 filter(padj < 0.05) %>%
+                group_by(pathway) %>%
+                mutate(leadingEdge = unlist(leadingEdge) %>%
+                            str_c(collapse = ", ")) %>%
+                ungroup() %>%
                 na.omit()
         })
-    names(gsea_output) <- names(degs_result)
+    names(gsea_output) <- names(degs_result)  
 
     return(gsea_output)
 }
+
 ```
 
 # GSEA Plots function for twoway dotplot and barplot
@@ -650,7 +691,7 @@ gsea_barplot <- function(data, x_col = "z_score") {
 ```{r circle_plot_function}
 #| cache.vars: 'circle_plot'
 circle_plot <- function(sobj,
-                        cluster_column,
+                        comparison_col,
                         features) {
     avg_expr <-
         AverageExpression(
@@ -658,7 +699,7 @@ circle_plot <- function(sobj,
             assay = "RNA",
             layer = "scale.data",
             features = features,
-            group.by = cluster_column
+            group.by = comparison_col
         ) %>%
         as.data.frame() %>%
         rownames_to_column("gene") %>%
@@ -671,7 +712,7 @@ circle_plot <- function(sobj,
         mutate(cluster = str_replace(cluster, "RNA.g", "Cluster "))
 
     clusters <-
-        sobj[[cluster_column]] %>%
+        sobj[[comparison_col]] %>%
         unlist() %>%
         unique() %>%
         as.character()
@@ -680,7 +721,7 @@ circle_plot <- function(sobj,
         lapply(clusters,
             function(x) {
                 binarized <-
-                    sobj[, sobj[[cluster_column]] == x] %>%
+                    sobj[, sobj[[comparison_col]] == x] %>%
                     GetAssayData(slot = "data")
                 binarized <- binarized[features, ]
                 binarized <- binarized == 0
@@ -747,7 +788,13 @@ cat_tib <- dplyr::tribble(
     "C5",       "GO:BP",       "Biological_processes",
     "C2",       "CP:REACTOME", "Reactome")
 
-make_panel_plot <- function(sobj, cluster_column, label, group) {
+make_panel_plot <- function(sobj,
+                            comparison_col = "seurat_clusters",
+                            label = "seurat_clusters",
+                            group,
+                            aggregate_by = c("sample_name", "seurat_clusters"),
+                            organism_col = "organism",
+                            subset = FALSE) {
     volc_plots <- list()
     gsea_plots <- list()
     gsea_results <- list()
@@ -758,10 +805,14 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
 
     colors_use <- c(colors_use[1:48], rep("gray", 4), colors_use[52:100])
 
-    dimplot <- dimplot_better(sobj, group_by = cluster_column)
-    dimplot_celltype <- dimplot_better(sobj, group_by = "new_annot_clust")
+    dimplot <- dimplot_better(sobj, group_by = comparison_col)
 
-    degs_result <- run_degs(sobject = sobj, group_by = cluster_column)
+    degs_result <-
+        run_degs(sobject = sobj, 
+                comparison_col = comparison_col,
+                aggregate_by = aggregate_by,
+                organism_col = organism_col,
+                subset = subset)
 
     if (dir.exists(paste0("output/degs/", label))) {
         unlink(paste0("output/degs/", label), recursive = TRUE)
@@ -833,7 +884,7 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
                     select(-baseMean, -lfcSE, -stat) %>%
                     filter(diffexpressed == "Upregulated") %>%
                     arrange(desc(log2FoldChange)) %>%
-                    slice_head(n = 5)
+                    slice_head(n = 7)
         }) %>%
         bind_rows() %>%
         pull(gene)
@@ -842,7 +893,7 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
         circle_plot_out <-
             circle_plot(
                 sobj,
-                cluster_column = cluster_column,
+                comparison_col = comparison_col,
                 features = marker_genes)
     } else {
         circle_plot_out <-
@@ -985,6 +1036,8 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
     qs::qsave(panel_plots[[label]],
               file = paste0("output/figures/gsea/", group, "/", label, "_six_panels.qs"))
 }
+
+
 ```
 
 

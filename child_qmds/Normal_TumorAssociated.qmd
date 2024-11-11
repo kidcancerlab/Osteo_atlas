@@ -2,7 +2,7 @@
 ## Normal vs tumor associated celltypes
 will compare the normal and tumor associated celltypes in the dataset.
 
-### Human Lung
+### Human metastatic normal vs tumor associated celltypes
 ```{r normal_tumor_associated_celltypes_analysis, echo = FALSE}
 #load the objects
 # might have to downsample to same nuber of cells per each group before comparing
@@ -24,7 +24,6 @@ Normal_lung$Comparison_col <-
                           "^Dendritic cells$" = "DC",
                           "^Fibroblasts$" = "Fibroblasts",
                           "^Myofibroblasts$" = "Fibroblasts"))
-
 
 #make the metadata for the normal lung
 Normal_lung_subset <-
@@ -134,160 +133,82 @@ Tumor_associated_lung_metadata <-
     dplyr::distinct() %>%
     dplyr::as_tibble()
 
-dimplot_better(Tumor_associated_lung_subset,
-               group_by = c("Comparison_col")) + NoLegend()
 
-combined_sobj <- 
-    merge(Normal_lung_subset,
-          Tumor_associated_lung_subset) %>%
-        JoinLayers() %>%
-        process_seurat()
+# combined_sobj <- 
+#     merge(Normal_lung_subset,
+#           Tumor_associated_lung_subset) %>%
+#         JoinLayers() %>%
+#         process_seurat()
 
-harmony_sobj <- 
-    combined_sobj %>%
-    RunHarmony(group.by.vars = c("tissue_type", "data_source"),
-                theta = c(4, 4)) %>%
-    process_seurat(reduction = "harmony")
+# harmony_sobj <- 
+#     combined_sobj %>%
+#     RunHarmony(group.by.vars = c("tissue_type", "data_source"),
+#                 theta = c(4, 4)) %>%
+#     process_seurat(reduction = "harmony")
 
-dimplot_better(harmony_sobj,
-                group_by = c("Comparison_col", "tissue_type")) + 
-    NoLegend()
-
-
-
-
-
-
-
-
-
-make_panel_plot(sobj = combined_sobj,
-                cluster_column = "tissue_type",
-                label = celltypes,
-                group = "patient_mets_normal_cells") 
-
+# qs::qsave(harmony_sobj,
+#         "output/seurat_objects/validation/Normal_vs_tumor_asso/Pmets_tumorasso_vs_normal.qs")
 
 all_samples_csv <-
     Tumor_associated_lung_metadata %>%
     dplyr::bind_rows(normal_lung_metadata)
 
+sobj <-
+    qs::qread("output/seurat_objects/validation/Normal_vs_tumor_asso/Pmets_tumorasso_vs_normal.qs")
 
-run_degs <- function(sobject = combined_sobj,
-                     aggregate_by = c("sample_name", "Comparison_col"),
-                     comparison_col = "Comparison_col",
-                     organism_col = "organism",
-                     subset = FALSE) {
-
-    pseudobulk <- sobject %>%
-        Seurat::AggregateExpression(
-            group.by = aggregate_by,
-            slot = "counts",
-            assay = "RNA"
-        )
-    pseudobulk <- pseudobulk[[1]]
-
-    # run deseq2
-    #for (cluster_no in unique(object$seurat_clusters)) {
-    degs_output <-
-        parallel::mclapply(unique(sobject@meta.data[[comparison_col]]),
-                           mc.cores = parallelly::availableCores(),
-                           mc.preschedule = FALSE,
-                           function(cluster_no) {
-
-        #subset here for the specfic celltytpe
-        if (subset == TRUE) {
-            Idents(sobject) <- comparison_col
-            pseudobulk <- sobject %>%
-                subset(idents = cluster_no) %>%
-                Seurat::AggregateExpression(
-                    group.by = c("sample_name", "tissue_type"),
-                    slot = "counts",
-                    assay = "RNA"
-                )
-            pseudobulk <- pseudobulk[[1]]
-        }
-
-        batch_df <- 
-            data.frame(sample_name = colnames(pseudobulk))
-
-        batch_df_new <-
-            tibble(col_label = colnames(pseudobulk),
-                   sample_name = colnames(pseudobulk) %>%
-                        sub("_.*", "", .),
-                   cluster_no = str_remove(colnames(pseudobulk), ".+_")) %>%
-            left_join(batch_df) %>%
-            mutate(sample_name = str_replace_all(sample_name, "-", "_")) %>%
-            mutate(organism = sobject@meta.data[[organism_col]][[1]])
-
-        #add the datasource and method as batch in batch_df_new from all_samples_csv for each sample_name
-        new_all_samples_csv <- 
-            all_samples_csv %>%
-            select(sample_name, method, data_source, model, location, organism)
-        if (unique(sobject[[organism_col]][[1]]) == "mouse") {
-            batch_df_new2 <- left_join(batch_df_new,
-                                    new_all_samples_csv,
-                                    by = c("sample_name", "organism")) %>%
-                select(-sample_name, -method, -location, -data_source, -organism)
-        } else {
-            batch_df_new2 <- left_join(batch_df_new,
-                                    new_all_samples_csv,
-                                    by = c("sample_name", "organism")) %>%
-                select(-sample_name, -method, -location, -model, -organism)
-        }
-
-        all(colnames(pseudobulk) == batch_df_new$col_label)
-
-        batch_df_new2$group <- "other"
-        batch_df_new2$group[batch_df_new2$cluster_no == cluster_no] <- "target"
-        batch_df_new2$group <- factor(batch_df_new2$group)
-    
-        if (subset == TRUE) {
-            batch_df_new2$group <- "other"
-            batch_df_new2$group[batch_df_new2$cluster_no == "Tumor-associated"] <- "target"
-            batch_df_new2$group <- factor(batch_df_new2$group)
-        }
-
-        for (columns in colnames(batch_df_new2)) {
-            if (unique(batch_df_new2[[columns]]) %>% length() == 1) {
-                batch_df_new2[[columns]] <- NULL
-            }
-        }
-        design <-
-            as.formula(
-                paste0(
-                    "~",
-                    paste(colnames(batch_df_new2)[c(-1, -2, -4)], collapse = " + ")
-                )
-            )
-
-        return(
-             DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
-                                           colData = batch_df_new2,
-                                           design = design) %>%
-            DESeq2::DESeq(quiet = TRUE) %>%
-            DESeq2::results() %>%
-            as.data.frame() %>%
-            dplyr::arrange(dplyr::desc(log2FoldChange)) %>%
-            tibble::rownames_to_column("gene") %>%
-            na.omit()
-        )
-    })
-    # subset and name the degs_output by the group_by variables
-    names(degs_output) <- unique(sobject@meta.data[[comparison_col]])
-
-    return(degs_output)
-}
+make_panel_plot(sobj = sobj,
+                comparison_col = "Comparison_col",
+                label = "Comparison_col",
+                group = "patient_mets_tumorasso_vs_normal",
+                aggregate_by = c("sample_name", "Comparison_col"),
+                organism_col = "organism",
+                subset = TRUE)
 
 ```
 
 
+### Human Primary normal vs tumor associated celltypes
 ```{r}
+# Patient prim stroma
+Tumor_associated_primary <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim_normal_cells.qs")
 
-patient_prim_ref <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim.qs"))
+dimplot_better(Tumor_associated_primary,
+                group_by = c("Ann_Level3")) +
+        NoLegend()
 
-patient_mets_ref <- 
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs"))
+Normal_bone <-
+    qs::qread("output/seurat_objects/comb_sobjs/normal_bone.qs")
 
+dimplot_better(Normal_bone,
+                group_by = c("seurat_clusters")) +
+        NoLegend()
 
+hpca <- celldex::HumanPrimaryCellAtlasData()
+huim <- celldex::MonacoImmuneData()
+ref_lung1 <- 
+    SingleR::SingleR(test = as.SingleCellExperiment(Normal_bone),
+                    ref = list(hpca, huim),
+                    labels = list(hpca$label.main, huim$label.main),
+                    aggr.ref = TRUE)
+
+Normal_bone$annotations <- ref_lung1$labels
+
+dimplot_better(Normal_bone,
+                group_by = c("annotations1")) +
+        NoLegend()
+
+Normal_bone$Comparison_col <-
+    str_replace_all(Normal_bone$annotations,
+                    c("^EC capillary$" = "EC_Blood",
+                      "^EC venous$" = "EC_Blood",
+                      "^EC arterial$" = "EC_Blood",
+                      "^AT1$" = "Alv_EpithelialT1",
+                      "^AT2$" = "Alv_EpithelialT2",
+                      "^B cell lineage$" = "B_cells",
+                      "^T cell lineage$" = "T_cells",
+                      "^Innate lymphoid cell NK$" = "NK_cells",
+                      "^Dendritic cells$" = "DC",
+                      "^Fibroblasts$" = "Fibroblasts",
+                      "^Myofibroblasts$" = "Fibroblasts"))
 ```

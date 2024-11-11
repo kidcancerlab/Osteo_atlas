@@ -169,9 +169,12 @@ for (i in seq_len(nrow(object_list))) {
         FindClusters(object, resolution = res_value)
 
     make_panel_plot(sobj = object,
-                    cluster_column = "seurat_clusters",
+                    comparison_col = "seurat_clusters",
                     label = "seurat_clusters",
-                    group = group)
+                    group = group,
+                    aggregate_by = c("sample_name", "seurat_clusters"),
+                    organism_col = "organism",
+                    subset = FALSE)
 }
 
 ```
@@ -531,5 +534,64 @@ for (i in seq_len(nrow(object_list))) {
         FindClusters(resolution = res_value)
 
 }
+```
+
+## Looking deeper into specific pathways
+```{r looking_into_pathways, echo = FALSE}
+
+object_list <-
+    tribble(~group,                         ~cluster_num,
+            "patient_prim_cancer_cells",    5,
+            "patient_mets_cancer_cells",    c(3, 7),
+            "mm_prim_cancer_cells",         c(4, 5),
+            "mm_mets_cancer_cells",         c(1, 4),
+            "xeno_prim_human",              c(4, 5))
+
+for (i in seq_len(nrow(object_list))) {
+    group <- object_list$group[i]
+    cluster_num <- object_list$cluster_num[i]
+
+    object <-
+        qs::qread(
+            str_c(
+                "output/seurat_objects/final_tumor_vs_stroma/",
+                "patient_prim_normal_cells",
+                ".qs"
+            ))
+    tumor_featureplot <- 
+                FeaturePlot(object,
+                            features = c("COL1A1", "COL1A2", "FBLN1",
+                                        "SATB2", "RUNX2", "SOX9"),
+                            ncol = 3)
+    immune_featureplot <- 
+        FeaturePlot(object,
+                    features = c("CD3E", "CD4", "CD68",
+                                "MUC1", "MS4A1", "ESAM"),
+                    ncol = 3)
+
+}
+
+sobj <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets_cancer_cells.qs")
+
+degs_result <-
+    run_degs(sobject = sobj,
+            group_by = "seurat_clusters")
+
+gsea_result <-
+    run_gsea(degs_result = degs_result,
+            category = "C2",
+            subcategory = "CP:REACTOME",
+            species = sobj$organism[1])
+
+"patient_mets_cancer_cells" 
+pat <- "REACTOME_IMMUNOREGULATORY_INTERACTIONS_BETWEEN_A_LYMPHOID_AND_A_NON_LYMPHOID_CELL"
+
+leading <-
+    gsea_result$`7` %>% 
+    filter(pathway == pat) %>%
+    pull(leadingEdge)
+
+make_panel_plot(objecrt)
 ```
 
