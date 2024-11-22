@@ -118,21 +118,33 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
         RunHarmony(group.by.vars = c("sample_name")) %>%
         process_seurat(reduction = "harmony")
     
-    #  force_directed_layout <- 
-    #     run_fdl(sobject = harm_mac_obj)
+    # run force directed layout on the harmonized object
+     force_directed_layout <- 
+        run_fdl(sobject = harm_mac_obj)
 
-    # split_fdl_plot <- 
-    #     dimplot_better(force_directed_layout,
-    #                    group_by= "Ann_Level3",
-    #                    reduction = "fdl") +
-    #         NoLegend()
-        
-    # ggsave(filename = str_c("output/figures/TAMs_analysis/", group, "_mac_fdl_plot.png"),
-    #         plot = split_fdl_plot,
-    #         width = 10,
-    #         height = 10,
-    #         limitsize = FALSE,
-    #         bg = "white")
+    split_fdl_plot <- 
+        dimplot_better(force_directed_layout,
+                group_by = "Ann_Level3",
+                reduction = "fdl") +
+            NoLegend() +
+            ggtitle(title_replacement[group][1])
+
+    ggsave(filename = str_c("output/figures/TAMs_analysis/", group, "_mac_fdl_plot.png"),
+            plot = split_fdl_plot,
+            width = 10,
+            height = 10,
+            limitsize = FALSE,
+            bg = "white")
+
+    # make the panel plot
+     make_panel_plot(sobj = harm_mac_obj,
+                    comparison_col = "Ann_Level3",
+                    label = "Ann_Level3",
+                    group = group,
+                    aggregate_by = c("sample_name", "Ann_Level3"),
+                    organism_col = "organism",
+                    subset = FALSE,
+                    batch_var = "data_source")
 
     # Plot the dimplot
     dimplot <-

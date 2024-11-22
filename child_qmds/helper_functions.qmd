@@ -412,7 +412,8 @@ run_degs <- function(sobject,
                      aggregate_by,
                      comparison_col,
                      organism_col = "organism",
-                     subset = TRUE) {
+                     subset = FALSE,
+                     batch_var) {
 
     pseudobulk <- sobject %>%
         Seurat::AggregateExpression(
@@ -453,7 +454,8 @@ run_degs <- function(sobject,
                    cluster_no = str_remove(colnames(pseudobulk), ".+_")) %>%
             left_join(batch_df) %>%
             mutate(sample_name = str_replace_all(sample_name, "-", "_")) %>%
-            mutate(organism = sobject@meta.data[[organism_col]][[1]])
+            mutate(organism = sobject@meta.data[[organism_col]][[1]]) %>%
+            mutate(cluster_no = str_replace_all(cluster_no, "-", "_"))
 
         #add the datasource and method as batch in batch_df_new from all_samples_csv for each sample_name
         new_all_samples_csv <- 
@@ -468,7 +470,7 @@ run_degs <- function(sobject,
             batch_df_new2 <- left_join(batch_df_new,
                                     new_all_samples_csv,
                                     by = c("sample_name", "organism")) %>%
-                select(-sample_name, -method, -location, -model, -organism)
+                select(col_label, cluster_no, dplyr::all_of(batch_var))
         }
 
         all(colnames(pseudobulk) == batch_df_new$col_label)
@@ -479,7 +481,7 @@ run_degs <- function(sobject,
     
         if (subset == TRUE) {
             batch_df_new2$group <- "other"
-            batch_df_new2$group[batch_df_new2$cluster_no == "Tumor-associated"] <- "target"
+            batch_df_new2$group[batch_df_new2$cluster_no == "Tumor_associated"] <- "target"
             batch_df_new2$group <- factor(batch_df_new2$group)
         }
 
@@ -495,15 +497,6 @@ run_degs <- function(sobject,
                     paste(colnames(batch_df_new2)[c(-1, -2)], collapse = " + ")
                 )
             )
-        if (subset == TRUE) {
-            design <-
-                as.formula(
-                    paste0(
-                        "~",
-                        paste(colnames(batch_df_new2)[c(-1, -2, -4)], collapse = " + ")
-                    )
-                )
-        }
 
         return(
              DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
@@ -794,7 +787,8 @@ make_panel_plot <- function(sobj,
                             group,
                             aggregate_by = c("sample_name", "seurat_clusters"),
                             organism_col = "organism",
-                            subset = FALSE) {
+                            subset = FALSE,
+                            batch_var = "data_source") {
     volc_plots <- list()
     gsea_plots <- list()
     gsea_results <- list()
@@ -812,7 +806,8 @@ make_panel_plot <- function(sobj,
                 comparison_col = comparison_col,
                 aggregate_by = aggregate_by,
                 organism_col = organism_col,
-                subset = subset)
+                subset = subset,
+                batch_var = batch_var)
 
     if (dir.exists(paste0("output/degs/", label))) {
         unlink(paste0("output/degs/", label), recursive = TRUE)

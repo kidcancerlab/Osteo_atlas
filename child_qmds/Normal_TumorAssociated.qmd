@@ -155,14 +155,17 @@ all_samples_csv <-
 
 sobj <-
     qs::qread("output/seurat_objects/validation/Normal_vs_tumor_asso/Pmets_tumorasso_vs_normal.qs")
-
+dimplot_better(sobj,
+                group_by = c("tissue_type")) +
+        NoLegend()
 make_panel_plot(sobj = sobj,
                 comparison_col = "Comparison_col",
                 label = "Comparison_col",
                 group = "patient_mets_tumorasso_vs_normal",
                 aggregate_by = c("sample_name", "Comparison_col"),
                 organism_col = "organism",
-                subset = TRUE)
+                subset = TRUE,
+                batch_var = "method")
 
 ```
 

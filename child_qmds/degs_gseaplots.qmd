@@ -174,7 +174,8 @@ for (i in seq_len(nrow(object_list))) {
                     group = group,
                     aggregate_by = c("sample_name", "seurat_clusters"),
                     organism_col = "organism",
-                    subset = FALSE)
+                    subset = FALSE,
+                    batch_var = "data_source")
 }
 
 ```

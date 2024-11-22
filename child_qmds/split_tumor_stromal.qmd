@@ -23,11 +23,12 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 
     # Pull in cancer cell annotation from all the methods we attempted and add them to the metadata
     for (method_used in c("SCEVAN", "scATOMIC", "celltype", "snv_calling")) {
-        cancer_label_file <- str_c("output/id_tumor/",
-                       method_used,
-                       "/",
-                       group,
-                       "_metadata.tsv")
+        cancer_label_file <- 
+            str_c("output/id_tumor/",
+                method_used,
+                "/",
+                group,
+                "_metadata.tsv")
 
         if (file.exists(cancer_label_file)) {
             cancer_label <- readr::read_tsv(cancer_label_file) %>%
@@ -45,15 +46,16 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 
     #plot for the cancer normal cells, mouse do not have scatomic tumor call
     if ("scatomic_tumor_call" %in% colnames(object@meta.data)){
-        combinedplot1 <-
+        combineplot1 <-
             dimplot_better(object,
                            group_by = "scatomic_tumor_call") +
-                NoLegend() +
-                theme(plot.title = element_text(size = 7))
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
     } else {
-        combinedplot1 <- ggplot(data = NULL) +
-                            aes(x = as.factor(1), y = as.factor(1)) +
-                            geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
+        combineplot1 <- 
+            ggplot(data = NULL) +
+            aes(x = as.factor(1), y = as.factor(1)) +
+            geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
     }
     combineplot2 <-
         dimplot_better(object,
@@ -83,12 +85,12 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 
     # use patchwork to combine the plots
     combined_plots <- 
-        patchwork::wrap_plots(combinedplot1,
+        patchwork::wrap_plots(combineplot6,
+                            combineplot5,
+                            combineplot1,
                             combineplot2,
                             combineplot3,
                             combineplot4,
-                            combineplot5,
-                            combineplot6,
                             ncol = 3,
                             widths = 21,
                             heights = 14) +
@@ -498,15 +500,15 @@ for (group in c("xeno_prim_human",
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
-    if (group == "xeno_prim_human") {
-        object <- subset(object, 
-                        sample_name != "SJOS030279_X1") %>%
-            process_seurat() %>%
-            RunHarmony(group.by.vars = c("sample_name", "data_source", "method"),
-                        theta = c(7, 7, 7)) %>%
-        process_seurat(reduction = "harmony",
-                       resolution = 0.1)
-    }
+    # if (group == "xeno_prim_human") {
+    #     object <- subset(object, 
+    #                     sample_name != "SJOS030279_X1") %>%
+    #         process_seurat() %>%
+    #         RunHarmony(group.by.vars = c("sample_name", "data_source", "method"),
+    #                     theta = c(7, 7, 7)) %>%
+    #     process_seurat(reduction = "harmony",
+    #                    resolution = 0.1)
+    # }
     object$SingleR_Ann3 <-
         stringr::str_replace_all(object$annotations,
                                 Annotation_cleanup$SingleR_Ann3_label)
@@ -633,30 +635,31 @@ for (group in c("xeno_prim_human",
 
 ## Redoing some of the clustering for the patient_mets_cancer_cells
 ```{r}
-patient_mets_cancer <-
-    qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs")
+# patient_mets_cancer <-
+#     qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs")
 
-Idents(patient_mets_cancer) <- patient_mets_cancer$sample_name
+# Idents(patient_mets_cancer) <- patient_mets_cancer$sample_name
 
-#clean some of the samples that do not harmonize well. 
-# Reason being that they are all just quiescent cells and do not have any real signal
-sample_names_iwant <-
-    unique(patient_mets_cancer$sample_name) %>%
-    .[!. %in% c("CCDI0095_7978", "CCDI0097_8978", "CCDI0053_445", "SJOS001105_M1")]
+# #clean some of the samples that do not harmonize well. 
+# # Reason being that they are all just quiescent cells and do not have any real signal
+# sample_names_iwant <-
+#     unique(patient_mets_cancer$sample_name) %>%
+#     .[!. %in% c("CCDI0095_7978", "CCDI0097_8978", "CCDI0053_445", "SJOS001105_M1")]
 
-new_subset <-
-    patient_mets_cancer %>%
-    subset(sample_name %in% sample_names_iwant) %>%
-    process_seurat() %>%
-    RunHarmony(group.by.vars = c("sample_name",
-                                         "method",
-                                         "data_source"),
-                theta = c(7, 7, 7),
-                lambda = c(0.5, 0.5, 0.5)) %>%
-    process_seurat(reduction = "harmony") %>%
-    FindClusters(resolution = 0.15)
+# new_subset <-
+#     patient_mets_cancer %>%
+#     subset(sample_name %in% sample_names_iwant) %>%
+#     process_seurat() %>%
+#     RunHarmony(group.by.vars = c("sample_name",
+#                                          "method",
+#                                          "data_source"),
+#                 theta = c(7, 7, 7),
+#                 lambda = c(0.5, 0.5, 0.5)) %>%
+#     process_seurat(reduction = "harmony") %>%
+#     FindClusters(resolution = 0.15)
 
-qs::qsave(new_subset,
-        file = "output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs")
+# qs::qsave(new_subset,
+#         file = "output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs")
+
 ```
 

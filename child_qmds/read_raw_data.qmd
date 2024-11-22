@@ -109,6 +109,7 @@ count_list <-
 
 write_tsv(bind_rows(count_list),
           "output/counts/cell_counts.txt")
+
 ```
 
 ## Run QC and create merged Seurat Object
