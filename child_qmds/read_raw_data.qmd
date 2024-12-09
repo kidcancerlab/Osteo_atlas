@@ -26,14 +26,18 @@ path_key <- list(
     SJ = "/gpfs0/home2/gdrobertslab/lab/ExternalData/Patel_lab/",
     NCH = "/gpfs0/home2/gdrobertslab/lab/Counts_2/",
     NCI_POB = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/03_FilteredMatricesH5/",
-    GEO = "/gpfs0/home2/gdrobertslab/lab/Counts_2/"
+    GEO = "/gpfs0/home2/gdrobertslab/lab/Counts_2/",
+    CSU = "/gpfs0/home2/gdrobertslab/lab/ExternalData/Regan_lab/",
+    TU = "/gpfs0/home2/gdrobertslab/lab/ExternalData/Gardner/"
     )
 
 path_suffix_key <- list(
     SJ = "/filtered_feature_bc_matrix.h5",
     NCH = "/filtered_feature_bc_matrix.h5",
     NCI_POB = "_filtered_feature_bc_matrix.h5", # Note different file names
-    GEO = "/filtered_feature_bc_matrix.h5"
+    GEO = "/filtered_feature_bc_matrix.h5",
+    CSU = "/filtered_feature_bc_matrix.h5",
+    TU = "/filtered_feature_bc_matrix.h5"
     )
 
 count_list <-

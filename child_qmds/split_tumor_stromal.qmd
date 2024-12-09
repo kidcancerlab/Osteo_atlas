@@ -192,38 +192,42 @@ harmony_params <-
     list(patient_prim = list(group_by = c("sample_name",
                                           "method",
                                           "data_source"),
-                             theta = c(5, 5, 5),
+                             theta = c(1, 5, 5),
                              lambda = c(0.5, 0.5, 0.5)),
         patient_mets = list(group_by = c("sample_name",
                                          "method",
                                          "data_source"),
-                            theta = c(7, 7, 7),
+                            theta = c(2, 7, 7),
                             lambda = c(0.5, 0.5, 0.5)),
         xeno_prim_human = list(group_by = c("sample_name",
-                                            "method",
-                                            "data_source"),
-                               theta = c(7, 7, 7)),
+                                            "method"),
+                               theta = c(2, 12),
+                               lambda = c(0.5, 0.5)),
         xeno_mets_human = list(group_by = c("sample_name",
                                             "method",
                                             "data_source"),
-                               theta = c(7, 7, 7)),
+                               theta = c(7, 7, 7),
+                               lambda = c(0.5, 0.5, 0.5)),
         xeno_prim_mouse = list(group_by = c("sample_name",
                                             "data_source"),
-                                theta = c(7, 7)),
+                                theta = c(7, 7),
+                                lambda = c(0.5, 0.5)),
         xeno_mets_mouse = list(group_by = c("sample_name",
                                             "method",
                                             "data_source"),
-                               theta = c(7, 7, 7)),
+                               theta = c(7, 7, 7),
+                               lambda = c(0.5, 0.5, 0.5)),
         mm_prim = list(group_by = c("sample_name",
                                     "model"),
                        theta = c(12, 12),
                        lambda = c(0.1, 0.1)),
         mm_mets = list(group_by = c("sample_name",
                                     "model"),
-                       theta = c(7, 7),
+                       theta = c(12, 12),
                        lambda = c(0.1, 0.1)),
         normal_bone = list(group_by = c("sample_name"),
                            theta = c(7)))
+
 
 
 #reference for annotating mets
@@ -260,9 +264,21 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         sub_group <- str_c(group, "_", cell_group_name)
 
         if  (cell_group_name == "normal_cells") {
+            set.seed(199820)
             s_obj <-
                 subset(x = object,
                         celltype_tumor_call == cell_group_name) %>%
+                process_seurat()
+            # add the filter genes that are present in less than 1% of cells
+            min_prop_cells_expressing <- 0.01
+            n_cells_in_data <- length(Cells(s_obj))
+            cells_expressing_genes <-
+                rowSums(
+                    GetAssayData(s_obj, layer = "counts") > 0
+                ) > min_prop_cells_expressing * n_cells_in_data
+            set.seed(199820)
+            s_obj <-
+                s_obj[cells_expressing_genes, ] %>%
                 process_seurat() %>%
                 RunHarmony(group.by.vars = harmony_params[[group]]$group_by) %>%
                 process_seurat(reduction = "harmony")
@@ -302,7 +318,9 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
             Idents(s_obj) <- s_obj$seurat_clusters
             clust_info <- tibble()
             for (cluster in unique(s_obj$seurat_clusters)) {
-                subset_object <- subset(s_obj, ident = cluster) %>%
+                set.seed(199820)
+                subset_object <- 
+                    subset(s_obj, ident = cluster) %>%
                     FindVariableFeatures() %>%
                     ScaleData() %>%
                     # don't ask for more PCs than there are cells
@@ -352,15 +370,28 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                                     replacement = celltype)
             }
         } else {
+            set.seed(199820)
             s_obj <-
                 subset(x = object,
                         celltype_tumor_call == cell_group_name) %>% 
+                process_seurat()
+            # add the filter genes that are present in less than 1% of cells
+            min_prop_cells_expressing <- 0.01
+            n_cells_in_data <- length(Cells(s_obj))
+            cells_expressing_genes <-
+                rowSums(
+                    GetAssayData(s_obj, layer = "counts") > 0
+                ) > min_prop_cells_expressing * n_cells_in_data
+            set.seed(199820)
+            s_obj <- 
+                s_obj[cells_expressing_genes, ] %>%
                 process_seurat() %>%
                 RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
                             theta = harmony_params[[group]]$theta,
                             lambda = harmony_params[[group]]$lambda) %>%
                 process_seurat(reduction = "harmony")
         }
+
         s_obj$SingleR_Ann3 <-
             stringr::str_replace_all(s_obj$new_annot_clust,
                                     Annotation_cleanup$SingleR_Ann3_label)
@@ -378,7 +409,6 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                         group_by = "seurat_clusters") +
                 NoLegend() +
                 theme(plot.title = element_text(size = 7))
-
 
         dimplot2 <- 
             dimplot_better(s_obj,
@@ -500,6 +530,21 @@ for (group in c("xeno_prim_human",
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
+    # add the filter genes that are present in less than 1% of cells
+    min_prop_cells_expressing <- 0.01
+    n_cells_in_data <- length(Cells(object))
+    cells_expressing_genes <-
+        rowSums(
+            GetAssayData(object, layer = "counts") > 0
+        ) > min_prop_cells_expressing * n_cells_in_data
+    set.seed(199820)
+    object <- 
+        object[cells_expressing_genes, ] %>%
+        process_seurat() %>%
+        RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
+                    theta = harmony_params[[group]]$theta,
+                    lambda = harmony_params[[group]]$lambda) %>%
+        process_seurat(reduction = "harmony")
     # if (group == "xeno_prim_human") {
     #     object <- subset(object, 
     #                     sample_name != "SJOS030279_X1") %>%
@@ -512,7 +557,6 @@ for (group in c("xeno_prim_human",
     object$SingleR_Ann3 <-
         stringr::str_replace_all(object$annotations,
                                 Annotation_cleanup$SingleR_Ann3_label)
-                   
 
     object$SingleR_Ann2 <-
         stringr::str_replace_all(object$SingleR_Ann3,

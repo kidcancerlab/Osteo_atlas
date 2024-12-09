@@ -29,6 +29,9 @@ for (i in seq_len(length(all_groups))) {
     object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                               group,
                               ".qs"))
+    # dimplot_better(object,
+    #                group_by = "sample_name") +
+    #     NoLegend()
 
     min_cell_silhouette <- 65000
     n_cells <- length(Cells(object))
@@ -47,10 +50,12 @@ for (i in seq_len(length(all_groups))) {
     sil_val_list[[group]] <- res_score
 
     resolution_range <- seq(from = 0, to = 1, by = 0.05)
-    clustree_sobj <- FindClusters(object,
-                                resolution = resolution_range)
-    tree <- clustree::clustree(clustree_sobj,
-                                prefix = "RNA_snn_res.") +
+    clustree_sobj <- 
+        FindClusters(object,
+        resolution = resolution_range)
+    tree <- 
+        clustree::clustree(clustree_sobj,
+                            prefix = "RNA_snn_res.") +
             ggtitle(str_c("sil_val was ", res_score, " ", group))
 
     ggsave(str_c("output/figures/tumor_vs_stroma/clustree/", group, ".png"),
@@ -61,7 +66,6 @@ for (i in seq_len(length(all_groups))) {
     #save as qs
     qs::qsave(tree,
               str_c("output/figures/tumor_vs_stroma/clustree/", group, ".qs"))
-
 }
 ```
 

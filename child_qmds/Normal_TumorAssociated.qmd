@@ -39,7 +39,7 @@ Normal_lung_subset <-
 Normal_lung_subset$tissue_type <-
     "Normal_lung"
 Normal_lung_subset$sample_name <- 
-    Normal_lung_subset$sample %>%
+    Normal_lung_subset$dataset %>%
         str_replace_all(c("-" = "_",
                         " " = "_")) %>%
         str_c("S", .)
@@ -47,6 +47,9 @@ Normal_lung_subset$data_source <-
     Normal_lung_subset$dataset
 Normal_lung_subset$organism <- 
     "human"
+
+Normal_lung_subset$method <- 
+    ifelse(Normal_lung_subset$fresh_or_frozen == "fresh", "single_cell", "single_nucleus")
 
 #make a metadata that can be used for the run degs function
 normal_lung_metadata <-
@@ -65,7 +68,7 @@ normal_lung_metadata <-
     as_tibble()
 
 dimplot_better(Normal_lung_subset,
-        group_by = c("Comparison_col"))
+        group_by = c("fresh_or_frozen"))
 
 #make the tumor associated object
 Tumor_associated_lung <-
@@ -142,30 +145,85 @@ Tumor_associated_lung_metadata <-
 
 # harmony_sobj <- 
 #     combined_sobj %>%
-#     RunHarmony(group.by.vars = c("tissue_type", "data_source"),
-#                 theta = c(4, 4)) %>%
+#     RunHarmony(group.by.vars = c("tissue_type", "data_source", "method"),
+#                 theta = c(7, 7, 7)) %>%
 #     process_seurat(reduction = "harmony")
 
+# dimplot_better(harmony_sobj,
+#                 group_by = c("Comparison_col", "Ann_Level2")) +
+#         NoLegend()
+
 # qs::qsave(harmony_sobj,
-#         "output/seurat_objects/validation/Normal_vs_tumor_asso/Pmets_tumorasso_vs_normal.qs")
+#         "output/seurat_objects/Normal_Vs_TumorAsso/patient_mets/Pmets_tumorasso_vs_normal.qs")
 
 all_samples_csv <-
     Tumor_associated_lung_metadata %>%
     dplyr::bind_rows(normal_lung_metadata)
 
 sobj <-
-    qs::qread("output/seurat_objects/validation/Normal_vs_tumor_asso/Pmets_tumorasso_vs_normal.qs")
-dimplot_better(sobj,
+    qs::qread("output/seurat_objects/Normal_Vs_TumorAsso/patient_mets/Pmets_tumorasso_vs_normal.qs")
+
+sobj_list <- list()
+
+for (celltypes in unique(sobj$Comparison_col)) {
+    subset_obj <-
+        subset(sobj,
+                Comparison_col == celltypes) %>%
+        process_seurat() %>%
+        RunHarmony(group.by.vars = c("tissue_type", "data_source", "method"),
+                    theta = c(7, 7, 7)) %>%
+        process_seurat(reduction = "harmony")
+    
+    sobj_list[[celltypes]] <- subset_obj
+
+    qs::qsave(subset_obj,
+            str_c("output/seurat_objects/Normal_Vs_TumorAsso/patient_mets/",
+                celltypes,
+                ".qs"))
+}
+
+
+dimplot_better(subset_obj,
                 group_by = c("tissue_type")) +
         NoLegend()
-make_panel_plot(sobj = sobj,
-                comparison_col = "Comparison_col",
-                label = "Comparison_col",
-                group = "patient_mets_tumorasso_vs_normal",
-                aggregate_by = c("sample_name", "Comparison_col"),
-                organism_col = "organism",
-                subset = TRUE,
-                batch_var = "method")
+
+for (celltypes in c("T_cells", "EC_Blood", "NK_cells", "Alv_EpithelialT2",
+                    "Fibroblasts", "B_cells", "Alv_EpithelialT1","Macrophages")) {
+    subset_obj <-
+        qs::qread(str_c("output/seurat_objects/Normal_Vs_TumorAsso/patient_mets/",
+                        celltypes,
+                        ".qs"))
+    
+    all_samples_csv <-
+        subset_obj@meta.data %>%
+        dplyr::select(tissue_type,
+                    sample_name,
+                    species,
+                    location,
+                    model,
+                    ncount_max,
+                    mt_percent,
+                    tumor_type,
+                    processed,
+                    sp_pattern,
+                    organism,
+                    data_type,
+                    method,
+                    data_source,
+                    unique,
+                    CL_or_PDX) %>%
+        dplyr::distinct() %>%
+        dplyr::as_tibble()
+
+    make_panel_plot(sobj = subset_obj,
+                    comparison_col = "tissue_type",
+                    label = celltypes,
+                    group = "Normal_vs_TumorAsso",
+                    aggregate_by = c("sample_name", "tissue_type"),
+                    organism_col = "organism",
+                    subset = FALSE,
+                    batch_var = "method")
+}
 
 ```
 

@@ -2,6 +2,7 @@
 ## Make a DimPlot with better default settings
 ```{r dimplot_better_function}
 #| cache.vars = 'dimplot_better'
+
 dimplot_better <- function(object,
                            group_by = NULL,
                            cols,
@@ -431,19 +432,6 @@ run_degs <- function(sobject,
                            mc.preschedule = FALSE,
                            function(cluster_no) {
 
-        #subset here for the specfic celltytpe
-        if (subset == TRUE) {
-            Idents(sobject) <- comparison_col
-            pseudobulk <- sobject %>%
-                subset(idents = cluster_no) %>%
-                Seurat::AggregateExpression(
-                    group.by = c("sample_name", "tissue_type"),
-                    slot = "counts",
-                    assay = "RNA"
-                )
-            pseudobulk <- pseudobulk[[1]]
-        }
-
         batch_df <- 
             data.frame(sample_name = colnames(pseudobulk))
 
@@ -456,11 +444,12 @@ run_degs <- function(sobject,
             mutate(sample_name = str_replace_all(sample_name, "-", "_")) %>%
             mutate(organism = sobject@meta.data[[organism_col]][[1]]) %>%
             mutate(cluster_no = str_replace_all(cluster_no, "-", "_"))
-
         #add the datasource and method as batch in batch_df_new from all_samples_csv for each sample_name
         new_all_samples_csv <- 
             all_samples_csv %>%
+            filter(sample_name %in% unique(sobject$sample_name)) %>%
             select(sample_name, method, data_source, model, location, organism)
+
         if (unique(sobject[[organism_col]][[1]]) == "mouse") {
             batch_df_new2 <- left_join(batch_df_new,
                                     new_all_samples_csv,
@@ -478,12 +467,6 @@ run_degs <- function(sobject,
         batch_df_new2$group <- "other"
         batch_df_new2$group[batch_df_new2$cluster_no == cluster_no] <- "target"
         batch_df_new2$group <- factor(batch_df_new2$group)
-    
-        if (subset == TRUE) {
-            batch_df_new2$group <- "other"
-            batch_df_new2$group[batch_df_new2$cluster_no == "Tumor_associated"] <- "target"
-            batch_df_new2$group <- factor(batch_df_new2$group)
-        }
 
         for (columns in colnames(batch_df_new2)) {
             if (unique(batch_df_new2[[columns]]) %>% length() == 1) {
@@ -499,7 +482,7 @@ run_degs <- function(sobject,
             )
 
         return(
-             DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
+            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
                                            colData = batch_df_new2,
                                            design = design) %>%
             DESeq2::DESeq(quiet = TRUE) %>%
