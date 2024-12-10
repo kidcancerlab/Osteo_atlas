@@ -41,6 +41,8 @@ library(knitr)
 library(scATOMIC)
 library(copykat)
 library(SCENIC)
+library(CellChat)
+library(RColorBrewer)
 ```
 
 # Load in functions
