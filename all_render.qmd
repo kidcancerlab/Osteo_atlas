@@ -644,52 +644,245 @@ gridExtra::grid.arrange(
 ```
 
 ```{r}
+obj0 <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim.qs")
+
 obj1 <-
     qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim_cancer_cells.qs")
 
 dimplot_better(obj1,
-            group_by = c("tumor_type", "seurat_clusters", "Ann_Level3", "sample_name"),
+            group_by = c("seurat_clusters"))
+dimplot_better(obj1,
+            group_by = c("scatomic_tumor_call",
+                            "final_snv_call",
+                            "celltype_tumor_call",
+                            "pan_cancer_cluster",
+                            "scevan_tumor_call",
+                            "CNV_status"),
             ncol=2) + NoLegend()
-
-
-obj1$tumor_type <- "patient_mets"
-
-
-
 
 obj2 <-
-    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim_cancer_cells.qs")
-obj2$tumor_type <- "patient_prim"
-
-SASP_anchor_cells <-
-    subset(obj2,
-           seurat_clusters == 3) %>%
-    colnames()
-
-sobjec <- qs::qread("output/extras/patient_prim_mets_cancer_cells.qs")
-
-sobjec <-
-    FindClusters(sobjec,
-                resolution = 0.15)
-
-dimplot_better(sobjec,
-            group_by = c("tumor_type", "seurat_clusters", "Ann_Level3", "sample_name"),
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim_normal_cells.qs")
+dimplot_better(obj2,
+            group_by = c("scatomic_tumor_call")),
+                            "final_snv_call",
+                            "pan_cancer_cluster",
+                            "scevan_tumor_call",
+                            "CNV_status"),
             ncol=2) + NoLegend()
 
+dimplot_better(obj1, group_by = "annotations") + NoLegend()
+
+tumor_cells <- 
+    subset(obj1, 
+           scevan_tumor_call == "cancer_cells") %>%
+    process_seurat()
+dimplot_better(tumor_cells, group_by = "sample_name") + NoLegend()
+harm_tumor <-
+    tumor_cells %>%
+    RunHarmony(group.by.vars = patient_prim$group_by,
+                theta = patient_prim$theta,
+                lambda = patient_prim$lambda) %>%
+    process_seurat(reduction = "harmony")
+
+dimplot_better(harm_tumor, group_by = "sample_name") + NoLegend()
+
+
+normal_cells <- 
+    subset(obj2, 
+           scevan_tumor_call != "cancer_cells")
+
+dimplot_better(normal_cells, group_by = "scatomic_tumor_call") + NoLegend()
+
+
+xeno_prim <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/xeno_prim_human.qs")
+
+xeno_mets <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/xeno_mets_human.qs")
+
+dimplot_better(xeno_prim, group_by = "Ann_Level3") + NoLegend()
+dimplot_better(xeno_mets, group_by = "annotations") + NoLegend()
+
+normal_cells  <-
+    subset(obj2,
+           Ann_Level2 == "Macrophages")
+
+hpca <- celldex::HumanPrimaryCellAtlasData()
+huim <- celldex::MonacoImmuneData()
+hpca$Ann_Level2 <- "normal_cells"
+huim$Ann_Level2 <- "immune_cells"
+
+ref <- 
+    SingleR::SingleR(test = as.SingleCellExperiment(obj1),
+                    ref = list(SeuratObject::GetAssayData(xeno_prim),
+                                hpca, huim),
+                    labels = list(xeno_prim$Ann_Level2,
+                                hpca$Ann_Level2,
+                                huim$Ann_Level2),
+                    aggr.ref = TRUE)
+
+obj1$Ann <- ref$labels
+
+dimplot_better(obj1, group_by = "Ann") + NoLegend()
 
 
 
-FeaturePlot(sobjec,
-                features = sasp_genes,
-                ncol = 5)
+object <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets_cancer_cells.qs")
 
-cluster4 <- subset(sobjec,
-                   seurat_clusters == 4) %>%
-            colnames()
+no_harm <-
+    process_seurat(object)
+
+combinedplot1 <-
+        dimplot_better(object,
+                        group_by = "scatomic_tumor_call") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
+
+combineplot2 <-
+    dimplot_better(object,
+                    group_by = "scevan_tumor_call") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7))
+combineplot3 <-
+    dimplot_better(object,
+                    group_by = "final_snv_call") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7))
+combineplot4 <-
+    dimplot_better(object,
+                    group_by = "celltype_tumor_call") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7))
+combineplot5 <-
+    dimplot_better(object,
+                    group_by = "Ann_Level3") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7))
+combineplot6 <-
+    dimplot_better(object,
+                    group_by = "sample_name") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7))
+
+combined_plots <- 
+        patchwork::wrap_plots(combinedplot1,
+                            combineplot2,
+                            combineplot3,
+                            combineplot4,
+                            combineplot5,
+                            combineplot6,
+                            ncol = 3,
+                            widths = 21,
+                            heights = 14) +
+            patchwork::plot_annotation(title = "Patient Mets") +
+            theme(plot.title = element_text(size = 10))
+
+ggsave(filename = "output/figures/presentation_biweekly/patient_mets_stroma_id.png",
+        plot = combined_plots,
+        width = 21,
+        height = 14,
+        limitsize = FALSE)
+
+get_plot("patient_prim_plots_with_tumorcell_identification")
 
 
-DimPlot(sobjec, cells.highlight = SASP_anchor_cells)
+
+presentations
+
+
+dim1 <-
+    dimplot_better(no_harm,
+                    group_by = "seurat_clusters") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Consolidated Clusters")
+
+dim2 <-
+    dimplot_better(no_harm,
+                    group_by = "sample_name") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Unique Patients")
+
+dim3 <-
+    dimplot_better(no_harm,
+                    group_by = "method") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Unique Methods")
+
+dim4 <-
+    dimplot_better(no_harm,
+                    group_by = "data_source") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Unique Institutions")
+
+com_plots <- 
+    patchwork::wrap_plots(dim1,
+                        dim2,
+                        dim3,
+                        dim4,
+                        ncol = 2,
+                        widths = 14,
+                        heights = 14) +
+        patchwork::plot_annotation(title = "Patient Primary") +
+        theme(plot.title = element_text(size = 10))
+
+stash_plot(
+    com_plots,
+    plot_name = "patient_prim_plots_with_cluster_identification"
+)
+
+
+
+dimple1 <-
+    dimplot_better(object,
+                    group_by = "Ann_Level0") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Annotation Level 0")
+
+dimple2 <-
+    dimplot_better(object,
+                    group_by = "Ann_Level1") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Annotation Level 1")
+
+dimple3 <-
+    dimplot_better(object,
+                    group_by = "Ann_Level2") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Annotation Level 2")
+
+dimple4 <-
+    dimplot_better(object,
+                    group_by = "Ann_Level3") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Annotation Level 3")
+
+dimple_comb <-
+    patchwork::wrap_plots(dimple1,
+                        dimple2,
+                        dimple3,
+                        dimple4,
+                        ncol = 4,
+                        widths = 28,
+                        heights = 7) +
+        patchwork::plot_annotation(title = "Patient Primary") +
+        theme(plot.title = element_text(size = 10))
+
+stash_plot(
+    dimple_comb,
+    plot_name = "patient_prim_plots_with_annotation_identification"
+)
 
 
 
 ```
+
