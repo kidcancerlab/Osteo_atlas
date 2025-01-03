@@ -951,10 +951,10 @@ make_panel_plot <- function(sobj,
         #########################################################
         # Drop in code to make heatmap here
         n_paths_per_cluster <- 20
-        use_pathways <-
-            gsea_result %>%
+          gsea_result %>%
             bind_rows() %>%
-            group_by(cluster) %>%
+            use_pathways <-
+          group_by(cluster) %>%
             mutate(abs_NES = abs(NES)) %>%
             slice_max(order_by = abs_NES, n = n_paths_per_cluster) %>%
             pull(pathway) %>%
@@ -1038,6 +1038,114 @@ make_panel_plot <- function(sobj,
 
 ```
 
+## Velocity Analysis Functions
+
+### get_plot_list
+
+This is a function for retrieving a list of plots created in python into R for creating tabsets.
+
+```{r get-plot-list}
+get_plot_list <- function(ob_name) {
+    plt_paths <- paste0("figures/",
+                        list.files("figures")[grep(ob_name,
+                                                   list.files("figures"))]) %>%
+        as.list()
+    plts <- lapply(plt_paths, function(x) {
+        tmp <- magick::image_read(x)
+        tmp_gg <- magick::image_ggplot(tmp)
+        return(tmp_gg)
+    })
+    names(plts) <- str_remove(plt_paths,
+                              pattern = paste0("figures/scvelo_",
+                                               ob_name,
+                                               "_")) %>%
+        str_remove(pattern = ".png")
+    return(plts)
+}
+```
+
+### Python Functions
+
+`loom_to_an` will take all loom files associated with a seurat object, load them in one-by-one, add in appropriate metadata, and then merge them into a single anndata object
+`calc_velo` will calculate the rna velocity information from our loom files
+`make_plots` will create the velocity analysis plots. Currently 4 plots are output by this:
+    a velocity stream plot colored by seurat clusters in umap space
+    a velocity embedding plot
+    a velocity stream plot showing cell cycle phases in umap space
+    a velocity stream plot colored by seurat clusters in fdl space
+
+```{python rna-velo-py-functions}
+def loom_to_an(loom_path, metadata_path):
+    #Get sample id's from metadata files
+    md_files=os.listdir(metadata_path)
+    #initialize list to hold anndata objects
+    ad_obs = []
+    for one_md in md_files:
+        #get sample id from file name
+        sample_id = re.sub("_metadata.csv", "", one_md)
+        #add object to list
+        tmp = anndata.read_loom(loom_path + "/" + sample_id + ".loom")
+        #read in metadata file
+        md_path = metadata_path + "/" + one_md
+        metadata = pd.read_csv(md_path, index_col = "bc")
+        #Subset anndata to only barcodes in metadata folder
+        tmp = tmp[metadata.index]
+        tmp.obs = metadata.filter(regex = '^(?!umap_|PC_|fdl_|harmony_).*$').reindex(tmp.obs.index)
+        #Add pca embeddings
+        tmp.obsm["X_pca"] = metadata.filter(regex = "PC_").reindex(tmp.obs.index).to_numpy()
+        #Add umap embeddings
+        tmp.obsm["X_umap"] = metadata.filter(regex = "umap_").reindex(tmp.obs.index).to_numpy()
+        #add fdl embeddings
+        tmp.obsm["X_fdl"] = metadata.filter(regex = "fdl_").reindex(tmp.obs.index).to_numpy()
+        #add harmony embeddings
+        tmp.obsm["X_harmony"] = metadata.filter(regex = "harmony_").reindex(tmp.obs.index).to_numpy ()
+        #make var names unique (this step is necessary to merge anndata list)
+        tmp.var_names_make_unique()
+        #add object to list
+        ad_obs.append(tmp)
+    #merge anndata list
+    merged_anndata = anndata.concat(ad_obs)
+    #return merged anndata
+    return merged_anndata
+
+
+def calc_velo(ad_ob, mode = "stochastic", group = "seurat_clusters"):
+    sc.pp.neighbors(ad_ob, n_pcs = 30, n_neighbors = 30)
+    scv.pp.moments(ad_ob)
+    scv.tl.velocity(ad_ob, mode = mode)
+
+def make_plots(ad_ob):
+    scv.tl.velocity_graph(ad_ob, backend = "threading")
+    scv.pl.velocity_embedding_stream(ad_ob, basis = "umap", color = "seurat_clusters")
+    scv.pl.velocity_embedding(ad_ob, basis = "umap", color = "seurat_clusters")
+    scv.pl.velocity_embedding_stream(ad_ob, basis = "umap", color = "Phase")
+    scv.pl.velocity_embedding_stream(ad_ob, basis = "fdl", color = "seurat_clusters")
+
+def save_velo_plots(ad_ob, ob_name):
+    #by default it saves the figures to a directory called ./figures/
+    scv.tl.velocity_graph(ad_ob, backend = "threading")
+    plotdict = {
+        "umap_clusters": ["umap", "seurat_clusters"],
+        "umap_cc": ["umap", "Phase"],
+        "fdl_clusters": ["fdl", "seurat_clusters"]
+    }
+    for plt_name, plt_type in plotdict.items():
+        file_end = ob_name + "_" + plt_name + ".png"
+        scv.pl.velocity_embedding_stream(ad_ob,
+                                         basis = plt_type[0],
+                                         color = plt_type[1],
+                                         show = False,
+                                         save = file_end,
+                                         dpi = 300)
+    file_end = ob_name + "_embedding.png"
+    scv.pl.velocity_embedding(ad_ob,
+                              basis = "umap",
+                              color = "seurat_clusters",
+                              show = False,
+                              save = file_end,
+                              dpi = 300)
+
+```
 
 ## Scenic plus regulon analysis function
 ```{r scenic_function}
