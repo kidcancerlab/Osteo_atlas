@@ -18,19 +18,24 @@ annotation_type <- list(patient_prim = list("human", FALSE),
                         xeno_mets_human = list("human_lung", FALSE),
                         xeno_prim_mouse = list("mouse", FALSE),
                         xeno_mets_mouse = list("mouse_lung", FALSE),
+                        dogs_prim = list("human", FALSE),
+                        dogs_mets = list("human_lung", FALSE),
                         normal_bone = list("human", FALSE))
 results <-
     parallel::mclapply(unique(all_samples_csv$unique),
                        mc.cores = parallelly::availableCores(),
                        function(group) {
-        ann_sobj <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
-                                    group,
-                                    ".qs"))
+        ann_sobj <- 
+            qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                            group,
+                            ".qs"))
         set.seed(199820)
-        ann_sobj <- annotate_celltypes(sobject = ann_sobj,
-                                       species = annotation_type[[group]][[1]],
-                                       with_tumor = annotation_type[[group]][[2]],
-                                       aggr_ref = TRUE)
+        dimplot_better(ann_sobj)
+        ann_sobj <-
+            annotate_celltypes(sobject = ann_sobj,
+                                species = annotation_type[[group]][[1]],
+                                with_tumor = annotation_type[[group]][[2]],
+                                aggr_ref = TRUE)
 
         Idents(ann_sobj) <- ann_sobj$seurat_clusters
         clust_info <- tibble()
@@ -90,5 +95,6 @@ results <-
                                ".qs"))
 })
 
-
+dimplot_better(ann_sobj, group_by = "new_annot_clust") +
+    NoLegend()
 ```

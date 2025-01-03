@@ -222,6 +222,9 @@ sobj <-
 dimplot_better(sobj,
               group_by = "tissue_type") +
         NoLegend()
+dimplot_better(sobj,
+              group_by = "Comparison_col") +
+        NoLegend()
 
 nichenet_out <-
     run_nichenetr_on_all_celltypes(
@@ -237,7 +240,65 @@ nichenet_out <-
 
 
 
-plot_complex_heatmap(nichenet_out$Fibroblasts)
+plot_complex_heatmap(nichenet_out$NK_cells)
+
+# Define the cutoffs
+cutoff_for_interraction_score <- 0.1
+cutoff_for_sender_percentage <- 10
+cutoff_for_sender_expression_of_ligand <- 0.1
+
+# Extract the interaction scores
+interaction_scores <- nichenet_out$Fibroblasts$ligand_activities
+
+# Filter the interaction scores based on the cutoffs
+filtered_scores <- interaction_scores %>%
+    dplyr::filter(interaction_score > cutoff_for_interraction_score,
+                  sender_percentage > cutoff_for_sender_percentage,
+                  sender_expression_of_ligand > cutoff_for_sender_expression_of_ligand)
+
+# Create a matrix of interaction scores
+interaction_matrix <- filtered_scores %>%
+    dplyr::select(sender, receiver, interaction_score) %>%
+    tidyr::spread(key = receiver, value = interaction_score, fill = 0)
+
+# Plot the heatmap
+ComplexHeatmap::Heatmap(as.matrix(interaction_matrix),
+                        name = "Interaction Score",
+                        col = colorRamp2(c(0, max(interaction_matrix)), c("white", "red")),
+                        cluster_rows = TRUE,
+                        cluster_columns = TRUE,
+                        width = unit(7, "cm"),
+                        height = unit(1, "cm"))
+
+
+
+
+
+# Define the cutoffs
+cutoff_for_interraction_score <- 0.1
+cutoff_for_sender_percentage <- 10
+cutoff_for_sender_expression_of_ligand <- 0.1
+
+# Extract the interaction scores
+interaction_scores <- nichenet_out$Fibroblasts$interaction_scores
+
+# Filter the interaction scores based on the cutoffs
+filtered_scores <- interaction_scores %>%
+    dplyr::filter(interaction_score > cutoff_for_interraction_score,
+                                sender_percentage > cutoff_for_sender_percentage,
+                                sender_expression_of_ligand > cutoff_for_sender_expression_of_ligand)
+
+# Create a matrix of interaction scores
+interaction_matrix <- filtered_scores %>%
+    dplyr::select(sender, receiver, interaction_score) %>%
+    tidyr::spread(key = receiver, value = interaction_score, fill = 0)
+
+# Plot the heatmap
+ComplexHeatmap::Heatmap(as.matrix(interaction_matrix),
+                                                name = "Interaction Score",
+                                                col = colorRamp2(c(0, max(interaction_matrix)), c("white", "red")),
+                                                cluster_rows = TRUE,
+                                                cluster_columns = TRUE)
 
 count how many sende cells have significant interactions scores with the receiver cells.
 From that we can make a square matrix

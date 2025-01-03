@@ -1,8 +1,13 @@
 ## Read metadata
 ```{r read_metadata}
 #| cache.vars: all_samples_csv
-all_samples_csv <- read_tsv("misc/allsample_details.txt",
-                            show_col_types = FALSE)
+# all_samples_csv <- readxl::read_excel("misc/allsample_details.xlsx")
+
+all_samples_csv <- 
+    readr::read_tsv("misc/allsample_details.txt",
+                    show_col_types = FALSE) %>%
+    filter(species== "canine")
+
 
 all_samples_csv$sp_pattern <-
     str_replace_all(all_samples_csv$sp_pattern, "nothing", "")
@@ -114,6 +119,10 @@ count_list <-
 write_tsv(bind_rows(count_list),
           "output/counts/cell_counts.txt")
 
+
+rrrSingleCellUtils::feature_hist(sobj, 
+                                features = c("nCount_RNA", "percent.mt"))
+
 ```
 
 ## Run QC and create merged Seurat Object
@@ -159,6 +168,14 @@ harmony_params <-
                                      "model",
                                      "location"),
                         theta = c(7, 7, 7)),
+         dogs_prim = list(group_by = c("sample_name",
+                                       "data_source",
+                                       "location"),
+                          theta = c(7, 7, 7)),
+         dogs_mets = list(group_by = c("sample_name",
+                                       "data_source",
+                                       "location"),
+                          theta = c(7, 7, 7)),
          normal_bone = list(group_by = c("sample_name"),
                             theta = c(7)))
 
@@ -201,9 +218,10 @@ results <-
         }
     }
 
-    merged_sobj <- merge(x = temp_list[[1]],
-                         y = temp_list[2:length(temp_list)],
-                         add.cell.id = names(temp_list)) %>%
+    merged_sobj <- 
+        merge(x = temp_list[[1]],
+            y = temp_list[2:length(temp_list)],
+            add.cell.id = names(temp_list)) %>%
         JoinLayers() %>%
         process_seurat()
 
@@ -270,7 +288,7 @@ results <-
 
     # make feaureplots
       # plot feature plots
-    if (merged_sobj$organism[1] == "human") {
+    if (merged_sobj$organism[1] == "human" | merged_sobj$organism[1] == "dog") {
         # tumor features for human
         featureplot1_tumor <-
             FeaturePlot(merged_sobj,
@@ -360,7 +378,6 @@ results <-
 })
 
 ```
-
 
 
 # Count before the QC

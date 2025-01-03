@@ -324,7 +324,7 @@ annotate_celltypes <- function(sobject,
                                aggr_ref = FALSE,
                                label_type = "label.main",
                                ...) {
-    if (grepl("human", species)) {
+    if (grepl("human", species) | grepl("canine", species)) {
         ref <- list(hpca,
                     huim)
         labels <- list(hpca[[label_type]],
@@ -337,7 +337,7 @@ annotate_celltypes <- function(sobject,
                            huim[[label_type]],
                            human_tumor_cell$CellType)
         }
-        if (species == "human_lung") {
+        if (species == "human_lung" | species == "canine_lung") {
             ref <- list(hpca,
                         huim,
                         SeuratObject::GetAssayData(human_lung_ref))
@@ -512,7 +512,6 @@ run_gsea <- function(degs_result,
                                  category = category,
                                  subcategory = subcategory) %>%
         split(x = .$gene_symbol, f = .$gs_name)
-
     gsea_output <- list()
     #for (item in names(degs_result)) {
     gsea_output <-
@@ -888,21 +887,41 @@ make_panel_plot <- function(sobj,
         category <- cat_tib$category[i]
         subcategory <- cat_tib$subcategory[i]
         cat_expl <- cat_tib$cat_expl[i]
-        if (subcategory == "NA") {
-            gsea_result <-
-                run_gsea(
-                    degs_result = degs_result,
-                    category = category,
-                    species = sobj$organism[1]
-                )
+        species <- sobj$organism[1]
+        if (species == "human" | species == "mouse") {
+            if (subcategory == "NA") {
+                gsea_result <-
+                    run_gsea(
+                        degs_result = degs_result,
+                        category = category,
+                        species = species
+                    )
+            } else {
+                gsea_result <-
+                    run_gsea(
+                        degs_result = degs_result,
+                        category = category,
+                        subcategory = subcategory,
+                        species = species
+                    )
+            }
         } else {
-            gsea_result <-
-                run_gsea(
-                    degs_result = degs_result,
-                    category = category,
-                    subcategory = subcategory,
-                    species = sobj$organism[1]
-                )
+            if (subcategory == "NA") {
+                gsea_result <-
+                    run_gsea(
+                        degs_result = degs_result,
+                        category = category,
+                        species = "human"
+                    )
+            } else {
+                gsea_result <-
+                    run_gsea(
+                        degs_result = degs_result,
+                        category = category,
+                        subcategory = subcategory,
+                        species = "human"
+                    )
+            }
         }
         #test if directory to save the results exists
         if (!dir.exists(paste0("output/gsea/", group, "/", label))) {
@@ -969,6 +988,7 @@ make_panel_plot <- function(sobj,
                     -leadingEdge,
                     -pval,
                     -pathway_group) %>%
+                arrange(cluster) %>%
                 pivot_wider(
                     names_from = cluster,
                     values_from = NES,

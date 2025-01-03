@@ -13,12 +13,16 @@ all_groups <-
       "mm_mets_cancer_cells",
       "xeno_prim_human",
       "xeno_mets_human",
+      "dogs_prim_cancer_cells",
+      "dogs_mets_cancer_cells",
       "patient_prim_normal_cells",
       "patient_mets_normal_cells",
       "xeno_prim_mouse",
       "xeno_mets_mouse",
       "mm_prim_normal_cells",
-      "mm_mets_normal_cells")
+      "mm_mets_normal_cells",
+      "dogs_prim_normal_cells",
+      "dogs_mets_normal_cells")
 
 sil_val_list <- list()
 clustrees <- list()
@@ -29,10 +33,6 @@ for (i in seq_len(length(all_groups))) {
     object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                               group,
                               ".qs"))
-    # dimplot_better(object,
-    #                group_by = "sample_name") +
-    #     NoLegend()
-
     min_cell_silhouette <- 65000
     n_cells <- length(Cells(object))
     keep_n_cells <- min(min_cell_silhouette, n_cells)
@@ -114,15 +114,19 @@ object_list <-
             "patient_prim_cancer_cells",    0.1,
             "patient_mets_cancer_cells",    0.15,
             "mm_prim_cancer_cells",         0.3,
-            "mm_mets_cancer_cells",         0.3,
-            "xeno_prim_human",              0.1,
+            "mm_mets_cancer_cells",         0.15,
+            "xeno_prim_human",              0.15,
             "xeno_mets_human",              0.1,
+            "dogs_prim_cancer_cells",       0.2,
+            "dogs_mets_cancer_cells",       0.2,
             "patient_prim_normal_cells",    0.15,
             "patient_mets_normal_cells",    0.05,
             "xeno_prim_mouse",              0.1,
             "xeno_mets_mouse",              0.1,
             "mm_prim_normal_cells",         0.25,
-            "mm_mets_normal_cells",         0.2)
+            "mm_mets_normal_cells",         0.2,
+            "dogs_prim_normal_cells",       0.2,
+            "dogs_mets_normal_cells",       0.2)
 
 # run force directed layout
 
@@ -158,7 +162,6 @@ for (i in seq_len(nrow(object_list))) {
                     "_fdl.qs"))
 }
 
-
 # Run GSEA 
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
@@ -191,11 +194,11 @@ for (i in seq_len(nrow(object_list))) {
 object_list <-
     tribble(~group,                         ~res_value,
             "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.15,
+            "patient_mets_cancer_cells",    0.1,
             "mm_prim_cancer_cells",         0.3,
-            "mm_mets_cancer_cells",         0.3,
-            "xeno_prim_human",              0.1,
-            "xeno_mets_human",              0.1,
+            "mm_mets_cancer_cells",         0.15,
+            "xeno_prim_human",              0.15,
+            "xeno_mets_human",              0.15,
             "patient_prim_normal_cells",    0.15,
             "patient_mets_normal_cells",    0.05,
             "xeno_prim_mouse",              0.1,
@@ -362,15 +365,15 @@ object_list <-
             "patient_prim_cancer_cells",    0.1,
             "patient_mets_cancer_cells",    0.15,
             "mm_prim_cancer_cells",         0.3,
-            "mm_mets_cancer_cells",         0.3,
-            "xeno_prim_human",              0.1,
-            "xeno_mets_human",              0.1)
+            "mm_mets_cancer_cells",         0.15,
+            "xeno_prim_human",              0.15,
+            "xeno_mets_human",              0.15)
 
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
     res_value <- object_list$res_value[i]
 
-    object <-
+    object2 <-
         qs::qread(
             str_c(
                 "output/seurat_objects/tumor_vs_stroma/",
@@ -406,67 +409,69 @@ for (i in seq_len(nrow(object_list))) {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
                           c("0" = "Tumor_Metabolic",    #metabolic phenotype
-                            "1" = "Tumor_Osteoblastic",   #collagen and ECM phenotype
+                            "1" = "Tumor_ECM_Producing",   #collagen and ECM phenotype
                             "2" = "Tumor_Proliferative",   #actively dividing G2M phase
                             "3" = "Tumor_Ground",   
-                            "4" = "Tumor_Inflammatory",   #
-                            "5" = "Tumor_ImmuneRegulatory",  #Immune regulatory interraction, IL10
-                            "6" = "Tumor_ImmuneRegulatory", # or low quality
-                            "7" = "Tumor_ImmuneRegulatory"))
+                            "4" = "Tumor_Interractive",   #IL signalling, interractions, Interferon gamma 
+                            "5" = "Tumor_Interractive",  #Immune regulatory interraction, IL10
+                            "6" = "Tumor_Interractive", # or low quality
+                            "7" = "Tumor_Metabolic",
+                            "8" = "Tumor_Metabolic"))
     }
     if (group == "patient_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Metabolic",
-                            "1" = "Tumor_Proliferative",
-                            "2" = "Tumor_Ground",
-                            "3" = "Tumor_Inflammatory",
-                            "4" = "Tumor_Proliferative",
-                            "5" = "Tumor_Ground",
-                            "6" = "Tumor_Inflammatory",
-                            "7" = "Tumor_ImmuneRegulatory",
-                            "8" = "Tumor_Ground"))
+                            c("0" = "Tumor_ECM_Producing",
+                            "1" = "Tumor_Ground",
+                            "2" = "Tumor_Proliferative",
+                            "3" = "Tumor_Ground",
+                            "4" = "Tumor_Interractive",
+                            "5" = "Tumor_Interractive",
+                            "6" = "Tumor_Ground",
+                            "7" = "Tumor_Interractive",
+                            "8" = "Tumor_Metabolic"))
     }
     if (group == "mm_prim_cancer_cells") {       #KEGG pathways are good to differentiate the clusters
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
                           c("0" = "Tumor_Proliferative",
                             "1" = "Tumor_Metabolic",
-                            "2" = "Tumor_Metabolic", 
-                            "3" = "Tumor_Osteoblastic",   
-                            "4" = "Tumor_ImmuneRegulatory",
-                            "5" = "Tumor_Ground"))
+                            "2" = "Tumor_Ground", 
+                            "3" = "Tumor_ECM_Producing",   
+                            "4" = "Tumor_Interractive"))
     }
     if (group == "mm_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Metabolic",    #rho family up
-                            "1" = "Tumor_Osteoblastic",
-                            "2" = "Tumor_Proliferative",
-                            "3" = "Tumor_Proliferative",    #not sure
-                            "4" = "Tumor_ImmuneRegulatory",
-                            "5" = "Tumor_Ground"))
+                          c("0" = "Tumor_Proliferative",    #rho family up
+                            "1" = "Tumor_ECM_Producing",
+                            "2" = "Tumor_Ground",
+                            "3" = "Tumor_Metabolic",    #not sure
+                            "4" = "Tumor_Interractive",
+                            "5" = "Tumor_ECM_Producing",
+                            "6" = "Tumor_Proliferative",
+                            "7" = "Tumor_Ground"))
     }
     if (group == "xeno_prim_human") {
         object$Ann_Level3 <-
-            str_replace_all(object$seurat_clusters,       #need to work more on this, its hard
-                          c("0" = "Tumor_Metabolic",
-                            "1" = "Tumor_Osteoblastic",   #not sure
+            str_replace_all(object$seurat_clusters,       #lacks the ECM producing phenotype
+                          c("0" = "Tumor_Ground",
+                            "1" = "Tumor_Metabolic",   #not sure
                             "2" = "Tumor_Ground",
                             "3" = "Tumor_Proliferative",
-                            "4" = "Tumor_ImmuneRegulatory",
-                            "5" = "Tumor_ImmuneRegulatory"))
+                            "4" = "Tumor_Metabolic",
+                            "5" = "Tumor_Interractive"))
     }
     if (group == "xeno_mets_human") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
                           c("0" = "Tumor_Metabolic",
-                            "1" = "Tumor_Ground",
-                            "2" = "Tumor_Osteoblastic",   #not sure
-                            "3" = "Tumor_ImmuneRegulatory",
+                            "1" = "Tumor_ECM_Producing",
+                            "2" = "Tumor_Ground",   #not sure
+                            "3" = "Tumor_ECM_Producing",
                             "4" = "Tumor_Proliferative",
                             "5" = "Tumor_Proliferative",
-                            "6" = "Tumor_Ground"))
+                            "6" = "Tumor_Interractive"))
     }
 
     object$Ann_Level2<- object$Ann_Level3
@@ -531,14 +536,89 @@ for (i in seq_len(nrow(object_list))) {
     object <-
         qs::qread(
             str_c(
-                "output/seurat_objects/final_tumor_vs_stroma/",
+                "output/seurat_objects/tumor_vs_stroma/",
                 group,
                 ".qs"
             )
         ) %>%
         FindClusters(resolution = res_value)
+    
+    species <- object$organism[1]
+    
+    dimplot1 <-
+        dimplot_better(object,
+                     group_by = "seurat_clusters") +
+            NoLegend()
+    dimplot2 <-
+        dimplot_better(object,
+                     group_by = "new_annot_clust") +
+            NoLegend()
 
+    entire_matrix <- object@assays$RNA$counts
+
+    big_featureplot_list <- list()
+
+    for (module in names(tumor_markers)) {
+        genelist <- tumor_markers[[module]]
+        if (species == "mouse") {
+            genelist <- 
+                nichenetr::convert_human_to_mouse_symbols(genelist) %>%
+                na.omit() %>%
+                unique()
+        }
+        genelist_present <- 
+            genelist[genelist %in% rownames(entire_matrix)]
+        # percent_cells <- 
+        #     (length(genelist_present) /length(genelist)) * 100
+        # if (percent_cells < 20.1) {
+        #     next
+        # }
+        cell_ranks <-
+            AUCell::AUCell_run(exprMat = entire_matrix,
+                            geneSets = genelist)
+        
+        object[[module]] <- AUCell::getAUC(cell_ranks)[1,]
+
+        feature_plot <-
+                FeaturePlot(object,
+                            module,
+                            cols = c("#EEEEEE", "#ae0600"),
+                            min.cutoff = 0.15,
+                            pt.size = 1,
+                            order = TRUE) +
+                    coord_fixed() +
+                    ggtitle(module)
+
+        big_featureplot_list[[module]] <- feature_plot
+    }
+    big_panel_plot <- 
+        cowplot::plot_grid(dimplot1,
+                            dimplot2,
+                            plotlist = big_featureplot_list,
+                            ncol = 2)
+
+#calculate height and length
+    length_var <- 
+        if (length(big_featureplot_list) %% 2 == 1) {
+            length(big_featureplot_list) + 1
+        } else {
+            length(big_featureplot_list)
+        }
+
+    height <- (length_var/2 * 7) + 14
+
+    ggsave(filename = str_c("output/figures/tumor_vs_stroma/",
+                            group,
+                            "/",
+                            "aucell_subpopulation_plots.png"),
+            plot = big_panel_plot,
+            width = 16,
+            height = height,
+            limitsize = FALSE,
+            bg = "white")
 }
+
+
 ```
 
 ## Looking deeper into specific pathways

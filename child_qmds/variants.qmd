@@ -5,15 +5,17 @@ We're only running on patient and mouse model samples that are primary tumors or
 samples_to_run <-
     read_tsv("misc/allsample_details.txt",
              show_col_types = FALSE) %>%
-    filter(species %in% c("patient", "mousemodel") &
-           location != "cc_alltumor" &
-           (tumor_type == "primary" |
-            (tumor_type == "metastatic" & location == "lung"))) %>% # No bam files for these samples
-    filter(!sample_name %in% c("SJOS013768_D1", # drop samples with low reads
-                               "SJOS016016_D1",
-                               "SJOS030605_D1",
-                               "SJOS030411_D1",
-                               "SJOS030605_D2")) 
+    filter(unique == "dogs_prim") # Only running on dogs primary samples
+    # filter(species %in% c("patient", "mousemodel") &
+    #        location != "cc_alltumor" &
+    #        (tumor_type == "primary" |
+    #         (tumor_type == "metastatic" & location == "lung"))) %>% # No bam files for these samples
+    # filter(!sample_name %in% c("SJOS013768_D1", # drop samples with low reads
+    #                            "SJOS016016_D1",
+    #                            "SJOS030605_D1",
+    #                            "SJOS030411_D1",
+    #                            "SJOS030605_D2"))
+
 ```
 
 ## Run SNV calling on the pseudobulked clusters to try to ID tumor cells
@@ -24,11 +26,14 @@ file_loc_key <-
          "S0" = "/home/gdrobertslab/lab/Counts_2/",
          "SC" = "/home/gdrobertslab/lab/Counts_2/",
          "SJ" = "/home/gdrobertslab/lab/ExternalData/Patel_lab/",
-         "CC" = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/BAMs/")
+         "CC" = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/BAMs/",
+         "TU" = "/home/gdrobertslab/lab/ExternalData/Gardner/",
+         "CSU" = "/home/gdrobertslab/lab/ExternalData/Regan_lab/")
 
 ploidy_key <-
     list("human" = "GRCh38",
-         "mouse" = "mm10")
+         "mouse" = "mm10",
+         "dog" = "canFam3.1")
 
 control_celltypes <-
     c("Monocytes",
@@ -37,7 +42,8 @@ control_celltypes <-
 
 genome_key <-
     list("human" = "/home/gdrobertslab/lab/GenRef/10x-hg38/fasta/genome.fa",
-         "mouse" = "/home/gdrobertslab/lab/GenRef/10x-mm10/fasta/genome.fa")
+         "mouse" = "/home/gdrobertslab/lab/GenRef/10x-mm10/fasta/genome.fa",
+         "dog" = "/home/gdrobertslab/lab/GenRef/10x-canfam3.1/fasta/genome.fa")
 
 output <-
     parallel::mclapply(seq_len(nrow(samples_to_run)),

@@ -251,7 +251,7 @@ for (sobj_name in soragni_sobj_list) {
 }
 
 
-# do the soagni dataset annotation
+# do the soragni dataset annotation
 Collins_sobj_list <- 
     list.files("output/seurat_objects/validation/before_harmony/Collins/",
             full.names = FALSE,

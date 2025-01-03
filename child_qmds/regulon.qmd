@@ -15,9 +15,9 @@ motifAnnotations_mgi <- motifAnnotations
 object_list <-
     tribble(~group,                         ~res_value, ~org,
             "patient_prim_cancer_cells",    0.1,        "hgnc",
-            "patient_mets_cancer_cells",    0.15,        "hgnc",
+            "patient_mets_cancer_cells",    0.1,        "hgnc",
             "mm_prim_cancer_cells",         0.3,        "mgi",
-            "mm_mets_cancer_cells",         0.3,        "mgi",
+            "mm_mets_cancer_cells",         0.1,        "mgi",
             "xeno_prim_human",              0.15,        "hgnc",
             "xeno_mets_human",              0.1,        "hgnc")
 
@@ -143,3 +143,25 @@ for (i in seq_len(nrow(object_list))) {
 
 ```
 
+```{r spatial, eval = TRUE}
+macrophage_features_cells <- list(
+    Osteoclast_TAMs = c("MMP9", "CTSK", "NFATC1"),
+    Prolif_TAMs = c("MKI67", "CDK1", "TOP2A"),
+    Monocytes = c("S100A8", "S100A9", "SELL"),
+    IFN_TAMs = c("IFIT2", "CXCL10", "IFIT1"),
+    Inflam_TAMs = c("CCL3", "CXCL2", "IL1B"),
+    Scar_TAMs = c("SPP1", "TREM2", "FABP5"),
+    Alv_Macrophages = c("MARCO", "TNFAIP2", "OLR1"),
+    TAMs = c("MERTK","SELENOP", "MS4A7")
+)
+obj <-
+    readRDS("/gpfs0/home2/gdrobertslab/lab/ExternalData/McEachron_lab/spatial_data/rdata/OS7_Seurat.rds")
+
+SpatialDimPlot(obj,
+               group.by = "seurat_clusters",
+               pt.size.factor = 1)
+
+SpatialFeaturePlot(obj,
+                    features = macrophage_features_cells$Monocytes)
+
+```
