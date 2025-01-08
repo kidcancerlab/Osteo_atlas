@@ -21,6 +21,12 @@ annotation_type <- list(patient_prim = list("human", FALSE),
                         dogs_prim = list("human", FALSE),
                         dogs_mets = list("human_lung", FALSE),
                         normal_bone = list("human", FALSE))
+
+#dogs have to be converted to human genes
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
+
+#Result for annotation
 results <-
     parallel::mclapply(unique(all_samples_csv$unique),
                        mc.cores = parallelly::availableCores(),
@@ -30,7 +36,11 @@ results <-
                             group,
                             ".qs"))
         set.seed(199820)
-        dimplot_better(ann_sobj)
+        if (group == "dogs_prim" || group == "dogs_mets") {
+            ann_sobj <- 
+                dog_to_human_setup(object = ann_sobj)
+        }
+        set.seed(199820)
         ann_sobj <-
             annotate_celltypes(sobject = ann_sobj,
                                 species = annotation_type[[group]][[1]],
@@ -67,8 +77,10 @@ results <-
                     rbind(clust_info)
         }
 
-        ann_sobj <- AddMetaData(ann_sobj, metadata = clust_info)
-        ann_sobj$new_annot_clust <- ann_sobj$re_cluster
+        ann_sobj <- 
+            AddMetaData(ann_sobj, metadata = clust_info)
+        ann_sobj$new_annot_clust <- 
+            ann_sobj$re_cluster
 
         cluster_celltypes <-
             table(ann_sobj$re_cluster, ann_sobj$annotations) %>%
@@ -89,12 +101,22 @@ results <-
                                 pattern = seurat_clust,
                                 replacement = celltype)
         }
+        
+        if (group == "dogs_prim" || group == "dogs_mets") {
+            object <- ann_sobj
+            ann_sobj <-
+                qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                            group,
+                            ".qs"))
+            ann_sobj$annotations <- object$annotations
+            ann_sobj$new_annot_clust <- object$new_annot_clust
+        }
+
         qs::qsave(x = ann_sobj,
                   file = str_c("output/seurat_objects/harmony_sobjs_annot/",
                                group,
                                ".qs"))
 })
 
-dimplot_better(ann_sobj, group_by = "new_annot_clust") +
-    NoLegend()
+
 ```

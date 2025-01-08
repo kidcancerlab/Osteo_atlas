@@ -4,8 +4,7 @@ We're only running on patient and mouse model samples that are primary tumors or
 #| cache.vars = 'samples_to_run'
 samples_to_run <-
     read_tsv("misc/allsample_details.txt",
-             show_col_types = FALSE) %>%
-    filter(unique == "dogs_prim") # Only running on dogs primary samples
+             show_col_types = FALSE) # Only running on dogs primary samples
     # filter(species %in% c("patient", "mousemodel") &
     #        location != "cc_alltumor" &
     #        (tumor_type == "primary" |

@@ -87,6 +87,7 @@ count_list <-
 
             if (counts$n_cells_post_filter >= min_n_cells) {
                 counts$kept <- TRUE
+                set.seed(199820)
                 sobj <-
                     subset(sobj,
                            nCount_RNA > ncount_min &
@@ -117,8 +118,6 @@ count_list <-
 
 write_tsv(bind_rows(count_list),
           "output/counts/cell_counts.txt")
-
-
 
 ```
 
@@ -440,19 +439,24 @@ single_sobjs <-
                full.names = FALSE)
 counts <- tibble()
 for (item in single_sobjs){
-    sobj <- qs::qread(str_c("output/seurat_objects/sobj_preprocess/",
-                            item))
-    sobj$ncount_median_before <- median(sobj$nCount_RNA)
-    unique <- sobj@meta.data$unique %>%
+    sobj <- 
+        qs::qread(str_c("output/seurat_objects/sobj_preprocess/",
+                        item))
+    sobj$ncount_median_before <- 
+        median(sobj$nCount_RNA)
+    unique <- 
+        sobj@meta.data$unique %>%
         head(n=1)
-    Hmeta_data <- sobj@meta.data %>%
+    Hmeta_data <- 
+        sobj@meta.data %>%
         as.data.table %>%
         group_by(sample_name, unique) %>%
         summarize(ncount_median_before = median(nCount_RNA),
                   N_cells_before = n(),
                   .groups = "drop")
 
-    counts <- Hmeta_data %>%
+    counts <- 
+        Hmeta_data %>%
         select("sample_name", "unique", "ncount_median_before", "N_cells_before") %>%
         rbind(counts) %>% 
         arrange(unique)
@@ -467,19 +471,22 @@ as 5000 max cells per sample for similar dataset representation
 counts_afterQC <- tibble()
 
 for (group in unique(all_samples_csv$unique)) {
-    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
-                              group,
-                              ".qs"))
+    object <- 
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                        group,
+                        ".qs"))
     #DimPlot(object)
     #extract meta data
-    Hmeta_data <- object@meta.data %>%
+    Hmeta_data <- 
+        object@meta.data %>%
         as.data.table %>%
         group_by(sample_name, unique) %>% 
         summarise(ncount_median_after = median(nCount_RNA),
                   N_cells_after = n(),
                   .groups = "drop")
 
-    counts_afterQC <- Hmeta_data %>% 
+    counts_afterQC <- 
+        Hmeta_data %>% 
         select("N_cells_after", "sample_name", "unique", "ncount_median_after") %>%
         rbind(counts_afterQC) %>%
         arrange(unique)

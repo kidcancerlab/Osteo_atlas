@@ -1106,6 +1106,10 @@ for (item in seq_len(nrow(object_list))) {
 
 }
 
+dimplot_better(sobj_list$Mesenchymal,
+              group_by = "Ann_Level3") 
+
+
 harmony_params <-
     list(patient_prim = list(group_by = c("sample_name",
                                           "method",

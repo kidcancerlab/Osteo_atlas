@@ -13,43 +13,18 @@ Segments are then classified in five copy number states.
 Analysis of subclones including clone tree, pathway activities, but it can be turned off
 
 ```{r scevan}
-#| cache.vars = c('orthologs', 'dog_to_human_setup')
+#| cache.vars = 'orthologs'
 #| fig.width: 10
 #| fig.height: 10
 #| fig.align: center
 #| echo: FALSE
 #| dependson: annot_celltypes
+#| dependson: dog_human_orthologs_function
 min_cells <- 500
 
 # load the tsv for human_dog gene orthologs
 orthologs <-
     read_tsv("input/downloads/dog_human_gene_orthologs.txt")
-
-# function to convert dog to human genes and the create a new seurat object
-dog_to_human_setup <- function(object) {
-    raw_counts <-
-        GetAssayData(object,
-                    slot = "counts")
-    raw_counts_new <-
-        raw_counts[rownames(raw_counts) %in% orthologs$dog_gene_name, ]
-    rownames(raw_counts_new) <- 
-        orthologs$human_gene_ortholog[match(rownames(raw_counts_new), orthologs$dog_gene_name)]
-    new_seurat_object <-
-        CreateSeuratObject(counts = raw_counts_new) %>%
-        AddMetaData(metadata = object@meta.data)
-    object <-
-        new_seurat_object %>%
-        process_seurat()
-    object <- 
-        RunHarmony(object,
-                    group.by.vars = c("sample_name",
-                                    "data_source",
-                                    "location"),
-                    theta = c(7, 7, 7)) %>%
-        process_seurat(reduction = "harmony")
-
-    return(object)
-}
 
 # run the SCEVAN pipeline
 for (group in c("patient_prim", "patient_mets",
@@ -287,7 +262,7 @@ for (group in c("patient_prim", "patient_mets",
 
 # scevan was done in mice as well so have to loop over all of the groups
 for (group in c("patient_prim", "patient_mets",
-                "mm_prim", "mm_mets"
+                "mm_prim", "mm_mets",
                 "dogs_prim", "dogs_mets")) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                               group,
@@ -355,7 +330,9 @@ snv_result_path <-
 snv_depth <-
     read_tsv("misc/use_snv_tumor_calls.txt")
 
-for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
     object <- 
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,

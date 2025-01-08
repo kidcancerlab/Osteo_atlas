@@ -201,9 +201,17 @@ for (group in c("patient_prim", "patient_mets",
 
 ```{r split_tumor_stromal_main}
 #| cache.vars = 'Annotation_cleanup'
+#| dependson: dog_human_orthologs_function
+#| dependson: annotate_celltypes
+
 # Annotation cleanup
 Annotation_cleanup <-
     qs::qread("misc/Annotation_cleanup.qs")
+
+# load the tsv for human_dog gene orthologs
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
+
 
 #Harmony parameters for the split
 harmony_params <-
@@ -256,8 +264,6 @@ harmony_params <-
         normal_bone = list(group_by = c("sample_name"),
                            theta = c(7)))
 
-
-
 #reference for annotating mets
 human_lung_ref <-
     qs::qread("input/downloads/ds_human_lung_atlas.qs") %>%
@@ -286,8 +292,9 @@ for (group in c("patient_prim", "patient_mets",
                         ".qs"))
 
     if (any(c("S0200", "S0201") %in% object$sample_name)) {
-        object <- subset(object,
-                         sample_name != "S0200" & sample_name != "S0201")
+        object <- 
+            subset(object,
+                   sample_name != "S0200" & sample_name != "S0201")
     }
 
     for (cell_group_name in c("cancer_cells", "normal_cells")) {
@@ -306,12 +313,20 @@ for (group in c("patient_prim", "patient_mets",
                 rowSums(
                     GetAssayData(s_obj, layer = "counts") > 0
                 ) > min_prop_cells_expressing * n_cells_in_data
+
             set.seed(199820)
             s_obj <-
                 s_obj[cells_expressing_genes, ] %>%
                 process_seurat() %>%
                 RunHarmony(group.by.vars = harmony_params[[group]]$group_by) %>%
                 process_seurat(reduction = "harmony")
+            
+            # change the dog genes to human genes for annotation for normal cells
+            set.seed(199820)
+            if (sub_group == "dogs_prim_normal_cells" | group == "dogs_mets_normal_cells") {
+                s_obj <- 
+                    dog_to_human_setup(object = s_obj)
+            }
 
             set.seed(199820)
             if (sub_group == "patient_mets_normal_cells" | sub_group == "dogs_mets_normal_cells") {
@@ -399,6 +414,22 @@ for (group in c("patient_prim", "patient_mets",
                                     pattern = seurat_clust,
                                     replacement = celltype)
             }
+            if (sub_group == "dogs_prim_normal_cells" | sub_group == "dogs_mets_normal_cells") {
+                normal_cell_ids <-
+                    colnames(s_obj)
+                dog_stroma_whuman_genes <-
+                    s_obj
+                set.seed(199820)
+                s_obj <-
+                    subset(x = object,
+                          cells = normal_cell_ids) %>%
+                    process_seurat() %>%
+                    RunHarmony(group.by.vars = harmony_params[[group]]$group_by) %>%
+                    process_seurat(reduction = "harmony")
+                s_obj$annotations <- dog_stroma_whuman_genes$annotations
+                s_obj$new_annot_clust <- dog_stroma_whuman_genes$new_annot_clust
+            }
+
         } else {
             set.seed(199820)
             s_obj <-
@@ -575,15 +606,7 @@ for (group in c("xeno_prim_human",
                     theta = harmony_params[[group]]$theta,
                     lambda = harmony_params[[group]]$lambda) %>%
         process_seurat(reduction = "harmony")
-    # if (group == "xeno_prim_human") {
-    #     object <- subset(object, 
-    #                     sample_name != "SJOS030279_X1") %>%
-    #         process_seurat() %>%
-    #         RunHarmony(group.by.vars = c("sample_name", "data_source", "method"),
-    #                     theta = c(7, 7, 7)) %>%
-    #     process_seurat(reduction = "harmony",
-    #                    resolution = 0.1)
-    # }
+
     object$SingleR_Ann3 <-
         stringr::str_replace_all(object$annotations,
                                 Annotation_cleanup$SingleR_Ann3_label)

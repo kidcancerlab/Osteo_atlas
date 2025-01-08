@@ -138,7 +138,8 @@ for (i in seq_len(nrow(object_list))) {
                         group,
                         ".qs"))
     object <- 
-        FindClusters(object, resolution = res_value)
+        FindClusters(object,
+                    resolution = res_value)
     
     force_directed_layout <- 
         run_fdl(sobject = object)
@@ -173,7 +174,14 @@ for (i in seq_len(nrow(object_list))) {
                         ".qs"))
 
     object <- 
-        FindClusters(object, resolution = res_value)
+        FindClusters(object,
+                    resolution = res_value)
+
+    #convert the dogs to human genes
+    if (object$organism[1] == "dog") {
+        object <-
+            dog_to_human_setup(object = object)
+    }
 
     make_panel_plot(sobj = object,
                     comparison_col = "seurat_clusters",

@@ -416,6 +416,7 @@ run_degs <- function(sobject,
                      subset = FALSE,
                      batch_var) {
 
+    # aggregate the data
     pseudobulk <- sobject %>%
         Seurat::AggregateExpression(
             group.by = aggregate_by,
@@ -883,62 +884,44 @@ make_panel_plot <- function(sobj,
     if (dir.exists(paste0("output/gsea/", label))) {
         unlink(paste0("output/gsea/", label), recursive = TRUE)
     }
+
     for (i in seq_len(nrow(cat_tib))){
         category <- cat_tib$category[i]
         subcategory <- cat_tib$subcategory[i]
         cat_expl <- cat_tib$cat_expl[i]
         species <- sobj$organism[1]
-        if (species == "human" | species == "mouse") {
-            if (subcategory == "NA") {
-                gsea_result <-
-                    run_gsea(
-                        degs_result = degs_result,
-                        category = category,
-                        species = species
-                    )
-            } else {
-                gsea_result <-
-                    run_gsea(
-                        degs_result = degs_result,
-                        category = category,
-                        subcategory = subcategory,
-                        species = species
-                    )
-            }
-        } else {
-            if (subcategory == "NA") {
-                gsea_result <-
-                    run_gsea(
-                        degs_result = degs_result,
-                        category = category,
-                        species = "human"
-                    )
-            } else {
-                gsea_result <-
-                    run_gsea(
-                        degs_result = degs_result,
-                        category = category,
-                        subcategory = subcategory,
-                        species = "human"
-                    )
-            }
+        if (sobj$organism[1] == "dog") {
+            species <- "human"
         }
-        #test if directory to save the results exists
+        if (subcategory == "NA") {
+            gsea_result <-
+                run_gsea(degs_result = degs_result,
+                        category = category,
+                        species = species)
+        } else {
+            gsea_result <-
+                run_gsea(degs_result = degs_result,
+                        category = category,
+                        subcategory = subcategory,
+                        species = species)
+        }
+
+            #test if directory to save the results exists
         if (!dir.exists(paste0("output/gsea/", group, "/", label))) {
             dir.create(paste0("output/gsea/", group, "/", label), recursive = TRUE)
         }
 
         gsea_result <-
             sapply(names(gsea_result),
-                   simplify = FALSE,
-                   function(x) {
+                    simplify = FALSE,
+                    function(x) {
                 gsea_result[[x]] %>%
                     mutate(cluster = paste("Cluster", x),
-                           pathway_group = cat_expl)
+                            pathway_group = cat_expl)
             })
 
         for (item in names(gsea_result)) {
-              #save the results
+                #save the results
             write_tsv(
                 gsea_result[[item]],
                 paste0(
@@ -948,13 +931,14 @@ make_panel_plot <- function(sobj,
             )
         }
 
-        #########################################################
-        # Drop in code to make heatmap here
+    #########################################################
+    # Drop in code to make heatmap here
         n_paths_per_cluster <- 20
-          gsea_result %>%
+
+        use_pathways <- 
+            gsea_result %>%
             bind_rows() %>%
-            use_pathways <-
-          group_by(cluster) %>%
+            group_by(cluster) %>%
             mutate(abs_NES = abs(NES)) %>%
             slice_max(order_by = abs_NES, n = n_paths_per_cluster) %>%
             pull(pathway) %>%
@@ -966,46 +950,46 @@ make_panel_plot <- function(sobj,
                 aes(x = as.factor(1), y = as.factor(1)) +
                 geom_text(aes(label = "No significant pathways"))
         } else {
-            max_abs_nes <-
-                gsea_result %>%
-                bind_rows() %>%
-                pull(NES) %>%
-                max() %>%
-                ceiling()
+        max_abs_nes <-
+            gsea_result %>%
+            bind_rows() %>%
+            pull(NES) %>%
+            max() %>%
+            ceiling()
 
-            breaks_use <-
-                seq(-max_abs_nes, max_abs_nes, length.out = 101)
+        breaks_use <-
+            seq(-max_abs_nes, max_abs_nes, length.out = 101)
 
-            heatmap_plots[[cat_expl]] <-
-                gsea_result %>%
-                bind_rows() %>%
-                filter(pathway %in% use_pathways) %>%
-                select(
-                    -padj,
-                    -log2err,
-                    -ES,
-                    -size,
-                    -leadingEdge,
-                    -pval,
-                    -pathway_group) %>%
-                arrange(cluster) %>%
-                pivot_wider(
-                    names_from = cluster,
-                    values_from = NES,
-                    values_fill = 0
-                ) %>%
-                column_to_rownames("pathway") %>%
-                pheatmap::pheatmap(
-                    color = colors_use,
-                    breaks = breaks_use,
-                    display_numbers = TRUE,
-                    silent = TRUE,
-                    main = paste0(cat_expl),
-                    fontsize_row = 7,
-                    fontsize_number = 7,
-                    cluster_cols = FALSE,
-                    cluster_rows = FALSE
-                )
+        heatmap_plots[[cat_expl]] <-
+            gsea_result %>%
+            bind_rows() %>%
+            filter(pathway %in% use_pathways) %>%
+            select(
+                -padj,
+                -log2err,
+                -ES,
+                -size,
+                -leadingEdge,
+                -pval,
+                -pathway_group) %>%
+            arrange(cluster) %>%
+            pivot_wider(
+                names_from = cluster,
+                values_from = NES,
+                values_fill = 0
+            ) %>%
+            column_to_rownames("pathway") %>%
+            pheatmap::pheatmap(
+                color = colors_use,
+                breaks = breaks_use,
+                display_numbers = TRUE,
+                silent = TRUE,
+                main = paste0(cat_expl),
+                fontsize_row = 7,
+                fontsize_number = 7,
+                cluster_cols = FALSE,
+                cluster_rows = FALSE
+            )
         }
     }
 
@@ -1238,6 +1222,44 @@ Run_GRA <- function(sobject,
 }
 ```
 
+
+## Convert dogs to human orthologs
+```{r dog_human_orthologs_function}
+#| cache.vars = 'dog_to_human_setup'
+dog_to_human_setup <- function(object) {
+    raw_counts <-
+        GetAssayData(object,
+                    slot = "counts")
+
+    number_of_ENSEMBL_genes <- 
+        sum(str_detect(rownames(raw_counts), "^ENSCAFG"))
+
+    raw_counts_new <-
+        raw_counts[rownames(raw_counts) %in% orthologs$dog_gene_name, ]
+    rownames(raw_counts_new) <- 
+        orthologs$human_gene_ortholog[match(rownames(raw_counts_new), orthologs$dog_gene_name)]
+    new_seurat_object <-
+        CreateSeuratObject(counts = raw_counts_new) %>%
+        AddMetaData(metadata = object@meta.data)
+    object <-
+        new_seurat_object %>%
+        process_seurat()
+    object <- 
+        RunHarmony(object,
+                    group.by.vars = c("sample_name",
+                                    "data_source",
+                                    "location"),
+                    theta = c(7, 7, 7)) %>%
+        process_seurat(reduction = "harmony")
+
+    return(object)
+}
+
+
+```
+
+
+
 ```{r helper_confirm_mclapply_worked}
 #| cache.vars: confirm_mclapply_worked
 #' Confirm mclapply Worked And Dump Error Messages If Not
@@ -1270,3 +1292,6 @@ confirm_mclapply_worked <- function(input_list) {
     }
 }
 ```
+
+
+
