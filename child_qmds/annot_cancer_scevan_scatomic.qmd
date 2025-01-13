@@ -13,13 +13,13 @@ Segments are then classified in five copy number states.
 Analysis of subclones including clone tree, pathway activities, but it can be turned off
 
 ```{r scevan}
-#| cache.vars = 'orthologs'
+#| cache.vars: orthologs
 #| fig.width: 10
 #| fig.height: 10
 #| fig.align: center
 #| echo: FALSE
-#| dependson: annot_celltypes
-#| dependson: dog_human_orthologs_function
+#| dependson: [annot_celltypes, dog_human_orthologs_function, dog_human_gene]
+
 min_cells <- 500
 
 # load the tsv for human_dog gene orthologs
@@ -79,6 +79,12 @@ for (group in c("patient_prim", "patient_mets",
             }
         })
 
+    directory <- 
+        "output/id_tumor/SCEVAN/"
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+
     bind_rows(result_list) %>%
         mutate(scevan_tumor_call = if_else(class == "tumor",
                                            "cancer_cells",
@@ -103,8 +109,8 @@ scATOMIC_pred : celltype annotation
 #| fig.height: 10
 #| fig.align: center
 #| echo: FALSE
-#| dependson: annot_celltypes
-#| dependson: scevan
+#| dependson: [annot_celltypes, scevan, dog_human_gene]
+
 
 for (group in c("patient_prim", "patient_mets",
                 "dogs_prim", "dogs_mets")) {
@@ -175,6 +181,12 @@ for (group in c("patient_prim", "patient_mets",
 
             return(scATOMIC_results)
         })
+    
+    directory <-
+        "output/id_tumor/scATOMIC/"
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
 
     dplyr::bind_rows(result_list) %>%
     mutate(scatomic_tumor_call = if_else(grepl("Cancer Cell$", scATOMIC_pred),
@@ -249,6 +261,11 @@ for (group in c("patient_prim", "patient_mets",
                                 ncol = 2) +
                 patchwork::plot_annotation(title = samples)
 
+        directory <- 
+            str_c("output/figures/scatomic/", group)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
         # save the plot for scatomic
         ggsave(str_c("output/figures/scatomic/",
                         group, "/",
@@ -309,6 +326,11 @@ for (group in c("patient_prim", "patient_mets",
                                 ncol = 2) +
                 patchwork::plot_annotation(title = samples)
 
+        directory <- 
+            str_c("output/figures/scevan/", group)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
         # save the plot for scatomic
         ggsave(str_c("output/figures/scevan/",
                         group, "/",
@@ -367,6 +389,11 @@ for (group in c("patient_prim", "patient_mets",
 
         metadata_list[[samples]] <- snv_metadata
         }
+    }
+    directory <- 
+        "output/id_tumor/snv_calling/"
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
     }
     dplyr::bind_rows(metadata_list) %>%
         write_tsv(str_c("output/id_tumor/snv_calling/",

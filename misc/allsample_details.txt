@@ -167,7 +167,7 @@ canine	Lung	T_OS_0050_M1_2	spontaneous16	6000	20	metastatic	yes	nothing	dog	thre
 canine	Lung	T_OS_0059_M1_1n	spontaneous17	20000	20	metastatic	yes	nothing	dog	three_prime	single_cell	TU	dogs_mets	patient
 canine	Lung	T_OS_0059_M1_2	spontaneous18	60000	20	metastatic	yes	nothing	dog	three_prime	single_cell	TU	dogs_mets	patient
 canine	Lung	T_OS_0061_M1_1	spontaneous19	20000	20	metastatic	yes	nothing	dog	three_prime	single_cell	TU	dogs_mets	patient
-canine	Lung	T_OS_0061_M1_2	spontaneous20			metastatic	yes	nothing	dog	three_prime	single_cell	TU	dogs_mets	patient
+canine	Lung	T_OS_0061_M1_2	spontaneous20	25000	20	metastatic	yes	nothing	dog	three_prime	single_cell	TU	dogs_mets	patient
 canine	Lung	OSLM1	spontaneous21	50000	20	metastatic	yes	nothing	dog	three_prime	single_cell	CSU	dogs_mets	patient
 canine	Lung	OSLM2	spontaneous22	50000	20	metastatic	yes	nothing	dog	three_prime	single_cell	CSU	dogs_mets	patient
 canine	Lung	OSLM3	spontaneous23	60000	20	metastatic	yes	nothing	dog	three_prime	single_cell	CSU	dogs_mets	patient

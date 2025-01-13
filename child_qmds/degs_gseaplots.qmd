@@ -58,6 +58,11 @@ for (i in seq_len(length(all_groups))) {
                             prefix = "RNA_snn_res.") +
             ggtitle(str_c("sil_val was ", res_score, " ", group))
 
+    directory <-
+        "output/figures/tumor_vs_stroma/clustree/"
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     ggsave(str_c("output/figures/tumor_vs_stroma/clustree/", group, ".png"),
             width = 10,
             height = 10,
@@ -96,6 +101,10 @@ theme_set(
         legend.text = element_text(size = 8, face = "bold")
     )
 )
+
+# load the tsv for human_dog gene orthologs
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
 
 #GSEA Miltilevel
 cat_tib <- dplyr::tribble(
@@ -149,7 +158,13 @@ for (i in seq_len(nrow(object_list))) {
                        group_by= "seurat_clusters",
                        reduction = "fdl") +
             NoLegend()
+    
+    directory <-
+        str_c("output/figures/tumor_vs_stroma/", group)
 
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     ggsave(str_c("output/figures/tumor_vs_stroma/",
                 group,
                 "/",
@@ -202,17 +217,21 @@ for (i in seq_len(nrow(object_list))) {
 object_list <-
     tribble(~group,                         ~res_value,
             "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.1,
+            "patient_mets_cancer_cells",    0.15,
             "mm_prim_cancer_cells",         0.3,
             "mm_mets_cancer_cells",         0.15,
             "xeno_prim_human",              0.15,
-            "xeno_mets_human",              0.15,
+            "xeno_mets_human",              0.1,
+            "dogs_prim_cancer_cells",       0.2,
+            "dogs_mets_cancer_cells",       0.2,
             "patient_prim_normal_cells",    0.15,
             "patient_mets_normal_cells",    0.05,
             "xeno_prim_mouse",              0.1,
             "xeno_mets_mouse",              0.1,
             "mm_prim_normal_cells",         0.25,
-            "mm_mets_normal_cells",         0.2)
+            "mm_mets_normal_cells",         0.2,
+            "dogs_prim_normal_cells",       0.2,
+            "dogs_mets_normal_cells",       0.2)
 
 all_data_celltypes <- tibble()
 
@@ -283,6 +302,11 @@ for (i in seq_len(nrow(object_list))) {
 }
 # Add date and time to the filename
 timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+directory <-
+    "output/cluster_and_celltype"
+if (!dir.exists(directory)) {
+    dir.create(directory, recursive = TRUE)
+}
 filename <- str_c("output/cluster_and_celltype/all_data_celltypes_",
                   timestamp,
                   ".tsv")
@@ -505,7 +529,11 @@ for (i in seq_len(nrow(object_list))) {
             plot = panel_plots,
             width = 14,
             height = 14)
-
+    directory <-
+        str_c("output/seurat_objects/final_tumor_vs_stroma/")
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     qs::qsave(object,
               str_c("output/seurat_objects/final_tumor_vs_stroma/",
                     group,

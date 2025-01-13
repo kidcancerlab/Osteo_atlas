@@ -106,22 +106,31 @@ names(my_new_list) <- markers_list_summary$cell_types
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_normal_cells",    0.1,
-            "patient_mets_normal_cells",    0.1,
-            "xeno_prim_mouse",              0.1,
-            "xeno_mets_mouse",              0.1,
-            "mm_prim_normal_cells",         0.25,
-            "mm_mets_normal_cells",         0.2)
+            # "patient_prim_normal_cells",    0.15,
+            # "patient_mets_normal_cells",    0.05,
+            # "xeno_prim_mouse",              0.1,
+            # "xeno_mets_mouse",              0.1,
+            # "mm_prim_normal_cells",         0.25,
+            # "mm_mets_normal_cells",         0.2,
+            "dogs_prim_normal_cells",       0.2,
+            "dogs_mets_normal_cells",       0.2)
 
 
 for (item in seq_len(nrow(object_list))) {
     group <- object_list$group[item]
     res_value <- object_list$res_value[item]
 
-    object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
-                              group,
-                              ".qs"))
+    object <- 
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                        group,
+                        ".qs"))
 
+    #convert the dogs to human genes
+    if (object$organism[1] == "dog") {
+        object <-
+            dog_to_human_setup(object = object)
+    }
+    
     dimplot_main <-
         dimplot_better(object,
                       group_by = c("SingleR_Ann3")) +
@@ -171,6 +180,12 @@ for (item in seq_len(nrow(object_list))) {
 
     height <- (length_var/2 * 7) + 7
 
+    directory <- 
+        str_c("output/figures/relustering_normals/",
+              group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     ggsave(filename = str_c("output/figures/relustering_normals/",
                             group,
                             "/",
@@ -196,7 +211,12 @@ for (item in seq_len(nrow(object_list))) {
     object <- 
         FindClusters(object,
                      resolution = res_value)
-
+    directory <- 
+        str_c("output/seurat_objects/Annotation_level1/",
+              group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     qs::qsave(x = object,
               file = str_c("output/seurat_objects/Annotation_level1/",
                            group,
@@ -237,7 +257,12 @@ for (item in seq_len(nrow(object_list))) {
                             dimplot_ann_level2,
                             dimplot_ann_level3,
                             ncol = 2)
-
+    directory <- 
+        str_c("output/figures/relustering_normals/",
+              group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
      ggsave(filename = str_c("output/figures/relustering_normals/",
                             group,
                             "/",
@@ -474,23 +499,35 @@ clusterbased_annot <- function(s_obj) {
     return(s_obj)
 }
 
+# load the tsv for human_dog gene orthologs
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
+
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_normal_cells",    0.1,
-            "patient_mets_normal_cells",    0.1,
-            "xeno_prim_mouse",              0.1,
-            "xeno_mets_mouse",              0.1,
-            "mm_prim_normal_cells",         0.25,
-            "mm_mets_normal_cells",         0.2)
+            # "patient_prim_normal_cells",    0.15,
+            # "patient_mets_normal_cells",    0.05,
+            # "xeno_prim_mouse",              0.1,
+            # "xeno_mets_mouse",              0.1,
+            # "mm_prim_normal_cells",         0.25,
+            # "mm_mets_normal_cells",         0.2,
+            "dogs_prim_normal_cells",       0.2,
+            "dogs_mets_normal_cells",       0.2)
 
 for (item in seq_len(nrow(object_list))) {
     group <- object_list$group[item]
     res_value <- object_list$res_value[item]
 
-    object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
-                              group,
-                              ".qs"))
+    object <- 
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                        group,
+                        ".qs"))
     species <- object$organism[1]
+    #convert the dogs to human genes
+    if (object$organism[1] == "dog") {
+        object <-
+            dog_to_human_setup(object = object)
+    }
 
     dimplot_big_obj <-
         dimplot_better(object,
@@ -516,6 +553,8 @@ for (item in seq_len(nrow(object_list))) {
                         theta = 7) %>%
             process_seurat(reduction = "harmony")
 
+    # change the dog genes to human genes for annotation for normal cells
+        set.seed(199820)
         if (cell_type == "Immune_Myeloid") {
             s_obj <-
                 FindClusters(s_obj,
@@ -1043,14 +1082,26 @@ for (item in seq_len(nrow(object_list))) {
             str_replace_all(s_obj$seurat_clusters,
                             celltype_list[[group]][[cell_type]])
 
+        directory <-
+            str_c("output/seurat_objects/stromal_subtypes/",
+                  group)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
         qs::qsave(x = s_obj,
                   file = str_c("output/seurat_objects/stromal_subtypes/",
                                group, "/",
                                 cell_type,
                                ".qs"))
-    
+
+        directory <-
+            str_c("output/metadata/celltype_stroma/",
+                  group)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
         timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
-        
+
         filename <- str_c("output/metadata/celltype_stroma/",
                             group, "/",
                             cell_type, "_",
@@ -1099,7 +1150,12 @@ for (item in seq_len(nrow(object_list))) {
         RunHarmony(group.by.vars = "sample_name",
                    theta = 7) %>%
         process_seurat(reduction = "harmony")
-
+    
+    directory <-
+        str_c("output/seurat_objects/final_tumor_vs_stroma/")
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     qs::qsave(x = merged_sobj,
               file = str_c("output/seurat_objects/final_tumor_vs_stroma/",
                             group,".qs"))
@@ -1278,6 +1334,11 @@ for (group in c("patient_prim", "patient_mets",
                         group,
                         ".qs"))
 
+    directory <-
+        str_c("output/metadata/Idents_used/")
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     metadata <- object@meta.data
     timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
     write_tsv(metadata,
@@ -1306,7 +1367,13 @@ for (group in c("patient_prim", "patient_mets",
                     combined_plot4,
                     nrow = 2) +
             patchwork::plot_annotation(title = group)
-
+    
+    directory <-
+        str_c("output/figures/Final_Annotations/",
+              group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     ggsave(filename = str_c("output/figures/Final_Annotations/",
                             group,
                             "/final_combo_plots.png"),

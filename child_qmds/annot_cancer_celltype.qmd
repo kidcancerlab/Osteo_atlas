@@ -6,7 +6,7 @@ This will annotate celltypes for tumor and normal call
 #| fig.height: 10
 #| fig.align: center
 #| echo: FALSE
-#| dependson: annot_celltypes
+#| dependson: [annot_celltypes, read_metadata, dog_human_gene]
 #| eval: FALSE
 
 cancer_celltypes <- list(patient_prim = c("MSC",
@@ -206,6 +206,11 @@ for (group in c("patient_prim", "patient_mets",
                    lambda = harmony_params[[group]]$lambda) %>%
         process_seurat(reduction = "harmony")
 
+    directory <-
+        str_c("output/id_tumor/celltype/")
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     object@meta.data %>%
         as.data.frame() %>%
         rownames_to_column("cell") %>%
@@ -214,6 +219,11 @@ for (group in c("patient_prim", "patient_mets",
                  group,
                  "_metadata",
                  ".tsv"))
+    directory <-
+        str_c("output/seurat_objects/harmony_sobjs_annot/")
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
 
     qs::qsave(x = object,
               file = str_c("output/seurat_objects/harmony_sobjs_annot/",
@@ -252,6 +262,12 @@ fdl_results <-
                        reduction = "fdl") +
             NoLegend()
 
+    directory <-
+        str_c("output/figures/combined_plots/",
+              group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     ggsave(str_c("output/figures/combined_plots",
                 "/",
                 group,
@@ -377,7 +393,10 @@ Annotation_cleanup <-
             "^Neutrophils__GN_ARTH_$" = "Neutrophils",
             "^Fibroblasts__FI_$" = "Fibroblasts",
             "^Hematopoietic_stem_cells$" = "Progenitors",
-            "^GMP$" = "Progenitors"),
+            "^GMP$" = "Progenitors",
+            "^Progenitor cells$" = "Progenitors",
+            "^Classical monocytes$" = "Classical_monocytes",
+            "^Erythroblast$" = "Progenitors"),
     SingleR_Ann2_label =
         c("^Fibroblasts_activated$" = "Fibroblasts",
             "^Fibroblasts_senescent$" = "Fibroblasts",
@@ -490,6 +509,9 @@ Annotation_cleanup <-
             "^Myelocyte$" = "Immune_Myeloid",
             "^Mesothelium$" = "Mesenchymal"))
 
+if (!dir.exists("misc")) {
+    dir.create("misc", recursive = TRUE)
+}
 qs::qsave(Annotation_cleanup, file = "misc/Annotation_cleanup.qs")
 
 ```

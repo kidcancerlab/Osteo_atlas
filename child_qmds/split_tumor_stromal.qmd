@@ -13,6 +13,7 @@ We will make these column names have the format "cancer_lable_{method_name}" so 
 #| fig.align: center
 #| echo: FALSE
 #| eval: FALSE
+#| dependson: [annotate_celltypes, read_metadata]
 
 #parallel::mclapply(unique(all_samples_csv$unique), function(group)
 for (group in c("patient_prim", "patient_mets",
@@ -40,11 +41,16 @@ for (group in c("patient_prim", "patient_mets",
         object <- object %>%
             AddMetaData(metadata = cancer_label)
     }
-
+    directory <-
+        str_c("output/seurat_objects/final_combined_sobjs/")
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     #save the seurat object.size
-    qs::qsave(object, str_c("output/seurat_objects/final_combined_sobjs/",
-                            group,
-                            ".qs"))
+    qs::qsave(object, 
+            str_c("output/seurat_objects/final_combined_sobjs/",
+                    group,
+                    ".qs"))
 
     #plot for the cancer normal cells, mouse do not have scatomic tumor call
     if ("scatomic_tumor_call" %in% colnames(object@meta.data)){
@@ -113,6 +119,11 @@ for (group in c("patient_prim", "patient_mets",
             patchwork::plot_annotation(title = group) +
             theme(plot.title = element_text(size = 10))
 
+    directory <-
+        str_c("output/figures/combined_plots/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     #save the combined plots
     ggsave(str_c("output/figures/combined_plots/",
                  group,
@@ -121,7 +132,6 @@ for (group in c("patient_prim", "patient_mets",
            plot = combined_plots,
            width = 21,
            height = 14)
-
     # save the plot as qs object
     qs::qsave(combined_plots,
               str_c("output/figures/combined_plots/",
@@ -200,9 +210,8 @@ for (group in c("patient_prim", "patient_mets",
 ## Split by clustering with right resolution as found by clustree
 
 ```{r split_tumor_stromal_main}
-#| cache.vars = 'Annotation_cleanup'
-#| dependson: dog_human_orthologs_function
-#| dependson: annotate_celltypes
+#| cache.vars: Annotation_cleanup
+#| dependson: [dog_human_orthologs_function, annotate_celltypes]
 
 # Annotation cleanup
 Annotation_cleanup <-
@@ -323,7 +332,7 @@ for (group in c("patient_prim", "patient_mets",
             
             # change the dog genes to human genes for annotation for normal cells
             set.seed(199820)
-            if (sub_group == "dogs_prim_normal_cells" | group == "dogs_mets_normal_cells") {
+            if (sub_group == "dogs_prim_normal_cells" | sub_group == "dogs_mets_normal_cells") {
                 s_obj <- 
                     dog_to_human_setup(object = s_obj)
             }
@@ -500,6 +509,12 @@ for (group in c("patient_prim", "patient_mets",
             patchwork::plot_annotation(title = str_c(group, " ", cell_group_name)) +
             theme(plot.title = element_text(size = 10))
 
+        directory <-
+            str_c("output/figures/tumor_vs_stroma/", group)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
+        #save the plot
         ggsave(str_c("output/figures/tumor_vs_stroma/",
                     group,
                     "/",
@@ -574,6 +589,11 @@ for (group in c("patient_prim", "patient_mets",
                         cell_group_name,
                         "_immune_featureplot.qs"))
 
+        directory <-
+            str_c("output/seurat_objects/tumor_vs_stroma/")
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
         qs::qsave(s_obj, str_c("output/seurat_objects/tumor_vs_stroma/",  #nolint
                                 group, "_",
                                 cell_group_name,
@@ -653,7 +673,7 @@ for (group in c("xeno_prim_human",
                             heights = 14) +
         patchwork::plot_annotation(title = group,
                                    theme = theme(plot.title = element_text(size = 10)))
-    
+
     ggsave(str_c("output/figures/tumor_vs_stroma/",
                 group,
                 "/",
@@ -738,13 +758,15 @@ object <-
                         ".qs"))
 
 
-object <- 
-    qs::qread("output/seurat_objects/tumor_vs_stroma/dogs_prim_cancer_cells.qs")
+object1 <- 
+    qs::qread("output/seurat_objects/tumor_vs_stroma/dogs_prim_normal_cells.qs")
+object2 <-
+    qs::qread("output/seurat_objects/tumor_vs_stroma/dogs_mets_normal_cells.qs")
 
-
-dimplot_better(object,
-            group_by = "new_annot_clust") +
-NoLegend()
+dimplot_better(object1,
+            group_by = "SingleR_Ann1") +
+dimplot_better(object2,
+            group_by = "SingleR_Ann1")
 
 s_obj <- 
     qs::qread("output/seurat_objects/tumor_vs_stroma/dogs_prim_normal_cells.qs")

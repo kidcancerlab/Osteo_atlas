@@ -1,7 +1,7 @@
 
 ## Make a DimPlot with better default settings
 ```{r dimplot_better_function}
-#| cache.vars = 'dimplot_better'
+#| cache.vars: dimplot_better
 
 dimplot_better <- function(object,
                            group_by = NULL,
@@ -35,7 +35,7 @@ https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE151974
 https://www.synapse.org/Synapse:syn21560554
 We kept only the normoxic samples for the analysis
 ```{r celltype_annotation_data}
-#| cache.vars = c('human_lung_ref', 'mouse_lung_ref', 'human_tumor_cell', 'mouse_tumor_cell')
+#| cache.vars: [human_lung_ref, mouse_lung_ref, human_tumor_cell, mouse_tumor_cell]
 human_lung_ref <-
     qs::qread("input/downloads/human_lung.qs")
 
@@ -103,16 +103,19 @@ human_lung_ref$free_annotation <-
 human_lung_ref$free_annotation <-
     str_replace_all(human_lung_ref$free_annotation, c(" " = "_"))
 
-# #load in the human tumor cell from xenograft primary fro documentation
-# sobj <- qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs") %>%
-#     subset(sample_name %in% c("S0170", "S0042"))
+#load in the human tumor cell from xenograft primary fro documentation
+sobj <- qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs") %>%
+    subset(sample_name %in% c("S0170", "S0042"))
 
-# #add a column with the cell type
-# sobj$CellType <- "Tumor_cells"
+#add a column with the cell type
+sobj$CellType <- "Tumor_cells"
 
-# #save the object
-# qs::qsave(sobj,
-#           file = "input/downloads/human_tumor_fromxenograft.qs")
+if (!dir.exists("input/downloads")) {
+    dir.create("input/downloads", recursive = TRUE)
+}
+#save the object
+qs::qsave(sobj,
+          file = "input/downloads/human_tumor_fromxenograft.qs")
 
 #load the object
 human_tumor_cell <- qs::qread("input/downloads/human_tumor_fromxenograft.qs")
@@ -176,17 +179,20 @@ mouse_lung_ref$CellType <-
                     "^CD8_plus_T$" = "CD8T_cells",
                     "^CD4_plus_T$" = "CD4T_cells"))
 
-# #make a reference for all tumor cells, using cell culture data documantation
-# mouse_tumor_cell <-
-#     qs::qread("output/seurat_objects/comb_sobjs/mm_prim.qs") %>%
-#     subset(sample_name %in% c("S0200", "S0201"))
+#make a reference for all tumor cells, using cell culture data documantation
+mouse_tumor_cell <-
+    qs::qread("output/seurat_objects/comb_sobjs/mm_prim.qs") %>%
+    subset(sample_name %in% c("S0200", "S0201"))
 
-# #create a column with the cell type
-# mouse_tumor_cell$CellType <- "Tumor_cells"
+#create a column with the cell type
+mouse_tumor_cell$CellType <- "Tumor_cells"
 
-# #save the object
-# qs::qsave(mouse_tumor_cell,
-#           file = "input/downloads/mm_tumor_cellculture.qs")
+if (!dir.exists("input/downloads")) {
+    dir.create("input/downloads", recursive = TRUE)
+}
+#save the object
+qs::qsave(mouse_tumor_cell,
+          file = "input/downloads/mm_tumor_cellculture.qs")
 
 #load the object S0200 and S0201 combined cell culture mouse tumor cells
 mouse_tumor_cell <- qs::qread("input/downloads/mm_tumor_cellculture.qs")
@@ -195,7 +201,8 @@ mouse_tumor_cell <- qs::qread("input/downloads/mm_tumor_cellculture.qs")
 
 ## Function to annotate cell types with mouse and human lung
 ```{r annotate_function}
-#| cache.vars = c('annotate_celltypes', 'hpca', 'huim', 'mord', 'moim', 'ref4')
+#| cache.vars: [annotate_celltypes, hpca, huim, mord, moim, ref4]
+#| dependson: celltype_annotation_data
 hpca <- celldex::HumanPrimaryCellAtlasData()
 huim <- celldex::MonacoImmuneData()
 ref4 <- SeuratObject::GetAssayData(human_tumor_cell)
@@ -404,7 +411,7 @@ annotate_celltypes <- function(sobject,
 
 ## RUN differential expression analysis on a Seurat object
 ```{r run_degs_function}
-#| cache.vars = c('all_samples_csv', 'run_degs')
+#| cache.vars: [all_samples_csv, run_degs]
 all_samples_csv <- read_tsv("misc/allsample_details.txt",
                             show_col_types = FALSE)
 
@@ -504,7 +511,7 @@ run_degs <- function(sobject,
 
 ## Function to run GSEA
 ```{r gsea_function}
-#| cache.vars = 'run_gsea'
+#| cache.vars: run_gsea
 run_gsea <- function(degs_result,
                      category = "",
                      subcategory = "",
@@ -522,7 +529,8 @@ run_gsea <- function(degs_result,
                            function(item) {
             gsea_input <- as.vector(degs_result[[item]]$log2FoldChange)
             names(gsea_input) <- degs_result[[item]]$gene
-
+            
+            set.seed(199820)
             output <- fgsea::fgseaMultilevel(gsea_ref,
                                             gsea_input,
                                             minSize = 10,
@@ -547,7 +555,7 @@ run_gsea <- function(degs_result,
 
 # GSEA Plots function for twoway dotplot and barplot
 ```{r}
-#| cache.vars = c('gsea_dotplot', 'gsea_barplot')
+#| cache.vars: [gsea_dotplot, gsea_barplot]
 gsea_dotplot <- function(data, x_col = "z_score") {
     lab4plot <-
         tibble(y = c(-2.5, 2.5),
@@ -665,7 +673,7 @@ gsea_barplot <- function(data, x_col = "z_score") {
 
 ## Circle plot function
 ```{r circle_plot_function}
-#| cache.vars: 'circle_plot'
+#| cache.vars: circle_plot
 circle_plot <- function(sobj,
                         comparison_col,
                         features) {
@@ -752,7 +760,7 @@ circle_plot <- function(sobj,
 ```
 
 ```{r panel_plot_function}
-#| cache.vars = c('make_panel_plot', 'cat_tib')
+#| cache.vars: [make_panel_plot, cat_tib]
 
 #GSEA Miltilevel
 cat_tib <- dplyr::tribble(
@@ -842,6 +850,11 @@ make_panel_plot <- function(sobj,
             geom_text_repel(aes(label = gene))
 
         # save the volcano plot
+        directory <-
+            paste0("output/figures/degs/", group)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
         ggsave(
             paste0("output/figures/degs/", group, "/",
                    cluster_name, "_volcano_plot.png"),
@@ -919,6 +932,12 @@ make_panel_plot <- function(sobj,
                     mutate(cluster = paste("Cluster", x),
                             pathway_group = cat_expl)
             })
+        
+        directory <-
+            paste0("output/gsea/", group, "/", label)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
 
         for (item in names(gsea_result)) {
                 #save the results
@@ -1007,6 +1026,12 @@ make_panel_plot <- function(sobj,
             ggplotify::as.ggplot(heatmap_plots$Reactome),
             ncol = 2) +
         patchwork::plot_annotation(title = label)
+    
+    directory <-
+        paste0("output/figures/gsea/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     ggsave(
         paste0("output/figures/gsea/", group, "/", label, "_six_panels.png"),
         width = 30,
@@ -1133,7 +1158,7 @@ def save_velo_plots(ad_ob, ob_name):
 
 ## Scenic plus regulon analysis function
 ```{r scenic_function}
-#| cache.vars = 'Run_GRA'
+#| cache.vars: Run_GRA
 Run_GRA <- function(sobject,
                     idents,
                     org,      #organism "mgi" for mouse, "hgnc" for human
@@ -1225,7 +1250,7 @@ Run_GRA <- function(sobject,
 
 ## Convert dogs to human orthologs
 ```{r dog_human_orthologs_function}
-#| cache.vars = 'dog_to_human_setup'
+#| cache.vars: dog_to_human_setup
 dog_to_human_setup <- function(object) {
     raw_counts <-
         GetAssayData(object,

@@ -8,7 +8,7 @@ assigned by highest number of celltype per each seurat cluster
 #| fig.width: 10
 #| fig.height: 10
 #| fig.align: "center"
-#| dependson: merge_harmony
+#| dependson: [merge_harmony, annotate_function, read_metadata, dog_human_gene]
 
 annotation_type <- list(patient_prim = list("human", FALSE),
                         patient_mets = list("human_lung", FALSE),
@@ -110,6 +110,12 @@ results <-
                             ".qs"))
             ann_sobj$annotations <- object$annotations
             ann_sobj$new_annot_clust <- object$new_annot_clust
+        }
+
+        directory <- 
+            str_c("output/seurat_objects/harmony_sobjs_annot/")
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
         }
 
         qs::qsave(x = ann_sobj,
