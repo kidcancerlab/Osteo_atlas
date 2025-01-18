@@ -134,8 +134,8 @@ object_list <-
             "xeno_mets_mouse",              0.1,
             "mm_prim_normal_cells",         0.25,
             "mm_mets_normal_cells",         0.2,
-            "dogs_prim_normal_cells",       0.2,
-            "dogs_mets_normal_cells",       0.2)
+            "dogs_prim_normal_cells",       0.1,
+            "dogs_mets_normal_cells",       0.15)
 
 # run force directed layout
 
@@ -212,7 +212,7 @@ for (i in seq_len(nrow(object_list))) {
 
 
 ## Save the celltypes metadata 
-```{r celltypes_metadata, echo = FALSE}
+```{r celltypes_metadata, echo = FALSE, eval = FALSE, include = FALSE}
 # Save the celltypes excel out with seurat clusters and celltypes annotation info
 object_list <-
     tribble(~group,                         ~res_value,
@@ -307,9 +307,10 @@ directory <-
 if (!dir.exists(directory)) {
     dir.create(directory, recursive = TRUE)
 }
-filename <- str_c("output/cluster_and_celltype/all_data_celltypes_",
-                  timestamp,
-                  ".tsv")
+filename <- 
+    str_c("output/cluster_and_celltype/all_data_celltypes_",
+            timestamp,
+            ".tsv")
 write_tsv(x = all_data_celltypes, file = filename)
 
 ```

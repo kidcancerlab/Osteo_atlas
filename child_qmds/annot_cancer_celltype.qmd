@@ -7,7 +7,7 @@ This will annotate celltypes for tumor and normal call
 #| fig.align: center
 #| echo: FALSE
 #| dependson: [annot_celltypes, read_metadata, dog_human_gene]
-#| eval: FALSE
+
 
 cancer_celltypes <- list(patient_prim = c("MSC",
                                           "Chondrocytes",
@@ -282,7 +282,7 @@ fdl_results <-
 
 ## Annotation cleanup
 Make a list that replaces the celltype labels with more general labels
-```{r}
+```{r annotation_cleanups_singleR}
 Annotation_cleanup <-
     list(SingleR_Ann3_label = 
             c("^DC__DC_$" = "Dendritic_cells",

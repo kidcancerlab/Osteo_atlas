@@ -52,7 +52,7 @@ for (group in c("patient_prim", "patient_mets",
     # SCEVAN results listed into an output for each seurat object
     result_list <-
         parallel::mclapply(names(count_mtx_list),
-                           mc.cores = min(1, parallelly::availableCores()),
+                           mc.cores = parallelly::availableCores(),
                            function(x) {
             # If we have too few cells SCEVAN errors out
             # dim(x) must have a positive length

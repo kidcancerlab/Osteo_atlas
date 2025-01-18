@@ -103,19 +103,19 @@ human_lung_ref$free_annotation <-
 human_lung_ref$free_annotation <-
     str_replace_all(human_lung_ref$free_annotation, c(" " = "_"))
 
-#load in the human tumor cell from xenograft primary fro documentation
-sobj <- qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs") %>%
-    subset(sample_name %in% c("S0170", "S0042"))
+# #load in the human tumor cell from xenograft primary fro documentation
+# sobj <- qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs") %>%
+#     subset(sample_name %in% c("S0170", "S0042"))
 
-#add a column with the cell type
-sobj$CellType <- "Tumor_cells"
+# #add a column with the cell type
+# sobj$CellType <- "Tumor_cells"
 
-if (!dir.exists("input/downloads")) {
-    dir.create("input/downloads", recursive = TRUE)
-}
-#save the object
-qs::qsave(sobj,
-          file = "input/downloads/human_tumor_fromxenograft.qs")
+# if (!dir.exists("input/downloads")) {
+#     dir.create("input/downloads", recursive = TRUE)
+# }
+# #save the object
+# qs::qsave(sobj,
+#           file = "input/downloads/human_tumor_fromxenograft.qs")
 
 #load the object
 human_tumor_cell <- qs::qread("input/downloads/human_tumor_fromxenograft.qs")
@@ -180,19 +180,19 @@ mouse_lung_ref$CellType <-
                     "^CD4_plus_T$" = "CD4T_cells"))
 
 #make a reference for all tumor cells, using cell culture data documantation
-mouse_tumor_cell <-
-    qs::qread("output/seurat_objects/comb_sobjs/mm_prim.qs") %>%
-    subset(sample_name %in% c("S0200", "S0201"))
+# mouse_tumor_cell <-
+#     qs::qread("output/seurat_objects/comb_sobjs/mm_prim.qs") %>%
+#     subset(sample_name %in% c("S0200", "S0201"))
 
-#create a column with the cell type
-mouse_tumor_cell$CellType <- "Tumor_cells"
+# #create a column with the cell type
+# mouse_tumor_cell$CellType <- "Tumor_cells"
 
-if (!dir.exists("input/downloads")) {
-    dir.create("input/downloads", recursive = TRUE)
-}
-#save the object
-qs::qsave(mouse_tumor_cell,
-          file = "input/downloads/mm_tumor_cellculture.qs")
+# if (!dir.exists("input/downloads")) {
+#     dir.create("input/downloads", recursive = TRUE)
+# }
+# #save the object
+# qs::qsave(mouse_tumor_cell,
+#           file = "input/downloads/mm_tumor_cellculture.qs")
 
 #load the object S0200 and S0201 combined cell culture mouse tumor cells
 mouse_tumor_cell <- qs::qread("input/downloads/mm_tumor_cellculture.qs")

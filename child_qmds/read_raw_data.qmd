@@ -267,11 +267,11 @@ results <-
             set.seed(63274528)
 
             cell_names <- Cells(sobj)
-            temp_list[[sample_name]] <-
-                subset(sobj,
-                       cells = sample(cell_names,
-                                      min(max_n_cells,
-                                          length(cell_names))))
+            temp_list[[sample_name]] <- sobj
+                # subset(sobj,
+                #        cells = sample(cell_names,
+                #                       min(max_n_cells,
+                #                           length(cell_names))))
             rm(sobj)
         } else {
             print(str_c(sample_name,

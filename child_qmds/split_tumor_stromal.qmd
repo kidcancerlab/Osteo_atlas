@@ -12,7 +12,6 @@ We will make these column names have the format "cancer_lable_{method_name}" so 
 ```{r read_cancer_labels_and_plot}
 #| fig.align: center
 #| echo: FALSE
-#| eval: FALSE
 #| dependson: [annotate_celltypes, read_metadata]
 
 #parallel::mclapply(unique(all_samples_csv$unique), function(group)
@@ -34,19 +33,22 @@ for (group in c("patient_prim", "patient_mets",
                 "_metadata.tsv")
 
         if (file.exists(cancer_label_file)) {
-            cancer_label <- readr::read_tsv(cancer_label_file) %>%
-                filter(cell %in% colnames(object)) %>%
-                column_to_rownames("cell")
+            cancer_label <- 
+                readr::read_tsv(cancer_label_file) %>%
+                dplyr::filter(cell %in% colnames(object)) %>%
+                tibble::column_to_rownames("cell")
         }
-        object <- object %>%
+        object <- 
+            object %>%
             AddMetaData(metadata = cancer_label)
     }
+                
     directory <-
-        str_c("output/seurat_objects/final_combined_sobjs/")
+        "output/seurat_objects/final_combined_sobjs/"
     if (!dir.exists(directory)) {
         dir.create(directory, recursive = TRUE)
     }
-    #save the seurat object.size
+    #save the seurat object size
     qs::qsave(object, 
             str_c("output/seurat_objects/final_combined_sobjs/",
                     group,
@@ -368,6 +370,7 @@ for (group in c("patient_prim", "patient_mets",
                                     aggr.ref = TRUE)
             }
             s_obj$annotations <- ref_lung$labels
+            s_obj$cell_scores <- ref_lung$scores
 
             Idents(s_obj) <- s_obj$seurat_clusters
             clust_info <- tibble()
@@ -424,10 +427,8 @@ for (group in c("patient_prim", "patient_mets",
                                     replacement = celltype)
             }
             if (sub_group == "dogs_prim_normal_cells" | sub_group == "dogs_mets_normal_cells") {
-                normal_cell_ids <-
-                    colnames(s_obj)
-                dog_stroma_whuman_genes <-
-                    s_obj
+                normal_cell_ids <- colnames(s_obj)
+                dog_stroma_whuman_genes <- s_obj
                 set.seed(199820)
                 s_obj <-
                     subset(x = object,
@@ -437,6 +438,7 @@ for (group in c("patient_prim", "patient_mets",
                     process_seurat(reduction = "harmony")
                 s_obj$annotations <- dog_stroma_whuman_genes$annotations
                 s_obj$new_annot_clust <- dog_stroma_whuman_genes$new_annot_clust
+                s_obj$cell_scores <- dog_stroma_whuman_genes$cell_scores
             }
 
         } else {
@@ -674,6 +676,12 @@ for (group in c("xeno_prim_human",
         patchwork::plot_annotation(title = group,
                                    theme = theme(plot.title = element_text(size = 10)))
 
+    directory <-
+        str_c("output/figures/tumor_vs_stroma/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+
     ggsave(str_c("output/figures/tumor_vs_stroma/",
                 group,
                 "/",
@@ -751,7 +759,7 @@ for (group in c("xeno_prim_human",
 
 
 ## Checking for the clusters where they map
-```{r map_the _clusters, echo = FALSE}
+```{r map_the _clusters, echo = FALSE, eval = FALSE, include = FALSE}
 object <-
         qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
                         "dogs_prim",
@@ -874,7 +882,7 @@ dimplot_better(obj1,
 
 
 ## Checking for the clusters where they map
-```{r map_the _clusters_pmets, echo = FALSE}
+```{r map_the _clusters_pmets, echo = FALSE, eval = FALSE, include = FALSE}
 ()
 obj_tumor <- 
     qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs")
@@ -915,7 +923,7 @@ dimplot_better(obj1,
 
 
 ## Redoing some of the clustering for the patient_mets_cancer_cells
-```{r}
+```{r redo1_clustering_patient_mets_cancer_cells, echo = FALSE, eval = FALSE, include = FALSE}
 # patient_mets_cancer <-
 #     qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs")
 
