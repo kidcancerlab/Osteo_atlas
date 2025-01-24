@@ -1250,11 +1250,15 @@ Run_GRA <- function(sobject,
 
 ## Convert dogs to human orthologs
 ```{r dog_human_orthologs_function}
+# load the tsv for human_dog gene orthologs
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
+
 #| cache.vars: dog_to_human_setup
 dog_to_human_setup <- function(object) {
     raw_counts <-
         GetAssayData(object,
-                    slot = "counts")
+                     slot = "counts")
 
     number_of_ENSEMBL_genes <- 
         sum(str_detect(rownames(raw_counts), "^ENSCAFG"))
@@ -1273,6 +1277,48 @@ dog_to_human_setup <- function(object) {
         RunHarmony(object,
                     group.by.vars = c("sample_name",
                                     "data_source",
+                                    "location"),
+                    theta = c(7, 7, 7)) %>%
+        process_seurat(reduction = "harmony")
+
+    return(object)
+}
+
+
+#mouse to human orthologs object
+mouse_to_human_setup <- function(object) {
+    raw_counts <-
+        GetAssayData(object,
+                     slot = "counts")
+
+    human_genes <-
+        object %>%
+        rownames() %>%
+        nichenetr::convert_mouse_to_human_symbols() %>%
+        as.character()
+    new_raw_counts <-
+        raw_counts
+
+    rownames(new_raw_counts) <- human_genes
+
+    new_raw_counts <-
+        new_raw_counts[!is.na(rownames(new_raw_counts)), ]
+
+    new_raw_counts <-
+        new_raw_counts[!duplicated(rownames(new_raw_counts)), ]
+
+    new_seurat_object <-
+        CreateSeuratObject(counts = new_raw_counts) %>%
+        AddMetaData(metadata = object@meta.data)
+
+    object <-
+        new_seurat_object %>%
+        process_seurat()
+    
+    object <-
+        RunHarmony(object,
+                    group.by.vars = c("sample_name",
+                                    "model",
                                     "location"),
                     theta = c(7, 7, 7)) %>%
         process_seurat(reduction = "harmony")

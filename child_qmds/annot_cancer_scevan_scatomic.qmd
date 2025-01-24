@@ -57,13 +57,31 @@ for (group in c("patient_prim", "patient_mets",
             # If we have too few cells SCEVAN errors out
             # dim(x) must have a positive length
             if (ncol(count_mtx_list[[x]]) > min_cells) {
-                output <-
-                    SCEVAN::pipelineCNA(count_mtx = count_mtx_list[[x]],
+                # output <-
+                #     SCEVAN::pipelineCNA(count_mtx = count_mtx_list[[x]],
+                #                         sample = x,
+                #                         organism = organism,
+                #                         par_cores = parallelly::availableCores(),
+                #                         SUBCLONES = FALSE)
+                
+                output <- 
+                    tryCatch(
+                        {
+                               SCEVAN::pipelineCNA(count_mtx = count_mtx_list[[x]],
                                         sample = x,
                                         organism = organism,
                                         par_cores = parallelly::availableCores(),
                                         SUBCLONES = FALSE)
-                # SCEVAN writes a bunch of files to ./output/ so we need to move them
+                        },
+                        error = function(e) {
+                            message("SCEVAN failed for ",group, " ", x, " with error: ", e)
+                        }
+                    )
+                if (inherits(output, "try-error")) {
+                    return(NULL)
+                }
+
+                 # SCEVAN writes a bunch of files to ./output/ so we need to move them
                 system(paste0("mv output/",
                             x,
                             "* output/id_tumor/SCEVAN/"))
@@ -105,6 +123,7 @@ Classification_confidence: confident, low_confidence on annotation
 pan_cancer_cluster: either cancer or normal
 scATOMIC_pred : celltype annotation
 ```{r scatomic}
+
 #| fig.width: 10
 #| fig.height: 10
 #| fig.align: center
@@ -113,7 +132,8 @@ scATOMIC_pred : celltype annotation
 
 
 for (group in c("patient_prim", "patient_mets",
-                "dogs_prim", "dogs_mets")) {
+                "dogs_prim", "dogs_mets",
+                "mm_prim", "mm_mets")) {
     object <- 
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
@@ -126,6 +146,11 @@ for (group in c("patient_prim", "patient_mets",
     if (organism == "dog") {
         object <- 
             dog_to_human_setup(object)
+        organism <- "human"
+    }
+    if (organism == "mouse") {
+        object <- 
+            mouse_to_human_setup(object)
         organism <- "human"
     }
 
@@ -209,7 +234,8 @@ for (group in c("patient_prim", "patient_mets",
 #| echo: FALSE
 #| dependson: scatomic
 for (group in c("patient_prim", "patient_mets",
-                "dogs_prim", "dogs_mets")) {
+                "dogs_prim", "dogs_mets",
+                "mm_prim", "mm_mets")) {
     object <- 
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,

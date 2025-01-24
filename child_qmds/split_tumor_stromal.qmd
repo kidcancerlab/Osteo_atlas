@@ -42,7 +42,7 @@ for (group in c("patient_prim", "patient_mets",
             object %>%
             AddMetaData(metadata = cancer_label)
     }
-                
+
     directory <-
         "output/seurat_objects/final_combined_sobjs/"
     if (!dir.exists(directory)) {
@@ -237,14 +237,15 @@ harmony_params <-
                             theta = c(1, 7, 7),
                             lambda = c(0.5, 0.5, 0.5)),
         xeno_prim_human = list(group_by = c("sample_name",
-                                            "method"),
-                               theta = c(2, 12),
-                               lambda = c(0.5, 0.5)),
+                                            "location",
+                                            "data_source"),
+                               theta = c(2, 7, 15),
+                               lambda = c(0.1, 0.1, 0.1)),
         xeno_mets_human = list(group_by = c("sample_name",
                                             "method",
                                             "data_source"),
-                               theta = c(7, 7, 7),
-                               lambda = c(0.5, 0.5, 0.5)),
+                               theta = c(2, 7, 15),
+                               lambda = c(0.7, 0.1, 0.1)),
         xeno_prim_mouse = list(group_by = c("sample_name",
                                             "data_source"),
                                 theta = c(7, 7),
@@ -474,7 +475,8 @@ for (group in c("patient_prim", "patient_mets",
 
         s_obj$SingleR_Ann1 <-
             stringr::str_replace_all(s_obj$SingleR_Ann2,
-                                    Annotation_cleanup$SingleR_Ann1_label)  
+                                    Annotation_cleanup$SingleR_Ann1_label)
+        #dimplot_better(s_obj, group_by = "SingleR_Ann1")
 
         dimplot1 <- 
             dimplot_better(s_obj,
@@ -767,9 +769,9 @@ object <-
 
 
 object1 <- 
-    qs::qread("output/seurat_objects/tumor_vs_stroma/dogs_prim_normal_cells.qs")
+    qs::qread("output/seurat_objects/tumor_vs_stroma/mm_prim_normal_cells.qs")
 object2 <-
-    qs::qread("output/seurat_objects/tumor_vs_stroma/dogs_mets_normal_cells.qs")
+    qs::qread("output/seurat_objects/tumor_vs_stroma/mm_mets_normal_cells.qs")
 
 dimplot_better(object1,
             group_by = "SingleR_Ann1") +

@@ -120,14 +120,14 @@ panel_plots <- list()
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.15,
-            "mm_prim_cancer_cells",         0.3,
-            "mm_mets_cancer_cells",         0.15,
+            "patient_prim_cancer_cells",    0.15,
+            "patient_mets_cancer_cells",    0.1,
+            "mm_prim_cancer_cells",         0.2,
+            "mm_mets_cancer_cells",         0.1,
             "xeno_prim_human",              0.15,
-            "xeno_mets_human",              0.1,
-            "dogs_prim_cancer_cells",       0.2,
-            "dogs_mets_cancer_cells",       0.2,
+            "xeno_mets_human",              0.15,
+            "dogs_prim_cancer_cells",       0.25,
+            "dogs_mets_cancer_cells",       0.15,
             "patient_prim_normal_cells",    0.15,
             "patient_mets_normal_cells",    0.05,
             "xeno_prim_mouse",              0.1,
@@ -138,7 +138,6 @@ object_list <-
             "dogs_mets_normal_cells",       0.15)
 
 # run force directed layout
-
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
     res_value <- object_list$res_value[i]
@@ -146,18 +145,49 @@ for (i in seq_len(nrow(object_list))) {
         qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                         group,
                         ".qs"))
-    object <- 
+    object <-
         FindClusters(object,
                     resolution = res_value)
+    dimplot_better(object, group_by = "seurat_clusters")  +
+    dimplot_better(object, group_by = "data_source") +
+    NoLegend()
+
     
     force_directed_layout <- 
         run_fdl(sobject = object)
 
-    split_fdl_plot <- 
+    split_fdl_plot1 <- 
         dimplot_better(force_directed_layout,
                        group_by= "seurat_clusters",
                        reduction = "fdl") +
             NoLegend()
+    
+    split_fdl_plot2 <-
+        dimplot_better(force_directed_layout,
+                       group_by = "new_annot_clust",
+                       reduction = "fdl") +
+            NoLegend()
+    
+    split_fdl_plot3 <- 
+        dimplot_better(force_directed_layout,
+                       group_by = "sample_name",
+                       reduction = "fdl") +
+            NoLegend()
+    
+    split_fdl_plot4 <-
+        dimplot_better(force_directed_layout,
+                       group_by = "data_source",
+                       reduction = "fdl") +
+            NoLegend()
+
+    split_fdl_plots <-
+        patchwork::wrap_plots(
+            split_fdl_plot1,
+            split_fdl_plot2,
+            split_fdl_plot3,
+            split_fdl_plot4,
+            ncol = 2
+        )
     
     directory <-
         str_c("output/figures/tumor_vs_stroma/", group)
@@ -169,9 +199,9 @@ for (i in seq_len(nrow(object_list))) {
                 group,
                 "/",
                 "fdl_plot.png"),
-            plot = split_fdl_plot,
-            width = 10,
-            height = 10)
+            plot = split_fdl_plots,
+            width = 16,
+            height = 16)
     qs::qsave(force_directed_layout,
               str_c("output/seurat_objects/tumor_vs_stroma/",
                     group,
@@ -216,22 +246,22 @@ for (i in seq_len(nrow(object_list))) {
 # Save the celltypes excel out with seurat clusters and celltypes annotation info
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.15,
-            "mm_prim_cancer_cells",         0.3,
-            "mm_mets_cancer_cells",         0.15,
+            "patient_prim_cancer_cells",    0.15,
+            "patient_mets_cancer_cells",    0.1,
+            "mm_prim_cancer_cells",         0.2,
+            "mm_mets_cancer_cells",         0.1,
             "xeno_prim_human",              0.15,
-            "xeno_mets_human",              0.1,
-            "dogs_prim_cancer_cells",       0.2,
-            "dogs_mets_cancer_cells",       0.2,
+            "xeno_mets_human",              0.15,
+            "dogs_prim_cancer_cells",       0.25,
+            "dogs_mets_cancer_cells",       0.15,
             "patient_prim_normal_cells",    0.15,
             "patient_mets_normal_cells",    0.05,
             "xeno_prim_mouse",              0.1,
             "xeno_mets_mouse",              0.1,
             "mm_prim_normal_cells",         0.25,
             "mm_mets_normal_cells",         0.2,
-            "dogs_prim_normal_cells",       0.2,
-            "dogs_mets_normal_cells",       0.2)
+            "dogs_prim_normal_cells",       0.1,
+            "dogs_mets_normal_cells",       0.15)
 
 all_data_celltypes <- tibble()
 
