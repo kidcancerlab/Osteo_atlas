@@ -120,7 +120,7 @@ panel_plots <- list()
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.15,
+            "patient_prim_cancer_cells",    0.2,
             "patient_mets_cancer_cells",    0.1,
             "mm_prim_cancer_cells",         0.2,
             "mm_mets_cancer_cells",         0.1,
@@ -238,6 +238,69 @@ for (i in seq_len(nrow(object_list))) {
                     batch_var = "data_source")
 }
 
+
+
+object <-
+    FindClusters(object,
+                resolution = 0.1)
+
+dimplot_better(object,
+              group_by = "seurat_clusters") +
+    ggtitle("seurat_clusters")
+
+dimplot_better(tumor_haram,
+              group_by = "annotations") +
+              NoLegend()
+
+cells <-
+    tumor_haram %>%
+    subset(seurat_clusters == "3") %>%
+    colnames()
+
+DimPlot(big_object,
+        cells.highlight = cells,
+        raster = F)
+
+DimPlot(object,
+        cells.highlight = cells)
+
+
+
+big_object<-
+    qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                        "patient_prim",
+                        ".qs"))
+
+DimPlot(big_object,
+        cells.highlight = cells,
+        raster = F)
+dimplot_better(big_object,
+              group_by = "new_annot_clust") +
+              NoLegend()
+list <- c("0", "3", "2")
+tumor <-
+    big_object %>%
+    subset(seurat_clusters %in% list)
+dimplot_better(tumor,
+              group_by = "seurat_clusters") +
+              NoLegend()
+
+tumor_haram <-
+    tumor %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = c("sample_name",
+                                          "method",
+                                          "data_source"),
+                    theta = c(1, 5, 5),
+                    lambda = c(0.5, 0.5, 0.5)) %>%
+    process_seurat(reduction = "harmony")
+
+dimplot_better(tumor_haram,
+              group_by = "seurat_clusters") +
+              NoLegend()
+
+        
+
 ```
 
 
@@ -246,7 +309,7 @@ for (i in seq_len(nrow(object_list))) {
 # Save the celltypes excel out with seurat clusters and celltypes annotation info
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.15,
+            "patient_prim_cancer_cells",    0.2,
             "patient_mets_cancer_cells",    0.1,
             "mm_prim_cancer_cells",         0.2,
             "mm_mets_cancer_cells",         0.1,
