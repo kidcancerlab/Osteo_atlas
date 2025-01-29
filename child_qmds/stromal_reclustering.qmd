@@ -585,6 +585,13 @@ for (item in seq_len(nrow(object_list))) {
                             resolution = 0.6)
         }
 
+        if (group == "dogs_prim_normal_cells" && cell_type == "Immune_Lymphoid") {
+            s_obj <-
+                FindClusters(s_obj,
+                            resolution = 0.4)
+        }
+
+
         dimplot_seurat <-
             dimplot_better(s_obj,
                           group_by = "seurat_clusters")
@@ -704,48 +711,11 @@ for (item in seq_len(nrow(object_list))) {
     }
 }
 
-
-dimplot_better(s_obj,
-            group_by = "seurat_clusters") 
-
-FeaturePlot(s_obj, 
-            features = nichenetr::convert_human_to_mouse_symbols(Immune_Lymphoid$Prolif_T))
-
-0=Neutrophils, 1=inflamtams, 2=TAMs, 3=Alveolar Mac, 4=Monocytes, 5 = scar,
-6 = scar, 7 = scar, 8=DC, 9 = EC_Blood, 10 = Prolif, 11 = Osteoclast
-
-"^0$" = "EC_Blood",
-"^1$" = "AlvEpithelial_T2",
-"^2$" = "AlvEpithelial_T1",
-"^3$" = "AlvEpithelial_T2",
-"^4$" = "EC_Blood",
-"^5$" = "Ciliated_Cells",
-"^6$" = "AlvEpithelial_T2",
-"^7$" = "EC_Lymphatic",
-"^8$" = "AlvEpithelial_T2",
-"^9$" = "EC_Blood",
-"^10$" = "EC_Blood",
-"^11$" = "EC_Blood",
-"^12$" = "AlvEpithelial_T2",
-"^13$" = "EC_Blood",
-"^14$" = "AlvEpithelial_T2",
-"^15$" = "EC_Blood",
-"^16$" = "EC_Blood",
-"^17$" = "EC_Blood",
-"^18$" = "EC_Blood",
-"^19$" = "EC_Lymphatic"
-
-s_obj <-
-    FindClusters(s_obj,
-                resolution = 1.5)
-
-dimplot_better(s_obj,
-              group_by = "seurat_clusters") +
-    ggtitle("seurat_clusters")
-
+dimplot_better(object,
+              group_by = "seurat_clusters") 
 cells <-
     s_obj %>%
-    subset(seurat_clusters == "11") %>%
+    subset(seurat_clusters == "9") %>%
     colnames()
 
 DimPlot(s_obj,
@@ -754,7 +724,7 @@ DimPlot(s_obj,
 DimPlot(object,
         cells.highlight = cells)
 
-dimplot_better(s_obj,
+dimplot_better(object,
               group_by = "new_annot_clust") +
     ggtitle("new_annot_clust") +
     NoLegend()
@@ -764,7 +734,7 @@ FeaturePlot(s_obj,
 
 big_object<-
     qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
-                        "mm_mets",
+                        "dogs_prim",
                         ".qs"))
 
 DimPlot(big_object,
@@ -778,7 +748,7 @@ dimplot_better(big_object,
 
 big_object1<-
     qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                        "mm_prim",
+                        "dogs_mets",
                         ".qs"))
 dimplot_better(big_object1,
               group_by = "Ann_Level3") +
@@ -787,6 +757,33 @@ dimplot_better(big_object1,
 
 ```
 
+
+## Dogs fixing manual annotation of each celltypes 
+```{r manual_annotation_celltypes_dogs} 
+#load the human mets immune myeloid cells annotated
+patient_mets_myeloid <-
+    qs::qread("output/seurat_objects/stromal_subtypes/patient_mets_normal_cells/Immune_Myeloid.qs")
+
+#load the dogs mets myeloid cells 
+dogs_mets_myeloid <- s_obj
+
+#singleR ref
+ref_lung <- 
+    SingleR::SingleR(test = as.SingleCellExperiment(dogs_mets_myeloid),
+                    ref = SeuratObject::GetAssayData(patient_mets_myeloid),
+                    labels = patient_mets_myeloid$Ann_Level3,
+                    aggr.ref = TRUE)
+
+#annotate the dogs mets myeloid cells
+dogs_mets_myeloid$Ann_Level3 <-
+    ref_lung$labels
+
+dimplot_better(dogs_mets_myeloid,
+              group_by = "Ann_Level3") +
+    ggtitle("Ann_Level3") +
+    NoLegend()
+
+```
 
 ## Manual annotation of each celltypes
 ```{r manual_annotation_celltypes}
@@ -1057,7 +1054,89 @@ celltype_list <-
                                                                 "^16$" = "EC_Blood",
                                                                 "^17$" = "EC_Blood",
                                                                 "^18$" = "EC_Blood",
-                                                                "^19$" = "EC_Lymphatic")))
+                                                                "^19$" = "EC_Lymphatic")),
+        dogs_prim_normal_cells = list(Immune_Lymphoid = c("^0$" = "CD8_T",
+                                                "^1$" = "CD4_T",
+                                                "^2$" = "Regulatory_T",
+                                                "^3$" = "NK_cells",
+                                                "^4$" = "CD4_T",
+                                                "^5$" = "Plasma_B",
+                                                "^6$" = "Proliferating_T",
+                                                "^7$" = "Naive_B",
+                                                "^8$" = "Plasma_B",
+                                                "^9$" = "CD8_T"),
+                            Immune_Myeloid = c("^0$" = "TAMs",
+                                                "^1$" = "Neutrophils",
+                                                "^2$" = "Inflam_TAMs",
+                                                "^3$" = "Osteoclast_TAMs",
+                                                "^4$" = "IFN_TAMs",
+                                                "^5$" = "Monocytes",
+                                                "^6$" = "Monocytes",
+                                                "^7$" = "Inflam_TAMs",
+                                                "^8$" = "DC",
+                                                "^9$" = "Inflam_TAMs",
+                                                "^10$" = "Inflam_TAMs",
+                                                "^11$" = "Monocytes",
+                                                "^12$" = "Osteoclast_TAMs",
+                                                "^13$" = "Neutrophils",
+                                                "^14$" = "DC",
+                                                "^15$" = "DC",
+                                                "^16$" = "Neutrophils",
+                                                "^17$" = "Plasmocytoid_DC",
+                                                "^18$" = "Mast"),
+                            Epithelial_Endothelial = c("^0$" = "EC_Blood",
+                                                        "^1$" = "EC_Blood",
+                                                        "^2$" = "EC_Blood",
+                                                        "^3$" = "EC_Blood",
+                                                        "^4$" = "EC_Blood")),
+        dogs_mets_normal_cells = list(Mesenchymal = c("^0$" = "Pericytes",
+                                                "^1$" ="Alv_Fibroblasts",
+                                                "^2$"= "Adventital_fibroblasts",
+                                                "$3$" = "Alv_Fibroblasts",
+                                                "^4$" = "Alv_Fibroblasts",
+                                                "^5$" = "Alv_Fibroblasts",
+                                                "^6$" = "Smooth_muscle",
+                                                "^7$" = "EC_Blood",
+                                                "^8$" = "Smooth_muscle"),
+                            Immune_Lymphoid = c("^0$" = "Naive_T",
+                                                "^1$" = "CD8_T",
+                                                "^2$" = "Memory_B",
+                                                "^3$" = "CD4_T",
+                                                "^4$" = "Plasma_B",
+                                                "^5$" = "Proliferating_T",
+                                                "^6$" = "Osteoclast_TAMs",
+                                                "^7$" = "NK_cells",
+                                                "^8$" = "DC",
+                                                "^9$" = "CD4_T"),
+                            Immune_Myeloid = c("^0$" = "Alv_Macrophages",
+                                                "^1$" = "Inflam_TAMs",
+                                                "^2$" = "TAMs",
+                                                "^3$" = "Inflam_TAMs",
+                                                "^4$" = "IFN_TAMs",
+                                                "^5$" = "TAMs",
+                                                "^6$" = "DC",
+                                                "^7$" = "Inflam_TAMs",
+                                                "^8$" = "Osteoclast_TAMs",
+                                                "^9$" = "DC",
+                                                "^10$" = "Inflam_TAMs",
+                                                "^11$" = "DC",
+                                                "^12$" = "Inflam_TAMs",
+                                                "^13$" = "Inflam_TAMs",
+                                                "^14$" = "TAMs",
+                                                "^15$" = "Mast",
+                                                "^16$" = "Alv_Macrophages",
+                                                "^17$" = "Plasmocytoid_DC"),
+                            Epithelial_Endothelial = c("^0$" = "EC_Blood",
+                                                        "^1$" = "EC_Blood",
+                                                        "^2$" = "EC_Blood",
+                                                        "^3$" = "AlvEpithelial_T2",
+                                                        "^4$" = "AlvEpithelial_T1",
+                                                        "^5$" = "EC_Blood",
+                                                        "^6$" = "EC_Lymphatic",
+                                                        "^7$" = "EC_Blood",
+                                                        "^8$" = "EC_Blood",
+                                                        "^9$" = "Ciliated_cells")))
+
 
 
 object_list <-
@@ -1080,12 +1159,12 @@ for (item in seq_len(nrow(object_list))) {
                               group,
                               ".qs"))
     species <- object$organism[1]
+    #convert the dogs to human genes
+    if (object$organism[1] == "dog") {
+        object <-
+            dog_to_human_setup(object = object)
+    }
 
-    # object$SingleR_Ann1 <-
-    #     str_replace_all(object$SingleR_Ann1,
-    #                     c("Endothelial_cells" = "Epithelial_Endothelial",
-    #                       "Epithelial_cells" = "Epithelial_Endothelial",
-    #                       "Stroma" = "Mesenchymal"))
     set.seed(199820)
     for (cell_type in unique(object$SingleR_Ann1)) {
         set.seed(199820)
@@ -1134,9 +1213,36 @@ for (item in seq_len(nrow(object_list))) {
                             resolution = 0.6)
         }
 
+        if (group == "dogs_prim_normal_cells" && cell_type == "Immune_Lymphoid") {
+            s_obj <-
+                FindClusters(s_obj,
+                            resolution = 0.4)
+        }
+
         s_obj$Ann_Level3 <-
             str_replace_all(s_obj$seurat_clusters,
                             celltype_list[[group]][[cell_type]])
+        
+        if (group == "dogs_mets_normal_cells" | group == "dogs_prim_normal_cells") {
+            s_obj1 <- s_obj
+            cell_ids <-
+                s_obj1@meta.data %>%
+                dplyr::select(Ann_Level3, seurat_clusters)
+
+            object <- 
+                qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                              group,
+                              ".qs"))
+            s_obj <-
+                object %>%
+                subset(SingleR_Ann1 == cell_type) %>%
+                process_seurat() %>%
+                RunHarmony(group.by.vars = "sample_name",
+                            theta = 7) %>%
+                process_seurat(reduction = "harmony")
+
+            s_obj <- AddMetaData(s_obj, cell_ids)
+        }
 
         directory <-
             str_c("output/seurat_objects/stromal_subtypes/",
@@ -1149,7 +1255,7 @@ for (item in seq_len(nrow(object_list))) {
                                group, "/",
                                 cell_type,
                                ".qs"))
-
+ 
         directory <-
             str_c("output/metadata/celltype_stroma/",
                   group)
@@ -1169,6 +1275,10 @@ for (item in seq_len(nrow(object_list))) {
     }
 }
 
+dimplot_better(s_obj,
+              group_by = "new_annot_clust") +
+    ggtitle("Ann_Level3") +
+    NoLegend()
 ```
 
 
@@ -1225,8 +1335,11 @@ for (item in seq_len(nrow(object_list))) {
 
 }
 
-dimplot_better(sobj_list$Mesenchymal,
-              group_by = "Ann_Level3")
+dimplot_better(sobj_list$Immune_Myeloid,
+              group_by = "Ann_Level3") +
+dimplot_better(sobj_list$Immune_Myeloid,
+              group_by = "new_annot_clust") +
+              NoLegend()
 
 
 harmony_params <-

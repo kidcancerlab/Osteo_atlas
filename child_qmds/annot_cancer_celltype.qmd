@@ -423,7 +423,9 @@ Annotation_cleanup <-
             "^Classical monocytes$" = "Classical_monocytes",
             "^Erythroblast$" = "Progenitors",
             "^Macrophage_monocyte_derived_S._aureus$" = "Macrophages",
-            "^iPS_cells_CRL2097_foreskin$" = "Progenitors"),
+            "^iPS_cells_CRL2097_foreskin$" = "Progenitors",
+            "^Monocyte_F._tularensis_novicida$" = "Monocytes",
+            "^iPS_cells_adipose_stem_cells$" = "Progenitors"),
     SingleR_Ann2_label =
         c("^Fibroblasts_activated$" = "Fibroblasts",
             "^Fibroblasts_senescent$" = "Fibroblasts",

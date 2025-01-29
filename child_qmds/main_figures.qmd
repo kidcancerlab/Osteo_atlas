@@ -119,8 +119,8 @@ stash_plot(stromal_panel_plot, "stromal_panel_plot")
 
 ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
         plot = stromal_panel_plot,
-        width = 20,
-        height = 30,
+        width = 14,
+        height = 21,
         limitsize = FALSE,
         bg = "white")
 

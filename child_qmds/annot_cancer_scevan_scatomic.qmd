@@ -52,34 +52,30 @@ for (group in c("patient_prim", "patient_mets",
     # SCEVAN results listed into an output for each seurat object
     result_list <-
         parallel::mclapply(names(count_mtx_list),
-                           mc.cores = parallelly::availableCores(),
+                           mc.cores = min(1, parallelly::availableCores()),
                            function(x) {
             # If we have too few cells SCEVAN errors out
             # dim(x) must have a positive length
             if (ncol(count_mtx_list[[x]]) > min_cells) {
-                # output <-
-                #     SCEVAN::pipelineCNA(count_mtx = count_mtx_list[[x]],
-                #                         sample = x,
-                #                         organism = organism,
-                #                         par_cores = parallelly::availableCores(),
-                #                         SUBCLONES = FALSE)
-                
-                output <- 
-                    tryCatch(
-                        {
-                               SCEVAN::pipelineCNA(count_mtx = count_mtx_list[[x]],
+                output <-
+                    SCEVAN::pipelineCNA(count_mtx = count_mtx_list[[x]],
                                         sample = x,
                                         organism = organism,
                                         par_cores = parallelly::availableCores(),
                                         SUBCLONES = FALSE)
-                        },
-                        error = function(e) {
-                            message("SCEVAN failed for ",group, " ", x, " with error: ", e)
-                        }
-                    )
-                if (inherits(output, "try-error")) {
-                    return(NULL)
-                }
+
+                # output <- 
+                #     tryCatch(
+                #         {
+                #             SCEVAN::pipelineCNA(count_mtx = count_mtx_list[[x]],
+                #                     sample = x,
+                #                     organism = organism,
+                #                     par_cores = parallelly::availableCores(),
+                #                     SUBCLONES = FALSE)
+                #         },
+                #         error = function(e) {
+                #             message("SCEVAN failed for ",group, " ", x, " with error: ", e)
+                #         })
 
                  # SCEVAN writes a bunch of files to ./output/ so we need to move them
                 system(paste0("mv output/",

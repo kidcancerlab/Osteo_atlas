@@ -1255,7 +1255,11 @@ orthologs <-
     read_tsv("input/downloads/dog_human_gene_orthologs.txt")
 
 #| cache.vars: dog_to_human_setup
-dog_to_human_setup <- function(object) {
+dog_to_human_setup <- function(object,      
+                                harm_vars = c("sample_name",
+                                              "data_source",
+                                              "location"),
+                                theta = c(7, 7, 7)) {
     raw_counts <-
         GetAssayData(object,
                      slot = "counts")
@@ -1275,10 +1279,8 @@ dog_to_human_setup <- function(object) {
         process_seurat()
     object <- 
         RunHarmony(object,
-                    group.by.vars = c("sample_name",
-                                    "data_source",
-                                    "location"),
-                    theta = c(7, 7, 7)) %>%
+                    group.by.vars = harm_vars,
+                    theta = theta) %>%
         process_seurat(reduction = "harmony")
 
     return(object)

@@ -606,6 +606,7 @@ for (group in c("patient_prim", "patient_mets",
     print(str_c(group, " labelled with cancer_vs_normal cells and subsetted and saved"))
 }
 
+
 #save the xenograft objects
 for (group in c("xeno_prim_human",
                 "xeno_prim_mouse",
@@ -623,7 +624,7 @@ for (group in c("xeno_prim_human",
             GetAssayData(object, layer = "counts") > 0
         ) > min_prop_cells_expressing * n_cells_in_data
     set.seed(199820)
-    object <- 
+    object <-
         object[cells_expressing_genes, ] %>%
         process_seurat() %>%
         RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
@@ -638,7 +639,7 @@ for (group in c("xeno_prim_human",
     object$SingleR_Ann2 <-
         stringr::str_replace_all(object$SingleR_Ann3,
                                 Annotation_cleanup$SingleR_Ann2_label)
-                
+
     object$SingleR_Ann1 <-
         stringr::str_replace_all(object$SingleR_Ann2,
                                 Annotation_cleanup$SingleR_Ann1_label)
@@ -769,12 +770,13 @@ object <-
 
 
 object1 <- 
-    qs::qread("output/seurat_objects/tumor_vs_stroma/mm_prim_normal_cells.qs")
+    qs::qread("output/seurat_objects/tumor_vs_stroma/dogs_prim_normal_cells.qs")
 object2 <-
     qs::qread("output/seurat_objects/tumor_vs_stroma/mm_mets_normal_cells.qs")
 
 dimplot_better(object1,
-            group_by = "SingleR_Ann1") +
+            group_by = "new_annot_clust") +NoLegend()
+FeaturePlot(object1, features = "COL1A1")
 dimplot_better(object2,
             group_by = "SingleR_Ann1")
 
