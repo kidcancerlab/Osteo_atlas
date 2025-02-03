@@ -136,6 +136,62 @@ heatmap(cor(scaled_ann_df), scale = "none", col = viridis::inferno(50))
 summary(annotation_matrix)
 ```
 
+## Plot Tumor Cell Scores
+
+The first sanity check we can perform is looking at how the tumor cell types' feature scores look compared to the H&E slides.
+
+```{r plot-tumor-scores}
+tmp <- spatial_list[[2]]
+SpatialFeaturePlot(tmp,
+                   features = c("Tumor_Metabolic",
+                                "Tumor_Inflammatory",
+                                "Tumor_Proliferative",
+                                "Tumor_Ground",
+                                "Tumor_ImmuneRegulatory"), pt.size.factor = 1500) |
+SpatialDimPlot(spatial_list[[8]], pt.size.factor = 1300)
+
+tmp_out <- list()
+for (ob in names(spatial_list)) {
+    tmp <- spatial_list[[ob]]
+    tmp$Tumor_Cummulative <- tmp$Tumor_Metabolic +
+                             tmp$Tumor_Inflammatory +
+                             tmp$Tumor_Proliferative +
+                             tmp$Tumor_Ground +
+                             tmp$Tumor_ImmuneRegulatory
+    plot_list <- list("H&E" = SpatialDimPlot(tmp,
+                                             pt.size.factor = 0) + NoLegend())
+    tumor_feats <- c("Tumor_Metabolic",
+                     "Tumor_Inflammatory",
+                     "Tumor_Proliferative",
+                     "Tumor_Ground",
+                     "Tumor_ImmuneRegulatory",
+                     "Tumor_Cummulative")
+
+    tumor_plts <- lapply(tumor_feats, function(x) {
+        SpatialFeaturePlot(tmp,
+                       features = x,
+                       pt.size.factor = size.factors[[ob]],
+                       image.alpha = 0)
+    })
+    names(tumor_plts) <- tumor_feats
+    plot_list <- c(plot_list, tumor_plts)
+    tmp_out[[ob]] <- grid.arrange(grobs = plot_list, nrow = 1)
+}
+
+
+
+size.factors <- list("OS1_Seurat" = 1500,
+                     "OS2_Seurat" = 1400,
+                     "OS3_Seurat" = 2700,
+                     "OS4_Seurat" = 1700,
+                     "OS5_Seurat" = 650,
+                     "OS6_Seurat" = 3000,
+                     "OS7_Seurat" = 2500,
+                     "OS8_Seurat" = 1300)
+
+```
+
+
 ## Cell Type Co-Occurrence
 
 I'll be using ISCHIA to identify spatially co-occurring cell types
@@ -143,4 +199,39 @@ I'll be using ISCHIA to identify spatially co-occurring cell types
 ```{r ISCHIA}
 # devtools::install_github("ati-lz/ISCHIA")
 library(ISCHIA)
+#we'll be using our `tmp` object, which is the sample named "OS1_Seurat"
+#extract devonvolution matrix
+#our deconvolution matrix is the same as our `annotation_matrix` object
+deconv_mat <- as.matrix(annotation_matrix)
+
+#Composition clustering of the deconvoluted spots
+#This identifies spots tissue-wide with similar cellular composition; this will enable us to robustly identify communicating cell types within each spot (kinda like pseudo bulking on like spots)
+#First identify number of clusters there should be?
+Composition.cluster.k(deconv_mat, 20)
+
+set.seed(17)
+
+tmp <- Composition.cluster(tmp, deconv_mat, 9)
+table(tmp$CompositionCluster_CC)
+SpatialDimPlot(tmp,
+               group.by = "CompositionCluster_CC",
+               pt.size.factor = 1500,
+               label = TRUE) | SpatialDimPlot(tmp, pt.size.factor = 0)
+
+enriched_ct_plots <- lapply(unique(tmp$CompositionCluster_CC), function(cc) {
+    Composition_cluster_enrichedCelltypes(tmp, cc, deconv_mat)
+})
+
+grid.arrange(grobs = enriched_ct_plots)
+
+
+tmp_umaps <- Composition_cluster_umap(tmp, deconv_mat)
+#Check cell type occurences
+tmp$CompositionCluster_CC <- tmp$seurat_clusters
+CC1_co_occur <- spatial.celltype.cooccurence(tmp,
+                                             deconv_mat,
+                                             COI = 5,
+                                             Condition = unique(tmp$orig.ident),
+                                             prob.th = 0.1)
+plot.celltype.cooccurence(CC1_co_occur)
 ```
