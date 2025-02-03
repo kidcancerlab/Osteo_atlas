@@ -1,0 +1,146 @@
+## Loading in Spatial Data
+
+This analysis will go along with the cellchat analysis. I'll weigh the interactions by the amount of cells in proximity to each other.
+
+This will also serve as practice for me to get more familiar with analyzing single-spot spatial transcriptomics.
+
+```{r load-spatial}
+spatial_path <- "/home/gdrobertslab/lab/ExternalData/McEachron_lab/spatial_data/rdata/"
+spatial_list <-
+    sapply(paste0(spatial_path, list.files(spatial_path)), readr::read_rds)
+names(spatial_list) <- str_remove(string = list.files(spatial_path), pattern = ".rds")
+
+system("mkdir output/spatial_pathway_analysis")
+
+#Remove pathway columns in metadata
+for (ob_name in names(spatial_list)) {
+    x <- spatial_list[[ob_name]]
+    #first extract pathway scores from metadata
+    pathway_metadata <- x@meta.data[, str_detect(colnames(x@meta.data),
+                                    "^GOBP|^REACTOME|^HALLMARK")]
+    # write.table(pathway_metadata,
+    #             file = paste0("output/spatial_pathway_analysis/",
+    #                           ob_name,
+    #                           ".tsv"),
+    #             sep = "\t")
+
+    x@meta.data <- x@meta.data[, !str_detect(colnames(x@meta.data),
+                                             "^GOBP|^REACTOME|^HALLMARK")]
+    x$sample_name <- ob_name
+    spatial_list[[ob_name]] <- x
+}
+```
+
+```{r}
+SpatialDimPlot(tmp, label = TRUE, label.size = 3, pt.size.factor = 1200)
+SpatialFeaturePlot(tmp,
+                   features = c("COL1A1",
+                                "SATB2",
+                                "nCount_Spatial"),
+                   pt.size.factor = 1200)
+```
+
+## Label Cell Types Using Spacexr
+
+We'll be using RCTD on full mode to perform cell-type annotation 
+
+### Create Reference Object
+
+I need to create a reference object. This object is created using the RCTD constructor function, which requires a counts matrix, cell types, and nUMI
+
+```{r}
+patient_mets <-
+    qs::qread("output/seurat_objects/updated_patient_mets.qs")
+
+#Ann_level3 was too granular, going to try using Ann_Level2
+spacexr_reference <-
+    spacexr::Reference(GetAssayData(patient_mets, layer = "counts"),
+                       as.factor(patient_mets$Ann_Level2))
+```
+
+### Run RCTD on Spatial Data
+
+```{r}
+#first I'm going to just use spacexr to add scores to each spot for the cell types in our reference
+for (ob_name in names(spatial_list)) {
+    sp_ob <- spatial_list[[ob_name]]
+    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
+        rename(x = imagerow, y = imagecol)
+    #convert our object to an rctd object
+    my_data <- spacexr::SpatialRNA(coords,
+                                   GetAssayData(sp_ob, layer = "counts"))
+    rctd_obj <- spacexr::create.RCTD(my_data,
+                                     spacexr_reference,
+                                     max_cores = 6,
+                                     UMI_min = 3,
+                                     counts_MIN = 0, 
+                                     UMI_max = 900000000,
+                                     CELL_MIN_INSTANCE = 0)
+    rctd_out <- spacexr::run.RCTD(rctd_obj, doublet_mode = "full")
+    qs::qsave(rctd_out, paste0("output/spatial_objects/spacexr_", ob_name, ".qs"))
+
+    norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
+    spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
+}
+qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level2_annotations.qs")
+```
+
+## Explore Cell Type Annotations
+
+For each spot, spacexr assigned a score out of 1 for each cell type. I want to use these results to identify cell types present in different spots.
+
+### Identify Significant Cell Type Scores
+
+Before we assign cell types to spots, I'm going to filter out not meaningful spots using a simple permutation threshold. Any cell types that do not meet this threshold for a particular cell will be zeroed out, and the remaining non-zero cell types will be rescaled to add up to one.
+
+```{r cell-type-permutation}
+#get matrix of spots x cell_type
+### EXTEND TO ALL SAMPLES LATER; JUST DOING ONE FOR SIMPLICITY SAKE
+tmp <- spatial_list[[1]]
+cell_types <- unique(patient_mets$Ann_Level2)
+annotation_matrix <- tmp@meta.data[ , cell_types]
+
+#use max as cell_type
+ann_df <- as.data.frame(annotation_matrix)
+ann_df$high_score <- apply(ann_df, MARGIN = 1, function(x) {
+    high_score = max(x)
+})
+
+ct <- c()
+for(i in rownames(ann_df)) {
+    ct_scores <- ann_df[i, 1:ncol(ann_df)]
+    ct[i] <- names(ct_scores)[which(ct_scores == ann_df[i, ]$high_score)]
+}
+
+#visualize highest cell type score for a given spot
+tmp <- AddMetaData(tmp, ct, col.name = "cell_type")
+SpatialDimPlot(tmp, group.by = "cell_type", pt.size.factor = 1500, label = TRUE)
+
+table(ct)
+
+#heatmap of correlation between cell type scores within one spot
+cor_hmaps <- list()
+for (ob in names(spatial_list)) {
+    ann_matrix <- spatial_list[[ob]]@meta.data[ , cell_types]
+    cor_hmaps[[ob]] <- pheatmap::pheatmap(cor(ann_matrix),
+                                          scale = "none",
+                                          col = viridis::inferno(50))
+}
+
+grid.arrange(grobs = cor_hmaps)
+
+scaled_ann_df <- scale(annotation_matrix)
+heatmap(cor(scaled_ann_df), scale = "none", col = viridis::inferno(50))
+
+
+summary(annotation_matrix)
+```
+
+## Cell Type Co-Occurrence
+
+I'll be using ISCHIA to identify spatially co-occurring cell types
+
+```{r ISCHIA}
+# devtools::install_github("ati-lz/ISCHIA")
+library(ISCHIA)
+```

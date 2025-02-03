@@ -38,11 +38,13 @@ library(data.table)
 library(hdf5r)
 library(Rmagic)
 library(knitr)
-library(scATOMIC)
+library(scATOMIC) abelson-lab
 library(copykat)
-library(SCENIC)
-library(CellChat)
+library(SCENIC) aertslab
+library(CellChat) sqjin
 library(RColorBrewer)
+library(gridExtra)
+
 ```
 
 # Load in functions

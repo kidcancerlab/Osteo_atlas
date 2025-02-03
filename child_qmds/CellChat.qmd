@@ -139,5 +139,3 @@ lapply(names(cellchat_list), function(x) {
 ```
 
 ## Permutation test to Find Strongest Interactions
-
-```{r cell-chat-permutation-test}

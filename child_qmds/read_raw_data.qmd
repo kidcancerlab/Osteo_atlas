@@ -411,7 +411,7 @@ for (group in unique(all_samples_csv$unique)) {
         arrange(unique)
 }
 
-combined_table <- 
+combined_table <-
     dplyr::full_join(counts, counts_afterQC, by = c("sample_name", "unique")) %>%
     select("sample_name", "unique", "ncount_median_before",
             "ncount_median_after", "N_cells_before", "N_cells_after")
