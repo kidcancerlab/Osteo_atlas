@@ -735,7 +735,9 @@ circle_plot <- function(sobj,
         hclust()
 
     left_join(avg_expr, perc_expressed, by = c("gene", "cluster")) %>%
-        mutate(gene = factor(gene, levels = gene_tree$label[gene_tree$order])) %>%
+        mutate(cluster_no = as.numeric(str_remove(cluster, "Cluster "))) %>%
+        mutate(gene = factor(gene, levels = gene_tree$label[gene_tree$order]),
+               cluster = factor(cluster) %>% fct_reorder(cluster_no)) %>%
         ggplot(
             aes(
                 x = cluster,
@@ -798,7 +800,7 @@ make_panel_plot <- function(sobj,
                 aggregate_by = aggregate_by,
                 organism_col = organism_col,
                 subset = subset,
-                batch_var = batch_var)
+                batch_var = batch_var) 
 
     if (dir.exists(paste0("output/degs/", label))) {
         unlink(paste0("output/degs/", label), recursive = TRUE)
@@ -898,6 +900,17 @@ make_panel_plot <- function(sobj,
         unlink(paste0("output/gsea/", label), recursive = TRUE)
     }
 
+    #if dogs conver the genes for human orthologs for gsea
+    if (sobj$organism[1] == "dog") {
+        degs_result <- lapply(degs_result, function(cluster_result) {
+            cluster_result$gene <- 
+                orthologs$human_gene_ortholog[match(cluster_result$gene, orthologs$dog_gene_name)]
+            cluster_result <- 
+                cluster_result[!is.na(cluster_result$gene), ]
+            return(cluster_result)
+        })
+    } 
+
     for (i in seq_len(nrow(cat_tib))){
         category <- cat_tib$category[i]
         subcategory <- cat_tib$subcategory[i]
@@ -992,6 +1005,9 @@ make_panel_plot <- function(sobj,
                 -pval,
                 -pathway_group) %>%
             arrange(cluster) %>%
+            mutate(cluster_no = as.numeric(str_remove(cluster, "Cluster "))) %>%
+            arrange(cluster_no) %>%
+            select(-cluster_no) %>%
             pivot_wider(
                 names_from = cluster,
                 values_from = NES,

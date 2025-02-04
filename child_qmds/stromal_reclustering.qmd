@@ -103,6 +103,8 @@ markers_list_summary <- markers_list1 %>%
 my_new_list <- markers_list_summary$markers_list
 names(my_new_list) <- markers_list_summary$cell_types
 
+orthologs <- 
+    read_tsv("input/downloads/orthologs.tsv")
 
 object_list <-
     tribble(~group,                         ~res_value,
@@ -141,13 +143,18 @@ for (item in seq_len(nrow(object_list))) {
     big_featureplot_list <- list()
 
     for (module in names(my_new_list)) {
+        genelist <- my_new_list[[module]]
         if (grepl("mouse", object$organism[1])) {
             genelist <-
                 nichenetr::convert_human_to_mouse_symbols(my_new_list[[module]]) %>%
                 na.omit() %>%
                 unique()
-        } else {
-            genelist <- my_new_list[[module]]
+        } 
+        if (species == "dog") {
+            genelist <- 
+                orthologs$dog_gene_name[match(genelist, orthologs$human_gene_ortholog)] %>%
+                na.omit() %>%
+                unique()
         }
         cell_ranks <-
             AUCell::AUCell_run(exprMat = entire_matrix,
@@ -524,11 +531,6 @@ for (item in seq_len(nrow(object_list))) {
                         group,
                         ".qs"))
     species <- object$organism[1]
-    #convert the dogs to human genes
-    if (object$organism[1] == "dog") {
-        object <-
-            dog_to_human_setup(object = object)
-    }
 
     dimplot_big_obj <-
         dimplot_better(object,
@@ -591,7 +593,6 @@ for (item in seq_len(nrow(object_list))) {
                             resolution = 0.4)
         }
 
-
         dimplot_seurat <-
             dimplot_better(s_obj,
                           group_by = "seurat_clusters")
@@ -644,6 +645,12 @@ for (item in seq_len(nrow(object_list))) {
             if (species == "mouse") {
                 genelist <- 
                     nichenetr::convert_human_to_mouse_symbols(genelist) %>%
+                    na.omit() %>%
+                    unique()
+            }
+            if (species == "dog") {
+                genelist <- 
+                    orthologs$dog_gene_name[match(genelist, orthologs$human_gene_ortholog)] %>%
                     na.omit() %>%
                     unique()
             }
@@ -757,33 +764,6 @@ dimplot_better(big_object1,
 
 ```
 
-
-## Dogs fixing manual annotation of each celltypes 
-```{r manual_annotation_celltypes_dogs} 
-#load the human mets immune myeloid cells annotated
-patient_mets_myeloid <-
-    qs::qread("output/seurat_objects/stromal_subtypes/patient_mets_normal_cells/Immune_Myeloid.qs")
-
-#load the dogs mets myeloid cells 
-dogs_mets_myeloid <- s_obj
-
-#singleR ref
-ref_lung <- 
-    SingleR::SingleR(test = as.SingleCellExperiment(dogs_mets_myeloid),
-                    ref = SeuratObject::GetAssayData(patient_mets_myeloid),
-                    labels = patient_mets_myeloid$Ann_Level3,
-                    aggr.ref = TRUE)
-
-#annotate the dogs mets myeloid cells
-dogs_mets_myeloid$Ann_Level3 <-
-    ref_lung$labels
-
-dimplot_better(dogs_mets_myeloid,
-              group_by = "Ann_Level3") +
-    ggtitle("Ann_Level3") +
-    NoLegend()
-
-```
 
 ## Manual annotation of each celltypes
 ```{r manual_annotation_celltypes}
@@ -1141,12 +1121,12 @@ celltype_list <-
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_normal_cells",    0.15,
-            "patient_mets_normal_cells",    0.05,
-            "xeno_prim_mouse",              0.1,
-            "xeno_mets_mouse",              0.1,
-            "mm_prim_normal_cells",         0.25,
-            "mm_mets_normal_cells",         0.2,
+            # "patient_prim_normal_cells",    0.15,
+            # "patient_mets_normal_cells",    0.05,
+            # "xeno_prim_mouse",              0.1,
+            # "xeno_mets_mouse",              0.1,
+            # "mm_prim_normal_cells",         0.25,
+            # "mm_mets_normal_cells",         0.2,
             "dogs_prim_normal_cells",       0.2,
             "dogs_mets_normal_cells",       0.2)
 
@@ -1159,11 +1139,6 @@ for (item in seq_len(nrow(object_list))) {
                               group,
                               ".qs"))
     species <- object$organism[1]
-    #convert the dogs to human genes
-    if (object$organism[1] == "dog") {
-        object <-
-            dog_to_human_setup(object = object)
-    }
 
     set.seed(199820)
     for (cell_type in unique(object$SingleR_Ann1)) {
@@ -1222,27 +1197,6 @@ for (item in seq_len(nrow(object_list))) {
         s_obj$Ann_Level3 <-
             str_replace_all(s_obj$seurat_clusters,
                             celltype_list[[group]][[cell_type]])
-        
-        if (group == "dogs_mets_normal_cells" | group == "dogs_prim_normal_cells") {
-            s_obj1 <- s_obj
-            cell_ids <-
-                s_obj1@meta.data %>%
-                dplyr::select(Ann_Level3, seurat_clusters)
-
-            object <- 
-                qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
-                              group,
-                              ".qs"))
-            s_obj <-
-                object %>%
-                subset(SingleR_Ann1 == cell_type) %>%
-                process_seurat() %>%
-                RunHarmony(group.by.vars = "sample_name",
-                            theta = 7) %>%
-                process_seurat(reduction = "harmony")
-
-            s_obj <- AddMetaData(s_obj, cell_ids)
-        }
 
         directory <-
             str_c("output/seurat_objects/stromal_subtypes/",
@@ -1275,10 +1229,7 @@ for (item in seq_len(nrow(object_list))) {
     }
 }
 
-dimplot_better(s_obj,
-              group_by = "new_annot_clust") +
-    ggtitle("Ann_Level3") +
-    NoLegend()
+
 ```
 
 
@@ -1335,9 +1286,9 @@ for (item in seq_len(nrow(object_list))) {
 
 }
 
-dimplot_better(sobj_list$Immune_Myeloid,
+dimplot_better(sobj_list$Immune_Lymphoid,
               group_by = "Ann_Level3") +
-dimplot_better(sobj_list$Immune_Myeloid,
+dimplot_better(sobj_list$Immune_Lymphoid,
               group_by = "new_annot_clust") +
               NoLegend()
 

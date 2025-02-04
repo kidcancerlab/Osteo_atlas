@@ -43,9 +43,27 @@ library(copykat)
 library(SCENIC)
 library(stashPlot)
 
-
 knitr::purl("child_qmds/helper_functions.qmd", "helpers.R")
 source("helpers.R")
+
+
+# # list of files in order to keep track of the files order 
+# read_raw_data.qmd
+# helper_functions.qmd
+# variants.qmd
+# annotate_celltypes.qmd
+# annot_cancer_scevan_scatomic.qmd
+# annot_cancer_celltype.qmd
+# split_tumor_stromal.qmd
+# degs_gseaplots.qmd
+# regulon.qmd
+# helper_functions_correlation.qmd
+# groupwise_expr_correlations.qmd
+# patient_reanalysis.qmd
+# stroma_reclustering.qmd
+# main_figures.qmd
+# TAMs_analysis.qmd
+
 ```
 
 # Load in functions
@@ -58,6 +76,7 @@ for directoryName in \
     output \
     output/figures \
     output/figures/gsea \
+    output/seurat_objects/final_combined_sobjs \
     output/figures/tumor_vs_stroma/clustree \
     output/figures/stromal_species_correlations \
     output/figures/tumor_subtypes_correlations \
@@ -104,10 +123,10 @@ The output of this is written to `output/seurat_objects/harmony_sobjs_annot/`
 
  {{< include child_qmds/annotate_celltypes.qmd >}}
 
-# Use SNV calling to try to ID tumor cells
+<!-- # Use SNV calling to try to ID tumor cells
 Run Matts SNV calling pipeline to try to ID tumor cells
 
-{{< include child_qmds/variants.qmd >}}
+{{< include child_qmds/variants.qmd >}} -->
 
 # Use SCEVAN and scATOMIC to try to identify tumor cells
 This will help in splitting the cancer cells from the stroma cells.
@@ -127,7 +146,7 @@ Run the differential expression and GSEA
 
 {{< include child_qmds/degs_gseaplots.qmd >}}
 
-# Investigate the expression correlation between subgroups of the data
+<!-- # Investigate the expression correlation between subgroups of the data
 
 {{< include child_qmds/helper_functions_correlation.qmd >}}
 
@@ -150,7 +169,7 @@ Reanalyze the patient samples for validation such as harmony integration validat
 
 # render to make figures html
 
-{{< include child_qmds/render_figs.qmd >}} -->
+{{< include child_qmds/render_figs.qmd >}} --> -->
 
 
 
