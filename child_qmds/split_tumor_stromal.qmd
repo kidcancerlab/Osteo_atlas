@@ -501,15 +501,43 @@ for (group in c("patient_prim", "patient_mets",
                         group_by = "data_source") +
                 NoLegend() +
                 theme(plot.title = element_text(size = 7))
+        
+        if ("scATOMIC_pred" %in% colnames(s_obj@meta.data)) {
+            scAtomic_call <-
+                dimplot_better(s_obj,
+                            group_by = "scATOMIC_pred") +
+                    ggtitle(str_c("SCATOMIC_celltype")) +
+                    NoLegend()
+        } else {
+            scAtomic_call <- 
+                ggplot(data = NULL) +
+                    aes(x = as.factor(1), y = as.factor(1)) +
+                    geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
+        }
+
+        if ("CNV_status" %in% colnames(s_obj@meta.data)){
+            dimplot_CNV <-
+                dimplot_better(s_obj,
+                            group_by = "CNV_status") +
+                    NoLegend() +
+                    theme(plot.title = element_text(size = 7))
+        } else {
+            dimplot_CNV <- 
+                ggplot(data = NULL) +
+                    aes(x = as.factor(1), y = as.factor(1)) +
+                    geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
+        }
 
         all_dimplots <- 
             patchwork::wrap_plots(dimplot1,
                                   dimplot2,
                                   dimplot3,
                                   dimplot4,
+                                  scAtomic_call,
+                                  dimplot_CNV,
                                   ncol = 2,
                                   widths = 14,
-                                  heights = 14) +
+                                  heights = 21) +
             patchwork::plot_annotation(title = str_c(group, " ", cell_group_name)) +
             theme(plot.title = element_text(size = 10))
 
@@ -667,12 +695,40 @@ for (group in c("xeno_prim_human",
                     group_by = "data_source") +
             NoLegend() +
             theme(plot.title = element_text(size = 7))
+    
+    if ("scATOMIC_pred" %in% colnames(object@meta.data)) {
+            scAtomic_call <-
+                dimplot_better(object,
+                            group_by = "scATOMIC_pred") +
+                    ggtitle(str_c("SCATOMIC_celltype")) +
+                    NoLegend()
+        } else {
+            scAtomic_call <- 
+                ggplot(data = NULL) +
+                    aes(x = as.factor(1), y = as.factor(1)) +
+                    geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
+        }
+
+        if ("CNV_status" %in% colnames(object@meta.data)){
+            dimplot_CNV <-
+                dimplot_better(object,
+                            group_by = "CNV_status") +
+                    NoLegend() +
+                    theme(plot.title = element_text(size = 7))
+        } else {
+            dimplot_CNV <- 
+                ggplot(data = NULL) +
+                    aes(x = as.factor(1), y = as.factor(1)) +
+                    geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
+        }
 
     all_dimplots <- 
         patchwork::wrap_plots(dimplot1,
                             dimplot2,
                             dimplot3,
                             dimplot4,
+                            scAtomic_call,
+                            dimplot_CNV,
                             ncol = 2,
                             widths = 14,
                             heights = 14) +

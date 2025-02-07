@@ -204,6 +204,23 @@ for (group in c("patient_prim", "patient_mets",
         object <-
             subset(object, celltype_tumor_call != "kick")
     }
+
+    mislabelled_cell_ids_normal <-
+        read_tsv(list.files(path = str_c("misc/mislabelled_ids/", group),
+                            pattern = "Epithelial_Endothelial|Mesenchymal|Immune_Lymphoid|Immune_Myeloid",
+                            full.names = TRUE)) %>%
+        distinct()
+
+    object$celltype_tumor_call[object$cell %in% mislabelled_cell_ids_normal$cell] <- "normal_cells"
+
+    mislabelled_cell_ids_tumor <-
+        read_tsv(list.files(path = str_c("misc/mislabelled_ids/", group),
+                            pattern = "Tumor",
+                            full.names = TRUE)) %>%
+        distinct()
+
+    object$celltype_tumor_call[object$cell %in% mislabelled_cell_ids_tumor$cell] <- "cancer_cells"
+
     set.seed(199820)
     object <-
         object %>%

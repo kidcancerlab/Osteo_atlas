@@ -593,6 +593,61 @@ for (item in seq_len(nrow(object_list))) {
                             resolution = 0.4)
         }
 
+        if (group == "patient_mets_normal_cells" && cell_type == "Epithelial_Endothelial") {
+            s_obj <-
+                FindClusters(s_obj,
+                            resolution = 0.5)
+        }
+
+        filename <-
+            system(paste0(
+                "ls output/metadata/celltype_stroma/",
+                group,
+                "/",
+                cell_type,
+                "_* | tail -n 1"),
+                intern = TRUE)
+        if (file.exists(filename)) {
+            old_meta <- 
+                read_tsv(filename,
+                guess_max = Inf,
+                show_col_types = FALSE) %>%
+            select(cell_name, Ann_Level3) %>%
+            column_to_rownames(var = "cell_name") %>%
+            dplyr::rename(old_ann_level3 = Ann_Level3)
+
+            s_obj <-
+                AddMetaData(s_obj, metadata = old_meta)
+
+            table_clusters <-
+                    table(s_obj$seurat_clusters, s_obj$old_ann_level3)
+            height <-
+                length(unique(s_obj$seurat_clusters))
+            
+            width <-
+                length(unique(s_obj$old_ann_level3))
+            
+            heatmap_previous_celltypes <-
+                pheatmap::pheatmap(table_clusters,
+                                    cluster_rows = FALSE,
+                                    cluster_cols = FALSE,
+                                    display_numbers = TRUE,
+                                    breaks = c(-1, -0.5, -0.1, 0.1, 0.5, 1),
+                                    silent = TRUE,
+                                    fontsize = 8,
+                                    fontsize_number = 8,
+                                    fontsize_row = 8,
+                                    fontsize_col = 8,
+                                    color = rev(RColorBrewer::brewer.pal(5, name = "RdBu")))
+
+            ggsave(str_c("output/figures/relustering_normals/",
+                        group, "/", cell_type,
+                        "_heatmap_pre_celltype.png"),
+                plot = heatmap_previous_celltypes,
+                width = width,
+                height = (height - 7),
+                bg = "white")
+        }
         dimplot_seurat <-
             dimplot_better(s_obj,
                           group_by = "seurat_clusters")
@@ -718,13 +773,36 @@ for (item in seq_len(nrow(object_list))) {
     }
 }
 
-dimplot_better(object,
-              group_by = "seurat_clusters") 
+                             Epithelial_Endothelial = c("^0$" = "EC_Vein",
+                                                        "^1$" = "Alv_EpithelialT1",
+                                                        "^2$" = "EC_Capillary",
+                                                        "^3$" = "Alv_EpithelialT2",
+                                                        "^4$" = "EC_Vein",
+                                                        "^5$" = "EC_Vein",
+                                                        "^6$" = "Alv_EpithelialT2",
+                                                        "^7$" = "EC_Vein",
+                                                        "^8$" = "EC_Vein",
+                                                        "^9$" = "EC_Artery",
+                                                        "^10$" = "Alv_EpithelialT1",
+                                                        "^11$" = "EC_Lymphatic",
+                                                        "^12$" = "Alv_EpithelialT1",
+                                                        "^13$" = "Ciliated_cells",
+                                                        "^14$" = "Alv_EpithelialT2",
+                                                        "^15$" = "EC_Vein",
+                                                        "^16$" = "Alv_EpithelialT1")
+
+
+
+dimplot_better(s_obj,
+              group_by = "seurat_clusters")
+
 cells <-
     s_obj %>%
-    subset(seurat_clusters == "9") %>%
+    subset(seurat_clusters == "16") %>%
     colnames()
 
+# FeaturePlot(s_obj,
+#             features = Osteoclast_TAMs)
 DimPlot(s_obj,
         cells.highlight = cells)
 
@@ -741,7 +819,7 @@ FeaturePlot(s_obj,
 
 big_object<-
     qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
-                        "dogs_prim",
+                        "patient_mets",
                         ".qs"))
 
 DimPlot(big_object,
@@ -804,28 +882,28 @@ celltype_list <-
                                                             "^18$" = "Osteoclast_TAMs",
                                                             "^19$" = "DC",
                                                             "^20$" = "Plasmocytoid_DC"),
-                                         Epithelial_Endothelial = c("^0$" = "EC_Blood",
-                                                                    "^1$" = "EC_Blood",
-                                                                    "^2$" = "EC_Blood",
-                                                                    "^3$" = "EC_Blood",
+                                         Epithelial_Endothelial = c("^0$" = "EC_Artery",
+                                                                    "^1$" = "EC_Vein",
+                                                                    "^2$" = "EC_Vein",
+                                                                    "^3$" = "EC_Artery",
                                                                     "^4$" = "EC_Lymphatic",
-                                                                    "^5$" = "EC_Blood",
-                                                                    "^6$" = "EC_Blood",
-                                                                    "^7$" = "EC_Blood",
-                                                                    "^8$" = "EC_Blood",
-                                                                    "^9$" = "EC_Blood")),
+                                                                    "^5$" = "EC_Lymphatic",
+                                                                    "^6$" = "EC_Vein",
+                                                                    "^7$" = "EC_Vein",
+                                                                    "^8$" = "EC_Vein",
+                                                                    "^9$" = "EC_Vein")),
         patient_mets_normal_cells = list(Mesenchymal = c("^0$" = "Pericytes",
-                                                        "^1$" = "Alveolar_fibroblasts",
-                                                        "^2$" = "EC_Blood",
-                                                        "^3$" = "Pericytes",
+                                                        "^1$" = "CAF",
+                                                        "^2$" = "EC_Vein",
+                                                        "^3$" = "CAF",
                                                         "^4$" = "Alveolar_fibroblasts",
-                                                        "^5$" = "EC_Blood",
+                                                        "^5$" = "EC_Vein",
                                                         "^6$" = "Smooth_muscle",
-                                                        "^7$" = "Pericytes",
+                                                        "^7$" = "CAF",
                                                         "^8$" = "Pericytes",
                                                         "^9$" = "Pericytes",
-                                                        "^10$" = "Alveolar_fibroblasts",
-                                                        "^11$" = "Pericytes",
+                                                        "^10$" = "CAF",
+                                                        "^11$" = "CAF",
                                                         "^12$" = "Alveolar_fibroblasts"),
                                          Immune_Lymphoid = c("^0$" = "CD8_T",
                                                             "^1$" = "Naive_T",
@@ -861,21 +939,25 @@ celltype_list <-
                                                             "^17$" = "Pericytes",
                                                             "^18$" = "TAMs",
                                                             "^19$" = "Plasmocytoid_DC"),
-                                         Epithelial_Endothelial = c("^0$" = "EC_Blood",
+                                         Epithelial_Endothelial = c("^0$" = "EC_Vein",
                                                                     "^1$" = "Alv_EpithelialT1",
-                                                                    "^2$" = "Alv_EpithelialT2",
-                                                                    "^3$" = "EC_Blood",
-                                                                    "^4$" = "EC_Blood",
-                                                                    "^5$" = "EC_Blood",
-                                                                    "^6$" = "EC_Blood",
-                                                                    "^7$" = "Alv_EpithelialT1",
-                                                                    "^8$" = "EC_Blood",
-                                                                    "^9$" = "EC_Lymphatic",
-                                                                    "^10$" = "Ciliated_cells",
-                                                                    "^11$" = "EC_Blood",
-                                                                    "^12$" = "Tuft_cells")),
-        xeno_prim_mouse = list(Mesenchymal = c("^0$" = "Fibroblasts",
-                                                "^1$" = "Fibroblasts",
+                                                                    "^2$" = "EC_Capillary",
+                                                                    "^3$" = "Alv_EpithelialT2",
+                                                                    "^4$" = "EC_Vein",
+                                                                    "^5$" = "EC_Vein",
+                                                                    "^6$" = "Alv_EpithelialT2",
+                                                                    "^7$" = "EC_Vein",
+                                                                    "^8$" = "EC_Vein",
+                                                                    "^9$" = "EC_Artery",
+                                                                    "^10$" = "Alv_EpithelialT1",
+                                                                    "^11$" = "EC_Lymphatic",
+                                                                    "^12$" = "Alv_EpithelialT1",
+                                                                    "^13$" = "Ciliated_cells",
+                                                                    "^14$" = "Alv_EpithelialT2",
+                                                                    "^15$" = "EC_Vein",
+                                                                    "^16$" = "Alv_EpithelialT1")),
+        xeno_prim_mouse = list(Mesenchymal = c("^0$" = "CAF",
+                                                "^1$" = "CAF",
                                                 "^2$" ="Stromal_cells",
                                                 "^3$"= "Cardiomyocytes"),
                             Immune_Lymphoid = c("^0$" = "Naive_NKT"),
@@ -894,11 +976,11 @@ celltype_list <-
                                                 "^12$" = "DC",
                                                 "^13$" = "Monocytes",
                                                 "^14$" = "TAMs"),
-                            Epithelial_Endothelial = c("^0$" = "EC_Blood",
-                                                        "^1$" = "EC_Blood",
-                                                        "^2$" = "EC_Blood",
-                                                        "^3$" = "EC_Blood",
-                                                        "^4$" = "EC_Blood")),
+                            Epithelial_Endothelial = c("^0$" = "EC_Vein",
+                                                        "^1$" = "EC_Vein",
+                                                        "^2$" = "EC_Artery",
+                                                        "^3$" = "EC_Vein",
+                                                        "^4$" = "EC_Vein")),
         xeno_mets_mouse = list(Mesenchymal = c("^0$" = "Myofibroblasts",
                                                 "^1$" ="Alv_Fibroblasts",
                                                 "^2$"= "Stromal_cells"),
@@ -922,23 +1004,23 @@ celltype_list <-
                                                 "^14$" = "Osteoclast_TAMs",
                                                 "^15$" = "Prolif_TAMs",
                                                 "^16$" = "Osteoclast_TAMs"),
-                            Epithelial_Endothelial = c("^0$" = "EC_Blood",
-                                                        "^1$" = "EC_Blood",
-                                                        "^2$" = "EC_Blood",
-                                                        "^3$" = "EC_Blood",
-                                                        "^4$" = "EC_Blood",
-                                                        "^5$" = "EC_Blood",
-                                                        "^6$" = "EC_Blood",
-                                                        "^7$" = "EC_Blood",
-                                                        "^8$" = "EC_Blood",
-                                                        "^9$" = "EC_Blood",
+                            Epithelial_Endothelial = c("^0$" = "EC_Artery",
+                                                        "^1$" = "EC_Capillary",
+                                                        "^2$" = "EC_Capillary",
+                                                        "^3$" = "EC_Capillary",
+                                                        "^4$" = "EC_Capillary",
+                                                        "^5$" = "EC_Vein",
+                                                        "^6$" = "EC_Capillary",
+                                                        "^7$" = "EC_Lymphatic",
+                                                        "^8$" = "EC_Capillary",
+                                                        "^9$" = "EC_Vein",
                                                         "^10$" = "Alv_EpithelialT2",
-                                                        "^11$" = "EC_Blood",
+                                                        "^11$" = "EC_Capillary",
                                                         "^12$" = "Alv_EpithelialT1",
                                                         "^13$" = "Ciliated_cells",
-                                                        "^14$" = "EC_Blood",
-                                                        "^15$" = "EC_Blood")),
-        mm_prim_normal_cells = list(Mesenchymal = c("^0$" = "Fibroblasts"),
+                                                        "^14$" = "EC_Vein",
+                                                        "^15$" = "EC_Capillary")),
+        mm_prim_normal_cells = list(Mesenchymal = c("^0$" = "CAF"),
                                     Immune_Lymphoid = c("^0$" = "CD8_T",
                                                         "^1$" = "CD8_T",
                                                         "^2$" = "CD4_T",
@@ -965,13 +1047,13 @@ celltype_list <-
                                                         "^14$" = "Memory_B",
                                                         "^15$" = "Neutrophils",
                                                         "^16$" = "DC"),
-                                    Epithelial_Endothelial = c("^0$" = "EC_Blood",
-                                                                "^1$" = "Stromal_cells",
-                                                                "^2$" = "EC_Blood")),
-        mm_mets_normal_cells = list(Mesenchymal = c("^0$" = "Alveolar_fibroblasts",
+                                    Epithelial_Endothelial = c("^0$" = "EC_Artery",
+                                                                "^1$" = "CAF",
+                                                                "^2$" = "EC_Artery")),
+        mm_mets_normal_cells = list(Mesenchymal = c("^0$" = "CAF",
                                                     "^1$" = "Pericytes",
-                                                    "^2$" = "Alveolar_fibroblasts",
-                                                    "^3$" = "Alveolar_fibroblasts",
+                                                    "^2$" = "CAF",
+                                                    "^3$" = "CAF",
                                                     "^4$" = "Adventital_fibroblasts",
                                                     "^5$" = "Smooth_muscle",
                                                     "^6$" = "Smooth_muscle",
@@ -1015,118 +1097,127 @@ celltype_list <-
                                                         "^21$" = "Osteoclast_TAMs",
                                                         "^22$" = "DC",
                                                         "^23$" = "Alv_Macrophages"),
-                                    Epithelial_Endothelial = c("^0$" = "EC_Blood",
+                                    Epithelial_Endothelial = c("^0$" = "EC_Capillary",
                                                                 "^1$" = "Alv_EpithelialT2",
                                                                 "^2$" = "Alv_EpithelialT1",
                                                                 "^3$" = "Alv_EpithelialT2",
-                                                                "^4$" = "EC_Blood",
+                                                                "^4$" = "EC_Artery",
                                                                 "^5$" = "Ciliated_Cells",
                                                                 "^6$" = "Alv_EpithelialT2",
                                                                 "^7$" = "EC_Lymphatic",
                                                                 "^8$" = "Alv_EpithelialT2",
-                                                                "^9$" = "EC_Blood",
-                                                                "^10$" = "EC_Blood",
-                                                                "^11$" = "EC_Blood",
+                                                                "^9$" = "EC_Capillary",
+                                                                "^10$" = "EC_Capillary",
+                                                                "^11$" = "EC_Capillary",
                                                                 "^12$" = "Alv_EpithelialT2",
-                                                                "^13$" = "EC_Blood",
+                                                                "^13$" = "EC_Vein",
                                                                 "^14$" = "Alv_EpithelialT2",
-                                                                "^15$" = "EC_Blood",
-                                                                "^16$" = "EC_Blood",
-                                                                "^17$" = "EC_Blood",
-                                                                "^18$" = "EC_Blood",
+                                                                "^15$" = "EC_Capillary",
+                                                                "^16$" = "EC_Capillary",
+                                                                "^17$" = "EC_Capillary",
+                                                                "^18$" = "EC_Capillary",
                                                                 "^19$" = "EC_Lymphatic")),
         dogs_prim_normal_cells = list(Immune_Lymphoid = c("^0$" = "CD8_T",
-                                                "^1$" = "CD4_T",
-                                                "^2$" = "Regulatory_T",
-                                                "^3$" = "NK_cells",
-                                                "^4$" = "CD4_T",
-                                                "^5$" = "Plasma_B",
-                                                "^6$" = "Proliferating_T",
-                                                "^7$" = "Naive_B",
-                                                "^8$" = "Plasma_B",
-                                                "^9$" = "CD8_T"),
+                                                        "^1$" = "CD4_T",
+                                                        "^2$" = "NK_cells",
+                                                        "^3$" = "Regulatory_T",
+                                                        "^4$" = "CD4_T",
+                                                        "^5$" = "Plasma_B",
+                                                        "^6$" = "Proliferating_T",
+                                                        "^7$" = "Memory_B",
+                                                        "^8$" = "Plasma_B",
+                                                        "^9$" = "CD8_T",
+                                                        "^10$" = "CD4_T",
+                                                        "^11$" = "CD4_T",
+                                                        "^12$" = "Proliferating_T"),
                             Immune_Myeloid = c("^0$" = "TAMs",
                                                 "^1$" = "Neutrophils",
                                                 "^2$" = "Inflam_TAMs",
                                                 "^3$" = "Osteoclast_TAMs",
-                                                "^4$" = "IFN_TAMs",
-                                                "^5$" = "Monocytes",
-                                                "^6$" = "Monocytes",
-                                                "^7$" = "Inflam_TAMs",
-                                                "^8$" = "DC",
-                                                "^9$" = "Inflam_TAMs",
+                                                "^4$" = "Monocytes",
+                                                "^5$" = "IFN_TAMs",
+                                                "^6$" = "DC",
+                                                "^7$" = "Monocytes",
+                                                "^8$" = "TAMs",
+                                                "^9$" = "Monocytes",
                                                 "^10$" = "Inflam_TAMs",
                                                 "^11$" = "Monocytes",
-                                                "^12$" = "Osteoclast_TAMs",
+                                                "^12$" = "DC",
                                                 "^13$" = "Neutrophils",
-                                                "^14$" = "DC",
-                                                "^15$" = "DC",
-                                                "^16$" = "Neutrophils",
-                                                "^17$" = "Plasmocytoid_DC",
-                                                "^18$" = "Mast"),
-                            Epithelial_Endothelial = c("^0$" = "EC_Blood",
-                                                        "^1$" = "EC_Blood",
-                                                        "^2$" = "EC_Blood",
-                                                        "^3$" = "EC_Blood",
-                                                        "^4$" = "EC_Blood")),
-        dogs_mets_normal_cells = list(Mesenchymal = c("^0$" = "Pericytes",
-                                                "^1$" ="Alv_Fibroblasts",
-                                                "^2$"= "Adventital_fibroblasts",
-                                                "$3$" = "Alv_Fibroblasts",
-                                                "^4$" = "Alv_Fibroblasts",
-                                                "^5$" = "Alv_Fibroblasts",
-                                                "^6$" = "Smooth_muscle",
-                                                "^7$" = "EC_Blood",
-                                                "^8$" = "Smooth_muscle"),
-                            Immune_Lymphoid = c("^0$" = "Naive_T",
+                                                "^14$" = "Osteoclast_TAMs",
+                                                "^15$" = "Monocytes",
+                                                "^16$" = "DC",
+                                                "^17$" = "Inflam_TAMs",
+                                                "^18$" = "Plasmocytoid_DC",
+                                                "^19$" = "Mast",
+                                                "^20$" = "Neutrophils"),
+                            Epithelial_Endothelial = c("^0$" = "EC_Vein",
+                                                        "^1$" = "EC_Artery",
+                                                        "^2$" = "EC_Capillary",
+                                                        "^3$" = "EC_Vein",
+                                                        "^4$" = "EC_Lymphatic",
+                                                        "^5$" = "EC_Vein",
+                                                        "^6$" = "EC_Vein",
+                                                        "^7$" = "EC_Vein")),
+        dogs_mets_normal_cells = list(Mesenchymal = c("^0$" = "CAF",
+                                                    "^1$" ="Smooth_muscle",
+                                                    "^2$"= "Alv_Fibroblasts",
+                                                    "$3$" = "Alv_Fibroblasts",
+                                                    "^4$" = "Pericytes",
+                                                    "^5$" = "Alv_EpithelialT2",
+                                                    "^6$" = "Smooth_muscle",
+                                                    "^7$" = "EC_Vein",
+                                                    "^8$" = "Alv_Fibroblasts",
+                                                    "^9$" = "Smooth_muscle"),
+                            Immune_Lymphoid = c("^0$" = "CD4_T",
                                                 "^1$" = "CD8_T",
                                                 "^2$" = "Memory_B",
-                                                "^3$" = "CD4_T",
+                                                "^3$" = "Regulatory_T",
                                                 "^4$" = "Plasma_B",
                                                 "^5$" = "Proliferating_T",
-                                                "^6$" = "Osteoclast_TAMs",
-                                                "^7$" = "NK_cells",
+                                                "^6$" = "NK_cells",
+                                                "^7$" = "Osteoclast_TAMs",
                                                 "^8$" = "DC",
-                                                "^9$" = "CD4_T"),
+                                                "^9$" = "Proliferating_T",
+                                                "^10$" = "CD4_T"),
                             Immune_Myeloid = c("^0$" = "Alv_Macrophages",
                                                 "^1$" = "Inflam_TAMs",
-                                                "^2$" = "TAMs",
-                                                "^3$" = "Inflam_TAMs",
-                                                "^4$" = "IFN_TAMs",
+                                                "^2$" = "IFN_TAMs",
+                                                "^3$" = "TAMs",
+                                                "^4$" = "DC",
                                                 "^5$" = "TAMs",
-                                                "^6$" = "DC",
-                                                "^7$" = "Inflam_TAMs",
+                                                "^6$" = "TAMs",
+                                                "^7$" = "TAMs",
                                                 "^8$" = "Osteoclast_TAMs",
                                                 "^9$" = "DC",
-                                                "^10$" = "Inflam_TAMs",
-                                                "^11$" = "DC",
-                                                "^12$" = "Inflam_TAMs",
+                                                "^10$" = "DC",
+                                                "^11$" = "Inflam_TAMs",
+                                                "^12$" = "Alv_Macrophages",
                                                 "^13$" = "Inflam_TAMs",
-                                                "^14$" = "TAMs",
-                                                "^15$" = "Mast",
-                                                "^16$" = "Alv_Macrophages",
-                                                "^17$" = "Plasmocytoid_DC"),
-                            Epithelial_Endothelial = c("^0$" = "EC_Blood",
-                                                        "^1$" = "EC_Blood",
-                                                        "^2$" = "EC_Blood",
+                                                "^14$" = "Mast",
+                                                "^15$" = "Plasmocytoid_DC",
+                                                "^16$" = "Alv_Macrophages"),
+                            Epithelial_Endothelial = c("^0$" = "EC_Vein",
+                                                        "^1$" = "EC_Capillary",
+                                                        "^2$" = "EC_Vein",
                                                         "^3$" = "AlvEpithelial_T2",
                                                         "^4$" = "AlvEpithelial_T1",
-                                                        "^5$" = "EC_Blood",
-                                                        "^6$" = "EC_Lymphatic",
-                                                        "^7$" = "EC_Blood",
-                                                        "^8$" = "EC_Blood",
+                                                        "^5$" = "EC_Capillary",
+                                                        "^6$" = "EC_Artery",
+                                                        "^7$" = "EC_Lymphatic",
+                                                        "^8$" = "EC_Vein",
                                                         "^9$" = "Ciliated_cells")))
 
 
 
 object_list <-
     tribble(~group,                         ~res_value,
-            # "patient_prim_normal_cells",    0.15,
-            # "patient_mets_normal_cells",    0.05,
-            # "xeno_prim_mouse",              0.1,
-            # "xeno_mets_mouse",              0.1,
-            # "mm_prim_normal_cells",         0.25,
-            # "mm_mets_normal_cells",         0.2,
+            "patient_prim_normal_cells",    0.15,
+            "patient_mets_normal_cells",    0.05,
+            "xeno_prim_mouse",              0.1,
+            "xeno_mets_mouse",              0.1,
+            "mm_prim_normal_cells",         0.25,
+            "mm_mets_normal_cells",         0.2,
             "dogs_prim_normal_cells",       0.2,
             "dogs_mets_normal_cells",       0.2)
 
@@ -1194,6 +1285,12 @@ for (item in seq_len(nrow(object_list))) {
                             resolution = 0.4)
         }
 
+        if (group == "patient_mets_normal_cells" && cell_type == "Epithelial_Endothelial") {
+            s_obj <-
+                FindClusters(s_obj,
+                            resolution = 0.5)
+        }
+
         s_obj$Ann_Level3 <-
             str_replace_all(s_obj$seurat_clusters,
                             celltype_list[[group]][[cell_type]])
@@ -1223,12 +1320,14 @@ for (item in seq_len(nrow(object_list))) {
                             cell_type, "_",
                             timestamp,
                             ".tsv")
-        write_tsv(x = s_obj@meta.data, file = filename)
+
+        s_obj@meta.data %>%
+        rownames_to_column(var = "cell_name") %>%
+        write_tsv(file = filename)
 
         print(str_c("Finished processing ", cell_type, " for ", group))
     }
 }
-
 
 ```
 
@@ -1395,11 +1494,16 @@ for (item in seq_len(nrow(object_list))) {
                           "^preDC$" = "DC",
                           "^Proli_TAMs$" = "Macrophages",
                           "^Myofibroblasts$" = "Fibroblasts",
-                          "^Tumor_Metabolic$" = "Tumor"))
+                          "^Tumor_Metabolic$" = "Tumor",
+                          "^EC_Artery$" = "Endothelial_cells",
+                          "^EC_Capillary$" = "Endothelial_cells",
+                          "^EC_Vein$" = "Endothelial_cells",
+                          "^EC_Lymphatic$" = "Endothelial_cells"))
 
     stroma_obj$Ann_Level1 <- 
         str_replace_all(stroma_obj$Ann_Level2,
                         c("^B_cells$" = "Immune_Myeloid",
+                          "^CAF$" = "Fibroblasts",
                           "^Ciliated_cells$" = "Epithelial_Endothelial",
                           "^Club_cells$" = "Epithelial_Endothelial",
                           "^DC$" = "Immune_Myeloid",
