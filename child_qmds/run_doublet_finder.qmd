@@ -536,53 +536,188 @@ dimplot_better(chimera_small, group = c("MajoritySinglet_DropletType",
 
 ## Using DoubletFinder Package
 
-We now want to see how the r package DoubletFinder performs in calling doublets.
+We now want to see how the r package DoubletFinder performs in calling doublets. Since doublets are captured during the sequencing run, I'm going to have 
+calculate doublets on a per-sample basis. I first need to identify the % expected doublets for each sample, which I can estimate from the number of cells recovered.
+
+```{r calculate-expected-doublet-rates}
+path_key <- list(
+    SJ = "/gpfs0/home2/gdrobertslab/lab/ExternalData/Patel_lab/",
+    NCH = "/gpfs0/home2/gdrobertslab/lab/Counts_2/",
+    NCI_POB = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/03_FilteredMatricesH5/",
+    GEO = "/gpfs0/home2/gdrobertslab/lab/Counts_2/"
+    )
+
+path_suffix_key <- list(
+    SJ = "/filtered_feature_bc_matrix.h5",
+    NCH = "/filtered_feature_bc_matrix.h5",
+    NCI_POB = "_filtered_feature_bc_matrix.h5", # Note different file names
+    GEO = "/filtered_feature_bc_matrix.h5"
+    )
+
+all_samples <- read.table("misc/allsample_details.txt")
+n_row <- nrow(all_samples)
+
+exp_doublets <- data.frame(sample = rep(NA, n_row),
+                           cells_recovered = rep(NA, n_row),
+                           exp_doublets = rep(NA, n_row))
+
+doublet_finder_results <- list()
+#keep track of samples processed so it doesn't double up
+samps_proc <- c()
+
+for (i in seq_len(n_row)) {
+    sid <- all_samples$sample_name[i]
+
+    #check that sample hasn't already been run
+    if (!sid %in% samps_proc) {
+    exp_doublets$sample[i] <- sid
+
+    print(paste("Iteration", i, "for sample", sid))
+
+    sp_pattern <- ifelse(all_samples$sp_pattern[i] == "nothing",
+                         "",
+                         all_samples$sp_pattern[i])
+    
+    source <- all_samples$data_source[i]
+    
+    ob <- tenx_load_qc(h5_file = paste0(path_key[[source]],
+                                        sid,
+                                        path_suffix_key[[source]]),
+                         violin_plot = FALSE,
+                         min_cells = 1,
+                         min_features = 1,
+                         exp_type = "GEX") %>%
+        process_seurat()
+
+    #pk identification
+    sweep_res_list <- DoubletFinder::paramSweep(ob, PCs = 1:15, sct = FALSE)
+    sweep_stats <- DoubletFinder::summarizeSweep(sweep_res_list, GT = FALSE)
+    png("tmp.png")
+    bcmvn <- DoubletFinder::find.pK(sweep_stats)
+    dev.off()
+    system("rm tmp.png")
+
+    #select the pK that corresponds to max bcmvn to optimize doublet detection
+    opt_pk <- bcmvn %>%
+        filter(BCmetric == max(BCmetric)) %>%
+        dplyr::select(pK) %>%
+        pull
+
+    #Homotypic doublet proportion estimate
+    annotations <- ob$seurat_clusters
+    homotypic.prop <- modelHomotypic(annotations)
+    #number of expected doublets based on doublet_rate=(cells_recovered)*2^(-10.2877)
+    exp_doublet_rate <- ncol(ob) * 2 ^ -10.2877 / 100
+    exp_doublets$exp_doublets[i] <- exp_doublet_rate
+    nExp_poi <- round(exp_doublet_rate*ncol(ob))
+    nExp_poi_adj <- round(nExp_poi*(1 - homotypic.prop))
+
+    doublet_finder_results[[sid]] <-
+        doubletFinder(ob,
+                      PCs = 1:15,
+                      pN = 0.25,
+                      pK = as.numeric(opt_pk),
+                      nExp = nExp_poi_adj,
+                      reuse.pANN = FALSE,
+                      sct = FALSE)
+
+    samps_proc <- c(samps_proc, sid)
+    }
+}
+```
 
 I'm going to assume a doublet rate of 8% for all samples. This is based on 10x's established rate of 8% per 10,000 cells
 
 ```{r rDoubletFinder}
+library(DoubletFinder)
 df_results <- list()
 for (ob_name in names(obj_list)) {
     #initialize list to hold results for this object
     curr_ob_res <- list()
     full_ob <- obj_list[[ob_name]]
     for (sid in unique(full_ob$sample_name)) {
-        ob <- subset(full_ob, sample_name == sid) %>%
-            process_seurat()
+        #SC072 only has 1 cell in patient_mets_cancer_cells
+        if (sum(full_ob$sample_name == sid) > 30) {
+            ob <- subset(full_ob, sample_name == sid) %>%
+                NormalizeData() %>%
+                FindVariableFeatures() %>%
+                ScaleData() %>%
+                RunPCA(npcs = 30)
+            ob <- RunUMAP(ob, dims = 1:30, reduction = "pca") %>%
+                FindNeighbors() %>%
+                FindClusters()
 
-        #pk identification (no ground truth)
-        sweep_res_list <- DoubletFinder::paramSweep(ob, PCs = 1:15, sct = FALSE)
-        sweep_stats <- DoubletFinder::summarizeSweep(sweep_res_list, GT = FALSE)
-        png("tmp.png")
-        bcmvn <- DoubletFinder::find.pK(sweep_stats)
-        dev.off()
-        system("rm tmp.png")
 
-        #select the pK that corresponds to max bcmvn to optimize doublet detection
-        opt_pk <- bcmvn %>%
-            filter(BCmetric == max(BCmetric)) %>%
-            dplyr::select(pK) %>%
-            pull
+            #pk identification (no ground truth)
+            sweep_res_list <- DoubletFinder::paramSweep(ob, PCs = 1:15, sct = FALSE)
+            sweep_stats <- DoubletFinder::summarizeSweep(sweep_res_list, GT = FALSE)
+            png("tmp.png")
+            bcmvn <- DoubletFinder::find.pK(sweep_stats)
+            dev.off()
+            system("rm tmp.png")
 
-        #Homotypic doublet proportion estimate
-        annotations <- ob$Ann_Level3
-        homotypic.prop <- modelHomotypic(annotations)
-        #number of expected doublets based on 8% doublet rate
-        nExp_poi <- round(0.8*ncol(ob))
-        nExp_poi_adj <- round(nExp_poi*(1 - homotypic.prop))
+            #select the pK that corresponds to max bcmvn to optimize doublet detection
+            opt_pk <- bcmvn %>%
+                filter(BCmetric == max(BCmetric)) %>%
+                dplyr::select(pK) %>%
+                pull
 
-        #Run DoubletFinder
-        curr_ob_res[[sid]] <-
-            doubletFinder(ob,
-                          PCs = 1:15,
-                          pN = 0.25,
-                          pK = as.numeric(opt_pk),
-                          nExp = nExp_poi_adj,
-                          reuse.pANN = FALSE,
-                          sct = FALSE)
+            #Homotypic doublet proportion estimate
+            annotations <- ob$Ann_Level3
+            homotypic.prop <- modelHomotypic(annotations)
+            #number of expected doublets based on 8% doublet rate
+            nExp_poi <- round(0.08*ncol(ob))
+            nExp_poi_adj <- round(nExp_poi*(1 - homotypic.prop))
+
+            #Run DoubletFinder
+            curr_ob_res[[sid]] <-
+                doubletFinder(ob,
+                            PCs = 1:15,
+                            pN = 0.25,
+                            pK = as.numeric(opt_pk),
+                            nExp = nExp_poi_adj,
+                            reuse.pANN = FALSE,
+                            sct = FALSE)
+        }
     }
-    df_results[[ob_name]] <- curr_ob_results
+    df_results[[ob_name]] <- curr_ob_res
+}
+
+df_obs <- lapply(df_results, function(x) {
+    merge(x[[1]], x[2:length(x)]) %>%
+        process_seurat()
+})
+
+df_obs <- list()
+for (ob_list in names(df_results)) {
+    print(ob_list)
+    df_obs[[ob_list]] <- merge(df_results[[ob_list]][[1]],
+                               df_results[[ob_list]][2:length(df_results[[ob_list]])])
 }
 
 
+df_by_ob <- list()
+for (ob_name in names(object_list)) {
+    tmp_df_res <- list()
+    for (sid in names(df_results[[ob_name]])) {
+        tmp <- df_results[[ob_name]][[sid]]@meta.data
+        df_res <- tmp[, startsWith(colnames(tmp), "DF.classifications")]
+        tmp_df_res[[sid]] <- setNames(df_res, rownames(tmp))
+    }
+    df_by_ob <- AnnotationDbi::unlist2(tmp_df_res)
+    
+    object_list[[ob_name]] <- AddMetaData(object_list[[ob_name]],
+                                          df_by_ob,
+                                          col.name = "DoubletFinder_call")
+}
+
+doublet_finder_umaps <- lapply(object_list, function(x) {
+    r_dim_plot(x, group.by = "Ann_Level3")
+})
+png("tmp.png", width = 2000)
+grid.arrange(grobs = doublet_finder_umaps[c("mm_mets_cancer_cells",
+                                            "mm_prim_cancer_cells",
+                                            "patient_mets_cancer_cells",
+                                            "patient_prim_cancer_cells")], nrow = 1)
+dev.off()
 ```

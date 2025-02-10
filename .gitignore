@@ -75,10 +75,14 @@ sbatch
 tmp_bams
 tmp_bcs
 analyze_looms*
-<<<<<<< HEAD
 *gtf
-=======
-*genes.gtf
->>>>>>> cf14430 (added checks for failed runs)
+
+#DoubletFinder Files
+DoubletFinder
 
 figures
+demuxafy_figs
+
+
+#doublet finder tests
+pdx_clinical_chimera
