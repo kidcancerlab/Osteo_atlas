@@ -1306,7 +1306,7 @@ for (item in seq_len(nrow(object_list))) {
                                group, "/",
                                 cell_type,
                                ".qs"))
- 
+
         directory <-
             str_c("output/metadata/celltype_stroma/",
                   group)
@@ -1385,11 +1385,9 @@ for (item in seq_len(nrow(object_list))) {
 
 }
 
-dimplot_better(sobj_list$Immune_Lymphoid,
-              group_by = "Ann_Level3") +
-dimplot_better(sobj_list$Immune_Lymphoid,
-              group_by = "new_annot_clust") +
-              NoLegend()
+dimplot_better(sobj_list$Epithelial_Endothelial,
+              group_by = "Ann_Level3")
+
 
 
 harmony_params <-
@@ -1503,7 +1501,7 @@ for (item in seq_len(nrow(object_list))) {
     stroma_obj$Ann_Level1 <- 
         str_replace_all(stroma_obj$Ann_Level2,
                         c("^B_cells$" = "Immune_Myeloid",
-                          "^CAF$" = "Fibroblasts",
+                          "^CAF$" = "Mesenchymal",
                           "^Ciliated_cells$" = "Epithelial_Endothelial",
                           "^Club_cells$" = "Epithelial_Endothelial",
                           "^DC$" = "Immune_Myeloid",

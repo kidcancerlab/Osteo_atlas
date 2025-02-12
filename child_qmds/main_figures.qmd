@@ -257,7 +257,7 @@ ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.png",
 
 merge_obj <-
     merge(cancer_sobj_list$patient_prim_cancer_cells,
-        cancer_sobj_list$xeno_prim_human) %>%
+        cancer_sobj_list$patient_mets_cancer_cells) %>%
     JoinLayers() %>%
     process_seurat()
 
