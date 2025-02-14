@@ -570,154 +570,212 @@ for (i in seq_len(n_row)) {
 
     #check that sample hasn't already been run
     if (!sid %in% samps_proc) {
-    exp_doublets$sample[i] <- sid
+        exp_doublets$sample[i] <- sid
 
-    print(paste("Iteration", i, "for sample", sid))
+        print(paste("Iteration", i, "for sample", sid))
 
-    sp_pattern <- ifelse(all_samples$sp_pattern[i] == "nothing",
-                         "",
-                         all_samples$sp_pattern[i])
-    
-    source <- all_samples$data_source[i]
-    
-    ob <- tenx_load_qc(h5_file = paste0(path_key[[source]],
-                                        sid,
-                                        path_suffix_key[[source]]),
-                         violin_plot = FALSE,
-                         min_cells = 1,
-                         min_features = 1,
-                         exp_type = "GEX") %>%
-        process_seurat()
+        sp_pattern <- ifelse(all_samples$sp_pattern[i] == "nothing",
+                             "",
+                             all_samples$sp_pattern[i])
 
-    #pk identification
-    sweep_res_list <- DoubletFinder::paramSweep(ob, PCs = 1:15, sct = FALSE)
-    sweep_stats <- DoubletFinder::summarizeSweep(sweep_res_list, GT = FALSE)
-    png("tmp.png")
-    bcmvn <- DoubletFinder::find.pK(sweep_stats)
-    dev.off()
-    system("rm tmp.png")
+        source <- all_samples$data_source[i]
 
-    #select the pK that corresponds to max bcmvn to optimize doublet detection
-    opt_pk <- bcmvn %>%
-        filter(BCmetric == max(BCmetric)) %>%
-        dplyr::select(pK) %>%
-        pull
+        ob <- tenx_load_qc(h5_file = paste0(path_key[[source]],
+                                            sid,
+                                            path_suffix_key[[source]]),
+                             violin_plot = FALSE,
+                             min_cells = 1,
+                             min_features = 1,
+                             exp_type = "GEX") %>%
+            process_seurat()
 
-    #Homotypic doublet proportion estimate
-    annotations <- ob$seurat_clusters
-    homotypic.prop <- modelHomotypic(annotations)
-    #number of expected doublets based on doublet_rate=(cells_recovered)*2^(-10.2877)
-    exp_doublet_rate <- ncol(ob) * 2 ^ -10.2877 / 100
-    exp_doublets$exp_doublets[i] <- exp_doublet_rate
-    nExp_poi <- round(exp_doublet_rate*ncol(ob))
-    nExp_poi_adj <- round(nExp_poi*(1 - homotypic.prop))
+        #pk identification
+        sweep_res_list <- DoubletFinder::paramSweep(ob, PCs = 1:15, sct = FALSE)
+        sweep_stats <- DoubletFinder::summarizeSweep(sweep_res_list, GT = FALSE)
+        png("tmp.png")
+        bcmvn <- DoubletFinder::find.pK(sweep_stats)
+        dev.off()
+        system("rm tmp.png")
 
-    doublet_finder_results[[sid]] <-
-        doubletFinder(ob,
-                      PCs = 1:15,
-                      pN = 0.25,
-                      pK = as.numeric(opt_pk),
-                      nExp = nExp_poi_adj,
-                      reuse.pANN = FALSE,
-                      sct = FALSE)
+        #select the pK that corresponds to max bcmvn to optimize doublet detection
+        opt_pk <- bcmvn %>%
+            filter(BCmetric == max(BCmetric)) %>%
+            dplyr::select(pK) %>%
+            pull
 
-    samps_proc <- c(samps_proc, sid)
+        #Homotypic doublet proportion estimate
+        annotations <- ob$seurat_clusters
+        homotypic.prop <- modelHomotypic(annotations)
+        #number of expected doublets based on doublet_rate=(cells_recovered)*2^(-10.2877)
+        exp_doublet_rate <- ncol(ob) * 2 ^ -10.2877 / 100
+        exp_doublets$exp_doublets[i] <- exp_doublet_rate
+        nExp_poi <- round(exp_doublet_rate*ncol(ob))
+        nExp_poi_adj <- round(nExp_poi*(1 - homotypic.prop))
+
+        doublet_finder_results[[sid]] <-
+            doubletFinder(ob,
+                          PCs = 1:15,
+                          pN = 0.25,
+                          pK = as.numeric(opt_pk),
+                          nExp = nExp_poi_adj,
+                          reuse.pANN = FALSE,
+                          sct = FALSE)
+
+        samps_proc <- c(samps_proc, sid)
     }
 }
 ```
 
-I'm going to assume a doublet rate of 8% for all samples. This is based on 10x's established rate of 8% per 10,000 cells
+Now I need to add these results to the object list. I'll be adding it to the "demuxafied_obj_list" objects.
 
 ```{r rDoubletFinder}
-library(DoubletFinder)
-df_results <- list()
-for (ob_name in names(obj_list)) {
-    #initialize list to hold results for this object
-    curr_ob_res <- list()
-    full_ob <- obj_list[[ob_name]]
-    for (sid in unique(full_ob$sample_name)) {
-        #SC072 only has 1 cell in patient_mets_cancer_cells
-        if (sum(full_ob$sample_name == sid) > 30) {
-            ob <- subset(full_ob, sample_name == sid) %>%
-                NormalizeData() %>%
-                FindVariableFeatures() %>%
-                ScaleData() %>%
-                RunPCA(npcs = 30)
-            ob <- RunUMAP(ob, dims = 1:30, reduction = "pca") %>%
-                FindNeighbors() %>%
-                FindClusters()
-
-
-            #pk identification (no ground truth)
-            sweep_res_list <- DoubletFinder::paramSweep(ob, PCs = 1:15, sct = FALSE)
-            sweep_stats <- DoubletFinder::summarizeSweep(sweep_res_list, GT = FALSE)
-            png("tmp.png")
-            bcmvn <- DoubletFinder::find.pK(sweep_stats)
-            dev.off()
-            system("rm tmp.png")
-
-            #select the pK that corresponds to max bcmvn to optimize doublet detection
-            opt_pk <- bcmvn %>%
-                filter(BCmetric == max(BCmetric)) %>%
-                dplyr::select(pK) %>%
-                pull
-
-            #Homotypic doublet proportion estimate
-            annotations <- ob$Ann_Level3
-            homotypic.prop <- modelHomotypic(annotations)
-            #number of expected doublets based on 8% doublet rate
-            nExp_poi <- round(0.08*ncol(ob))
-            nExp_poi_adj <- round(nExp_poi*(1 - homotypic.prop))
-
-            #Run DoubletFinder
-            curr_ob_res[[sid]] <-
-                doubletFinder(ob,
-                            PCs = 1:15,
-                            pN = 0.25,
-                            pK = as.numeric(opt_pk),
-                            nExp = nExp_poi_adj,
-                            reuse.pANN = FALSE,
-                            sct = FALSE)
-        }
-    }
-    df_results[[ob_name]] <- curr_ob_res
-}
-
-df_obs <- lapply(df_results, function(x) {
-    merge(x[[1]], x[2:length(x)]) %>%
-        process_seurat()
-})
-
-df_obs <- list()
-for (ob_list in names(df_results)) {
-    print(ob_list)
-    df_obs[[ob_list]] <- merge(df_results[[ob_list]][[1]],
-                               df_results[[ob_list]][2:length(df_results[[ob_list]])])
-}
-
-
-df_by_ob <- list()
+#loop through each object and get barcodes and object names
+whole_ob_res <- list()
 for (ob_name in names(object_list)) {
-    tmp_df_res <- list()
-    for (sid in names(df_results[[ob_name]])) {
-        tmp <- df_results[[ob_name]][[sid]]@meta.data
-        df_res <- tmp[, startsWith(colnames(tmp), "DF.classifications")]
-        tmp_df_res[[sid]] <- setNames(df_res, rownames(tmp))
-    }
-    df_by_ob <- AnnotationDbi::unlist2(tmp_df_res)
-    
-    object_list[[ob_name]] <- AddMetaData(object_list[[ob_name]],
-                                          df_by_ob,
-                                          col.name = "DoubletFinder_call")
+    tmp_md <- object_list[[ob_name]]@meta.data %>%
+        rownames_to_column("bc") %>%
+        dplyr::select(sample_name, bc)
+
+    #get barcodes from uniques sample names in tmp_md
+    tmp_df_list <-lapply(setNames(unique(tmp_md$sample_name),
+                             unique(tmp_md$sample_name)), function(sid) {
+        x <- doublet_finder_results[[sid]]
+        tmp_df_res <- x@meta.data[, startsWith(colnames(x@meta.data), "DF.classifications")]
+        as.data.frame(tmp_df_res, row.names = paste(sid, colnames(x), sep = "_"))
+    })
+    whole_ob_res[[ob_name]] <- bind_rows(tmp_df_list)
+    object_list[[ob_name]]$DoubletFinder <-
+        whole_ob_res[[ob_name]]$tmp_df_res[match(colnames(object_list[[ob_name]]),
+                                      rownames(whole_ob_res[[ob_name]]))]
+}
+qs::qsave(whole_ob_res, "output/whole_object_doublet_finder_results.qs")
+
+doublet_finder_umaps <- list()
+for (ob_name in names(object_list)) {
+    doublet_finder_umaps[[ob_name]] <-
+        (dimplot_better(object_list[[ob_name]], group = "Ann_Level3") /
+        dimplot_better(object_list[[ob_name]], group = "DoubletFinder")) +
+        plot_annotation(title = ob_name)
 }
 
-doublet_finder_umaps <- lapply(object_list, function(x) {
-    r_dim_plot(x, group.by = "Ann_Level3")
-})
+png("tmp.png", width = 2000, height = 1200)
+(doublet_finder_umaps[[1]] |
+doublet_finder_umaps[[3]] |
+doublet_finder_umaps[[5]]) /
+(doublet_finder_umaps[[7]] |
+doublet_finder_umaps[[9]] |
+doublet_finder_umaps[[11]])
+dev.off()
+
 png("tmp.png", width = 2000)
 grid.arrange(grobs = doublet_finder_umaps[c("mm_mets_cancer_cells",
                                             "mm_prim_cancer_cells",
                                             "patient_mets_cancer_cells",
                                             "patient_prim_cancer_cells")], nrow = 1)
+dev.off()
+
+new_df_heatmaps <- list()
+
+for(ob_name in names(object_list)) {
+    new_df_heatmaps[[ob_name]] <- object_list[[ob_name]]@meta.data %>%
+        dplyr::select(DoubletFinder,
+                      Ann_Level3) %>%
+        group_by(Ann_Level3) %>%
+        mutate(group_total = sum(n())) %>%
+        group_by(Ann_Level3, DoubletFinder) %>%
+        mutate(prop = sum(n()) / group_total) %>%
+        unique() %>%
+        ggplot(aes(x = DoubletFinder,
+                          y = Ann_Level3,
+                          fill = prop)) +
+            geom_tile() +
+            geom_label(aes(label = round(prop, 3)), fill = "white") +
+            theme(axis.text.y = element_text(size = 15, face = "bold"),
+                  axis.text.x = element_text(size = 15, face = "bold"),
+                  axis.title.y = element_blank(),
+                  axis.title.x = element_blank(),
+                  panel.background = element_blank(),
+                  plot.title = element_text(size = 20, face = "bold")) +
+            ggtitle(ob_name)
+}
+
+png("tmp.png", width = 2000, height = 1000)
+(new_df_heatmaps[[1]] |
+new_df_heatmaps[[3]] |
+new_df_heatmaps[[5]]) /
+(new_df_heatmaps[[7]] |
+new_df_heatmaps[[9]] |
+new_df_heatmaps[[11]])
+dev.off()
+```
+
+### DoubletFinder Sanity Check
+
+I'm going to check the calls in cells that should be doublets
+
+
+
+```{r}
+pdx_details <- read.table("misc/allsample_details.txt") %>%
+    filter(CL_or_PDX == "xenograft_PDX") %>%
+    select(sample_name, data_source) %>%
+    unique()
+
+pdx_df <- whole_ob_res[c("xeno_mets_human",
+                         "xeno_mets_mouse",
+                         "xeno_prim_human",
+                         "xeno_prim_mouse")]
+
+pdx_df <- lapply(pdx_df, rownames_to_column, "bc")
+pdx_df <- bind_rows(pdx_df)
+
+length(unique(pdx_df$bc))
+dim(pdx_df)
+#we have more rows than barcodes since many cells were counted twice for a human and mouse demuxafy call
+pdx_df <- dplyr::select(pdx_df, bc, tmp_df_res) %>% 
+    unique()
+dim(pdx_df)
+
+mixed_bcs <- list()
+for (i in seq_len(nrow(pdx_details))) {
+    sid <- pdx_details$sample_name[i]
+    obj <- doublet_finder_results[[sid]]
+    ct_mtx <- GetAssayData(obj, slot = "counts")
+    ct_mtx <- ct_mtx[, colSums(ct_mtx) > 200]
+    pct_human <- colSums(ct_mtx[startsWith(rownames(ct_mtx), "GRCh38"), ])/colSums(ct_mtx)
+
+    #get barcodes for cells w bw 40 and 60% human reads
+    true_doublets <- names(pct_human)[pct_human > 0.4 & pct_human < 0.6]
+    true_doublets <- paste(sid, true_doublets, sep = "_")
+
+    #add doublet finder calls to these cells
+    true_doublets <- as.data.frame(true_doublets)
+
+    true_doublets$DoubletFinder <-
+        obj[[colnames(obj@meta.data)[startsWith(colnames(obj@meta.data), "DF.class")]]][match(true_doublets$true_doublets, paste(sid, colnames(obj), sep = "_")), ]
+    true_doublets$sid <- sid
+    
+    mixed_bcs[[sid]] <- true_doublets
+}
+
+mixed_bc_df <- bind_rows(mixed_bcs)
+mixed_bc_heatmaps <- lapply(mixed_bcs, function(x) {
+    mutate(x, total = n(), sid = sid) %>%
+        group_by(DoubletFinder) %>%
+        summarize(prop = n() / total, sid = sid) %>%
+        unique()
+})
+
+mixed_bc_heatmaps <- bind_rows(mixed_bc_heatmaps)
+mixed_bc_heatmaps <- pivot_wider(mixed_bc_heatmaps, names_from = "DoubletFinder", values_from = "prop")
+mixed_bc_heatmaps[is.na(mixed_bc_heatmaps)] <- 0
+
+png("tmp.png")
+mixed_bc_heatmaps %>%
+    dplyr::select(-`NA`) %>%
+    pivot_longer(cols = c("Singlet", "Doublet"), values_to = "prop", names_to = "call") %>%
+    group_by(sid) %>%
+    ggplot(aes(x = call, y = sid, fill = prop)) +
+    geom_tile()
 dev.off()
 ```

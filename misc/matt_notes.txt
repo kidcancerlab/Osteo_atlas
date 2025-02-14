@@ -1,0 +1,8 @@
+2/11
+What's done:
+    Ran Doublet finder, created some heatmaps for calls in different objects
+    Saved a list of dataframe results for each object as output/whole_object_doublet_finder_results.qs
+
+To do:
+    More polished analysis of doubletFinder
+    Overlay velocity analysis with new cancer subpopulation annotations

@@ -50,7 +50,7 @@ I need to create a reference object. This object is created using the RCTD const
 
 ```{r}
 patient_mets <-
-    qs::qread("output/seurat_objects/updated_patient_mets.qs")
+    qs::qread("output/seurat_objects/V3/pateint_mets.qs")
 
 #Ann_level3 was too granular, going to try using Ann_Level2
 spacexr_reference <-
