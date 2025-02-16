@@ -4,7 +4,6 @@ volcano plots and GSEA plots for each of the samples. The results will be
 saved in the `output/degs` and `output/figures/gsea` directories.
 
 ## Find the optimal resolution for clustering for tumor cells
-
 ```{r clustree, echo = FALSE}
 all_groups <-
     c("patient_prim_cancer_cells",
@@ -39,7 +38,7 @@ for (i in seq_len(length(all_groups))) {
     set.seed(63249528)
     res_score <-
         optimize_silhouette(sobject = object[, sample(1:n_cells, keep_n_cells)],
-                            test_res = seq(0.1, 0.9, by = 0.1),
+                            test_res = seq(0.05, 0.9, by = 0.05),
                             summary_plot = FALSE,
                             reduction = "harmony") %>%
         filter(!is.na(sil_vals)) %>%
@@ -127,20 +126,8 @@ object_list <-
             "xeno_prim_human",              0.15,
             "xeno_mets_human",              0.15,
             "dogs_prim_cancer_cells",       0.25,
-            "dogs_mets_cancer_cells",       0.15,
-            "patient_prim_normal_cells",    0.15,
-            "patient_mets_normal_cells",    0.05,
-            "xeno_prim_mouse",              0.1,
-            "xeno_mets_mouse",              0.1,
-            "mm_prim_normal_cells",         0.25,
-            "mm_mets_normal_cells",         0.2,
-            "dogs_prim_normal_cells",       0.1,
-            "dogs_mets_normal_cells",       0.15)
+            "dogs_mets_cancer_cells",       0.15)
 
-#obj <- clusterbased_annot(object)
-dimplot_better(object,
-              group_by = "annotations") +
-              NoLegend()
 
 # run force directed layout
 for (i in seq_len(nrow(object_list))) {
@@ -542,42 +529,8 @@ for (i in seq_len(nrow(object_list))) {
     }
 }
 
-cluster6_topdegs <- c(
-    "IL1B", "MS4A7", "SAMSN1", "CD163", "CD69",
-    "FPR3", "MRC1", "MS4A6A", "CD14", "CCL4", "SLC16A10"
-)
-
-FeaturePlot(cluster6_sobj,
-            features = cluster6_topdegs,
-            pt.size = 0.3,
-            cols = c("#EEEEEE", "#ae0600"),
-            min.cutoff = 0.15,
-            order = TRUE) +
-    coord_fixed() +
-    ggtitle(str_c("cluster6 top degs"))
-
-DotPlot(object1,
-        features = Osteoblast,
-        group.by = "seurat_clusters",
-        scale=F) +
-    coord_flip() +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-    ggtitle(str_c("cluster6 reclustered top degs"))
-
-cluster6_sobj <-
-    subset(object1,
-            seurat_clusters == "6") %>%
-    process_seurat() %>%
-    RunHarmony(group.by.vars = "sample_name",
-                theta = 3) %>%
-    process_seurat(reduction = "harmony")
-
-dimplot_better(object1,
-        group_by = "new_annot_clust") +
-    NoLegend()
-table(cluster6_sobj$annotations, cluster6_sobj$seurat_clusters)
+hist(genelist$percent_target_degs)
 ```
-
 
 
 

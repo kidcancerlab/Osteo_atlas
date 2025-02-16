@@ -29,9 +29,15 @@ cancer_celltypes <- list(patient_prim = c("MSC",
                         xeno_prim_mouse = c(),
                         xeno_mets_mouse = c(),
                         normal_bone = c(),
-                        mm_prim = c("Tumor_cells"),
+                        mm_prim = c("Tumor_cells",
+                                    "Fibroblasts"),
                         mm_mets = c("Tumor_cells",
-                                    "Neurons"),
+                                    "Neurons",
+                                    "Fibroblasts",
+                                    "Adipocytes",
+                                    "Alveolar_Fibroblast",
+                                    "Myo_Fibroblasts",
+                                    "Adventitial_Fibroblast"),
                         dogs_prim = c("Smooth_muscle_cells",
                                       "Tissue_stem_cells",
                                       "MSC",
@@ -205,21 +211,21 @@ for (group in c("patient_prim", "patient_mets",
             subset(object, celltype_tumor_call != "kick")
     }
 
-    mislabelled_cell_ids_normal <-
-        read_tsv(list.files(path = str_c("misc/mislabelled_ids/", group),
-                            pattern = "Epithelial_Endothelial|Mesenchymal|Immune_Lymphoid|Immune_Myeloid",
-                            full.names = TRUE)) %>%
-        distinct()
+    # mislabelled_cell_ids_normal <-
+    #     read_tsv(list.files(path = str_c("misc/mislabelled_ids/", group),
+    #                         pattern = "Epithelial_Endothelial|Mesenchymal|Immune_Lymphoid|Immune_Myeloid",
+    #                         full.names = TRUE)) %>%
+    #     distinct()
 
-    object$celltype_tumor_call[object$cell %in% mislabelled_cell_ids_normal$cell] <- "normal_cells"
+    # object$celltype_tumor_call[object$cell %in% mislabelled_cell_ids_normal$cell] <- "normal_cells"
 
-    mislabelled_cell_ids_tumor <-
-        read_tsv(list.files(path = str_c("misc/mislabelled_ids/", group),
-                            pattern = "Tumor",
-                            full.names = TRUE)) %>%
-        distinct()
+    # mislabelled_cell_ids_tumor <-
+    #     read_tsv(list.files(path = str_c("misc/mislabelled_ids/", group),
+    #                         pattern = "Tumor",
+    #                         full.names = TRUE)) %>%
+    #     distinct()
 
-    object$celltype_tumor_call[object$cell %in% mislabelled_cell_ids_tumor$cell] <- "cancer_cells"
+    # object$celltype_tumor_call[object$cell %in% mislabelled_cell_ids_tumor$cell] <- "cancer_cells"
 
     set.seed(199820)
     object <-

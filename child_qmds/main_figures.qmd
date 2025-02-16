@@ -144,7 +144,7 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                         ".qs"))
 
     cancer_sobj_list[[group]] <- object
-
+                
     cell_count <-
         object$Ann_Level3 %>%
         table() %>%
@@ -261,10 +261,59 @@ merge_obj <-
     JoinLayers() %>%
     process_seurat()
 
+
+
+#make a boxplot of gene expression for F3 and F7
+VlnPlot(merge_obj,
+        features = c("F3", "F7"),
+        group.by = "unique",
+        pt.size = 0.4,
+        cols = c("blue", "red")) +
+    NoLegend() +
+    theme(aspect.ratio=1) +
+    ggtitle("VlnPlot of F3")
+
+#make a boxplot of gene expression for F3 and F7
+VlnPlot(merge_obj,
+        features = "F3",
+        group.by = "unique",
+        pt.size = 0.4,
+        cols = c("blue", "red")) +
+    ggplot2::geom_bloxplot() +
+    NoLegend() +
+    theme(aspect.ratio=1) +
+    ggtitle("VlnPlot of F7")
+
+FeaturePlot(harmony_sobj,
+            features = c("F3", "F10"),
+            split.by = "unique",
+            ncol = 2,
+            order = T) +
+    NoLegend() +
+    theme(aspect.ratio=1) +
+    ggtitle("FeaturePlot of F3 and F7")
+
+
+# Extract expression data
+df <- FetchData(harm_obj, vars = c("unique", "F10"))
+
+# Rename columns
+colnames(df) <- c("unique", "Expression")
+
+# Generate the boxplot
+ggplot(df, aes(x = unique, y = log2(Expression), fill = unique)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6) +  # Boxplot without outliers
+  geom_jitter(width = 0.2, size = 0, alpha = 0.5) +  # Scatter points for distribution
+  labs(title = paste("Expression by group"),
+       x = "Group", y = "log 2 Expression Level") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+
 harmony_sobj <- 
     merge_obj %>%
     RunHarmony(group.by.vars = c("sample_name", "data_source", "method"),
-                theta = c(7, 7, 7),
+                theta = c(1, 5, 5),
                 lambda = c(0.5, 0.5, 0.5)) %>%
     process_seurat(reduction = "harmony")
 
@@ -272,8 +321,19 @@ harm_obj <-
     harmony_sobj %>%
     FindClusters(resolution = 0.1)
 
-dimplot_better(harmony_sobj, group_by = "annotations", split_by = "unique") + 
-    NoLegend()
+patient_p <- 
+    subset(harm_obj, unique == "patient_prim")
+
+patient_m <-
+    subset(harm_obj, unique == "patient_mets")
+
+
+dimplot_better(patient_p,
+                group_by = "sample_name",
+                raster = F) + 
+    NoLegend() 
+
+
 
 celltypes <- unique(harmony_sobj$annotations)
 
@@ -319,4 +379,245 @@ obj <-
 
 dimplot_better(obj, group_by = "annotations") + 
     NoLegend()
+```
+
+
+```{r mapping_query_dataset}
+
+# load the query dataset
+query_sobj <- 
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    "patient_prim_normal_cells",
+                            ".qs"))
+
+dimplot_better(query_sobj,
+            group_by = "Ann_Level1") + 
+    NoLegend()
+
+
+
+ref_dataset <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    "patient_mets_cancer_cells",
+                            ".qs"))
+dimplot_better(ref_dataset,
+            group_by = "Ann_Level3") + 
+    NoLegend()
+
+ref_dataset$ref_col <- 
+    ref_dataset$Ann_Level3
+Idents(ref_dataset) <- ref_dataset$ref_col
+
+# find the anchor genes between te query and reference dataset
+anchors <- 
+    FindTransferAnchors(reference = ref_dataset,
+                        query = query_sobj,
+                        dims = 1:30,
+                        reference.reduction = "pca")
+
+
+predictions <- 
+    TransferData(anchorset = anchors,
+                refdata = ref_dataset$ref_col,
+                dims = 1:30)
+
+query_sobj <-
+    AddMetaData(query_sobj,
+                metadata = predictions)
+
+ref_dataset <-
+    RunUMAP(ref_dataset,
+            dims = 1:30,
+            reduction = "harmony",
+            return.model = TRUE)
+
+query_sobj <-
+    MapQuery(anchorset = anchors,
+            reference = ref_dataset,
+            query = query_sobj,
+            refdata = list(celltype = "ref_col"),
+            reference.reduction = "pca",
+            reduction.model = "umap")
+
+table(query_sobj$predicted.id)
+celltypes <- unique(query_sobj$Ann_Level3)
+cols <- c(plot_cols, sample(rainbow(length(celltypes))))
+names(cols) <- celltypes
+
+p1 <-
+    dimplot_better(ref_dataset,
+                    reduction = "umap",
+                    group_by = "ref_col",
+                    cols = cols) +
+    NoLegend() +
+    ggtitle("Reference annotations")
+
+
+p2 <- 
+   dimplot_better(query_sobj,
+                reduction = "ref.umap",
+                group_by = "predicted.celltype",
+                cols = cols) +
+    NoLegend() +
+    ggtitle("Query transferred labels")
+
+p3 <- 
+    dimplot_better(query_sobj,
+            reduction = "ref.umap",
+            group_by = "Ann_Level3",
+            cols = cols) +
+    NoLegend() +
+    ggtitle("My labels in ref umap")
+
+p4 <-
+    dimplot_better(query_sobj,
+            reduction = "umap",
+            group_by = "Ann_Level3",
+            cols = cols) +
+    NoLegend() +
+    ggtitle("My labels in query umap")
+
+p5 <-
+    dimplot_better(query_sobj,
+            reduction = "umap",
+            group_by = "predicted.id",
+            cols = cols) +
+    NoLegend() +
+    ggtitle("Query transferred labels in query umap")
+
+
+patchwork::wrap_plots(p1, p2, p3, p4, p5,
+            ncol = 3) +
+    patchwork::plot_annotation(title = "Mapping query dataset to reference dataset")
+```
+
+```{r}
+sobj <- 
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    "patient_prim_cancer_cells",
+                            ".qs"))
+
+sobj12 <-
+    process_seurat(sobj) %>%
+    RunHarmony(group.by.vars = "sample_name",
+                theta = 7) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.1)
+
+dimplot_better(sobj12,
+            group_by = "scATOMIC_pred") + 
+    NoLegend()
+
+for (clusters in unique(sobj$seurat_clusters)) {
+    sub_obj <- 
+        subset(sobj,
+                subset = seurat_clusters == clusters) %>%
+        process_seurat() %>%
+        RunHarmony(group.by.vars = "sample_name",
+                    theta = 7) %>%
+        process_seurat(reduction = "harmony",
+                        resolution = 0.1)
+    
+    dimplot1 <-
+        dimplot_better(sub_obj,
+                group_by = "seurat_clusters") + 
+            NoLegend() +
+            ggtitle(str_c("Cluster ", clusters))
+
+    dimplot2 <-
+        dimplot_better(sub_obj,
+                group_by = "annotations") + 
+            NoLegend() +
+            ggtitle(str_c("Cluster ", clusters))
+    
+    dimplot3 <-
+        dimplot_better(sub_obj,
+                group_by = "sample_name") + 
+            NoLegend() +
+            ggtitle(str_c("Cluster ", clusters))
+    
+    dimplot4 <-
+        dimplot_better(sub_obj,
+                group_by = "new_annot_clust") + 
+            NoLegend() +
+            ggtitle(str_c("Cluster ", clusters))
+    
+    dimplot5 <-
+        dimplot_better(sub_obj,
+                group_by = "scATOMIC_pred") + 
+            NoLegend() +
+            ggtitle(str_c("Cluster ", clusters))
+
+    dimplot6 <-
+        dimplot_better(sub_obj,
+                group_by = "CNV_status") + 
+            NoLegend() +
+            ggtitle(str_c("Cluster ", clusters))
+    
+    plot_c <-
+        patchwork::wrap_plots(dimplot1, dimplot2, dimplot3,
+                            dimplot4, dimplot5, dimplot6,
+                            ncol = 2) +
+        patchwork::plot_annotation(title = str_c("Cluster ", clusters))
+
+    if (!dir.exists(str_c("output/figures/reclustering_tumors/", group))) {
+        dir.create(str_c("output/figures/reclustering_tumors/", group),
+                    recursive = TRUE)
+    }
+
+    ggsave(filename = str_c("output/figures/reclustering_tumors/", group, "/cluster_",
+                        clusters,
+                        ".png"),
+            plot = plot_c,
+            width = 14,
+            height = 21,
+            limitsize = FALSE,
+            bg = "white")
+}
+
+dimplot_better(sobj,
+            group_by = "annotations") + 
+    NoLegend()
+
+clusters <- c("1", "5")
+
+sub_sobj <-
+    subset(sobj,
+            subset = seurat_clusters %in% clusters) %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = "sample_name",
+                theta = 7) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.1)
+
+annot <-
+    annotate_celltypes(sobject = sub_sobj,
+                        species = "human",
+                        with_tumor = TRUE)
+
+dimplot_better(sub_sobj,
+            group_by = "scATOMIC_pred") + 
+    NoLegend()
+
+CAF_markers <- list(
+  myCAFs = c("ACTA2", "FN1", "COL1A1", "COL1A2", "PDGFRB", "DES"),
+  iCAFs = c("IL6", "IL8", "CCL2", "LIF", "FAP", "PDGFRA"),
+  apCAFs = c("HLA-DR", "CD74", "CIITA", "FAP"),
+  sCAFs = c("CDKN2A", "CDKN1A", "GLB1", "CXCL1", "CXCL12", "MMP2", "MMP9"),
+  mCAFs = c("SLC16A3", "SLC2A1", "CAV1", "FAP"),
+  isCAFs = c("CD274", "TGFB1", "ARG1", "FAP", "IL10"),
+  qCAFs = c("PDGFRB", "DES", "Low_ACTA2"),
+  General_CAFs = c("VIM", "S100A4", "PDGFRA", "PDGFRB", "FAP", "TNC")
+)
+
+FeaturePlot(sub_sobj,
+            features = "POSTN",
+            ncol=5) +
+    theme(aspect.ratio=1) +
+    ggtitle("CAF markers") +
+    NoLegend()
+
+
+
+
 ```

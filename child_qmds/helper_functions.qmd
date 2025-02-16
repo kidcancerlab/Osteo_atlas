@@ -1,7 +1,7 @@
 
 ## Make a DimPlot with better default settings
 ```{r dimplot_better_function}
-#| cache.vars: dimplot_better
+#| cache.vars: [dimplot_better, clusterbased_annot]
 
 dimplot_better <- function(object,
                            group_by = NULL,
@@ -25,6 +25,64 @@ dimplot_better <- function(object,
         coord_fixed() +
         theme(aspect.ratio=1)
 }
+
+# cluster based annotation
+clusterbased_annot <- function(s_obj) {
+    Idents(s_obj) <- s_obj$seurat_clusters
+    clust_info <- tibble()
+    for (cluster in unique(s_obj$seurat_clusters)) {
+        set.seed(199820)
+        subset_object <- subset(s_obj, ident = cluster) %>%
+            FindVariableFeatures() %>%
+            ScaleData() %>%
+            # don't ask for more PCs than there are cells
+            RunPCA(npcs = min(50,
+                            sum(s_obj$seurat_clusters == cluster) - 1))
+
+        if (length(unique(subset_object$sample_name)) > 1 &&
+            ncol(subset_object) > 50) {
+            subset_object <- RunHarmony(subset_object,
+                                        group.by.vars = "sample_name") %>%
+                process_seurat(reduction = "harmony")
+        } else {
+            subset_object <- subset_object
+        }
+
+        subset_object$re_cluster <- str_c(cluster,
+                                        ".",
+                                        subset_object$seurat_clusters)
+
+        clust_info <- subset_object@meta.data %>%
+                as.data.frame() %>%
+                select(re_cluster) %>%
+                rbind(clust_info)
+    }
+
+    s_obj <- AddMetaData(s_obj, metadata = clust_info)
+    s_obj$new_annot_clust <- s_obj$re_cluster
+
+    cluster_celltypes <-
+        table(s_obj$re_cluster, s_obj$annotations) %>%
+        as.data.frame() %>%
+        group_by(Var1) %>%
+        arrange(desc(Freq), .by_group = TRUE) %>%
+        slice_head(n = 1)
+
+    for (i in seq_len(nrow(cluster_celltypes))) {
+        seurat_clust <- str_c("^", cluster_celltypes$Var1[i], "$") %>%
+            as.character()
+
+        celltype <- cluster_celltypes$Var2[i] %>%
+            as.character()
+
+        s_obj$new_annot_clust <-
+            str_replace_all(string = s_obj$new_annot_clust,
+                            pattern = seurat_clust,
+                            replacement = celltype)
+    }
+    return(s_obj)
+}
+
 ```
 
 ## Cell type annotaton data compilation
@@ -411,9 +469,66 @@ annotate_celltypes <- function(sobject,
 
 ## RUN differential expression analysis on a Seurat object
 ```{r run_degs_function}
-#| cache.vars: [all_samples_csv, run_degs]
+#| cache.vars: [all_samples_csv, run_degs, degs_cutoff_percent, gene_cell_percent_calc]
 all_samples_csv <- read_tsv("misc/allsample_details.txt",
                             show_col_types = FALSE)
+
+gene_cell_percent_calc <- function(sobj,
+                                   cluster_no,
+                                   target_col_name) {
+    # get the cluster number
+    sub_obj <-
+        sobj %>%
+        subset(seurat_clusters %in% cluster_no)
+
+    # get the number of cells in the cluster
+    num_cells <- ncol(sub_obj)
+
+
+    # get the number of cells in the cluster that express each geneskept
+    num_cells_expressed <- 
+        rowSums(GetAssayData(sub_obj,
+                            layer = "counts") > 0) %>%
+        as.data.frame() %>%
+        rownames_to_column("gene") %>% 
+        dplyr::rename(value = ".") %>%
+        arrange(desc(value)) %>%
+        mutate(percent = value / num_cells) %>%
+        select(gene, percent) %>%
+        rename({{target_col_name}} := "percent")
+    
+    return(num_cells_expressed)
+}
+
+
+degs_cutoff_percent <- function(sobj,
+                                target_cluster_no) {
+    non_target_cluster_no <-
+        unique(sobj$seurat_clusters) %>%
+        setdiff(target_cluster_no)
+    
+    # get the number of cells in the cluster
+    output_target <-
+        gene_cell_percent_calc(sobj,
+         target_cluster_no,
+         target_col_name = "percent_target_degs")
+    
+    output_non_target <-
+        gene_cell_percent_calc(sobj,
+                               non_target_cluster_no,
+                               target_col_name = "percent_non_target_degs")
+    
+    # combine the two dataframes
+    output_merged <- 
+        merge(output_target,
+            output_non_target,
+            by = "gene")
+    
+    # return the output
+    return(output_merged)
+}
+
+
 
 #function to run DEGs
 run_degs <- function(sobject,
@@ -489,8 +604,10 @@ run_degs <- function(sobject,
                 )
             )
 
+        # add the batch variable to the design
+
         return(
-            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
+            x <- DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
                                            colData = batch_df_new2,
                                            design = design) %>%
             DESeq2::DESeq(quiet = TRUE) %>%
@@ -498,7 +615,13 @@ run_degs <- function(sobject,
             as.data.frame() %>%
             dplyr::arrange(dplyr::desc(log2FoldChange)) %>%
             tibble::rownames_to_column("gene") %>%
-            na.omit()
+            na.omit() %>%
+            left_join(
+                degs_cutoff_percent(sobject, cluster_no),
+                by = "gene"
+            ) %>%
+            filter(percent_target_degs > 0.1 |
+                  percent_non_target_degs > 0.1)
         )
     })
     # subset and name the degs_output by the group_by variables
@@ -506,6 +629,38 @@ run_degs <- function(sobject,
 
     return(degs_output)
 }
+
+# y <-
+#     x %>%
+#     filter(percent_target_degs > 0.1) %>%
+#     filter(percent_non_target_degs > 0.1) 
+# ggplot(data = x,
+#         mapping = aes(x = log10(percent_target_degs),
+#                      y = log10(percent_non_target_degs))) +
+#     geom_point()
+
+
+# plot1 <-
+#     hist(log10(x$percent_target_degs), 
+#         main = "Histogram of Data", 
+#         xlab = "Values", 
+#         ylab = "Frequency", 
+#         col = "skyblue", 
+#         border = "black")
+# plot2 <-
+#     hist(log10(x$percent_non_target_degs), 
+#         main = "Histogram of Data", 
+#         xlab = "Values", 
+#         ylab = "Frequency", 
+#         col = "skyblue", 
+#         border = "black")
+
+# ggplot(data = x,
+#         mapping = aes(x = log10(percent_target_degs),
+#                      y = log10(percent_non_target_degs))) +
+#     geom_point()
+
+
 
 ```
 
@@ -1293,11 +1448,16 @@ dog_to_human_setup <- function(object,
     object <-
         new_seurat_object %>%
         process_seurat()
-    object <- 
-        RunHarmony(object,
-                    group.by.vars = harm_vars,
-                    theta = theta) %>%
-        process_seurat(reduction = "harmony")
+    
+    if (length(unique(object$sample_name)) > 1 && ncol(object) > 50) {
+        object <- 
+            RunHarmony(object,
+                        group.by.vars = harm_vars,
+                        theta = theta) %>%
+            process_seurat(reduction = "harmony")
+    } else {
+            object <- object
+    }
 
     return(object)
 }
