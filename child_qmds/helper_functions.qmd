@@ -1096,18 +1096,18 @@ get_plot_list <- function(ob_name) {
     a velocity stream plot colored by seurat clusters in fdl space
 
 ```{python rna-velo-py-functions}
-def loom_to_an(loom_path, metadata_path):
+def loom_to_an(obj_name):
     #Get sample id's from metadata files
-    md_files=os.listdir(metadata_path)
+    md_files=os.listdir("new_looms/metadata/" + obj_name)
     #initialize list to hold anndata objects
     ad_obs = []
     for one_md in md_files:
         #get sample id from file name
         sample_id = re.sub("_metadata.csv", "", one_md)
         #add object to list
-        tmp = anndata.read_loom(loom_path + "/" + sample_id + ".loom")
+        tmp = anndata.read_loom("new_looms/" + sample_id + "/" + sample_id + ".loom")
         #read in metadata file
-        md_path = metadata_path + "/" + one_md
+        md_path = "new_looms/metadata/" + obj_name + "/" + one_md
         metadata = pd.read_csv(md_path, index_col = "bc")
         #Subset anndata to only barcodes in metadata folder
         tmp = tmp[metadata.index]
