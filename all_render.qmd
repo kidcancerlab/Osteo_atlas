@@ -206,6 +206,8 @@ data <- seurat@meta.data %>%
     y = factor(y, levels = unique(y))
   )
 
+## percent of cell expressing the gene expression
+## of the cells that expree the gene what is the average expresion
 
 data_labels <- tibble(
     group = c(
@@ -271,59 +273,204 @@ dittoBarPlot(obj1,
              group.by = "sample_name") +
     scale_fill_manual(values = c(plot_cols, sample(rainbow(1000))))
 
-features<- c("COL1A1", "RUNX2", "COL3A1", "ACAN", "COL2A1", "SOX9", "JUN", "FOS")
-features<- c("Col1a1", "Runx2", "Col3a1", "Acan", "Col2a1", "Sox9")
-FeaturePlot(obj1,
-                features = features,
-                ncol = 4,
-                order = T) 
-obj1$tumor_type <- "xeno_prim"
-dimplot_better(obj1,
-            group_by = c("tumor_type", "seurat_clusters", "Ann_Level3", "sample_name"),
-            ncol=2) + NoLegend()
-obj2 <-
-    qs::qread("output/seurat_objects/final_tumor_vs_stroma/mm_mets_cancer_cells.qs")
-obj2$tumor_type <- "xeno_mets"
+```
 
-combine_sobj2 <-
-    merge(x = obj1,
-          y = obj2) %>%
-    JoinLayers() %>%
-    process_seurat()
 
-harm_obj2 <- combine_sobj2 %>%
-    RunHarmony(group.by.vars = c("model", "sample_name"),
-                theta = c(4,4)) %>%
-    process_seurat(reduction = "harmony")
+## CHarles plots for paper
+```{r}
+# Extract expression data
+#CXhange the TFPI-1 to TFPI_1 to avoid issues with the hyphen if it exists
+harmony_sobj1 <- harmony_sobj
 
-harm_obj2 <-
-    FindClusters(harm_obj2,
-                resolution = 0.2)
-dimplot_better(harm_obj2,
-            group_by = c("tumor_type", "seurat_clusters", "Ann_Level3", "sample_name"),
-            ncol=2) + NoLegend()
+DotPlot(harmony_sobj1,
+        features = c("F2", "F3", "F7", "F10", "F12", "F2R", "F2RL1", "TFPI", "THBD", "MMP2", "ITGB1", "ITGB2", "CXCL1", "TFPI-1", "TFPI-2", "SRSF1", "SRSF2", "SRSF5", "SRSF6"),
+        group.by = c("unique"),
+        cols = c("lightgrey","darkred"),
+        scale = FALSE) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-qs::qsave(harm_obj2, "output/extras/mm_prim_mets_cancer_cells.qs")
 
-clust26<-
-    subset(harm_obj2,
-           seurat_clusters == c(6)) %>%
-    colnames()
 
-cluster4<-
-    subset(obj1,
-           seurat_clusters == 5) %>%
-    colnames()
+## percent of cell expressing the gene expression
 
-DimPlot(harm_obj2, cells.highlight = cluster4)
 
-FeaturePlot(harm_obj2,
-                features = s100_mouse_genes,
-                ncol = 3)
+## of the cells that expree the gene what is the average expresion
 
-pseudobulk <- harm_obj2 %>%
+# Extract expression data
+df <- FetchData(harmony_sobj, vars = c("unique", "F3"))
+
+# Rename columns
+colnames(df) <- c("unique", "Expression")
+
+real_genes <- c("F3", "F10", "F2RL1", "F2R", "F2R", "FGA", "FGB")
+
+split1 <-
+    DotPlot(harmony_sobj,
+    features = c("F3"),
+    group.by = c("unique"),
+    split.by = "method",
+    scale = FALSE) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_y_discrete(labels = function(x) gsub("_", " ", x))
+
+df <- FetchData(harmony_sobj, vars = c("unique", "F2", "F3", "F7", "F10", "F12", "F2R", "F2RL1", "TFPI", "THBD", "MMP2", "ITGB1", "ITGB2", "CXCL1", "TFPI-1", "TFPI-2", "SRSF1", "SRSF2", "SRSF5", "SRSF6"))
+
+# Rename columns
+colnames(df) <- c("unique", "Expression")
+
+df <- df %>%
+    pivot_longer(cols = -unique, names_to = "gene", values_to = "Expression")
+
+
+# Generate the boxplot
+ggplot(df, aes(x = unique, y = log2(Expression), fill = unique)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.6) +  # Boxplot without outliers
+    geom_jitter(width = 0.2, size = 0, alpha = 0.5) +  # Scatter points for distribution
+    labs(title = paste("Expression by group"),
+             x = "Group", y = "log 2 Expression Level") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    facet_wrap(~ gene, scales = "free_y")
+
+
+
+ggplot(df, aes(x = unique, y = log2(Expression), fill = unique)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6) +  # Boxplot without outliers
+  geom_jitter(width = 0.2, size = 0, alpha = 0.5) +  # Scatter points for distribution
+  labs(title = paste("Expression by group"),
+       x = "Group", y = "log 2 Expression Level") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+
+
+
+real_genes <- c("F3", "F10", "F2RL1", "F2R", "F2R", "FGA", "FGB")
+
+
+patient_prim <- 
+        subset(harmony_sobj,
+                unique == "patient_prim")
+
+num_cells <- ncol(patient_prim)
+num_cells_expressed1 <-
+        rowSums(GetAssayData(patient_prim,
+                            layer = "counts") > 0) %>%
+        as.data.frame() %>%
+        rownames_to_column("gene") %>% 
+        dplyr::rename(value = ".") %>%
+        arrange(desc(value)) %>%
+        mutate(percent = value / num_cells) %>%
+        select(gene, percent) %>%
+        filter(gene == "F10") %>%
+        pull(percent)
+
+
+cells_expressed <-
+    GetAssayData(patient_prim,
+                layer = "counts")["F3", ] > 0
+
+
+patient_mets <- 
+        subset(harmony_sobj,
+                unique == "patient_mets")
+
+num_cells <- ncol(patient_mets)
+num_cells_expressed <-
+        rowSums(GetAssayData(patient_mets,
+                            layer = "counts") > 0) %>%
+        as.data.frame() %>%
+        rownames_to_column("gene") %>% 
+        dplyr::rename(value = ".") %>%
+        arrange(desc(value)) %>%
+        mutate(percent = value / num_cells) %>%
+        select(gene, percent) %>%
+        filter(gene == "F3") %>%
+        pull(percent)
+
+
+
+
+# here harmony_sobj is the object with the integrated data that has both patient_prim and patient_mets
+lists <- list()
+for (groups in unique(harmony_sobj$unique)) {
+    subset_F3 <- 
+        subset(harmony_sobj,
+                unique == groups)
+    for (methods in unique(harmony_sobj$method)) {
+        subset_F3_method <- 
+            subset(subset_F3,
+                    method == methods)
+
+        num_cells <- ncol(subset_F3_method)
+        num_cells_expressed <-
+            rowSums(GetAssayData(subset_F3_method,
+                                layer = "counts") > 0) %>%
+            as.data.frame() %>%
+            rownames_to_column("gene") %>% 
+            dplyr::rename(value = ".") %>%
+            arrange(desc(value)) %>%
+            mutate(percent = value / num_cells) %>%
+            select(gene, percent) %>%
+            filter(gene == "F10") %>%
+            pull(percent)
+     lists[[groups]][[methods]] <- round(num_cells_expressed *100)
+    }
+}
+
+lists_df <- do.call(rbind, lapply(names(lists), function(group) {
+    do.call(rbind, lapply(names(lists[[group]]), function(method) {
+        data.frame(Group = group, Method = method, Percent = lists[[group]][[method]])
+    }))
+}))
+
+lists_df
+
+# subset the cells that express the F3 gene
+subset_F3_ob <-
+    subset(harmony_sobj,
+           subset = F10 > 0,
+           slot = "counts")
+
+VlnPlot(subset_F3_ob,
+    features = c("F10"),
+    group.by = c("unique"),
+    pt.size = 0.01,
+    split.by = "method",
+    raster =F) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_y_continuous(name = "Level of Expression") +
+    scale_x_discrete(labels = function(x) gsub("_", " ", x), limits = c("patient_prim", "patient_mets"))
+
+DotPlot(harmony_sobj,
+    features = c("F3"),
+    group.by = "unique",
+    split.by = "method",
+    scale = FALSE) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_y_discrete(labels = function(x) gsub("_", " ", x))
+
+subset_F3 <- 
+        subset(harmony_sobj,
+                unique == "patient_prim")
+
+VlnPlot(harmony_sobj,
+    features = c("F3"),
+    group.by = c("unique"),
+    pt.size = 0.01,
+    split.by = "method",
+    raster =F) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_y_continuous(name = "Level of Expression") +
+    scale_x_discrete(labels = function(x) gsub("_", " ", x), limits = c("patient_prim", "patient_mets"))
+```
+
+
+### charles pseudobulk by patient
+```{r}
+pseudobulk <- harmony_sobj %>%
         Seurat::AggregateExpression(
-            group.by = c("sample_name", "tumor_type"),
+            group.by = c("unique"),
             slot = "counts",
             assay = "RNA")
 
@@ -341,6 +488,7 @@ entire_matrix <- pseudobulk_new %>%
 entire_matrix$TFPI_1 <- entire_matrix$TFPI-1
 
 runx2_matrix <- entire_matrix[ , c("groups", "F2", "F3", "F7", "F10", "F12", "F2R", "F2RL1", "TFPI", "THBD", "MMP2", "ITGB1", "ITGB2", "CXCL1", "TFPI_1", "TFPI_2", "SRSF1", "SRSF2", "SRSF5", "SRSF6")]
+
 
 runx2_matrix$tumor_type <- runx2_matrix$groups %>%
     str_split("_") %>%

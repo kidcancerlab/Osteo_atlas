@@ -13,6 +13,7 @@
 
 # Output files from R CMD build
 /*.tar.gz
+output*
 
 # Output files from R CMD check
 /*.Rcheck/
@@ -66,6 +67,18 @@ int
 osteo_atlas_files
 rfiles
 tmp
+
+# Temporary files created by R
+bootstrap
+anchor
+*.RData
+*.RDS
+*.rds
+*.Rds
+*.js
+*.gz
+*.h5
+*.hdf5
 
 
 #velocity analysis files

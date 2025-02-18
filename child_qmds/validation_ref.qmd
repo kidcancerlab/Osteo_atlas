@@ -60,6 +60,90 @@ dimplot_better(sobject,
 ```
 
 
+### Test dogs cc tumor cell to label tumor cells
+```{r dogs_cc_tumor}
+Dogs_prim <-
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        "dogs_prim",
+                        ".qs"))
+
+dimplot_better(Dogs_prim, group_by = "new_annot_clust") +
+    NoLegend()
+dogs_prim1 <-
+     dog_to_human_setup(object = Dogs_prim)
+
+tumor_cc <-
+    qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                    "dogs_cc",
+                    ".qs"))
+tumor_cc1 <-
+     dog_to_human_setup(object = tumor_cc,
+                        harm_vars = c("sample_name", "location"),
+                        theta = c(7,7))
+
+feature_hist(tumor_cc1, features = c("nCount_RNA", "nFeature_RNA", "percent.mt")) +
+    NoLegend()
+
+tumor_cc2 <-
+    subset(tumor_cc1,
+            sample_name == "Modiano_061_DOS_0952_K9_OS_GEX") %>%
+    subset(nCount_RNA > 1000 &
+            nCount_RNA < 18000 &
+            percent.mt < 10) %>%
+    process_seurat()
+
+tumor_cc2$CellType <- "cancer_cells"
+
+dimplot_better(tumor_cc2, group_by = "CellType") 
+
+
+tumor_cc1$CellType <- "cancer_cells"
+
+dimplot_better(tumor_cc1, group_by = "sample_name") +
+    NoLegend()
+
+FeaturePlot(tumor_cc1, features = "nCount_RNA") 
+
+
+ref <- list(hpca,
+            huim,
+            Seurat::GetAssayData(tumor_cc1))
+labels <- list(hpca$label.main,
+                huim$label.main,
+                tumor_cc2$CellType)
+
+ref_lung <- 
+    SingleR::SingleR(test = as.SingleCellExperiment(dogs_prim1),
+                    ref = ref,
+                    labels = labels,
+                    aggr.ref = TRUE)
+
+dogs_prim1$labels_new1 <- ref_lung$labels
+
+dimplot_better(dogs_prim1, group_by = "labels_new1") +
+    NoLegend()
+
+ref_lung1 <- 
+    SingleR::SingleR(test = as.SingleCellExperiment(tumor_cc1),
+                    ref = list(hpca, huim),
+                    labels = list(hpca$label.main, huim$label.main),
+                    aggr.ref = TRUE)
+tumor_cc1$labels1 <- ref_lung1$labels
+
+dimplot_better(tumor_cc1, group_by = "labels1") +
+    NoLegend()
+
+feature_hist(tumor_cc, features = c("nCount_RNA", "nFeature_RNA", "percent.mt"))
+
+
+dogs_prim1$labels_new <- ref_lung$labels
+
+dimplot_better(dogs_prim1, group_by = "labels_new", raster =F) +
+    NoLegend() +
+dimplot_better(dogs_prim1, group_by = "new_annot_clust", raster=F) +
+    NoLegend()
+```
+
 ##  ALSF dataset validation, patient data
 Make the seurat object and save it to the output directory
 
