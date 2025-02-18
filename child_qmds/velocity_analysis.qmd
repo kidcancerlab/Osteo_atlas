@@ -76,7 +76,7 @@ lapply(names(obj_list), function(ob_name) {
     r_make_loom_files(sobj = ob,
                       id_col = "sample_name",
                       out_dir = "loom_output",
-                      species = sepcies,
+                      species = species,
                       bam_paths = bam_list[[ob_name]],
                       cluster_account = "gdrobertslab",
                       slurm_base = "output/velocity_analysis/slurmOut",
@@ -85,6 +85,90 @@ lapply(names(obj_list), function(ob_name) {
                       )
     }
 )
+```
+
+## New velocity analysis function
+
+I realized that I should have just created individual loom files for the filtered_feature matrices, that way I can subset by any barcodes that I want. So i'm going to rewrite the r_make_loom_files function.
+
+Input is a table with the following column names:
+    -sample_id
+    -h5_path
+    -bam_path
+    -species
+
+```{r}
+source("new_make_loom_files.r")
+velo_input <- read.table("misc/allsample_details.txt",
+                         header = TRUE) %>%
+    dplyr::select(sample_id = sample_name,
+                  species,
+                  data_source) %>%
+    mutate(data_path = paste0(
+            recode(data_source,
+                   "GEO" = "/home/gdrobertslab/lab/Counts_2/",
+                    "NCH" = "/home/gdrobertslab/lab/Counts_2/",
+                    "SJ" = "/home/gdrobertslab/lab/ExternalData/Patel_lab/",
+                    "NCI_POB" = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/"))) %>%
+    unique()
+rownames(velo_input) <- NULL
+
+h5s <- ifelse(velo_input$data_source == "NCI_POB",
+                             paste0(velo_input$data_path,
+                                    "03_FilteredMatricesH5/",
+                                    velo_input$sample_id,
+                                    "_filtered_feature_bc_matrix.h5"),
+                             paste0(velo_input$data_path,
+                                    velo_input$sample_id,
+                                    "/filtered_feature_bc_matrix.h5"))
+
+velo_input$h5_path <- h5s
+
+ext_data_path <- "/home/gdrobertslab/lab/ExternalData/"
+
+bams <-
+    ifelse(
+           velo_input$data_source %in% c("NCH", "GEO"),
+           paste0("/home/gdrobertslab/lab/Counts_2/",
+                  velo_input$sample_id,
+                  "/possorted_genome_bam.bam"),
+           ifelse(
+                  velo_input$data_source == "NCI_POB",
+                  paste0(ext_data_path,
+                         "McEachron_lab/BAMs/",
+                         velo_input$sample_id,
+                         "_gex_possorted_bam.bam"),
+                  paste0(ext_data_path,
+                         "Patel_lab/",
+                         velo_input$sample_id,
+                         "/possorted_genome_bam.bam")
+                         )
+                         )
+
+bams <- ifelse(file.exists(bams),
+                   bams,
+                   gsub("possorted_genome", "gex_possorted", bams))
+
+velo_input$bam_path <- bams
+
+
+#rewrite species to match list in make loom function
+unique(velo_input$species)
+velo_input$species <- recode(velo_input$species,
+       "patient" = "human",
+       "xenograft" = "mixed",
+       "mousemodel" = "mouse")
+
+
+head(velo_input)
+source("new_make_loom_files.r")
+#new_function is new_make_loom_files
+#install my version of rrrSingleCellUtils
+# devtools::install("/home/gdrobertslab/lab/Analysis/MattGust/projects/rrrSingleCellUtils")
+
+new_make_loom_files(input_table = velo_input,
+                    out_dir = "new_looms/",
+                    cluster_account = "gdrobertslab")
 ```
 
 ### Figure out Which Samples Failed

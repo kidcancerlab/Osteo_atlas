@@ -76,6 +76,7 @@ tmp_bams
 tmp_bcs
 analyze_looms*
 *gtf
+new_looms
 
 #DoubletFinder Files
 DoubletFinder
