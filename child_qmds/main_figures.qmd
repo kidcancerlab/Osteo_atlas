@@ -139,7 +139,7 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 "mm_prim_cancer_cells", "mm_mets_cancer_cells",
                 "xeno_prim_human", "xeno_mets_human")) {
     object <- 
-        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                         group,
                         ".qs"))
 
@@ -262,7 +262,6 @@ merge_obj <-
     process_seurat()
 
 
-
 #make a boxplot of gene expression for F3 and F7
 VlnPlot(merge_obj,
         features = c("F3", "F7"),
@@ -295,7 +294,7 @@ FeaturePlot(harmony_sobj,
 
 
 # Extract expression data
-df <- FetchData(harm_obj, vars = c("unique", "F10"))
+df <- FetchData(harm_obj, vars = c("unique", "F3"))
 
 # Rename columns
 colnames(df) <- c("unique", "Expression")

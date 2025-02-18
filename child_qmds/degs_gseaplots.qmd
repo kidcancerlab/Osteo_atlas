@@ -29,9 +29,11 @@ clustrees <- list()
 for (i in seq_len(length(all_groups))) {
     group <- all_groups[i]
 
-    object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
-                              group,
-                              ".qs"))
+    object <- 
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    #dimplot_better(object, group_by = "new_annot_clust") + NoLegend()
     min_cell_silhouette <- 65000
     n_cells <- length(Cells(object))
     keep_n_cells <- min(min_cell_silhouette, n_cells)
@@ -71,6 +73,13 @@ for (i in seq_len(length(all_groups))) {
     qs::qsave(tree,
               str_c("output/figures/tumor_vs_stroma/clustree/", group, ".qs"))
 }
+
+sub <- object %>%
+    subset(new_annot_clust == "Neurons_Schwann_cell")
+x <- FindMarkers(sub)
+
+mean(sub$cell_scores)
+
 ```
 
 ##  Differential expression analysis for tumor cells and GSEA
