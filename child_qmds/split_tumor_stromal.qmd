@@ -735,7 +735,10 @@ for (group in c("patient_prim", "patient_mets",
                                     aggr.ref = TRUE)
             }
             s_obj$annotations <- ref_lung$labels
-            s_obj$cell_scores <- ref_lung$scores
+            s_obj$cell_scores <-
+                apply(X = ref_lung$scores,
+                    MARGIN = 1,
+                    function(x) max(x, na.rm = TRUE))
 
             s_obj <-
                 clusterbased_annot(s_obj)
