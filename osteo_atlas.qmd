@@ -41,6 +41,11 @@ library(knitr)
 library(scATOMIC)
 library(copykat)
 library(SCENIC)
+library(stashPlot)
+
+
+knitr::purl("child_qmds/helper_functions.qmd", "helpers.R")
+source("helpers.R")
 ```
 
 # Load in functions

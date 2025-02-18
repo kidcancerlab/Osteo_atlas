@@ -1,0 +1,322 @@
+
+In this qmd, i will just make the main result figures and stash_plot save them
+
+## Result 1 figures
+```{r figure_stroma_panel, echo = FALSE}
+#| cache.vars = 'title_replacement'
+#plots for stromal panel
+sobj_list <-  list()
+cell_count_table <- tibble::tibble(celltypes = character())
+
+for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                "xeno_prim_mouse", "xeno_mets_mouse")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    sobj_list[[group]] <- object
+
+    cell_count <-
+        object$Ann_Level2 %>%
+        table() %>%
+        as.data.frame() %>%
+        arrange(desc(Freq)) %>%
+        dplyr::rename(!!group := Freq,
+                      celltypes := ".")
+
+    cell_count_table <- cell_count_table %>%
+        dplyr::full_join(cell_count, by = "celltypes")
+}
+
+cell_count_prep <- cell_count_table %>%
+    mutate_all(~replace_na(., 0)) %>%
+    column_to_rownames("celltypes") %>%
+    t()
+
+# Calculate the percentage for each cell type
+cell_count_percent <-
+    sweep(cell_count_prep, 1, rowSums(cell_count_prep), FUN = "/") * 100
+
+stromal_celltype_heatmap<-
+    pheatmap::pheatmap(cell_count_percent,
+                        cluster_rows = FALSE,
+                        cluster_cols = FALSE,
+                        display_numbers = TRUE,
+                        fontsize_number = 10,
+                        main = "Cell Count Percentage Heatmap",
+                        scale = "none",
+                        number_format = "%.1f",
+                        silent = TRUE,
+                        color = colorRampPalette(c("white", "red"))(100),
+                        legend = FALSE)
+
+stash_plot(stromal_celltype_heatmap[[4]], "stromal_celltype_heatmap")
+
+ggsave(filename = "output/figures/Final_Annotations/stromal_celltype_heatmap.png",
+        plot = stromal_celltype_heatmap,
+        width = 20,
+        height = 5,
+        limitsize = FALSE,
+        bg = "white")
+
+#prepare colors for the dimplot
+celltypes <-
+    c(unique(sobj_list$patient_prim_normal_cells$Ann_Level3),
+    unique(sobj_list$patient_mets_normal_cells$Ann_Level3),
+    unique(sobj_list$mm_prim_normal_cells$Ann_Level3),
+    unique(sobj_list$mm_mets_normal_cells$Ann_Level3),
+    unique(sobj_list$xeno_prim_mouse$Ann_Level3),
+    unique(sobj_list$xeno_mets_mouse$Ann_Level3)) %>%
+    unique()
+
+cols <- c(plot_cols, sample(rainbow(length(celltypes))))
+
+names(cols) <- celltypes
+
+dimplot_list <- list()
+
+title_replacement <- 
+    list(patient_prim_normal_cells = "Patient Primary Stroma",
+        patient_mets_normal_cells = "Patient Metatatic Stroma",
+        mm_prim_normal_cells = "Mouse Primary Stroma",
+        mm_mets_normal_cells = "Mouse Metatatic Stroma",
+        xeno_prim_mouse = "Xenograft Primary Stroma",
+        xeno_mets_mouse = "Xenograft Metastatic Stroma")
+
+for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                "xeno_prim_mouse", "xeno_mets_mouse")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    dimplot <-
+        DimPlot(object,
+                group.by = "Ann_Level3",
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = cols,
+                label.size = 2.5) +
+            coord_fixed() +
+            #scale_color_manual(values = cols) +
+            NoLegend() +
+            ggtitle(title_replacement[group][1]) +
+            theme(aspect.ratio=1)
+
+    dimplot_list[[group]] <- dimplot
+}
+
+stromal_panel_plot <-
+    patchwork::wrap_plots(plotlist = dimplot_list,
+            ncol = 2) +
+        patchwork::plot_annotation(title = "Stromal cell types Ann_Level3")
+
+stash_plot(stromal_panel_plot, "stromal_panel_plot")
+
+ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
+        plot = stromal_panel_plot,
+        width = 20,
+        height = 30,
+        limitsize = FALSE,
+        bg = "white")
+
+
+
+```
+
+
+## Result 2 figures
+```{r, figure_cancer_panel, echo = FALSE}
+# load the cancer final object
+cancer_sobj_list <-  list()
+cell_count_table <- tibble::tibble(celltypes = character())
+
+for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
+                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
+                "xeno_prim_human", "xeno_mets_human")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    cancer_sobj_list[[group]] <- object
+
+    cell_count <-
+        object$Ann_Level3 %>%
+        table() %>%
+        as.data.frame() %>%
+        arrange(desc(Freq)) %>%
+        dplyr::rename(!!group := Freq,
+                      celltypes := ".")
+
+    cell_count_table <- cell_count_table %>%
+        dplyr::full_join(cell_count, by = "celltypes")
+}
+
+# Generate a heatmap of the cell count data
+cell_count_prep <- 
+    cell_count_table %>%
+    mutate_all(~replace_na(., 0)) %>%
+    column_to_rownames("celltypes") %>%
+    t()
+
+# Calculate the percentage for each cell type
+cell_count_percent <- sweep(cell_count_prep, 1, rowSums(cell_count_prep), FUN = "/") * 100
+
+cancer_cell_percent <-
+    pheatmap::pheatmap(cell_count_percent,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         display_numbers = TRUE,
+         fontsize_number = 10,
+         main = "Cell Count Percentage Heatmap",
+         scale = "none",
+         number_format = "%.1f",
+         color = colorRampPalette(c("white", "red"))(100))
+
+stash_plot(cancer_cell_percent[[4]], "tumor_celltype_heatmap")
+
+ggsave(filename = "output/figures/Final_Annotations/cancer_celltype_heatmap.png",
+        plot = cancer_cell_percent,
+        width = 10,
+        height = 7,
+        limitsize = FALSE,
+        bg = "white")
+#prepare colors for the plot
+celltypes <-
+    c(unique(cancer_sobj_list$patient_prim_cancer_cells$Ann_Level3),
+    unique(cancer_sobj_list$patient_mets_cancer_cells$Ann_Level3),
+    unique(cancer_sobj_list$mm_prim_cancer_cells$Ann_Level3),
+    unique(cancer_sobj_list$mm_mets_cancer_cells$Ann_Level3),
+    unique(cancer_sobj_list$xeno_prim_human$Ann_Level3),
+    unique(cancer_sobj_list$xeno_mets_human$Ann_Level3)) %>%
+    unique()
+cols <- c(plot_cols, sample(rainbow(length(celltypes))))
+
+names(cols) <- celltypes
+
+#plots for cancer panel
+cancer_plot_list <- list()
+
+title_replacement <- 
+    list(patient_prim_cancer_cells = "Patient Primary Tumor",
+        patient_mets_cancer_cells = "Patient Metastatic Tumor",
+        mm_prim_cancer_cells = "Mouse Primary Tumor",
+        mm_mets_cancer_cells = "Mouse Metastatic Tumor",
+        xeno_prim_human = "Xenograft Primary Tumor",
+        xeno_mets_human = "Xenograft Metastatic Tumor")
+
+for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
+                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
+                "xeno_prim_human", "xeno_mets_human")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    cancer_plot <-
+        DimPlot(object,
+                group.by = "Ann_Level3",
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = cols,
+                label.size = 2.5) +
+            coord_fixed() +
+            NoLegend() +
+            ggtitle(title_replacement[group][1]) +
+            theme(aspect.ratio=1)
+
+    cancer_plot_list[[group]] <- cancer_plot
+}
+
+cancer_panel_plot <-
+    patchwork::wrap_plots(plotlist = cancer_plot_list,
+            ncol = 2) +
+        patchwork::plot_annotation(title = "Tumor subpopulations Ann_Level3")
+
+stash_plot(cancer_panel_plot, "tumor_panel_plot")
+
+ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.png",
+        plot = cancer_panel_plot,
+        width = 20,
+        height = 30,
+        limitsize = FALSE,
+        bg = "white")
+
+
+```
+
+
+
+```{r}
+
+merge_obj <-
+    merge(cancer_sobj_list$patient_prim_cancer_cells,
+        cancer_sobj_list$xeno_prim_human) %>%
+    JoinLayers() %>%
+    process_seurat()
+
+harmony_sobj <- 
+    merge_obj %>%
+    RunHarmony(group.by.vars = c("sample_name", "data_source", "method"),
+                theta = c(7, 7, 7),
+                lambda = c(0.5, 0.5, 0.5)) %>%
+    process_seurat(reduction = "harmony")
+
+harm_obj <-
+    harmony_sobj %>%
+    FindClusters(resolution = 0.1)
+
+dimplot_better(harmony_sobj, group_by = "annotations", split_by = "unique") + 
+    NoLegend()
+
+celltypes <- unique(harmony_sobj$annotations)
+
+cols <- c(plot_cols, sample(rainbow(length(celltypes))))
+
+names(cols) <- celltypes
+
+pprim <-
+    subset(harmony_sobj, unique == "patient_prim")
+
+cancer_plot <-
+        DimPlot(pprim,
+                group.by = "annotations",
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = cols,
+                label.size = 2.5) +
+            coord_fixed() +
+            NoLegend()
+
+
+
+merge_obj2 <-
+    merge(cancer_sobj_list$patient_mets_cancer_cells,
+        cancer_sobj_list$xeno_mets_human) %>%
+    JoinLayers() %>%
+    process_seurat()
+
+harmony_sobj2 <- 
+    merge_obj2 %>%
+    RunHarmony(group.by.vars = c("sample_name", "data_source", "method"),
+                theta = c(7, 7, 7),
+                lambda = c(0.5, 0.5, 0.5)) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.15)
+dimplot_better(harmony_sobj2, group_by = "Ann_Level3")
+
+obj <-
+    qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                            "patient_prim",
+                            ".qs"))
+
+dimplot_better(obj, group_by = "annotations") + 
+    NoLegend()
+```

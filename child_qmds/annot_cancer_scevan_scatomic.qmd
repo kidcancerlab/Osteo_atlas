@@ -13,19 +13,39 @@ Segments are then classified in five copy number states.
 Analysis of subclones including clone tree, pathway activities, but it can be turned off
 
 ```{r scevan}
+#| cache.vars: orthologs
 #| fig.width: 10
 #| fig.height: 10
 #| fig.align: center
 #| echo: FALSE
-#| dependson: annot_celltypes
+#| dependson: [annot_celltypes, dog_human_orthologs_function, dog_human_gene]
+
 min_cells <- 500
 
-for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
-    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
-                              group,
-                              ".qs"))
+# load the tsv for human_dog gene orthologs
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
 
-    count_mtx_list <- object %>%
+# run the SCEVAN pipeline
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        group,
+                        ".qs"))
+    organism <-
+        object$organism[1]
+
+    #use the function to convert dog to human genes and make new seurat object
+    if (organism == "dog") {
+        object <- 
+            dog_to_human_setup(object)
+        organism <- "human"
+    }
+
+    count_mtx_list <- 
+        object %>%
         SplitObject(split.by = "sample_name") %>%
         lapply(FUN = function(x) GetAssayData(x, layer = "counts"))
 
@@ -40,7 +60,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                 output <-
                     SCEVAN::pipelineCNA(count_mtx = count_mtx_list[[x]],
                                         sample = x,
-                                        organism = object$organism[1],
+                                        organism = organism,
                                         par_cores = parallelly::availableCores(),
                                         SUBCLONES = FALSE)
                 # SCEVAN writes a bunch of files to ./output/ so we need to move them
@@ -59,6 +79,12 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
             }
         })
 
+    directory <- 
+        "output/id_tumor/SCEVAN/"
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+
     bind_rows(result_list) %>%
         mutate(scevan_tumor_call = if_else(class == "tumor",
                                            "cancer_cells",
@@ -68,6 +94,8 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                         group,
                         "_metadata.tsv"))
 }
+
+
 ```
 
 ## Cancer cells vs normal cells using scATOMIC
@@ -81,12 +109,25 @@ scATOMIC_pred : celltype annotation
 #| fig.height: 10
 #| fig.align: center
 #| echo: FALSE
-#| dependson: annot_celltypes
+#| dependson: [annot_celltypes, scevan, dog_human_gene]
 
-for (group in c("patient_prim", "patient_mets")) {
-    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
-                              group,
-                              ".qs"))
+
+for (group in c("patient_prim", "patient_mets",
+                "dogs_prim", "dogs_mets")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        group,
+                        ".qs"))
+    
+    organism <-
+        object$organism[1]
+
+    #use the function to convert dog to human genes and make new seurat object
+    if (organism == "dog") {
+        object <- 
+            dog_to_human_setup(object)
+        organism <- "human"
+    }
 
     min_count_per_gene <- 10
     count_mtx_list <- object %>%
@@ -140,6 +181,12 @@ for (group in c("patient_prim", "patient_mets")) {
 
             return(scATOMIC_results)
         })
+    
+    directory <-
+        "output/id_tumor/scATOMIC/"
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
 
     dplyr::bind_rows(result_list) %>%
     mutate(scatomic_tumor_call = if_else(grepl("Cancer Cell$", scATOMIC_pred),
@@ -161,15 +208,18 @@ for (group in c("patient_prim", "patient_mets")) {
 #| fig.align: center
 #| echo: FALSE
 #| dependson: scatomic
-for (group in c("patient_prim", "patient_mets")) {
-    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
-                              group,
-                              ".qs"))
+for (group in c("patient_prim", "patient_mets",
+                "dogs_prim", "dogs_mets")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        group,
+                        ".qs"))
 
     #add scatomic label
-    scatomic_label <- readr::read_tsv(str_c("output/id_tumor/scATOMIC/",
-                                    group,
-                                    "_metadata.tsv")) %>%
+    scatomic_label <- 
+        readr::read_tsv(str_c("output/id_tumor/scATOMIC/",
+                            group,
+                            "_metadata.tsv")) %>%
         column_to_rownames("cell")
     object <- object %>%
             AddMetaData(metadata = scatomic_label)
@@ -211,6 +261,11 @@ for (group in c("patient_prim", "patient_mets")) {
                                 ncol = 2) +
                 patchwork::plot_annotation(title = samples)
 
+        directory <- 
+            str_c("output/figures/scatomic/", group)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
         # save the plot for scatomic
         ggsave(str_c("output/figures/scatomic/",
                         group, "/",
@@ -223,38 +278,46 @@ for (group in c("patient_prim", "patient_mets")) {
 }
 
 # scevan was done in mice as well so have to loop over all of the groups
-for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
     object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                               group,
                               ".qs"))
 
     #add scevan label
-    scevan_label <- readr::read_tsv(str_c("output/id_tumor/SCEVAN/",
-                                    group,
-                                    "_metadata.tsv")) %>%
+    scevan_label <- 
+        readr::read_tsv(str_c("output/id_tumor/SCEVAN/",
+                            group,
+                            "_metadata.tsv")) %>%
         column_to_rownames("cell")
-    object <- object %>%
-            AddMetaData(metadata = scevan_label)
+    object <- 
+        object %>%
+        AddMetaData(metadata = scevan_label)
 
     #loop over individual  samples to plot and save
     for (samples in unique(object$sample_name)) {
-        sub_sobj <- subset(object, sample_name == samples) %>%
-                        process_seurat()
+        sub_sobj <- 
+            subset(object, sample_name == samples) %>%
+            process_seurat()
 
         # check if CNV_status is present and if all of them are NA, cannot plot
         if (all(!is.na(sub_sobj$scevan_tumor_call))) {
-            scevan1 <- dimplot_better(sub_sobj,
-                                        group_by = "scevan_tumor_call") +
-                            NoLegend()
+            scevan1 <- 
+                dimplot_better(sub_sobj,
+                                group_by = "scevan_tumor_call") +
+                    NoLegend()
         } else {
-            scevan1 <- ggplot(data = NULL) +
-                            aes(x = as.factor(1), y = as.factor(1)) +
-                            geom_text(aes(label = str_c("scevan_tumor_call not present for ", samples)))
+            scevan1 <- 
+                ggplot(data = NULL) +
+                    aes(x = as.factor(1), y = as.factor(1)) +
+                    geom_text(aes(label = str_c("scevan_tumor_call not present for ", samples)))
         }
 
-        scevan2 <- dimplot_better(sub_sobj,
-                                   group_by = "new_annot_clust") +
-                        NoLegend()
+        scevan2 <- 
+            dimplot_better(sub_sobj,
+                            group_by = "new_annot_clust") +
+                NoLegend()
 
         # patchwork the plot for scatomic
         dimplot_sub_sobj <- 
@@ -263,6 +326,11 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                                 ncol = 2) +
                 patchwork::plot_annotation(title = samples)
 
+        directory <- 
+            str_c("output/figures/scevan/", group)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
         # save the plot for scatomic
         ggsave(str_c("output/figures/scevan/",
                         group, "/",
@@ -284,10 +352,13 @@ snv_result_path <-
 snv_depth <-
     read_tsv("misc/use_snv_tumor_calls.txt")
 
-for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
-    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
-                              group,
-                              ".qs"))
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        group,
+                        ".qs"))
 
     #make a list of the samples
     metadata_list <- list()
@@ -300,7 +371,8 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                         samples,
                         "_snp_calls.tsv")
         if (file.exists(tsv_file)) {
-            pick_depth <- snv_depth %>%
+            pick_depth <- 
+                snv_depth %>%
                 filter(sample_name == samples) %>%
                 pull(use_snvs_depth)
             snv_metadata <-
@@ -317,6 +389,11 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 
         metadata_list[[samples]] <- snv_metadata
         }
+    }
+    directory <- 
+        "output/id_tumor/snv_calling/"
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
     }
     dplyr::bind_rows(metadata_list) %>%
         write_tsv(str_c("output/id_tumor/snv_calling/",

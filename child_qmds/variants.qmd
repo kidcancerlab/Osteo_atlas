@@ -4,120 +4,126 @@ We're only running on patient and mouse model samples that are primary tumors or
 #| cache.vars = 'samples_to_run'
 samples_to_run <-
     read_tsv("misc/allsample_details.txt",
-             show_col_types = FALSE) %>%
-    filter(species %in% c("patient", "mousemodel") &
-           location != "cc_alltumor" &
-           (tumor_type == "primary" |
-            (tumor_type == "metastatic" & location == "lung"))) %>% # No bam files for these samples
-    filter(!sample_name %in% c("SJOS013768_D1", # drop samples with low reads
-                               "SJOS016016_D1",
-                               "SJOS030605_D1",
-                               "SJOS030411_D1",
-                               "SJOS030605_D2")) %>%
-    filter(data_source == "NCI_POB")
+             show_col_types = FALSE) # Only running on dogs primary samples
+    # filter(species %in% c("patient", "mousemodel") &
+    #        location != "cc_alltumor" &
+    #        (tumor_type == "primary" |
+    #         (tumor_type == "metastatic" & location == "lung"))) %>% # No bam files for these samples
+    # filter(!sample_name %in% c("SJOS013768_D1", # drop samples with low reads
+    #                            "SJOS016016_D1",
+    #                            "SJOS030605_D1",
+    #                            "SJOS030411_D1",
+    #                            "SJOS030605_D2"))
+
 ```
 
 ## Run SNV calling on the pseudobulked clusters to try to ID tumor cells
 This portion requires https://github.com/kidcancerlab/rrrSnvs
 ```{r run_rrrSnvs}
 file_loc_key <-
-    list("X0" = "/home/gdrobertslab/lab/Counts_2/",
-         "S0" = "/home/gdrobertslab/lab/Counts_2/",
-         "SC" = "/home/gdrobertslab/lab/Counts_2/",
-         "SJ" = "/home/gdrobertslab/lab/ExternalData/Patel_lab/",
-         "CC" = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/BAMs/")
+    list("GEO"     = "/home/gdrobertslab/lab/Counts_2/",
+         "NCH"     = "/home/gdrobertslab/lab/Counts_2/",
+         "NCH"     = "/home/gdrobertslab/lab/Counts_2/",
+         "SJ"      = "/home/gdrobertslab/lab/ExternalData/Patel_lab/",
+         "NCI_POB" = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/BAMs/",
+         "TU"      = "/home/gdrobertslab/lab/ExternalData/Gardner/",
+         "CSU"     = "/home/gdrobertslab/lab/ExternalData/Regan_lab/")
 
 ploidy_key <-
     list("human" = "GRCh38",
-         "mouse" = "mm10")
+         "mouse" = "mm10",
+         "dog"   = "misc/canine_ploidy.txt")
 
 control_celltypes <-
     c("Monocytes",
       "Macrophage",
-      "Macrophages")
+      "Macrophages",
+      "NK_cells",
+      "T-cells")
 
+genome_key_base <- "/home/gdrobertslab/lab/GenRef/"
 genome_key <-
-    list("human" = "/home/gdrobertslab/lab/GenRef/10x-hg38/fasta/genome.fa",
-         "mouse" = "/home/gdrobertslab/lab/GenRef/10x-mm10/fasta/genome.fa")
+    list(
+        "patient_mets"      = "10x-hg38/fasta/genome.fa",
+        "patient_prim"      = "10x-hg38/fasta/genome.fa",
+        "normal_bone"       = "10x-hg38/fasta/genome.fa",
+        "mm_mets"           = "10x-mm10/fasta/genome.fa",
+        "mm_prim"           = "10x-mm10/fasta/genome.fa",
+        "dogs_mets"         = "10x-canine-atlas/fasta/genome.fa",
+        "dogs_prim"         = "10x-canine-atlas/fasta/genome.fa",
+        "xeno_mets_human"   = "10x-hg38-mm10/fasta/genome.fa",
+        "xeno_mets_mouse"   = "10x-hg38-mm10/fasta/genome.fa",
+        "xeno_prim_human"   = "10x-hg38-mm10/fasta/genome.fa",
+        "xeno_prim_mouse"   = "10x-hg38-mm10/fasta/genome.fa"
+    )
+
+species_key <-
+    list(
+        "patient_mets"      = "human_lung",
+        "patient_prim"      = "human",
+        "mm_mets"           = "mouse_lung",
+        "mm_prim"           = "mouse",
+        "dogs_mets"         = "canine",
+        "dogs_prim"         = "canine",
+        "xeno_mets_human"   = "human",
+        "xeno_mets_mouse"   = "mouse",
+        "xeno_prim_human"   = "human",
+        "xeno_prim_mouse"   = "mouse",
+        "normal_bone"       = "human"
+    )
+
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
+
+min_depths_to_use <- c(5, 10, 20, 30)
 
 output <-
     parallel::mclapply(seq_len(nrow(samples_to_run)),
                        mc.preschedule = FALSE,
                        mc.cores = 10,
                        function(i) {
-    sample_id <- samples_to_run$sample_name[i]
-    species <- samples_to_run$organism[i]
-    file_loc <- file_loc_key[[substr(sample_id, 1, 2)]]
-    ploidy <- ploidy_key[[species]]
-    data_source <- samples_to_run$data_source[i]
-    method <- samples_to_run$method[i]
+        sample_id <- samples_to_run$sample_name[i]
+        species <- samples_to_run$organism[i]
+        annot_species <- species_key[[samples_to_run$unique[i]]]
+        file_loc <- file_loc_key[[samples_to_run$data_source[i]]]
+        ploidy <- ploidy_key[[species]]
+        data_source <- samples_to_run$data_source[i]
+        method <- samples_to_run$method[i]
 
-    message(sample_id)
+        message(sample_id)
 
-    bam_file <- "possorted_genome_bam.bam"
+        bam_file <- "possorted_genome_bam.bam"
 
-    if (method == "single_nucleus" && data_source == "NCH") {
-        bam_file <- "gex_possorted_bam.bam"
-    }
-    if (data_source == "NCI_POB") {
-        bam_file <- "gex_possorted_bam.bam"
-    }
-    message("loading data")
-
-    qs_file <-
-        paste0("output/seurat_objects/sobj_preprocess/",
-               sample_id,
-               "_", species,
-               ".qs")
-
-    if (!file.exists(qs_file)) {
-        return(
-            paste0(
-                "No seurat object for ",
-                sample_id,
-                " at ",
-                qs_file
-            )
-        )
-    } else {
-        s_obj <- qs::qread(qs_file)
-        if (length(Cells(s_obj)) > 100) {
-            s_obj <-
-                s_obj %>%
-                process_seurat(run_umap_dims = 1:50) %>%
-                annotate_celltypes(species = species)
-        } else {
-            return(
-                paste0(
-                    "Only ",
-                    length(Cells(s_obj)),
-                    " cells for ",
-                    sample_id
-                )
-            )
+        # S0291 is a single-nucleus sample, but is not multiomics
+        if (method == "single_nucleus" &&
+            data_source == "NCH" &&
+            sample_id != "S0291") {
+            bam_file <- "gex_possorted_bam.bam"
         }
 
-        message("Optimizing silhouette score")
-        opt_res <-
-            optimize_silhouette(s_obj, summary_plot = FALSE) %>%
-            arrange(desc(sil_vals)) %>%
-            pull(res_vals) %>%
-            head(1)
-
-        s_obj <- FindClusters(s_obj, resolution = opt_res)
+        if (data_source == "NCI_POB") {
+            bam_file <- "gex_possorted_bam.bam"
+        }
 
         if (data_source == "NCI_POB") {
-            full_bam_file <- 
+            full_bam_file <-
                 paste0(file_loc,
-                   sample_id,
-                   "_",
-                   bam_file)
+                        sample_id,
+                        "_",
+                        bam_file)
+        } else if (data_source == "CSU") {
+            full_bam_file <-
+                paste0(file_loc,
+                       sample_id, "/",
+                       sample_id,
+                       "_",
+                       bam_file)
         } else {
             full_bam_file <-
                 paste0(file_loc,
-                    sample_id,
-                    "/",
-                    bam_file)
+                       sample_id,
+                       "/",
+                       bam_file)
         }
 
         if (!file.exists(full_bam_file)) {
@@ -131,181 +137,294 @@ output <-
             )
         }
 
-        s_obj$bam_file <- full_bam_file
+        message("loading data")
 
-        s_obj$cell_barcode <- colnames(s_obj)
-        s_obj$cell_group <- paste0("cluster_", s_obj$seurat_clusters)
-        message("Making DimPlot")
-        dim_plot_name <-
-            dimplot_better(
-                            s_obj,
-                            group_by = c("seurat_clusters", "annotations"),
-                            label.size = 2.5) +
-                        NoLegend()
+        qs_file <-
+            paste0("output/seurat_objects/sobj_preprocess/",
+                   sample_id,
+                   "_", species,
+                   ".qs")
 
-        ggsave(
-            paste0(
-                "output/id_tumor/snvs/plots/",
-                sample_id,
-                "_dim_plot.png"
-            ),
-            plot = dim_plot_name,
-            width = 7,
-            height = 14
-        )
-
-        c_b_t <-
-            s_obj@meta.data %>%
-            select(cell_group, bam_file, cell_barcode)
-
-        if (!dir.exists(paste0("output/id_tumor/snvs/", sample_id))) {
-            dir.create(
+        if (!file.exists(qs_file)) {
+            return(
                 paste0(
-                    "output/id_tumor/snvs/",
-                    sample_id
-                ),
-                recursive = TRUE)
-        }
-        message("Making snp tree")
-        snp_tree <-
-            tryCatch({
-                rrrSnvs::get_snp_tree(
-                    cellid_bam_table = c_b_t,
-                    ploidy = ploidy,
-                    ref_fasta = genome_key[[species]],
-                    min_depth = c(5, 10, 20),
-                    temp_dir = paste0("output/id_tumor/snvs/", sample_id),
-                    sbatch_base = paste0(
-                        "output/id_tumor/snvs/",
-                        sample_id,
-                        "/shell"
-                        ),
-                    slurm_base = paste0(
-                        "output/id_tumor/snvs/",
-                        sample_id,
-                        "/slurm"
-                        ),
-                    min_sites_covered = 1000,
-                    cleanup = TRUE
+                    "No seurat object for ",
+                    sample_id,
+                    " at ",
+                    qs_file
                 )
-            }, error = function(e) {
+            )
+        } else {
+            s_obj <- qs::qread(qs_file)
+            if (species == "dog") {
+                s_obj <- dog_to_human_setup(s_obj, run_harmony = FALSE)
+            }
+
+            if (length(Cells(s_obj)) > 100) {
+                s_obj <-
+                    s_obj %>%
+                    process_seurat(run_umap_dims = 1:50) %>%
+                    annotate_celltypes(species = annot_species,
+                                       aggr_ref = TRUE,
+                                       with_tumor = TRUE)
+            } else {
                 return(
                     paste0(
-                        "Error in snp_tree for ",
-                        sample_id,
-                        ": ",
-                        e
+                        "Only ",
+                        length(Cells(s_obj)),
+                        " cells for ",
+                        sample_id
                     )
                 )
-                return(NULL)
-            })
+            }
 
-        # if all the min_depths failed due to low coverage, then the value
-        #  of snp_tree is an empty list of length 0. We change this to NULL for
-        # downstream processing
-        if (length(snp_tree) == 0) {
-            snp_tree <- NULL
-        }
+            message("Optimizing silhouette score")
+            opt_res <-
+                optimize_silhouette(s_obj, summary_plot = FALSE) %>%
+                arrange(desc(sil_vals)) %>%
+                pull(res_vals) %>%
+                head(1)
 
-        if (is.character(snp_tree)) {
-            return(snp_tree)
-        }
+            s_obj <- FindClusters(s_obj, resolution = opt_res)
 
-        if (is.null(snp_tree)) {
-            return(paste0("No snp_tree for ", sample_id))
-        }
+            s_obj$bam_file <- full_bam_file
+            s_obj$cell_barcode <- colnames(s_obj)
+            s_obj$cell_group <- paste0("cluster_", s_obj$seurat_clusters)
+            message("Making DimPlot")
+            dim_plot_name <-
+                dimplot_better(s_obj,
+                               group_by = c("seurat_clusters", "annotations"),
+                               label.size = 2.5) +
+                NoLegend()
 
-        qs::qsave(
-            snp_tree,
-            paste0(
-                "output/id_tumor/snvs/",
-                sample_id, "/",
-                sample_id, "_snp_tree.qs"
+            ggsave(
+                paste0(
+                    "output/id_tumor/snvs/plots/",
+                    sample_id,
+                    "_",
+                    species,
+                    "_dim_plot.png"
+                ),
+                plot = dim_plot_name,
+                width = 7,
+                height = 14
             )
-        )
 
-        message("Plotting trees")
-        for (depth in c("min_depth_5", "min_depth_10", "min_depth_20")) {
-            if (!is.null(snp_tree[[depth]])) {
-                snp_tree[[depth]]$labels <-
-                    str_remove(snp_tree[[depth]]$labels, "split_")
-                png(
+            c_b_t <-
+                s_obj@meta.data %>%
+                select(cell_group, bam_file, cell_barcode)
+
+            if (!dir.exists(paste0("output/id_tumor/snvs/", species, "_", sample_id))) {
+                dir.create(
                     paste0(
                         "output/id_tumor/snvs/",
-                        sample_id, "/",
-                        depth, "_", sample_id, ".png"
+                        species,
+                        "_",
+                        sample_id,
+                        "/shell"
                     ),
-                    width = 2500,
-                    height = 2500,
-                    res = 300
+                    recursive = TRUE
                 )
-                plot(snp_tree[[depth]])
-                dev.off()
+                dir.create(
+                    paste0(
+                        "output/id_tumor/snvs/",
+                        species,
+                        "_",
+                        sample_id,
+                        "/slurm"
+                    ),
+                    recursive = TRUE
+                )
             }
-        }
-        message("Labeling tree groups")
-        # Figure out which clusters are more than 50% control celltypes
-        normal_clusters <-
-            rrrSnvs::match_celltype_clusters(
-                sobject = s_obj,
-                normal_celltypes = control_celltypes,
-                cluster_col = "seurat_clusters",
-                celltype_col = "annotations"
-            ) %>%
-            paste0("cluster_", .)
+            message("Making snp tree")
+            # snp_tree <-
+            #     tryCatch({
+            #         rrrSnvs::get_snp_tree(
+            #             cellid_bam_table = c_b_t,
+            #             ploidy = ploidy,
+            #             ref_fasta = paste0(
+            #                 genome_key_base,
+            #                 genome_key[[samples_to_run$unique[i]]]
+            #             ),
+            #             min_depth = min_depths_to_use,
+            #             output_dir = paste0(
+            #                 "output/id_tumor/snvs/",
+            #                 species,
+            #                 "_",
+            #                 sample_id
+            #             ),
+            #             output_base_name = sample_id,
+            #             temp_dir = paste0(
+            #                 "output/id_tumor/snvs/",
+            #                 species,
+            #                 "_",
+            #                 sample_id
+            #             ),
+            #             sbatch_base = "shell/sbatch_",
+            #             slurm_base = "slurm/slurm",
+            #             min_snvs_per_cluster = 1000,
+            #             max_prop_missing_at_site = 0.9,
+            #             bootstrap_cutoff = 0.99,
+            #             cleanup = TRUE
+            #         )
+            #     }, error = function(e) {
+            #         message(paste0(
+            #                 "Error in snp_tree for ",
+            #                 sample_id,
+            #                 ": ",
+            #                 e
+            #         ))
 
-        cut_n_groups <- 2
+            #         return(
+            #             paste0(
+            #                 "Error in snp_tree for ",
+            #                 sample_id,
+            #                 ": ",
+            #                 e
+            #             )
+            #         )
+            #     })
 
-        s_obj$cell_barcode <- NULL
-        for (depth in c("min_depth_5", "min_depth_10", "min_depth_20")) {
-            if (!is.null(snp_tree[[depth]])) {
-                s_obj <-
-                    rrrSnvs::label_tree_groups(
-                        sobject = s_obj,
-                        dist_tree = snp_tree[[depth]],
-                        group_col_name = "cell_group",
-                        normal_groups = normal_clusters,
-                        cut_n_groups = cut_n_groups,
-                        tumor_call_column = paste0("snp_", depth)
-                    )
+            # # if all the min_depths failed due to low coverage, then the value
+            # #  of snp_tree is an empty list of length 0. We change this to NULL for
+            # # downstream processing
+            # if (is.character(snp_tree)) {
+            #     return(snp_tree)
+            # }
+
+            message("Labeling tree groups")
+            # Figure out which clusters are more than 50% control celltypes
+            normal_clusters <-
+                rrrSnvs::match_celltype_clusters(
+                    sobject = s_obj,
+                    normal_celltypes = control_celltypes,
+                    cluster_col = "cell_group",
+                    celltype_col = "annotations"
+                )
+
+            for (depth in min_depths_to_use) {
+                if (file.exists(paste0(
+                        "output/id_tumor/snvs/",
+                        species, "_",
+                        sample_id, "/",
+                        sample_id, "_",
+                        depth, "_dist.txt"
+                    ))) {
+                    s_obj <-
+                        add_snv_group_to_sobj(
+                            s_obj,
+                            snv_group_file = paste0(
+                                "output/id_tumor/snvs/",
+                                species, "_",
+                                sample_id, "/",
+                                sample_id, "_",
+                                depth, "_dist.txt"
+                            ),
+                            new_columns = paste0(
+                                c("snv_group_", "snv_top_lvl_group_"),
+                                depth
+                            ),
+                            cell_group = "cell_group"
+                        )
+
+                    if (length(normal_clusters) > 0) {
+                        s_obj <-
+                            label_tumor_cells(
+                                s_obj,
+                                cell_group = "cell_group",
+                                snv_group_col = paste0(
+                                    "snv_top_lvl_group_",
+                                    depth
+                                ),
+                                normal_clusters = normal_clusters,
+                                tumor_call_column = paste0(
+                                    "snv_top_lvl_tumor_call_",
+                                    depth
+                                )
+                            )
+                    } else {
+                        s_obj[[paste0("snv_top_lvl_tumor_call_", depth)]] <-
+                            s_obj[[paste0("snv_top_lvl_group_", depth)]]
+                    }
+                    s_obj@meta.data[[paste0("snv_top_lvl_tumor_call_", depth)]] <-
+                        replace_na(
+                            as.character(s_obj@meta.data[[paste0(
+                                "snv_top_lvl_tumor_call_",
+                                depth
+                            )]]),
+                            "unknown"
+                        )
+                } else {
+                    message(paste0(
+                            "No dist file for ",
+                            sample_id,
+                            " at ",
+                            depth,
+                            ". File: ",
+                            paste0(
+                                "output/id_tumor/snvs/",
+                                species, "_",
+                                sample_id, "/",
+                                sample_id, "_",
+                                depth, "_dist.txt"
+                            )
+                    ))
+                }
             }
-        }
-        message("Dimplots of calls")
-        if (!is.null(snp_tree)) {
-            plot_name <-
+
+            message("Dimplots of calls")
+            dimplots <-
                 dimplot_better(
                     s_obj,
                     group_by = c(
-                        "snp_min_depth_5",
-                        "snp_min_depth_10",
-                        "snp_min_depth_20"
-                    )
+                        paste0("snv_top_lvl_tumor_call_", min_depths_to_use),
+                        "cell_group",
+                        "annotations"
+                    ),
+                    ncol = 1,
+                    label.size = 2
+                ) +
+                NoLegend()
+
+            tree_plots <-
+                assemble_tree_plots(
+                    fig_folder = paste0(
+                        "output/id_tumor/snvs/",
+                        species, "_",
+                        sample_id
+                    ),
+                    sample_id = sample_id,
+                    depths = min_depths_to_use
                 )
+
             ggsave(
                 paste0(
-                    "output/id_tumor/snvs/",
-                    sample_id,
-                    "_dim_plot_calls.png"
+                    "output/id_tumor/snvs/plots/",
+                    sample_id, "_",
+                    species,
+                    "_dim_plot_tumor_calls.png"
                     ),
-                plot = plot_name,
-                width = 7,
-                height = 21
+                plot = patchwork::wrap_plots(tree_plots, dimplots, ncol = 2),
+                width = 15,
+                height = 20
             )
 
-            s_obj@meta.data %>%
-                rownames_to_column("cell") %>%
-                select(cell, starts_with("snp_min_depth")) %>%
-                write_tsv(
-                    paste0(
-                        "output/id_tumor/snvs/",
-                        sample_id,
-                        "_snp_calls.tsv"
+            if (any(grepl("snv_", colnames(s_obj@meta.data)))) {
+                s_obj@meta.data %>%
+                    rownames_to_column("cell") %>%
+                    select(cell, starts_with("snv_")) %>%
+                    write_tsv(
+                        paste0(
+                            "output/id_tumor/snvs/",
+                            species, "_",
+                            sample_id,
+                            "_snv_calls.tsv"
+                        )
                     )
-                )
+            }
         }
-    }
-    return("Completed successfully")
-})
+        return("Completed successfully")
+    })
 
 qs::qsave(output, "output/id_tumor/snvs/output.qs")
 ```

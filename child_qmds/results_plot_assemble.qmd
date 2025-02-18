@@ -1,0 +1,45 @@
+---
+title: "Untitled"
+format: html
+---
+## Results 1 - stromal_panel_plot
+```{r result1}
+# patchwork
+stromal_combined <-
+    patchwork::wrap_plots(
+    get_plot("stromal_panel_plot"),
+    get_plot("stromal_celltype_heatmap"),
+    heights = c(4, 1),
+    ncol = 1
+)
+
+ggsave(filename = "output/figures/Final_Annotations/stromal_panel_heatmap_plot.png",
+        plot = stromal_combined,
+        width = 14,
+        height = 25,
+        limitsize = FALSE,
+        bg = "white")
+
+# gridExtra
+gridExtra::grid.arrange(
+    grobs = list(
+        get_plot("mpg_disp"),
+        get_plot("mpg_qsec") +
+            theme(legend.position = "none")
+    ),
+    layout_matrix = matrix(c(1,1,1,2), ncol = 1),
+    ncol = 1
+)
+
+```
+
+## Results 2 - figure_cancer_panel
+```{r result2}
+patchwork::wrap_plots(
+    get_plot("tumor_panel_plot"),
+    get_plot("tumor_celltype_heatmap"),
+    heights = c(3, 1),
+    ncol = 1
+)
+
+```

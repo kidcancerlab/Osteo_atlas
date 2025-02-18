@@ -1,8 +1,12 @@
 ## Read metadata
 ```{r read_metadata}
 #| cache.vars: all_samples_csv
-all_samples_csv <- read_tsv("misc/allsample_details.txt",
-                            show_col_types = FALSE)
+# all_samples_csv <- readxl::read_excel("misc/allsample_details.xlsx")
+
+all_samples_csv <- 
+    readr::read_tsv("misc/allsample_details.txt",
+                    show_col_types = FALSE)
+
 
 all_samples_csv$sp_pattern <-
     str_replace_all(all_samples_csv$sp_pattern, "nothing", "")
@@ -26,14 +30,18 @@ path_key <- list(
     SJ = "/gpfs0/home2/gdrobertslab/lab/ExternalData/Patel_lab/",
     NCH = "/gpfs0/home2/gdrobertslab/lab/Counts_2/",
     NCI_POB = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/03_FilteredMatricesH5/",
-    GEO = "/gpfs0/home2/gdrobertslab/lab/Counts_2/"
+    GEO = "/gpfs0/home2/gdrobertslab/lab/Counts_2/",
+    CSU = "/gpfs0/home2/gdrobertslab/lab/ExternalData/Regan_lab/",
+    TU = "/gpfs0/home2/gdrobertslab/lab/ExternalData/Gardner/"
     )
 
 path_suffix_key <- list(
     SJ = "/filtered_feature_bc_matrix.h5",
     NCH = "/filtered_feature_bc_matrix.h5",
     NCI_POB = "_filtered_feature_bc_matrix.h5", # Note different file names
-    GEO = "/filtered_feature_bc_matrix.h5"
+    GEO = "/filtered_feature_bc_matrix.h5",
+    CSU = "/filtered_feature_bc_matrix.h5",
+    TU = "/filtered_feature_bc_matrix.h5"
     )
 
 count_list <-
@@ -79,6 +87,7 @@ count_list <-
 
             if (counts$n_cells_post_filter >= min_n_cells) {
                 counts$kept <- TRUE
+                set.seed(199820)
                 sobj <-
                     subset(sobj,
                            nCount_RNA > ncount_min &
@@ -107,20 +116,86 @@ count_list <-
         return(counts)
     })
 
+directory <- "output/counts"
+if (!dir.exists(directory)) {
+    dir.create(directory, recursive = TRUE)
+}
 write_tsv(bind_rows(count_list),
           "output/counts/cell_counts.txt")
+
 ```
 
+
+## Dog to human gene orthologs creation
+```{r dog_human_gene, echo=FALSE, include=FALSE, eval=FALSE}
+# Connect to Ensembl
+library(biomaRt)
+ensembl <- 
+    useMart("ensembl")
+
+# Select dog and human datasets
+dog_mart <- 
+    useDataset("clfamiliaris_gene_ensembl",
+                        mart = ensembl)
+human_mart <- 
+    useDataset("hsapiens_gene_ensembl",
+                        mart = ensembl)
+
+# Retrieve dog-to-human orthologs
+dog_to_human <- 
+    getBM(attributes = c("ensembl_gene_id",                 # Dog gene ID
+                                "external_gene_name",              # Dog gene name
+                                "hsapiens_homolog_ensembl_gene",   # Human ortholog gene ID
+                                "hsapiens_homolog_associated_gene_name"), # Human ortholog gene name
+                mart = dog_mart) # Dog dataset
+
+# select only the gene columns
+dog_human_cols<-
+    dog_to_human %>%
+    dplyr::select(external_gene_name,
+                hsapiens_homolog_associated_gene_name) %>%
+    dplyr::rename(dog_gene_name = external_gene_name,
+                  human_gene_ortholog = hsapiens_homolog_associated_gene_name)
+
+# Remove rows with missing values for both dog and human gene names
+dog_human_cols_filtered  <-
+    dog_human_cols %>%
+    dplyr::filter(dog_gene_name != "") %>%
+    dplyr::filter(human_gene_ortholog != "")
+
+# length(dog_human_cols_filtered$dog_gene_name)
+# length(unique(dog_human_cols_filtered$dog_gene_name))
+# Remove duplicate rows based on dog_gene_name, keeping only the first occurrence
+dog_human_cols_filtered <- 
+    dog_human_cols_filtered %>%
+    dplyr::distinct(dog_gene_name, .keep_all = TRUE) %>%
+    dplyr::distinct(human_gene_ortholog, .keep_all = TRUE)
+
+# # check for duplicates and keep only the first one
+# duplicated_rows <- 
+#     dog_human_cols_filtered %>%
+#     dplyr::filter(duplicated(dog_gene_name))
+
+directory <- "input/downloads"
+if (!dir.exists(directory)) {
+    dir.create(directory, recursive = TRUE)
+}
+write_tsv(dog_human_cols_filtered,
+         "input/downloads/dog_human_gene_orthologs.txt")
+
+```
 ## Run QC and create merged Seurat Object
 Will apply QC of ncount_min > 500 and number of cells > 200 cells per sample
 to be included into the merged seurat object per each group of patient_primary,
 patient_metastatic, mouse_primary, mouse_metastatic, xenograft_primary_human,
 xenograft_primary_mouse, xenograft_metastatic_human, and xenograft_metastatic_mouse
 ```{r merge_harmony}
+#| cache.vars: harmony_params
 #| fig.width: 10
 #| fig.height: 10
 #| fig.align: center
-#| dependson: read_raw
+#| dependson: [read_raw, read_metadata]
+
 harmony_params <-
     list(patient_prim = list(group_by = c("sample_name",
                                           "method",
@@ -154,6 +229,14 @@ harmony_params <-
                                      "model",
                                      "location"),
                         theta = c(7, 7, 7)),
+         dogs_prim = list(group_by = c("sample_name",
+                                       "data_source",
+                                       "location"),
+                          theta = c(7, 7, 7)),
+         dogs_mets = list(group_by = c("sample_name",
+                                       "data_source",
+                                       "location"),
+                          theta = c(7, 7, 7)),
          normal_bone = list(group_by = c("sample_name"),
                             theta = c(7)))
 
@@ -196,21 +279,27 @@ results <-
         }
     }
 
-    merged_sobj <- merge(x = temp_list[[1]],
-                         y = temp_list[2:length(temp_list)],
-                         add.cell.id = names(temp_list)) %>%
+    merged_sobj <- 
+        merge(x = temp_list[[1]],
+            y = temp_list[2:length(temp_list)],
+            add.cell.id = names(temp_list)) %>%
         JoinLayers() %>%
         process_seurat()
 
     #remove the temp_list
     rm(temp_list)
+    directory <- 
+        str_c("output/seurat_objects/comb_sobjs")
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
 
     qs::qsave(merged_sobj,
               str_c("output/seurat_objects/comb_sobjs/",
                     group,
                     ".qs"))
     #run harmony
-    
+
     #save the dimplot of the merged object
     dimplot1 <- 
         dimplot_better(merged_sobj,
@@ -246,6 +335,12 @@ results <-
                                 heights = 14) +
         patchwork::plot_annotation(title = str_c(group, " pre harmony dimplots")) +
         theme(plot.title = element_text(size = 10))
+
+    directory <- 
+        str_c("output/figures/combined_plots/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     #save the combined plots
     ggsave(str_c("output/figures/combined_plots/",
                  group,
@@ -265,7 +360,7 @@ results <-
 
     # make feaureplots
       # plot feature plots
-    if (merged_sobj$organism[1] == "human") {
+    if (merged_sobj$organism[1] == "human" | merged_sobj$organism[1] == "dog") {
         # tumor features for human
         featureplot1_tumor <-
             FeaturePlot(merged_sobj,
@@ -291,6 +386,11 @@ results <-
                         features = c("Cd3e", "Cd4", "Cd68",
                                      "Muc1", "Ms4a1", "Esam"),
                         ncol = 3)
+    }
+    directory <- 
+        str_c("output/figures/combined_plots/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
     }
     ggsave(str_c("output/figures/combined_plots/",
                  group,
@@ -322,63 +422,63 @@ results <-
                  "preharmony_immune_featureplots.qs"))
 
     #run the harmony
+    set.seed(199820)
+    merged_sobj <-
+        qs::qread(str_c("output/seurat_objects/comb_sobjs/",
+                        group,
+                        ".qs"))
     harmony_obj <-
         RunHarmony(object = merged_sobj,
                    group.by.vars = harmony_params[[group]]$group_by,
                    theta = harmony_params[[group]]$theta)
 
-    #optimize resolution, silhouette score does not work for large dataset
-    max_cell_silhouette <- 65000
-    n_cells <- length(Cells(harmony_obj))
-    keep_n_cells <- min(max_cell_silhouette, n_cells)
-    set.seed(63249528)
-    res_score <-
-        optimize_silhouette(harmony_obj[, sample(1:n_cells, keep_n_cells)],
-                            test_res = seq(0.1, 0.9, by = 0.1),
-                            summary_plot = FALSE,
-                            reduction = "harmony") %>%
-        arrange(desc(sil_vals), res_vals) %>%
-        slice_head(n = 1) %>%
-        pull(res_vals)
-
     harmony_obj <-
         harmony_obj %>%
-        process_seurat(reduction = "harmony",
-                       resolution = res_score)
+        process_seurat(reduction = "harmony")
 
+    directory <- 
+        str_c("output/seurat_objects/harmony_sobjs")
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     qs::qsave(harmony_obj,
               str_c("output/seurat_objects/harmony_sobjs/",
                     group,
                     ".qs"))
 
-    return(TRUE)
+    return(harmony_obj)
 })
 
 ```
 
 
-
 # Count before the QC
 Count the number of cells per sample before the QC
-```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
+```{r counting_cells_beforeQC}
 single_sobjs <- 
     list.files(path = "output/seurat_objects/sobj_preprocess/",
                full.names = FALSE)
+
 counts <- tibble()
 for (item in single_sobjs){
-    sobj <- qs::qread(str_c("output/seurat_objects/sobj_preprocess/",
-                            item))
-    sobj$ncount_median_before <- median(sobj$nCount_RNA)
-    unique <- sobj@meta.data$unique %>%
+    sobj <- 
+        qs::qread(str_c("output/seurat_objects/sobj_preprocess/",
+                        item))
+    sobj$ncount_median_before <- 
+        median(sobj$nCount_RNA)
+    unique <- 
+        sobj@meta.data$unique %>%
         head(n=1)
-    Hmeta_data <- sobj@meta.data %>%
+    Hmeta_data <- 
+        sobj@meta.data %>%
         as.data.table %>%
         group_by(sample_name, unique) %>%
         summarize(ncount_median_before = median(nCount_RNA),
                   N_cells_before = n(),
                   .groups = "drop")
 
-    counts <- Hmeta_data %>%
+    counts <- 
+        Hmeta_data %>%
         select("sample_name", "unique", "ncount_median_before", "N_cells_before") %>%
         rbind(counts) %>% 
         arrange(unique)
@@ -389,23 +489,32 @@ for (item in single_sobjs){
 some of the samples are discarded as the ncountmin was set 500 and number of 
 cells limit was set to 200 cells and above per sample. The upper cutoff was set 
 as 5000 max cells per sample for similar dataset representation 
-```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+```{r counting_cells_afterQC}
+
+all_samples_csv <- 
+    readr::read_tsv("misc/allsample_details.txt",
+                    show_col_types = FALSE) %>%
+    filter(unique != "normal_bone")
+
 counts_afterQC <- tibble()
 
 for (group in unique(all_samples_csv$unique)) {
-    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
-                              group,
-                              ".qs"))
+    object <- 
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                        group,
+                        ".qs"))
     #DimPlot(object)
     #extract meta data
-    Hmeta_data <- object@meta.data %>%
+    Hmeta_data <- 
+        object@meta.data %>%
         as.data.table %>%
         group_by(sample_name, unique) %>% 
         summarise(ncount_median_after = median(nCount_RNA),
                   N_cells_after = n(),
                   .groups = "drop")
 
-    counts_afterQC <- Hmeta_data %>% 
+    counts_afterQC <- 
+        Hmeta_data %>% 
         select("N_cells_after", "sample_name", "unique", "ncount_median_after") %>%
         rbind(counts_afterQC) %>%
         arrange(unique)

@@ -8,7 +8,7 @@ assigned by highest number of celltype per each seurat cluster
 #| fig.width: 10
 #| fig.height: 10
 #| fig.align: "center"
-#| dependson: merge_harmony
+#| dependson: [merge_harmony, annotate_function, read_metadata, dog_human_gene]
 
 annotation_type <- list(patient_prim = list("human", FALSE),
                         patient_mets = list("human_lung", FALSE),
@@ -18,18 +18,34 @@ annotation_type <- list(patient_prim = list("human", FALSE),
                         xeno_mets_human = list("human_lung", FALSE),
                         xeno_prim_mouse = list("mouse", FALSE),
                         xeno_mets_mouse = list("mouse_lung", FALSE),
+                        dogs_prim = list("human", FALSE),
+                        dogs_mets = list("human_lung", FALSE),
                         normal_bone = list("human", FALSE))
+
+#dogs have to be converted to human genes
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
+
+#Result for annotation
 results <-
     parallel::mclapply(unique(all_samples_csv$unique),
                        mc.cores = parallelly::availableCores(),
                        function(group) {
-        ann_sobj <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
-                                    group,
-                                    ".qs"))
-        ann_sobj <- annotate_celltypes(sobject = ann_sobj,
-                                       species = annotation_type[[group]][[1]],
-                                       with_tumor = annotation_type[[group]][[2]],
-                                       aggr_ref = TRUE)
+        ann_sobj <- 
+            qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                            group,
+                            ".qs"))
+        set.seed(199820)
+        if (group == "dogs_prim" || group == "dogs_mets") {
+            ann_sobj <- 
+                dog_to_human_setup(object = ann_sobj)
+        }
+        set.seed(199820)
+        ann_sobj <-
+            annotate_celltypes(sobject = ann_sobj,
+                                species = annotation_type[[group]][[1]],
+                                with_tumor = annotation_type[[group]][[2]],
+                                aggr_ref = TRUE)
 
         Idents(ann_sobj) <- ann_sobj$seurat_clusters
         clust_info <- tibble()
@@ -61,8 +77,10 @@ results <-
                     rbind(clust_info)
         }
 
-        ann_sobj <- AddMetaData(ann_sobj, metadata = clust_info)
-        ann_sobj$new_annot_clust <- ann_sobj$re_cluster
+        ann_sobj <- 
+            AddMetaData(ann_sobj, metadata = clust_info)
+        ann_sobj$new_annot_clust <- 
+            ann_sobj$re_cluster
 
         cluster_celltypes <-
             table(ann_sobj$re_cluster, ann_sobj$annotations) %>%
@@ -83,10 +101,28 @@ results <-
                                 pattern = seurat_clust,
                                 replacement = celltype)
         }
+        
+        if (group == "dogs_prim" || group == "dogs_mets") {
+            object <- ann_sobj
+            ann_sobj <-
+                qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                            group,
+                            ".qs"))
+            ann_sobj$annotations <- object$annotations
+            ann_sobj$new_annot_clust <- object$new_annot_clust
+        }
+
+        directory <- 
+            str_c("output/seurat_objects/harmony_sobjs_annot/")
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
+
         qs::qsave(x = ann_sobj,
                   file = str_c("output/seurat_objects/harmony_sobjs_annot/",
                                group,
                                ".qs"))
 })
+
 
 ```

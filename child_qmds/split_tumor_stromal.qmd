@@ -13,9 +13,12 @@ We will make these column names have the format "cancer_lable_{method_name}" so 
 #| fig.align: center
 #| echo: FALSE
 #| eval: FALSE
+#| dependson: [annotate_celltypes, read_metadata]
 
 #parallel::mclapply(unique(all_samples_csv$unique), function(group)
-for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
     object <-
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
@@ -23,11 +26,12 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 
     # Pull in cancer cell annotation from all the methods we attempted and add them to the metadata
     for (method_used in c("SCEVAN", "scATOMIC", "celltype", "snv_calling")) {
-        cancer_label_file <- str_c("output/id_tumor/",
-                       method_used,
-                       "/",
-                       group,
-                       "_metadata.tsv")
+        cancer_label_file <- 
+            str_c("output/id_tumor/",
+                method_used,
+                "/",
+                group,
+                "_metadata.tsv")
 
         if (file.exists(cancer_label_file)) {
             cancer_label <- readr::read_tsv(cancer_label_file) %>%
@@ -37,34 +41,54 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
         object <- object %>%
             AddMetaData(metadata = cancer_label)
     }
-
+    directory <-
+        str_c("output/seurat_objects/final_combined_sobjs/")
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     #save the seurat object.size
-    qs::qsave(object, str_c("output/seurat_objects/final_combined_sobjs/",
-                            group,
-                            ".qs"))
+    qs::qsave(object, 
+            str_c("output/seurat_objects/final_combined_sobjs/",
+                    group,
+                    ".qs"))
 
     #plot for the cancer normal cells, mouse do not have scatomic tumor call
     if ("scatomic_tumor_call" %in% colnames(object@meta.data)){
-        combinedplot1 <-
+        combineplot1 <-
             dimplot_better(object,
                            group_by = "scatomic_tumor_call") +
-                NoLegend() +
-                theme(plot.title = element_text(size = 7))
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
     } else {
-        combinedplot1 <- ggplot(data = NULL) +
-                            aes(x = as.factor(1), y = as.factor(1)) +
-                            geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
+        combineplot1 <- 
+            ggplot(data = NULL) +
+            aes(x = as.factor(1), y = as.factor(1)) +
+            geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
     }
-    combineplot2 <-
-        dimplot_better(object,
-                       group_by = "scevan_tumor_call") +
+    if ("scevan_tumor_call" %in% colnames(object@meta.data)){
+        combineplot2 <-
+            dimplot_better(object,
+                           group_by = "scevan_tumor_call") +
             NoLegend() +
             theme(plot.title = element_text(size = 7))
-    combineplot3 <-
-        dimplot_better(object,
-                       group_by = "final_snv_call") +
+    } else {
+        combineplot2 <- 
+            ggplot(data = NULL) +
+            aes(x = as.factor(1), y = as.factor(1)) +
+            geom_text(aes(label = str_c("scevan_tumor_call not present for ", group)))
+    }
+    if ("snv_call" %in% colnames(object@meta.data)){
+        combineplot3 <-
+            dimplot_better(object,
+                           group_by = "snv_call") +
             NoLegend() +
             theme(plot.title = element_text(size = 7))
+    } else {
+        combineplot3 <- 
+            ggplot(data = NULL) +
+            aes(x = as.factor(1), y = as.factor(1)) +
+            geom_text(aes(label = str_c("snv_call not present for ", group)))
+    }
     combineplot4 <-
         dimplot_better(object,
                        group_by = "celltype_tumor_call") +
@@ -83,18 +107,23 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 
     # use patchwork to combine the plots
     combined_plots <- 
-        patchwork::wrap_plots(combinedplot1,
+        patchwork::wrap_plots(combineplot6,
+                            combineplot5,
+                            combineplot1,
                             combineplot2,
                             combineplot3,
                             combineplot4,
-                            combineplot5,
-                            combineplot6,
                             ncol = 3,
                             widths = 21,
                             heights = 14) +
             patchwork::plot_annotation(title = group) +
             theme(plot.title = element_text(size = 10))
 
+    directory <-
+        str_c("output/figures/combined_plots/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     #save the combined plots
     ggsave(str_c("output/figures/combined_plots/",
                  group,
@@ -103,7 +132,6 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
            plot = combined_plots,
            width = 21,
            height = 14)
-
     # save the plot as qs object
     qs::qsave(combined_plots,
               str_c("output/figures/combined_plots/",
@@ -113,13 +141,15 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 }
 
 #make feature plots for all the groups
-for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
                         group,
                         ".qs"))
     # plot feature plots
-    if (object$organism[1] == "human") {
+    if (object$organism[1] == "human" | object$organism[1] == "dog") {
         # tumor features for human
         featureplot1_tumor <-
             FeaturePlot(object,
@@ -180,45 +210,68 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
 ## Split by clustering with right resolution as found by clustree
 
 ```{r split_tumor_stromal_main}
-# Harmony parameters for the split
+#| cache.vars: Annotation_cleanup
+#| dependson: [dog_human_orthologs_function, annotate_celltypes]
 
+# Annotation cleanup
+Annotation_cleanup <-
+    qs::qread("misc/Annotation_cleanup.qs")
+
+# load the tsv for human_dog gene orthologs
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
+
+
+#Harmony parameters for the split
 harmony_params <-
     list(patient_prim = list(group_by = c("sample_name",
                                           "method",
                                           "data_source"),
-                             theta = c(5, 5, 5),
+                             theta = c(1, 5, 5),
                              lambda = c(0.5, 0.5, 0.5)),
         patient_mets = list(group_by = c("sample_name",
                                          "method",
                                          "data_source"),
-                            theta = c(7, 7, 7),
+                            theta = c(1, 7, 7),
                             lambda = c(0.5, 0.5, 0.5)),
         xeno_prim_human = list(group_by = c("sample_name",
-                                            "method",
-                                            "data_source"),
-                               theta = c(7, 7, 7)),
+                                            "method"),
+                               theta = c(2, 12),
+                               lambda = c(0.5, 0.5)),
         xeno_mets_human = list(group_by = c("sample_name",
                                             "method",
                                             "data_source"),
-                               theta = c(7, 7, 7)),
+                               theta = c(7, 7, 7),
+                               lambda = c(0.5, 0.5, 0.5)),
         xeno_prim_mouse = list(group_by = c("sample_name",
                                             "data_source"),
-                                theta = c(7, 7)),
+                                theta = c(7, 7),
+                                lambda = c(0.5, 0.5)),
         xeno_mets_mouse = list(group_by = c("sample_name",
                                             "method",
                                             "data_source"),
-                               theta = c(7, 7, 7)),
+                               theta = c(7, 7, 7),
+                               lambda = c(0.5, 0.5, 0.5)),
         mm_prim = list(group_by = c("sample_name",
                                     "model"),
                        theta = c(12, 12),
                        lambda = c(0.1, 0.1)),
         mm_mets = list(group_by = c("sample_name",
                                     "model"),
-                       theta = c(7, 7),
+                       theta = c(12, 12),
                        lambda = c(0.1, 0.1)),
+        dogs_prim = list(group_by = c("sample_name",
+                                       "data_source",
+                                       "location"),
+                          theta = c(7, 7, 7),
+                          lambda = c(0.5, 0.5, 0.5)),
+        dogs_mets = list(group_by = c("sample_name",
+                                       "data_source",
+                                       "location"),
+                          theta = c(7, 7, 7),
+                          lambda = c(0.5, 0.5, 0.5)),
         normal_bone = list(group_by = c("sample_name"),
                            theta = c(7)))
-
 
 #reference for annotating mets
 human_lung_ref <-
@@ -239,47 +292,75 @@ mouse_lung_ref_new$CellType <-
                               "^Alveolar_Epithelial_Type_2$" = "Alveolar_Epithelial"))
 
 
-for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
                         group,
                         ".qs"))
 
     if (any(c("S0200", "S0201") %in% object$sample_name)) {
-        object <- subset(object,
-                         sample_name != "S0200" & sample_name != "S0201")
+        object <- 
+            subset(object,
+                   sample_name != "S0200" & sample_name != "S0201")
     }
 
     for (cell_group_name in c("cancer_cells", "normal_cells")) {
         sub_group <- str_c(group, "_", cell_group_name)
 
         if  (cell_group_name == "normal_cells") {
+            set.seed(199820)
             s_obj <-
                 subset(x = object,
                         celltype_tumor_call == cell_group_name) %>%
+                process_seurat()
+            # add the filter genes that are present in less than 1% of cells
+            min_prop_cells_expressing <- 0.01
+            n_cells_in_data <- length(Cells(s_obj))
+            cells_expressing_genes <-
+                rowSums(
+                    GetAssayData(s_obj, layer = "counts") > 0
+                ) > min_prop_cells_expressing * n_cells_in_data
+
+            set.seed(199820)
+            s_obj <-
+                s_obj[cells_expressing_genes, ] %>%
                 process_seurat() %>%
                 RunHarmony(group.by.vars = harmony_params[[group]]$group_by) %>%
                 process_seurat(reduction = "harmony")
+            
+            # change the dog genes to human genes for annotation for normal cells
+            set.seed(199820)
+            if (sub_group == "dogs_prim_normal_cells" | sub_group == "dogs_mets_normal_cells") {
+                s_obj <- 
+                    dog_to_human_setup(object = s_obj)
+            }
 
-            if (sub_group == "patient_mets_normal_cells") {
+            set.seed(199820)
+            if (sub_group == "patient_mets_normal_cells" | sub_group == "dogs_mets_normal_cells") {
+                set.seed(199820)
                 ref_lung <- 
                     SingleR::SingleR(test = as.SingleCellExperiment(s_obj),
                                     ref = GetAssayData(human_lung_ref),
                                     labels = human_lung_ref$free_annotation,
                                     aggr.ref = TRUE)
-            } else if (sub_group == "patient_prim_normal_cells") {
+            } else if (sub_group == "patient_prim_normal_cells" | sub_group == "dogs_prim_normal_cells") {
+                set.seed(199820)
                 ref_lung <- 
                     SingleR::SingleR(test = as.SingleCellExperiment(s_obj),
                                     ref = list(hpca, huim),
                                     labels = list(hpca$label.fine, huim$label.fine),
                                     aggr.ref = TRUE)
             } else if (sub_group == "mm_mets_normal_cells") {
+                set.seed(199820)
                 ref_lung <- 
                     SingleR::SingleR(test = as.SingleCellExperiment(s_obj),
                                     ref = GetAssayData(mouse_lung_ref_new),
                                     labels = mouse_lung_ref_new$CellType,
                                     aggr.ref = TRUE)
             } else {
+                set.seed(199820)
                 ref_lung <- 
                     SingleR::SingleR(test = as.SingleCellExperiment(s_obj),
                                     ref = list(moim, mord),
@@ -291,7 +372,9 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
             Idents(s_obj) <- s_obj$seurat_clusters
             clust_info <- tibble()
             for (cluster in unique(s_obj$seurat_clusters)) {
-                subset_object <- subset(s_obj, ident = cluster) %>%
+                set.seed(199820)
+                subset_object <- 
+                    subset(s_obj, ident = cluster) %>%
                     FindVariableFeatures() %>%
                     ScaleData() %>%
                     # don't ask for more PCs than there are cells
@@ -340,212 +423,62 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                                     pattern = seurat_clust,
                                     replacement = celltype)
             }
+            if (sub_group == "dogs_prim_normal_cells" | sub_group == "dogs_mets_normal_cells") {
+                normal_cell_ids <-
+                    colnames(s_obj)
+                dog_stroma_whuman_genes <-
+                    s_obj
+                set.seed(199820)
+                s_obj <-
+                    subset(x = object,
+                          cells = normal_cell_ids) %>%
+                    process_seurat() %>%
+                    RunHarmony(group.by.vars = harmony_params[[group]]$group_by) %>%
+                    process_seurat(reduction = "harmony")
+                s_obj$annotations <- dog_stroma_whuman_genes$annotations
+                s_obj$new_annot_clust <- dog_stroma_whuman_genes$new_annot_clust
+            }
+
         } else {
+            set.seed(199820)
             s_obj <-
                 subset(x = object,
                         celltype_tumor_call == cell_group_name) %>% 
+                process_seurat()
+            # add the filter genes that are present in less than 1% of cells
+            min_prop_cells_expressing <- 0.01
+            n_cells_in_data <- length(Cells(s_obj))
+            cells_expressing_genes <-
+                rowSums(
+                    GetAssayData(s_obj, layer = "counts") > 0
+                ) > min_prop_cells_expressing * n_cells_in_data
+            set.seed(199820)
+            s_obj <- 
+                s_obj[cells_expressing_genes, ] %>%
                 process_seurat() %>%
                 RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
                             theta = harmony_params[[group]]$theta,
                             lambda = harmony_params[[group]]$lambda) %>%
                 process_seurat(reduction = "harmony")
         }
-        s_obj$Ann_level3 <-
+
+        s_obj$SingleR_Ann3 <-
             stringr::str_replace_all(s_obj$new_annot_clust,
-                c("^DC__DC_$" = "Dendritic_cells",
-                    "^DC__DC_103_11B_plus24_plus_$" = "Dendritic_cells",
-                    "^DC__DC_PDC_8_plus_$" = "Plasmacytoid_Dendritic",
-                    "^DC__DC_8_4_11B_plus_$" = "Dendritic_cells",
-                    "^B_cell_Plasma_cell$" = "Plasma_Bcells",
-                    "^Macrophages__MF_103_11B_plus24__$" = "Macrophages",
-                    "^Macrophages__MF_11C_11B_plus_$" = "Macrophages",
-                    "^DC_monocyte_derived_AEC_conditioned$" = "DC_monocyte_derived",
-                    "^Mast_cells__MC.ES_$" = "Mast_cells",
-                    "^Neutrophils__GN.Thio_$" = "Neutrophils",
-                    "^Stromal_cells__ST.31_38_44__$" = "Stromal_cells",
-                    "^T_cells__T.Tregs_$" = "Regulatory_T",
-                    "^CD4_plus_T$" = "CD4T_cells",
-                    "^CD8_plus_T$" = "CD8T_cells",
-                    "^Capillary_Aerocyte$" = "EC_capillary_aerocyte",
-                    "^Capillary$" = "EC_capillary",
-                    "^Lympatic$" = "EC_Lympatic",
-                    "^Myeloid_Dendritic_Type_1$" = "Myeloid_Dendritic",
-                    "^Myofibroblast$" = "Myofibroblasts",
-                    "^Natural_Killer$" = "NK_cells",
-                    "^Plasma$" = "Plasma_Bcells",
-                    "^B_cell_Plasma_cell$" = "Plasma_Bcells",
-                    "^B$" = "B_cells",
-                    "^Ciliated$" = "Ciliated_cells",
-                    "^DC_monocyte_derived_AEC_conditioned$" = "DC_monocyte_derived",
-                    "^DC_monocyte_derived_antiCD40_VAF347$" = "DC_monocyte_derived",
-                    "^DC_monocyte_derived_mature$" = "DC_monocyte_derived",
-                    "^Effector memory CD8 T cells$" = "Effector_memory_CD8T",
-                    "^Endothelial_cells_blood_vessel" = "EC_blood_vessel",
-                    "^Endothelial_cells_HUVEC_VEGF$" = "EC_HUVEC_VEGF",
-                    "^Endothelial_cells_lymphatic$" = "EC_lymphatic",
-                    "^Endothelial_cells_lymphatic_KSHV$" = "EC_lymphatic",
-                    "^Fibroblasts_breast$" = "Fibroblasts",
-                    "^Intermediate monocytes$" = "Intermediate_monocytes",
-                    "^Low-density basophils$" = "Basophils",
-                    "^Low-density neutrophils$" = "Neutrophils",
-                    "^Macrophage_monocyte_derived_IL_4_Dex_TGFb$" = "Macrophage_monocyte_derived",
-                    "^Macrophage_monocyte_derived_M_CSF$" = "Macrophage_monocyte_derived",
-                    "^MAIT cells$" = "MAI_Tcells",
-                    "^Monocyte_CD16_$" = "Monocytes_CD16_minus",
-                    "^Monocyte_S._typhimurium_flagellin$" = "Monocytes",
-                    "^Neutrophil_commensal_E._coli_MG1655$" = "Neutrophils",
-                    "^Myeloid dendritic cells$" = "Myeloid_Dendritic",
-                    "^Naive B cells$" = "Naive_Bcells",
-                    "^Naive CD8 T cells$" = "Naive_CD8T",
-                    "^NK_cell$" = "NK_cells",
-                    "^Plasmablasts$" = "Plasma_Bcells",
-                    "^Plasmacytoid dendritic cells$" = "Plasmacytoid_Dendritic",
-                    "^Switched memory B cells$" = "Memory_Bcells",
-                    "^T regulatory cells$" = "Regulatory_T",
-                    "^T_cell_CD4_plus_central_memory$" = "Central_memory_CD4T",
-                    "^T_cell_CD4_plus_effector_memory$" = "Effector_memory_CD4T",
-                    "^T_cell_CD4_plus_Naive$" = "Naive_CD4T",
-                    "^T_cell_CD8_plus_Central_memory$" = "Central_memory_CD8T",
-                    "^T_cell_CD8_plus_naive$" = "Naive_CD8T",
-                    "^T_cell_gamma_delta$" = "GammaDelta_Tcells",
-                    "^AT1$" = "AlvEpithelial_T1",
-                    "^AT2$" = "AlvEpithelial_T2",
-                    "^CD4_T_cells$" = "CD4T_cells",
-                    "^CD8_T_cells$" = "CD8T_cells",
-                    "^DC1$" = "Dendritic_cells1",
-                    "^DC2$" = "Dendritic_cells2",
-                    "^EC_arterial$" = "EC_artery",
-                    "^EC_general_capillary$" = "EC_capillary",
-                    "^EC_venous_pulmonary$" = "EC_vein",
-                    "^EC_venous_systemic$" = "EC_vein",
-                    "^Lymphatic_EC_mature$" = "EC_lymphatic",
-                    "^Multiciliated$" = "Ciliated_cells",
-                    "^Non_classical_monocytes$" = "Nonclassical_monocytes",
-                    "^Nonclassical_Monocyte$" = "Nonclassical_monocytes",
-                    "^Classical_Monocyte$" = "Classical_monocytes",
-                    "^Plasma_cells$" = "Plasma_Bcells",
-                    "^Plasmacytoid_DCs$" = "Plasmacytoid_Dendritic",
-                    "^T_cells_proliferating$" = "Proliferating_T",
-                    "^Neutrophil$" = "Neutrophils",
-                    "^Pericyte$" = "Pericytes",
-                    "^Astrocytes$" = "Neurons",
-                    "^Stem_cells$" = "Progenitors",
-                    "^Basophil_Mast" = "Basophils",
-                    "^Capillary_cells$" = "EC_capillary",
-                    "^Artery_cells$" = "EC_artery",
-                    "^Monocyte_leukotriene_D4$" = "Monocytes",
-                    "^Vein_cells$" = "EC_vein",
-                    "^Lymph_cells$" = "EC_lymphatic",
-                    "^Alv_Macrophages$" = "Alveolar_macrophages",
-                    "^Int_Macrophages$" = "Interstitial_macrophage",
-                    "^Myo_Fibroblasts$" = "Myofibroblasts",
-                    "^Oligodendrocytes$" = "Stromal_cells",
-                    "^Transitional_Club_AT2$" = "Club_cells"))
+                                    Annotation_cleanup$SingleR_Ann3_label)
 
-        s_obj$Ann_level2 <-
-            stringr::str_replace_all(s_obj$Ann_level3,
-                    c("^Fibroblasts_activated$" = "Fibroblasts",
-                        "^Fibroblasts_senescent$" = "Fibroblasts",
-                        "^Macrophages_activated$" = "Macrophages",
-                        "^Plasmacytoid_Dendritic$" = "Dendritic_cells",
-                        "^Regulatory_T$" = "T_cells",
-                        "^Alox5_plus_Lymphocytes$" = "Lymphocytes",
-                        "^Alveolar_Epithelial$" = "Epithelial_cells",
-                        "^Alveolar_Fibroblast$" = "Fibroblasts",
-                        "^Alveolar_Macrophage$" = "Macrophages",
-                        "^Ccr7_plus_Dendritic$" = "Dendritic_cells",
-                        "^Ciliated_cells$" = "Epithelial_cells",
-                        "^Classical_monocytes" = "Monocytes",
-                        "^EC_capillary$" = "Endothelial_cells",
-                        "^EC_capillary_aerocyte$" = "Endothelial_cells",
-                        "^EC_Lympatic$" = "Endothelial_cells",
-                        "^Interstitial_Macrophage$" = "Macrophages",
-                        "^Interstital_macrophage$" = "Macrophages",
-                        "^Myeloid_Dendritic$" = "Dendritic_cells",
-                        "^Myofibroblasts$" = "Fibroblasts",
-                        "^Nonclassical_monocytes$" = "Monocytes",
-                        "^Plasma_Bcells$" = "B_cells",
-                        "^Proliferating_Alveolar_Macrophage" = "Macrophages",
-                        "^Proliferating_T$" = "T_cells",
-                        "^Proliferating_Dendritic$" = "Dendritic_cells",
-                        "^Zbtb32_plus_B$" = "B_cells",
-                        "^Central_memory_CD4T$" = "T_cells",
-                        "^Central_memory_CD8T$" = "T_cells",
-                        "^DC_monocyte_derived$" = "Dendritic_cells",
-                        "^EC_blood_vessel$" = "Endothelial_cells",
-                        "^EC_HUVEC_VEGF$" = "Endothelial_cells",
-                        "^Effector_memory_CD4T$" = "T_cells",
-                        "^Effector_memory_CD8T$" = "T_cells",
-                        "^GammaDelta_Tcells$" = "T_cells",
-                        "^Intermediate_monocytes$" = "Monocytes",
-                        "^Macrophage_monocyte_derived$" = "Macrophages",
-                        "^MAI_Tcells$" = "T_cells",
-                        "^Memory_Bcells$" = "B_cells",
-                        "^Monocyte_CD16_plus$" = "Monocytes",
-                        "^Monocyte_leukotriene_D4$" = "Monocytes",
-                        "^Monocytes_CD16_minus$" = "Monocytes",
-                        "^Naive_Bcells$" = "B_cells",
-                        "^Naive_CD8T$" = "T_cells",
-                        "^Plasmablasts_Bcells$" = "B_cells",
-                        "^Alveolar_fibroblasts$" = "Fibroblasts",
-                        "^Alveolar_macrophages$" = "Macrophages",
-                        "^AlvEpithelial_T1$" = "Epithelial_cells",
-                        "^AlvEpithelial_T2$" = "Epithelial_cells",
-                        "^CD4T_cells$" = "T_cells",
-                        "^CD8T_cells$" = "T_cells",
-                        "^Dendritic_cells1$" = "Dendritic_cells",
-                        "^Dendritic_cells2$" = "Dendritic_cells",
-                        "^EC_artery$" = "Endothelial_cells",
-                        "^EC_capillary$" = "Endothelial_cells",
-                        "^EC_vein$" = "Endothelial_cells",
-                        "^EC_lymphatic$" = "Endothelial_cells",
-                        "^Interstitial_macrophage$" = "Macrophages",
-                        "^Interstitial_macrophages$" = "Macrophages",
-                        "^Peribronchial_fibroblasts$" = "Fibroblasts",
-                        "^SM_activated_stress_response$" = "Smooth_muscle",
-                        "^Subpleural_fibroblasts$" = "Fibroblasts",
-                        "^Transitional_Club_AT2$" = "Epithelial_cells",
-                        "^Tuft$" = "Epithelial_cells",
-                        "^Proliferating_NK$" = "NK_cells",
-                        "^Tgd_cells$" = "T_cells",
-                        "^AlvEpithelial_cells$" = "Epithelial_cells",
-                        "^Club_cells$" = "Epithelial_cells",
-                        "^EC_aerocyte_capillary$" = "Endothelial_cells",
-                        "^Migratory_DCs$" = "Dendritic_cells"))
+        s_obj$SingleR_Ann2 <-
+            stringr::str_replace_all(s_obj$SingleR_Ann3,
+                                    Annotation_cleanup$SingleR_Ann2_label)
 
-        s_obj$Ann_level1 <-
-            stringr::str_replace_all(s_obj$Ann_level2,
-                        c("^B_cells$" = "Immune_Lymphoid",
-                        "^Dendritic_cells$" = "Immune_Myeloid",
-                        "^Erythrocytes$" = "Immune_Myeloid",
-                        "^Macrophages$" = "Immune_Myeloid",
-                        "^Mast_cells$" = "Immune_Myeloid",
-                        "^Monocytes$" = "Immune_Myeloid",
-                        "^Neutrophils$" = "Immune_Myeloid",
-                        "^NK_cells$" = "Immune_Lymphoid",
-                        "^Fibroblasts$" = "Mesenchymal",
-                        "^Stromal_cells$" = "Mesenchymal",
-                        "^T_cells$" = "Immune_Lymphoid",
-                        "^Lymphocytes$" = "Immune_Lymphoid",
-                        "^Pericytes$" = "Mesenchymal",
-                        "^Basophils$" = "Immune_Myeloid",
-                        "^Osteoblasts$" = "Mesenchymal",
-                        "^Smooth_muscle$" = "Mesenchymal",
-                        "^Cardiomyocytes$" = "Mesenchymal",
-                        "^Adipocytes$" = "Mesenchymal",
-                        "^Neurons$" = "Mesenchymal",
-                        "^Granulocytes$" = "Immune_Myeloid",
-                        "^Progenitors$" = "Immune_Myeloid",
-                        "^Lymphoid_cells$" = "Immune_Lymphoid",
-                        "^Mesothelial_cells$" = "Mesenchymal",
-                        "^Mural_cells$" = "Mesenchymal"))
+        s_obj$SingleR_Ann1 <-
+            stringr::str_replace_all(s_obj$SingleR_Ann2,
+                                    Annotation_cleanup$SingleR_Ann1_label)  
 
         dimplot1 <- 
             dimplot_better(s_obj,
                         group_by = "seurat_clusters") +
                 NoLegend() +
                 theme(plot.title = element_text(size = 7))
-
 
         dimplot2 <- 
             dimplot_better(s_obj,
@@ -576,6 +509,12 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
             patchwork::plot_annotation(title = str_c(group, " ", cell_group_name)) +
             theme(plot.title = element_text(size = 10))
 
+        directory <-
+            str_c("output/figures/tumor_vs_stroma/", group)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
+        #save the plot
         ggsave(str_c("output/figures/tumor_vs_stroma/",
                     group,
                     "/",
@@ -593,7 +532,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                         cell_group_name,
                         "_dimplot.qs"))
 
-        if (object$organism[1] == "human") {
+        if (object$organism[1] == "human" | object$organism[1] == "dog") {
             tumor_featureplot <- 
                 FeaturePlot(s_obj,
                             features = c("COL1A1", "COL1A2", "FBLN1",
@@ -650,6 +589,11 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets")) {
                         cell_group_name,
                         "_immune_featureplot.qs"))
 
+        directory <-
+            str_c("output/seurat_objects/tumor_vs_stroma/")
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
         qs::qsave(s_obj, str_c("output/seurat_objects/tumor_vs_stroma/",  #nolint
                                 group, "_",
                                 cell_group_name,
@@ -667,200 +611,33 @@ for (group in c("xeno_prim_human",
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
-    if (group == "xeno_prim_human") {
-        object <- subset(object, 
-                        sample_name != "SJOS030279_X1") %>%
-            process_seurat() %>%
-            RunHarmony(group.by.vars = c("sample_name", "data_source", "method"),
-                        theta = c(7, 7, 7)) %>%
-        process_seurat(reduction = "harmony",
-                       resolution = 0.15)
-    }
-    object$Ann_level3 <-
+    # add the filter genes that are present in less than 1% of cells
+    min_prop_cells_expressing <- 0.01
+    n_cells_in_data <- length(Cells(object))
+    cells_expressing_genes <-
+        rowSums(
+            GetAssayData(object, layer = "counts") > 0
+        ) > min_prop_cells_expressing * n_cells_in_data
+    set.seed(199820)
+    object <- 
+        object[cells_expressing_genes, ] %>%
+        process_seurat() %>%
+        RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
+                    theta = harmony_params[[group]]$theta,
+                    lambda = harmony_params[[group]]$lambda) %>%
+        process_seurat(reduction = "harmony")
+
+    object$SingleR_Ann3 <-
         stringr::str_replace_all(object$annotations,
-                    c("^DC__DC_$" = "Dendritic_cells",
-                    "^DC__DC_103_11B_plus24_plus_$" = "Dendritic_cells",
-                    "^DC__DC_PDC_8_plus_$" = "Plasmacytoid_Dendritic",
-                    "^DC__DC_8_4_11B_plus_$" = "Dendritic_cells",
-                    "^B_cell_Plasma_cell$" = "Plasma_Bcells",
-                    "^Macrophages__MF_103_11B_plus24__$" = "Macrophages",
-                    "^Macrophages__MF_11C_11B_plus_$" = "Macrophages",
-                    "^DC_monocyte_derived_AEC_conditioned$" = "DC_monocyte_derived",
-                    "^Mast_cells__MC.ES_$" = "Mast_cells",
-                    "^Neutrophils__GN.Thio_$" = "Neutrophils",
-                    "^Stromal_cells__ST.31_38_44__$" = "Stromal_cells",
-                    "^T_cells__T.Tregs_$" = "Regulatory_T",
-                    "^CD4_plus_T$" = "CD4T_cells",
-                    "^CD8_plus_T$" = "CD8T_cells",
-                    "^Capillary_Aerocyte$" = "EC_capillary_aerocyte",
-                    "^Capillary$" = "EC_capillary",
-                    "^Lympatic$" = "EC_Lympatic",
-                    "^Myeloid_Dendritic_Type_1$" = "Myeloid_Dendritic",
-                    "^Myofibroblast$" = "Myofibroblasts",
-                    "^Natural_Killer$" = "NK_cells",
-                    "^Plasma$" = "Plasma_Bcells",
-                    "^B_cell_Plasma_cell$" = "Plasma_Bcells",
-                    "^B$" = "B_cells",
-                    "^Ciliated$" = "Ciliated_cells",
-                    "^DC_monocyte_derived_AEC_conditioned$" = "DC_monocyte_derived",
-                    "^DC_monocyte_derived_antiCD40_VAF347$" = "DC_monocyte_derived",
-                    "^DC_monocyte_derived_mature$" = "DC_monocyte_derived",
-                    "^Effector memory CD8 T cells$" = "Effector_memory_CD8T",
-                    "^Endothelial_cells_blood_vessel" = "EC_blood_vessel",
-                    "^Endothelial_cells_HUVEC_VEGF$" = "EC_HUVEC_VEGF",
-                    "^Endothelial_cells_lymphatic$" = "EC_lymphatic",
-                    "^Endothelial_cells_lymphatic_KSHV$" = "EC_lymphatic",
-                    "^Fibroblasts_breast$" = "Fibroblasts",
-                    "^Intermediate monocytes$" = "Intermediate_monocytes",
-                    "^Low-density basophils$" = "Basophils",
-                    "^Low-density neutrophils$" = "Neutrophils",
-                    "^Macrophage_monocyte_derived_IL_4_Dex_TGFb$" = "Macrophage_monocyte_derived",
-                    "^Macrophage_monocyte_derived_M_CSF$" = "Macrophage_monocyte_derived",
-                    "^MAIT cells$" = "MAI_Tcells",
-                    "^Monocyte_CD16_$" = "Monocytes_CD16_minus",
-                    "^Monocyte_S._typhimurium_flagellin$" = "Monocytes",
-                    "^Neutrophil_commensal_E._coli_MG1655$" = "Neutrophils",
-                    "^Myeloid dendritic cells$" = "Myeloid_Dendritic",
-                    "^Naive B cells$" = "Naive_Bcells",
-                    "^Naive CD8 T cells$" = "Naive_CD8T",
-                    "^NK_cell$" = "NK_cells",
-                    "^Plasmablasts$" = "Plasmablasts_Bcells",
-                    "^Plasmacytoid dendritic cells$" = "Plasmacytoid_Dendritic",
-                    "^Switched memory B cells$" = "Memory_Bcells",
-                    "^T regulatory cells$" = "Regulatory_T",
-                    "^T_cell_CD4_plus_central_memory$" = "Central_memory_CD4T",
-                    "^T_cell_CD4_plus_effector_memory$" = "Effector_memory_CD4T",
-                    "^T_cell_CD4_plus_Naive$" = "Naive_CD4T",
-                    "^T_cell_CD8_plus_Central_memory$" = "Central_memory_CD8T",
-                    "^T_cell_CD8_plus_naive$" = "Naive_CD8T",
-                    "^T_cell_gamma_delta$" = "GammaDelta_Tcells",
-                    "^AT1$" = "AlvEpithelial_T1",
-                    "^AT2$" = "AlvEpithelial_T2",
-                    "^CD4_T_cells$" = "CD4T_cells",
-                    "^CD8_T_cells$" = "CD8T_cells",
-                    "^DC1$" = "Dendritic_cells1",
-                    "^DC2$" = "Dendritic_cells2",
-                    "^EC_arterial$" = "EC_artery",
-                    "^EC_general_capillary$" = "EC_capillary",
-                    "^EC_venous_pulmonary$" = "EC_vein",
-                    "^EC_venous_systemic$" = "EC_vein",
-                    "^Lymphatic_EC_mature$" = "EC_lymphatic",
-                    "^Multiciliated$" = "Ciliated_cells",
-                    "^Non_classical_monocytes$" = "Nonclassical_monocytes",
-                    "^Nonclassical_Monocyte$" = "Nonclassical_monocytes",
-                    "^Classical_Monocyte$" = "Classical_monocytes",
-                    "^Plasma_cells$" = "Plasma_Bcells",
-                    "^Plasmacytoid_DCs$" = "Plasmacytoid_Dendritic",
-                    "^T_cells_proliferating$" = "Proliferating_T",
-                    "^Neutrophil$" = "Neutrophils",
-                    "^Pericyte$" = "Pericytes",
-                    "^Astrocytes$" = "Neurons",
-                    "^Stem_cells$" = "Progenitors",
-                    "^Basophil_Mast" = "Basophils",
-                    "^Capillary_cells$" = "EC_capillary",
-                    "^Artery_cells$" = "EC_artery",
-                    "^Vein_cells$" = "EC_vein",
-                    "^Lymph_cells$" = "EC_lymphatic",
-                    "^Alv_Macrophages$" = "Alveolar_macrophages",
-                    "^Int_Macrophages$" = "Interstitial_macrophage",
-                    "^Myo_Fibroblasts$" = "Myofibroblasts",
-                    "^Monocyte_leukotriene_D4$" = "Monocytes",
-                    "^Oligodendrocytes$" = "Stromal_cells",
-                    "^Transitional_Club_AT2$" = "Club_cells"))
+                                Annotation_cleanup$SingleR_Ann3_label)
 
-        object$Ann_level2 <-
-            stringr::str_replace_all(object$Ann_level3,
-                    c("^Fibroblasts_activated$" = "Fibroblasts",
-                        "^Fibroblasts_senescent$" = "Fibroblasts",
-                        "^Macrophages_activated$" = "Macrophages",
-                        "^Plasmacytoid_Dendritic$" = "Dendritic_cells",
-                        "^Regulatory_T$" = "T_cells",
-                        "^Alox5_plus_Lymphocytes$" = "Lymphocytes",
-                        "^Alveolar_Epithelial$" = "Epithelial_cells",
-                        "^Alveolar_Fibroblast$" = "Fibroblasts",
-                        "^Alveolar_Macrophage$" = "Macrophages",
-                        "^Ccr7_plus_Dendritic$" = "Dendritic_cells",
-                        "^Ciliated_cells$" = "Epithelial_cells",
-                        "^Classical_monocytes" = "Monocytes",
-                        "^EC_capillary$" = "Endothelial_cells",
-                        "^EC_capillary_aerocyte$" = "Endothelial_cells",
-                        "^EC_Lympatic$" = "Endothelial_cells",
-                        "^Interstitial_Macrophage$" = "Macrophages",
-                        "^Interstital_macrophage$" = "Macrophages",
-                        "^Myeloid_Dendritic$" = "Dendritic_cells",
-                        "^Myofibroblasts$" = "Fibroblasts",
-                        "^Nonclassical_monocytes$" = "Monocytes",
-                        "^Plasma_Bcells$" = "B_cells",
-                        "^Proliferating_Alveolar_Macrophage" = "Macrophages",
-                        "^Proliferating_T$" = "T_cells",
-                        "^Proliferating_Dendritic$" = "Dendritic_cells",
-                        "^Zbtb32_plus_B$" = "B_cells",
-                        "^Central_memory_CD4T$" = "T_cells",
-                        "^Central_memory_CD8T$" = "T_cells",
-                        "^DC_monocyte_derived$" = "Dendritic_cells",
-                        "^EC_blood_vessel$" = "Endothelial_cells",
-                        "^EC_HUVEC_VEGF$" = "Endothelial_cells",
-                        "^Effector_memory_CD4T$" = "T_cells",
-                        "^Effector_memory_CD8T$" = "T_cells",
-                        "^GammaDelta_Tcells$" = "T_cells",
-                        "^Intermediate_monocytes$" = "Monocytes",
-                        "^Macrophage_monocyte_derived$" = "Macrophages",
-                        "^MAI_Tcells$" = "T_cells",
-                        "^Memory_Bcells$" = "B_cells",
-                        "^Monocyte_CD16_plus$" = "Monocytes",
-                        "^Monocyte_leukotriene_D4$" = "Monocytes",
-                        "^Monocytes_CD16_minus$" = "Monocytes",
-                        "^Naive_Bcells$" = "B_cells",
-                        "^Naive_CD8T$" = "T_cells",
-                        "^Plasmablasts_Bcells$" = "B_cells",
-                        "^Alveolar_fibroblasts$" = "Fibroblasts",
-                        "^Alveolar_macrophages$" = "Macrophages",
-                        "^AlvEpithelial_T1$" = "Epithelial_cells",
-                        "^AlvEpithelial_T2$" = "Epithelial_cells",
-                        "^CD4T_cells$" = "T_cells",
-                        "^CD8T_cells$" = "T_cells",
-                        "^Dendritic_cells1$" = "Dendritic_cells",
-                        "^Dendritic_cells2$" = "Dendritic_cells",
-                        "^EC_artery$" = "Endothelial_cells",
-                        "^EC_capillary$" = "Endothelial_cells",
-                        "^EC_vein$" = "Endothelial_cells",
-                        "^EC_lymphatic$" = "Endothelial_cells",
-                        "^Interstitial_macrophage$" = "Macrophages",
-                        "^Peribronchial_fibroblasts$" = "Fibroblasts",
-                        "^SM_activated_stress_response$" = "Smooth_muscle",
-                        "^Subpleural_fibroblasts$" = "Fibroblasts",
-                        "^Tuft$" = "Epithelial_cells",
-                        "^Proliferating_NK$" = "NK_cells",
-                        "^Tgd_cells$" = "T_cells",
-                        "^AlvEpithelial_cells$" = "Epithelial_cells",
-                        "^Club_cells$" = "Epithelial_cells"))
-
-        object$Ann_level1 <-
-            stringr::str_replace_all(object$Ann_level2,
-                        c("^B_cells$" = "Immune_Lymphoid",
-                        "^Dendritic_cells$" = "Immune_Myeloid",
-                        "^Erythrocytes$" = "Immune_Myeloid",
-                        "^Macrophages$" = "Immune_Myeloid",
-                        "^Mast_cells$" = "Immune_Myeloid",
-                        "^Monocytes$" = "Immune_Myeloid",
-                        "^Neutrophils$" = "Immune_Myeloid",
-                        "^NK_cells$" = "Immune_Lymphoid",
-                        "^Fibroblasts$" = "Mesenchymal",
-                        "^Stromal_cells$" = "Mesenchymal",
-                        "^T_cells$" = "Immune_Lymphoid",
-                        "^Lymphocytes$" = "Immune_Lymphoid",
-                        "^Pericytes$" = "Mesenchymal",
-                        "^Basophils$" = "Immune_Myeloid",
-                        "^Osteoblasts$" = "Mesenchymal",
-                        "^Smooth_muscle$" = "Mesenchymal",
-                        "^Cardiomyocytes$" = "Mesenchymal",
-                        "^Adipocytes$" = "Mesenchymal",
-                        "^Neurons$" = "Mesenchymal",
-                        "^Granulocytes$" = "Immune_Myeloid",
-                        "^Progenitors$" = "Immune_Myeloid",
-                        "^Lymphoid_cells$" = "Immune_Lymphoid",
-                        "^Mesothelial_cells$" = "Mesenchymal",
-                        "^Mural_cells$" = "Mesenchymal"))
+    object$SingleR_Ann2 <-
+        stringr::str_replace_all(object$SingleR_Ann3,
+                                Annotation_cleanup$SingleR_Ann2_label)
+                
+    object$SingleR_Ann1 <-
+        stringr::str_replace_all(object$SingleR_Ann2,
+                                Annotation_cleanup$SingleR_Ann1_label)
 
     dimplot1 <- 
         dimplot_better(object,
@@ -896,7 +673,7 @@ for (group in c("xeno_prim_human",
                             heights = 14) +
         patchwork::plot_annotation(title = group,
                                    theme = theme(plot.title = element_text(size = 10)))
-    
+
     ggsave(str_c("output/figures/tumor_vs_stroma/",
                 group,
                 "/",
@@ -969,5 +746,201 @@ for (group in c("xeno_prim_human",
                             group,
                             ".qs"))
 }
+
+```
+
+
+## Checking for the clusters where they map
+```{r map_the _clusters, echo = FALSE}
+object <-
+        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                        "dogs_prim",
+                        ".qs"))
+
+
+object1 <- 
+    qs::qread("output/seurat_objects/tumor_vs_stroma/dogs_prim_normal_cells.qs")
+object2 <-
+    qs::qread("output/seurat_objects/tumor_vs_stroma/dogs_mets_normal_cells.qs")
+
+dimplot_better(object1,
+            group_by = "SingleR_Ann1") +
+dimplot_better(object2,
+            group_by = "SingleR_Ann1")
+
+s_obj <- 
+    qs::qread("output/seurat_objects/tumor_vs_stroma/dogs_prim_normal_cells.qs")
+
+s_obj$SingleR_Ann3 <-
+            stringr::str_replace_all(s_obj$new_annot_clust,
+                                    Annotation_cleanup$SingleR_Ann3_label)
+
+s_obj$SingleR_Ann2 <-
+    stringr::str_replace_all(s_obj$SingleR_Ann3,
+                            Annotation_cleanup$SingleR_Ann2_label)
+
+s_obj$SingleR_Ann1 <-
+    stringr::str_replace_all(s_obj$SingleR_Ann2,
+                            Annotation_cleanup$SingleR_Ann1_label)  
+
+dimplot_better(s_obj,
+            group_by = "SingleR_Ann1") +
+NoLegend()
+
+object <- 
+    qs::qread("output/seurat_objects/tumor_vs_stroma/xeno_mets_human.qs")
+
+VlnPlot(object,
+        features = "cell_scores",
+        group = "annotations",
+        pt.size = 0.1)
+
+
+
+obj <-
+    obj %>%
+    FindClusters(resolution = 0.1)
+
+plot <-
+    dimplot_better(object,
+               group_by = "annotations") +
+    NoLegend()
+
+ggsave("output/figures/presentation_biweekly/cccr_present/xenom_annotationsa.png",
+       plot = plot,
+       width = 8,
+       height = 8)
+
+seurat_clusters_I_want <-
+    c("0", "1", "2", "3", "4", "7", "8")
+
+obj_sub <-
+    obj %>%
+    subset(seurat_clusters %in% seurat_clusters_I_want)
+
+obj_sub <- obj_sub %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = c("sample_name",
+                                 "method",
+                                 "data_source"),
+                theta = c(1, 5, 5),
+                lambda = c(0.5, 0.5, 0.5)) %>%
+    process_seurat(reduction = "harmony")
+
+obj_sub <-
+    obj_sub %>%
+    FindClusters(resolution = 0.1)
+
+dimplot_better(obj_sub,
+               group_by = "seurat_clusters")
+
+
+dimplot_better(obj,
+               group_by = "annotations") +
+    NoLegend() 
+
+cells <-
+    obj %>%
+    #subset(seurat_clusters == "6") %>%
+    colnames()
+
+DimPlot(big_obj,
+        cells.highlight = cells)
+
+
+big_obj <-
+    qs::qread("output/seurat_objects/final_combined_sobjs/patient_prim.qs")
+
+DimPlot(big_obj,
+        cells.highlight = cells)
+
+DimPlot(big_obj,
+        cells.highlight = WhichCells(big_obj, idents = "2")) +
+    NoLegend()
+
+dimplot_better(big_obj,
+               group_by = "seurat_clusters")
+
+
+obj1 <- 
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim.qs")
+
+dimplot_better(obj1,
+                group_by = "Ann_Level3") +
+    NoLegend()
+
+```
+
+
+
+## Checking for the clusters where they map
+```{r map_the _clusters_pmets, echo = FALSE}
+()
+obj_tumor <- 
+    qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs")
+
+obj_tumor <-
+    obj_tumor %>%
+    FindClusters(resolution = 0.15)
+
+dimplot_better(obj_tumor,
+               group_by = "seurat_clusters")
+
+cells <-
+    obj_tumor %>%
+    subset(seurat_clusters == "8") %>%
+    colnames()
+
+DimPlot(big_obj_pmets,
+        cells.highlight = cells,
+        raster = FALSE)
+
+big_obj_pmets <-
+    qs::qread("output/seurat_objects/final_combined_sobjs/patient_mets.qs")
+
+
+
+obj1 <- 
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs")
+
+dimplot_better(obj1,
+                group_by = "Ann_Level3",
+                raster = FALSE) +
+    NoLegend()
+
+```
+
+
+
+
+
+## Redoing some of the clustering for the patient_mets_cancer_cells
+```{r}
+# patient_mets_cancer <-
+#     qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs")
+
+# Idents(patient_mets_cancer) <- patient_mets_cancer$sample_name
+
+# #clean some of the samples that do not harmonize well. 
+# # Reason being that they are all just quiescent cells and do not have any real signal
+# sample_names_iwant <-
+#     unique(patient_mets_cancer$sample_name) %>%
+#     .[!. %in% c("CCDI0095_7978", "CCDI0097_8978", "CCDI0053_445", "SJOS001105_M1")]
+
+# new_subset <-
+#     patient_mets_cancer %>%
+#     subset(sample_name %in% sample_names_iwant) %>%
+#     process_seurat() %>%
+#     RunHarmony(group.by.vars = c("sample_name",
+#                                          "method",
+#                                          "data_source"),
+#                 theta = c(7, 7, 7),
+#                 lambda = c(0.5, 0.5, 0.5)) %>%
+#     process_seurat(reduction = "harmony") %>%
+#     FindClusters(resolution = 0.15)
+
+# qs::qsave(new_subset,
+#         file = "output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs")
+
 ```
 

@@ -1,0 +1,275 @@
+
+## Normal vs tumor associated celltypes
+will compare the normal and tumor associated celltypes in the dataset.
+
+### Human metastatic normal vs tumor associated celltypes
+```{r normal_tumor_associated_celltypes_analysis, echo = FALSE}
+#load the objects
+# might have to downsample to same nuber of cells per each group before comparing
+#celltypes: Macrophages, T cells, B cells, NK cells, Fibroblasts, Epithelial, Endothelial cells
+Normal_lung <-
+    qs::qread("input/downloads/ds_human_lung_atlas.qs")
+
+#harmonize the celltypes
+Normal_lung$Comparison_col <- 
+        str_replace_all(Normal_lung$ann_level_3,
+                        c("^EC capillary$" = "EC_Blood",
+                          "^EC venous$" = "EC_Blood",
+                          "^EC arterial$" = "EC_Blood",
+                          "^AT1$" = "Alv_EpithelialT1",
+                          "^AT2$" = "Alv_EpithelialT2",
+                          "^B cell lineage$" = "B_cells",
+                          "^T cell lineage$" = "T_cells",
+                          "^Innate lymphoid cell NK$" = "NK_cells",
+                          "^Dendritic cells$" = "DC",
+                          "^Fibroblasts$" = "Fibroblasts",
+                          "^Myofibroblasts$" = "Fibroblasts"))
+
+#make the metadata for the normal lung
+Normal_lung_subset <-
+    subset(Normal_lung,
+            subset = Comparison_col %in% c("Alv_EpithelialT1", 
+                                            "Alv_EpithelialT2",
+                                            "B_cells",
+                                            "EC_Blood",
+                                            "Fibroblasts",
+                                            "Macrophages",
+                                            "NK_cells",
+                                            "T_cells"))
+Normal_lung_subset$tissue_type <-
+    "Normal_lung"
+Normal_lung_subset$sample_name <- 
+    Normal_lung_subset$dataset %>%
+        str_replace_all(c("-" = "_",
+                        " " = "_")) %>%
+        str_c("S", .)
+Normal_lung_subset$data_source <- 
+    Normal_lung_subset$dataset
+Normal_lung_subset$organism <- 
+    "human"
+
+Normal_lung_subset$method <- 
+    ifelse(Normal_lung_subset$fresh_or_frozen == "fresh", "single_cell", "single_nucleus")
+
+#make a metadata that can be used for the run degs function
+normal_lung_metadata <-
+    Normal_lung_subset@meta.data %>%
+    dplyr::select(sample, 
+           fresh_or_frozen,
+           data_source,
+           tissue_type,
+           sample_name,
+           organism) %>%
+    dplyr::rename(method = fresh_or_frozen) %>%
+    dplyr::mutate(species = "human",
+            location = "lung",
+            method = ifelse(method == "fresh", "single_cell", "single_nucleus")) %>% 
+    distinct() %>%
+    as_tibble()
+
+dimplot_better(Normal_lung_subset,
+        group_by = c("fresh_or_frozen"))
+
+#make the tumor associated object
+Tumor_associated_lung <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets_normal_cells.qs")
+
+Tumor_associated_lung$Comparison_col <- 
+        str_replace_all(Tumor_associated_lung$Ann_Level3,
+                        c("^Angio_TAMs$" = "Macrophages",
+                          "^CAF$" = "Fibroblasts",
+                          "^CD4_T$" = "T_cells",
+                          "^CD8_T$" = "T_cells",
+                          "^IFN_TAMs$" = "Macrophages",
+                          "^Inflam_TAMs$" = "Macrophages",
+                          "^Memory_B$" = "B_cells",
+                          "^Naive_T$" = "T_cells",
+                          "^Normal_Fibroblasts$" = "Fibroblasts",
+                          "^Osteoblasts$" = "Osteoblasts",
+                          "^Osteoclast_TAMs$" = "Macrophages",
+                          "^Plasma_B$" = "B_cells",
+                          "^Plasmocytoid_DC$" = "DC",
+                          "^Prolif_TAMs$" = "Macrophages",
+                          "^Regulatory_T$" = "T_cells",
+                          "^Proliferating_T$" = "T_cells",
+                          "^TAMs$" = "Macrophages",
+                          "^Alv_Fibroblasts$" = "Fibroblasts",
+                          "^Alv_Macrophages$" = "Macrophages",
+                          "^Int_Macrophages$" = "Macrophages",
+                          "^PreDC$" = "DC",
+                          "^Scar_TAMs$" = "Macrophages",
+                          "^preDC$" = "DC",
+                          "^Proli_TAMs$" = "Macrophages",
+                          "^Myofibroblasts$" = "Fibroblasts"))
+
+Tumor_associated_lung$tissue_type <- "Tumor_associated"
+
+Tumor_associated_lung_subset <- 
+    subset(Tumor_associated_lung,
+           subset = Comparison_col %in% c("Alv_EpithelialT1", 
+                                          "Alv_EpithelialT2",
+                                          "B_cells",
+                                          "EC_Blood",
+                                          "Fibroblasts",
+                                          "Macrophages",
+                                          "NK_cells",
+                                          "T_cells"))
+
+Tumor_associated_lung_metadata <-
+    Tumor_associated_lung_subset@meta.data %>%
+     dplyr::select(tissue_type,
+                  sample_name,
+                  species,
+                  location,
+                  model,
+                  ncount_max,
+                  mt_percent,
+                  tumor_type,
+                  processed,
+                  sp_pattern,
+                  organism,
+                  data_type,
+                  method,
+                  data_source,
+                  unique,
+                  CL_or_PDX) %>%
+    dplyr::distinct() %>%
+    dplyr::as_tibble()
+
+
+# combined_sobj <- 
+#     merge(Normal_lung_subset,
+#           Tumor_associated_lung_subset) %>%
+#         JoinLayers() %>%
+#         process_seurat()
+
+# harmony_sobj <- 
+#     combined_sobj %>%
+#     RunHarmony(group.by.vars = c("tissue_type", "data_source", "method"),
+#                 theta = c(7, 7, 7)) %>%
+#     process_seurat(reduction = "harmony")
+
+# dimplot_better(harmony_sobj,
+#                 group_by = c("Comparison_col", "Ann_Level2")) +
+#         NoLegend()
+
+# qs::qsave(harmony_sobj,
+#         "output/seurat_objects/Normal_Vs_TumorAsso/patient_mets/Pmets_tumorasso_vs_normal.qs")
+
+all_samples_csv <-
+    Tumor_associated_lung_metadata %>%
+    dplyr::bind_rows(normal_lung_metadata)
+
+sobj <-
+    qs::qread("output/seurat_objects/Normal_Vs_TumorAsso/patient_mets/Pmets_tumorasso_vs_normal.qs")
+
+sobj_list <- list()
+
+for (celltypes in unique(sobj$Comparison_col)) {
+    subset_obj <-
+        subset(sobj,
+                Comparison_col == celltypes) %>%
+        process_seurat() %>%
+        RunHarmony(group.by.vars = c("tissue_type", "data_source", "method"),
+                    theta = c(7, 7, 7)) %>%
+        process_seurat(reduction = "harmony")
+    
+    sobj_list[[celltypes]] <- subset_obj
+
+    qs::qsave(subset_obj,
+            str_c("output/seurat_objects/Normal_Vs_TumorAsso/patient_mets/",
+                celltypes,
+                ".qs"))
+}
+
+
+dimplot_better(subset_obj,
+                group_by = c("tissue_type")) +
+        NoLegend()
+
+for (celltypes in c("T_cells", "EC_Blood", "NK_cells", "Alv_EpithelialT2",
+                    "Fibroblasts", "B_cells", "Alv_EpithelialT1","Macrophages")) {
+    subset_obj <-
+        qs::qread(str_c("output/seurat_objects/Normal_Vs_TumorAsso/patient_mets/",
+                        celltypes,
+                        ".qs"))
+    
+    all_samples_csv <-
+        subset_obj@meta.data %>%
+        dplyr::select(tissue_type,
+                    sample_name,
+                    species,
+                    location,
+                    model,
+                    ncount_max,
+                    mt_percent,
+                    tumor_type,
+                    processed,
+                    sp_pattern,
+                    organism,
+                    data_type,
+                    method,
+                    data_source,
+                    unique,
+                    CL_or_PDX) %>%
+        dplyr::distinct() %>%
+        dplyr::as_tibble()
+
+    make_panel_plot(sobj = subset_obj,
+                    comparison_col = "tissue_type",
+                    label = celltypes,
+                    group = "Normal_vs_TumorAsso",
+                    aggregate_by = c("sample_name", "tissue_type"),
+                    organism_col = "organism",
+                    subset = FALSE,
+                    batch_var = "method")
+}
+
+```
+
+
+### Human Primary normal vs tumor associated celltypes
+```{r}
+# Patient prim stroma
+Tumor_associated_primary <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim_normal_cells.qs")
+
+dimplot_better(Tumor_associated_primary,
+                group_by = c("Ann_Level3")) +
+        NoLegend()
+
+Normal_bone <-
+    qs::qread("output/seurat_objects/comb_sobjs/normal_bone.qs")
+
+dimplot_better(Normal_bone,
+                group_by = c("seurat_clusters")) +
+        NoLegend()
+
+hpca <- celldex::HumanPrimaryCellAtlasData()
+huim <- celldex::MonacoImmuneData()
+ref_lung1 <- 
+    SingleR::SingleR(test = as.SingleCellExperiment(Normal_bone),
+                    ref = list(hpca, huim),
+                    labels = list(hpca$label.main, huim$label.main),
+                    aggr.ref = TRUE)
+
+Normal_bone$annotations <- ref_lung1$labels
+
+dimplot_better(Normal_bone,
+                group_by = c("annotations1")) +
+        NoLegend()
+
+Normal_bone$Comparison_col <-
+    str_replace_all(Normal_bone$annotations,
+                    c("^EC capillary$" = "EC_Blood",
+                      "^EC venous$" = "EC_Blood",
+                      "^EC arterial$" = "EC_Blood",
+                      "^AT1$" = "Alv_EpithelialT1",
+                      "^AT2$" = "Alv_EpithelialT2",
+                      "^B cell lineage$" = "B_cells",
+                      "^T cell lineage$" = "T_cells",
+                      "^Innate lymphoid cell NK$" = "NK_cells",
+                      "^Dendritic cells$" = "DC",
+                      "^Fibroblasts$" = "Fibroblasts",
+                      "^Myofibroblasts$" = "Fibroblasts"))
+```

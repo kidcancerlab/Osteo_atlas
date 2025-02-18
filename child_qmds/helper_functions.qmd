@@ -1,7 +1,8 @@
 
 ## Make a DimPlot with better default settings
 ```{r dimplot_better_function}
-#| cache.vars = 'dimplot_better'
+#| cache.vars: dimplot_better
+
 dimplot_better <- function(object,
                            group_by = NULL,
                            cols,
@@ -19,9 +20,10 @@ dimplot_better <- function(object,
             shuffle = T,
             label.box = T,
             #raster.dpi = c(500, 500),
-            cols = c(plot_cols, sample(rainbow(1000))),
+            cols = c(plot_cols, sample(rainbow(50))),
             ...) +
-        coord_fixed()
+        coord_fixed() +
+        theme(aspect.ratio=1)
 }
 ```
 
@@ -33,7 +35,7 @@ https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE151974
 https://www.synapse.org/Synapse:syn21560554
 We kept only the normoxic samples for the analysis
 ```{r celltype_annotation_data}
-#| cache.vars = c('human_lung_ref', 'mouse_lung_ref', 'human_tumor_cell', 'mouse_tumor_cell')
+#| cache.vars: [human_lung_ref, mouse_lung_ref, human_tumor_cell, mouse_tumor_cell]
 human_lung_ref <-
     qs::qread("input/downloads/human_lung.qs")
 
@@ -101,16 +103,19 @@ human_lung_ref$free_annotation <-
 human_lung_ref$free_annotation <-
     str_replace_all(human_lung_ref$free_annotation, c(" " = "_"))
 
-# #load in the human tumor cell from xenograft primary fro documentation
-# sobj <- qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs") %>%
-#     subset(sample_name %in% c("S0170", "S0042"))
+#load in the human tumor cell from xenograft primary fro documentation
+sobj <- qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs") %>%
+    subset(sample_name %in% c("S0170", "S0042"))
 
-# #add a column with the cell type
-# sobj$CellType <- "Tumor_cells"
+#add a column with the cell type
+sobj$CellType <- "Tumor_cells"
 
-# #save the object
-# qs::qsave(sobj,
-#           file = "input/downloads/human_tumor_fromxenograft.qs")
+if (!dir.exists("input/downloads")) {
+    dir.create("input/downloads", recursive = TRUE)
+}
+#save the object
+qs::qsave(sobj,
+          file = "input/downloads/human_tumor_fromxenograft.qs")
 
 #load the object
 human_tumor_cell <- qs::qread("input/downloads/human_tumor_fromxenograft.qs")
@@ -174,17 +179,20 @@ mouse_lung_ref$CellType <-
                     "^CD8_plus_T$" = "CD8T_cells",
                     "^CD4_plus_T$" = "CD4T_cells"))
 
-# #make a reference for all tumor cells, using cell culture data documantation
-# mouse_tumor_cell <-
-#     qs::qread("output/seurat_objects/comb_sobjs/mm_prim.qs") %>%
-#     subset(sample_name %in% c("S0200", "S0201"))
+#make a reference for all tumor cells, using cell culture data documantation
+mouse_tumor_cell <-
+    qs::qread("output/seurat_objects/comb_sobjs/mm_prim.qs") %>%
+    subset(sample_name %in% c("S0200", "S0201"))
 
-# #create a column with the cell type
-# mouse_tumor_cell$CellType <- "Tumor_cells"
+#create a column with the cell type
+mouse_tumor_cell$CellType <- "Tumor_cells"
 
-# #save the object
-# qs::qsave(mouse_tumor_cell,
-#           file = "input/downloads/mm_tumor_cellculture.qs")
+if (!dir.exists("input/downloads")) {
+    dir.create("input/downloads", recursive = TRUE)
+}
+#save the object
+qs::qsave(mouse_tumor_cell,
+          file = "input/downloads/mm_tumor_cellculture.qs")
 
 #load the object S0200 and S0201 combined cell culture mouse tumor cells
 mouse_tumor_cell <- qs::qread("input/downloads/mm_tumor_cellculture.qs")
@@ -193,7 +201,8 @@ mouse_tumor_cell <- qs::qread("input/downloads/mm_tumor_cellculture.qs")
 
 ## Function to annotate cell types with mouse and human lung
 ```{r annotate_function}
-#| cache.vars = 'annotate_celltypes'
+#| cache.vars: [annotate_celltypes, hpca, huim, mord, moim, ref4]
+#| dependson: celltype_annotation_data
 hpca <- celldex::HumanPrimaryCellAtlasData()
 huim <- celldex::MonacoImmuneData()
 ref4 <- SeuratObject::GetAssayData(human_tumor_cell)
@@ -322,7 +331,7 @@ annotate_celltypes <- function(sobject,
                                aggr_ref = FALSE,
                                label_type = "label.main",
                                ...) {
-    if (grepl("human", species)) {
+    if (grepl("human", species) | grepl("canine", species)) {
         ref <- list(hpca,
                     huim)
         labels <- list(hpca[[label_type]],
@@ -335,7 +344,7 @@ annotate_celltypes <- function(sobject,
                            huim[[label_type]],
                            human_tumor_cell$CellType)
         }
-        if (species == "human_lung") {
+        if (species == "human_lung" | species == "canine_lung") {
             ref <- list(hpca,
                         huim,
                         SeuratObject::GetAssayData(human_lung_ref))
@@ -402,16 +411,22 @@ annotate_celltypes <- function(sobject,
 
 ## RUN differential expression analysis on a Seurat object
 ```{r run_degs_function}
-#| cache.vars: c('all_samples_csv', 'run_degs')
+#| cache.vars: [all_samples_csv, run_degs]
 all_samples_csv <- read_tsv("misc/allsample_details.txt",
                             show_col_types = FALSE)
 
+#function to run DEGs
 run_degs <- function(sobject,
-                     group_by = "") {
+                     aggregate_by,
+                     comparison_col,
+                     organism_col = "organism",
+                     subset = FALSE,
+                     batch_var) {
 
+    # aggregate the data
     pseudobulk <- sobject %>%
         Seurat::AggregateExpression(
-            group.by = c("sample_name", "seurat_clusters"),
+            group.by = aggregate_by,
             slot = "counts",
             assay = "RNA"
         )
@@ -420,25 +435,30 @@ run_degs <- function(sobject,
     # run deseq2
     #for (cluster_no in unique(object$seurat_clusters)) {
     degs_output <-
-        parallel::mclapply(sort(unique(sobject$seurat_clusters)),
+        parallel::mclapply(unique(sobject@meta.data[[comparison_col]]),
                            mc.cores = parallelly::availableCores(),
                            mc.preschedule = FALSE,
                            function(cluster_no) {
-        batch_df <- data.frame(sample_name = colnames(pseudobulk))
+
+        batch_df <- 
+            data.frame(sample_name = colnames(pseudobulk))
 
         batch_df_new <-
             tibble(col_label = colnames(pseudobulk),
                    sample_name = colnames(pseudobulk) %>%
-                   str_remove("_[0-9]+$"),
+                        sub("_.*", "", .),
                    cluster_no = str_remove(colnames(pseudobulk), ".+_")) %>%
             left_join(batch_df) %>%
             mutate(sample_name = str_replace_all(sample_name, "-", "_")) %>%
-            mutate(organism = sobject$organism[1])
-
+            mutate(organism = sobject@meta.data[[organism_col]][[1]]) %>%
+            mutate(cluster_no = str_replace_all(cluster_no, "-", "_"))
         #add the datasource and method as batch in batch_df_new from all_samples_csv for each sample_name
-        new_all_samples_csv <- all_samples_csv %>%
+        new_all_samples_csv <- 
+            all_samples_csv %>%
+            filter(sample_name %in% unique(sobject$sample_name)) %>%
             select(sample_name, method, data_source, model, location, organism)
-        if (sobject$organism[1] == "mouse") {
+
+        if (unique(sobject[[organism_col]][[1]]) == "mouse") {
             batch_df_new2 <- left_join(batch_df_new,
                                     new_all_samples_csv,
                                     by = c("sample_name", "organism")) %>%
@@ -447,7 +467,7 @@ run_degs <- function(sobject,
             batch_df_new2 <- left_join(batch_df_new,
                                     new_all_samples_csv,
                                     by = c("sample_name", "organism")) %>%
-                select(-sample_name, -method, -location, -model, -organism)
+                select(col_label, cluster_no, dplyr::all_of(batch_var))
         }
 
         all(colnames(pseudobulk) == batch_df_new$col_label)
@@ -482,15 +502,16 @@ run_degs <- function(sobject,
         )
     })
     # subset and name the degs_output by the group_by variables
-    names(degs_output) <- sort(unique(sobject$seurat_clusters))
+    names(degs_output) <- unique(sobject@meta.data[[comparison_col]])
 
     return(degs_output)
 }
+
 ```
 
 ## Function to run GSEA
 ```{r gsea_function}
-#| cache.vars = 'run_gsea'
+#| cache.vars: run_gsea
 run_gsea <- function(degs_result,
                      category = "",
                      subcategory = "",
@@ -499,7 +520,6 @@ run_gsea <- function(degs_result,
                                  category = category,
                                  subcategory = subcategory) %>%
         split(x = .$gene_symbol, f = .$gs_name)
-
     gsea_output <- list()
     #for (item in names(degs_result)) {
     gsea_output <-
@@ -509,7 +529,8 @@ run_gsea <- function(degs_result,
                            function(item) {
             gsea_input <- as.vector(degs_result[[item]]$log2FoldChange)
             names(gsea_input) <- degs_result[[item]]$gene
-
+            
+            set.seed(199820)
             output <- fgsea::fgseaMultilevel(gsea_ref,
                                             gsea_input,
                                             minSize = 10,
@@ -519,17 +540,22 @@ run_gsea <- function(degs_result,
                 output %>%
                 dplyr::arrange(desc(NES)) %>%
                 filter(padj < 0.05) %>%
+                group_by(pathway) %>%
+                mutate(leadingEdge = unlist(leadingEdge) %>%
+                            str_c(collapse = ", ")) %>%
+                ungroup() %>%
                 na.omit()
         })
-    names(gsea_output) <- names(degs_result)
+    names(gsea_output) <- names(degs_result)  
 
     return(gsea_output)
 }
+
 ```
 
 # GSEA Plots function for twoway dotplot and barplot
 ```{r}
-#| cache.vars = c('gsea_dotplot', 'gsea_barplot')
+#| cache.vars: [gsea_dotplot, gsea_barplot]
 gsea_dotplot <- function(data, x_col = "z_score") {
     lab4plot <-
         tibble(y = c(-2.5, 2.5),
@@ -647,9 +673,9 @@ gsea_barplot <- function(data, x_col = "z_score") {
 
 ## Circle plot function
 ```{r circle_plot_function}
-#| cache.vars: 'circle_plot'
+#| cache.vars: circle_plot
 circle_plot <- function(sobj,
-                        cluster_column,
+                        comparison_col,
                         features) {
     avg_expr <-
         AverageExpression(
@@ -657,7 +683,7 @@ circle_plot <- function(sobj,
             assay = "RNA",
             layer = "scale.data",
             features = features,
-            group.by = cluster_column
+            group.by = comparison_col
         ) %>%
         as.data.frame() %>%
         rownames_to_column("gene") %>%
@@ -670,7 +696,7 @@ circle_plot <- function(sobj,
         mutate(cluster = str_replace(cluster, "RNA.g", "Cluster "))
 
     clusters <-
-        sobj[[cluster_column]] %>%
+        sobj[[comparison_col]] %>%
         unlist() %>%
         unique() %>%
         as.character()
@@ -679,7 +705,7 @@ circle_plot <- function(sobj,
         lapply(clusters,
             function(x) {
                 binarized <-
-                    sobj[, sobj[[cluster_column]] == x] %>%
+                    sobj[, sobj[[comparison_col]] == x] %>%
                     GetAssayData(slot = "data")
                 binarized <- binarized[features, ]
                 binarized <- binarized == 0
@@ -734,7 +760,7 @@ circle_plot <- function(sobj,
 ```
 
 ```{r panel_plot_function}
-#| cache.vars = c('make_panel_plot', 'cat_tib')
+#| cache.vars: [make_panel_plot, cat_tib]
 
 #GSEA Miltilevel
 cat_tib <- dplyr::tribble(
@@ -746,7 +772,14 @@ cat_tib <- dplyr::tribble(
     "C5",       "GO:BP",       "Biological_processes",
     "C2",       "CP:REACTOME", "Reactome")
 
-make_panel_plot <- function(sobj, cluster_column, label, group) {
+make_panel_plot <- function(sobj,
+                            comparison_col = "seurat_clusters",
+                            label = "seurat_clusters",
+                            group,
+                            aggregate_by = c("sample_name", "seurat_clusters"),
+                            organism_col = "organism",
+                            subset = FALSE,
+                            batch_var = "data_source") {
     volc_plots <- list()
     gsea_plots <- list()
     gsea_results <- list()
@@ -757,10 +790,15 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
 
     colors_use <- c(colors_use[1:48], rep("gray", 4), colors_use[52:100])
 
-    dimplot <- dimplot_better(sobj, group_by = cluster_column)
-    dimplot_celltype <- dimplot_better(sobj, group_by = "new_annot_clust")
+    dimplot <- dimplot_better(sobj, group_by = comparison_col)
 
-    degs_result <- run_degs(sobject = sobj, group_by = cluster_column)
+    degs_result <-
+        run_degs(sobject = sobj, 
+                comparison_col = comparison_col,
+                aggregate_by = aggregate_by,
+                organism_col = organism_col,
+                subset = subset,
+                batch_var = batch_var)
 
     if (dir.exists(paste0("output/degs/", label))) {
         unlink(paste0("output/degs/", label), recursive = TRUE)
@@ -812,6 +850,11 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
             geom_text_repel(aes(label = gene))
 
         # save the volcano plot
+        directory <-
+            paste0("output/figures/degs/", group)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
         ggsave(
             paste0("output/figures/degs/", group, "/",
                    cluster_name, "_volcano_plot.png"),
@@ -832,7 +875,7 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
                     select(-baseMean, -lfcSE, -stat) %>%
                     filter(diffexpressed == "Upregulated") %>%
                     arrange(desc(log2FoldChange)) %>%
-                    slice_head(n = 5)
+                    slice_head(n = 7)
         }) %>%
         bind_rows() %>%
         pull(gene)
@@ -841,7 +884,7 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
         circle_plot_out <-
             circle_plot(
                 sobj,
-                cluster_column = cluster_column,
+                comparison_col = comparison_col,
                 features = marker_genes)
     } else {
         circle_plot_out <-
@@ -854,42 +897,50 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
     if (dir.exists(paste0("output/gsea/", label))) {
         unlink(paste0("output/gsea/", label), recursive = TRUE)
     }
+
     for (i in seq_len(nrow(cat_tib))){
         category <- cat_tib$category[i]
         subcategory <- cat_tib$subcategory[i]
         cat_expl <- cat_tib$cat_expl[i]
+        species <- sobj$organism[1]
+        if (sobj$organism[1] == "dog") {
+            species <- "human"
+        }
         if (subcategory == "NA") {
             gsea_result <-
-                run_gsea(
-                    degs_result = degs_result,
-                    category = category,
-                    species = sobj$organism[1]
-                )
+                run_gsea(degs_result = degs_result,
+                        category = category,
+                        species = species)
         } else {
             gsea_result <-
-                run_gsea(
-                    degs_result = degs_result,
-                    category = category,
-                    subcategory = subcategory,
-                    species = sobj$organism[1]
-                )
+                run_gsea(degs_result = degs_result,
+                        category = category,
+                        subcategory = subcategory,
+                        species = species)
         }
-        #test if directory to save the results exists
+
+            #test if directory to save the results exists
         if (!dir.exists(paste0("output/gsea/", group, "/", label))) {
             dir.create(paste0("output/gsea/", group, "/", label), recursive = TRUE)
         }
 
         gsea_result <-
             sapply(names(gsea_result),
-                   simplify = FALSE,
-                   function(x) {
+                    simplify = FALSE,
+                    function(x) {
                 gsea_result[[x]] %>%
                     mutate(cluster = paste("Cluster", x),
-                           pathway_group = cat_expl)
+                            pathway_group = cat_expl)
             })
+        
+        directory <-
+            paste0("output/gsea/", group, "/", label)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
 
         for (item in names(gsea_result)) {
-              #save the results
+                #save the results
             write_tsv(
                 gsea_result[[item]],
                 paste0(
@@ -899,13 +950,14 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
             )
         }
 
-        #########################################################
-        # Drop in code to make heatmap here
+    #########################################################
+    # Drop in code to make heatmap here
         n_paths_per_cluster <- 20
-          gsea_result %>%
+
+        use_pathways <- 
+            gsea_result %>%
             bind_rows() %>%
-            use_pathways <-
-          group_by(cluster) %>%
+            group_by(cluster) %>%
             mutate(abs_NES = abs(NES)) %>%
             slice_max(order_by = abs_NES, n = n_paths_per_cluster) %>%
             pull(pathway) %>%
@@ -917,45 +969,46 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
                 aes(x = as.factor(1), y = as.factor(1)) +
                 geom_text(aes(label = "No significant pathways"))
         } else {
-            max_abs_nes <-
-                gsea_result %>%
-                bind_rows() %>%
-                pull(NES) %>%
-                max() %>%
-                ceiling()
+        max_abs_nes <-
+            gsea_result %>%
+            bind_rows() %>%
+            pull(NES) %>%
+            max() %>%
+            ceiling()
 
-            breaks_use <-
-                seq(-max_abs_nes, max_abs_nes, length.out = 101)
+        breaks_use <-
+            seq(-max_abs_nes, max_abs_nes, length.out = 101)
 
-            heatmap_plots[[cat_expl]] <-
-                gsea_result %>%
-                bind_rows() %>%
-                filter(pathway %in% use_pathways) %>%
-                select(
-                    -padj,
-                    -log2err,
-                    -ES,
-                    -size,
-                    -leadingEdge,
-                    -pval,
-                    -pathway_group) %>%
-                pivot_wider(
-                    names_from = cluster,
-                    values_from = NES,
-                    values_fill = 0
-                ) %>%
-                column_to_rownames("pathway") %>%
-                pheatmap::pheatmap(
-                    color = colors_use,
-                    breaks = breaks_use,
-                    display_numbers = TRUE,
-                    silent = TRUE,
-                    main = paste0(cat_expl),
-                    fontsize_row = 7,
-                    fontsize_number = 7,
-                    cluster_cols = FALSE,
-                    cluster_rows = FALSE
-                )
+        heatmap_plots[[cat_expl]] <-
+            gsea_result %>%
+            bind_rows() %>%
+            filter(pathway %in% use_pathways) %>%
+            select(
+                -padj,
+                -log2err,
+                -ES,
+                -size,
+                -leadingEdge,
+                -pval,
+                -pathway_group) %>%
+            arrange(cluster) %>%
+            pivot_wider(
+                names_from = cluster,
+                values_from = NES,
+                values_fill = 0
+            ) %>%
+            column_to_rownames("pathway") %>%
+            pheatmap::pheatmap(
+                color = colors_use,
+                breaks = breaks_use,
+                display_numbers = TRUE,
+                silent = TRUE,
+                main = paste0(cat_expl),
+                fontsize_row = 7,
+                fontsize_number = 7,
+                cluster_cols = FALSE,
+                cluster_rows = FALSE
+            )
         }
     }
 
@@ -973,6 +1026,12 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
             ggplotify::as.ggplot(heatmap_plots$Reactome),
             ncol = 2) +
         patchwork::plot_annotation(title = label)
+    
+    directory <-
+        paste0("output/figures/gsea/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
     ggsave(
         paste0("output/figures/gsea/", group, "/", label, "_six_panels.png"),
         width = 30,
@@ -984,6 +1043,8 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
     qs::qsave(panel_plots[[label]],
               file = paste0("output/figures/gsea/", group, "/", label, "_six_panels.qs"))
 }
+
+
 ```
 
 ## Velocity Analysis Functions
@@ -1097,7 +1158,7 @@ def save_velo_plots(ad_ob, ob_name):
 
 ## Scenic plus regulon analysis function
 ```{r scenic_function}
-#| cache.vars = 'Run_GRA'
+#| cache.vars: Run_GRA
 Run_GRA <- function(sobject,
                     idents,
                     org,      #organism "mgi" for mouse, "hgnc" for human
@@ -1186,6 +1247,44 @@ Run_GRA <- function(sobject,
 }
 ```
 
+
+## Convert dogs to human orthologs
+```{r dog_human_orthologs_function}
+#| cache.vars: dog_to_human_setup
+dog_to_human_setup <- function(object) {
+    raw_counts <-
+        GetAssayData(object,
+                    slot = "counts")
+
+    number_of_ENSEMBL_genes <- 
+        sum(str_detect(rownames(raw_counts), "^ENSCAFG"))
+
+    raw_counts_new <-
+        raw_counts[rownames(raw_counts) %in% orthologs$dog_gene_name, ]
+    rownames(raw_counts_new) <- 
+        orthologs$human_gene_ortholog[match(rownames(raw_counts_new), orthologs$dog_gene_name)]
+    new_seurat_object <-
+        CreateSeuratObject(counts = raw_counts_new) %>%
+        AddMetaData(metadata = object@meta.data)
+    object <-
+        new_seurat_object %>%
+        process_seurat()
+    object <- 
+        RunHarmony(object,
+                    group.by.vars = c("sample_name",
+                                    "data_source",
+                                    "location"),
+                    theta = c(7, 7, 7)) %>%
+        process_seurat(reduction = "harmony")
+
+    return(object)
+}
+
+
+```
+
+
+
 ```{r helper_confirm_mclapply_worked}
 #| cache.vars: confirm_mclapply_worked
 #' Confirm mclapply Worked And Dump Error Messages If Not
@@ -1218,3 +1317,6 @@ confirm_mclapply_worked <- function(input_list) {
     }
 }
 ```
+
+
+
