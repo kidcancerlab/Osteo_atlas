@@ -11,7 +11,6 @@ Input is a table with the following column names:
     -species
 
 ```{r}
-source("new_make_loom_files.r")
 velo_input <- read.table("misc/allsample_details.txt",
                          header = TRUE) %>%
     dplyr::select(sample_id = sample_name,
@@ -73,9 +72,6 @@ velo_input$species <- recode(velo_input$species,
        "xenograft" = "mixed",
        "mousemodel" = "mouse")
 
-
-head(velo_input)
-source("new_make_loom_files.r")
 #new_function is new_make_loom_files
 #install my version of rrrSingleCellUtils
 # devtools::install("/home/gdrobertslab/lab/Analysis/MattGust/projects/rrrSingleCellUtils")
@@ -110,7 +106,7 @@ for (ob_name in obj_names) {
 lapply(names(obj_list), function(obj_name) {
     write_off_md(sobj = obj_list[[obj_name]],
                  id_col = "sample_name",
-                 output_dir = paste0("loom_output/metadata",
+                 output_dir = paste0("loom_output/metadata/",
                                      obj_name),
                  vars_to_keep = c("sample_name",
                                   "seurat_clusters",
@@ -145,11 +141,31 @@ import re
 
 ```{python analyze-mm-mets-cancer-cells}
 #get names of loom files
-merged_ad = loom_to_an(loom_path = "loom_output/mm_mets_cancer_cells/loom_files",
-                       metadata_path = "loom_output/mm_mets_cancer_cells/metadata")
+merged_ad = loom_to_an(obj_name = "mm_mets_cancer_cells",
+                       loom_dir = "loom_output/samples",
+                       metadata_dir = "loom_output/metadata/")
+
+ob_names = os.listdir("loom_output/metadata")
+for ob in ob_names:
+    merged_ad = loom_to_an(obj_name = ob,
+                           loom_dir = "loom_output/samples",
+                           metadata_dir = "loom_output/metadata")
+    calc_velo(merged_ad)
+    #save anndata object so you don't have to remake them
+    merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
+
+    scv.tl.velocity_graph(merged_ad, backend = "threading")
+
+    #create plots
+    scv.pl.velocity_embedding_stream(merged_ad, basis = "umap", color = "seurat_clusters", show = False, save = ob + "_umap_clusters", dpi = 300)
+
+    #optionally create fdl plot
+    if len(merged_ad.obsm["X_fdl"]) == 2:
+        scv.pl.velocity_embedding_stream(merged_ad, basis = "fdl", color = "seurat_clusters", show = False, save = ob + "_fdl_clusters", dpi = 300)
+
 ```
 
-### patient_mets_normal_cells
+### patient_mets_cancer_cells
 
 We're also interested in how the normal cells in our patient met samples are behaving, particularly the macrophages. We're gonna write off some metadata for the objects to be able to reconstruct it in python.
 
