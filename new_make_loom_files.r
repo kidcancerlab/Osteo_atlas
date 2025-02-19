@@ -4,14 +4,19 @@ new_make_loom_files <- function(input_table,
          slurm_base = paste0(getwd(), "/slurmOut"),
          sbatch_base = "sbatch_") {
     
-    input_table <- column_to_rownames(input_table, "sample_id")
+    rownames(input_table) <- input_table$sample_id
 
     #make out_dir end with a /
     out_dir <- ifelse(endsWith(out_dir, "/"),
                       out_dir,
                       paste0(out_dir, "/"))
     
-    system(paste0("mkdir ", out_dir))
+
+    system(paste0("mkdir -p ", out_dir))
+
+    #make temporary sbatch directory
+    system(paste0("mkdir ", out_dir, "sbatch"))
+
 
     gtf_list <- list("mixed" = "10x-hg38-mm10",
                      "human" = "10x-hg38",
@@ -20,17 +25,7 @@ new_make_loom_files <- function(input_table,
     for (sid in rownames(input_table)) {
         #make sample output folders
         sid_out <- paste0(out_dir, sid)
-        system(paste0("mkdir ", sid_out))
-        #make directories for sbatch files
-        sbatch_dir <- paste0(sid_out, "/sbatch")
-        system(paste0("mkdir ",
-              sbatch_dir,
-              "; mkdir ",
-              sbatch_dir,
-              "/jobs;",
-              "mkdir ",
-              sbatch_dir,
-              "/output"))
+        system(paste0("mkdir -p", sid_out))
 
         species <- input_table[sid, ]$species
         new_gene_path <- paste0(sid_out, "/genes.gtf.gz")
@@ -42,7 +37,9 @@ new_make_loom_files <- function(input_table,
         #read in h5 object
         h5_object <- Read10X_h5(input_table[sid, ]$h5_path)
         #make sure only get gene expression data
-        if (class(h5_object) == "list") h5_object <- h5_object[["Gene Expression"]]
+        if (class(h5_object) == "list") {
+            h5_object <- h5_object[["Gene Expression"]]
+        }
 
         #make temporary directory with barcodes for current sample
         bcs <- colnames(h5_object)
@@ -82,12 +79,13 @@ new_make_loom_files <- function(input_table,
     #create bash array of sample_ids
     ids <- rownames(input_table)
     id_array <- paste(ids, collapse = " ")
+
     replace_tbl <-
         tibble::tribble(
             ~find,                      ~replace,
             "placeholder_account",      cluster_account,
-            "placeholder_slurm_out",    paste0("new_looms/sbatch/"),
-            # "placeholder_loom_dir",     loom_dir,
+            "placeholder_slurm_out",    paste0(out_dir, "/sbatch/out_"),
+            "placeholder_slurm_error",  paste0(out_dir, "/sbatch/error_"),
             "placeholder_env_path",     env_path,
             "placeholder_max_array",    as.character(length(ids) - 1),
             "placeholder_id_array",     id_array,

@@ -50,7 +50,7 @@ I need to create a reference object. This object is created using the RCTD const
 
 ```{r}
 patient_mets <-
-    qs::qread("output/seurat_objects/V3/pateint_mets.qs")
+    qs::qread("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/V3/patient_mets.qs")
 
 #Ann_level3 was too granular, going to try using Ann_Level2
 spacexr_reference <-
@@ -357,6 +357,7 @@ library(ISCHIA)
 #we'll be using our `tmp` object, which is the sample named "OS1_Seurat"
 #extract devonvolution matrix
 #our deconvolution matrix is the same as our `annotation_matrix` object
+tmp <- spatial_list[[1]]
 annotation_matrix <- tmp@meta.data[, cell_types]
 deconv_mat <- as.matrix(annotation_matrix)
 
