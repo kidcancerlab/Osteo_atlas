@@ -1,92 +1,5 @@
 We are interested in how cell types and states in each sample change are evolving based on splicing dynamics. For this purpose will perform velocity analysis.
 
-## Get .bam Files for Velocity Analysis
-
-Since we have external data for this project not all .bam files are in the same location. As a result, we will have to conditionally create bam paths.
-
-```{r get-bam-paths}
-#making a list of bam paths, where each entry corresponds to an object and is a
-#vector of all bams associated with that object
-
-bam_list <- list()
-obj_list <- qs::qread("output/matt_obj_list.qs")
-obj_names <- names(obj_list)
-
-for (obj in obj_names) {
-    tmp_ob <- obj_list[[obj]] #nolint
-
-    obj_list[[obj]] <- tmp_ob
-
-    #get table of sample_names and the data source
-    s_ids <- table("sample_name" = tmp_ob$sample_name,
-                   "data_source" = tmp_ob$data_source) %>%
-        as.data.frame() %>%
-        subset(., Freq > 0) %>%
-        select(1:2)
-
-    ext_data_path <- "/home/gdrobertslab/lab/ExternalData/"
-
-    bams <-
-        ifelse(
-               s_ids$data_source %in% c("NCH", "GEO"),
-               paste0("/home/gdrobertslab/lab/Counts_2/",
-                      s_ids$sample_name,
-                      "/possorted_genome_bam.bam"),
-               ifelse(
-                      s_ids$data_source == "NCI_POB",
-                      paste0(ext_data_path,
-                             "McEachron_lab/BAMs/",
-                             s_ids$sample_name,
-                             "_gex_possorted_bam.bam"),
-                      paste0(ext_data_path,
-                             "Patel_lab/",
-                             s_ids$sample_name,
-                             "/possorted_genome_bam.bam")
-                             )
-                             )
-    
-    #fix paths for atac runs since bams have gex_ before possorted
-    bams <- ifelse(file.exists(bams),
-                   bams,
-                   gsub("possorted_genome", "gex_possorted", bams))
-    names(bams) <- s_ids$sample_name
-
-    bam_list[[obj]] <- bams
-}
-
-#saving this list so that changing assignments won't mess up my analysis
-qs::qsave(obj_list, "output/matt_obj_list.qs")
-
-lapply(bam_list, file.exists)
-```
-
-## Make Loom Files
-
-Now that we have our bams associated with each object we can make our loom files.
-
-```{r make-loom-files}
-lapply(names(obj_list), function(ob_name) {
-    ob <- obj_list[[ob_name]]
-    if (grepl("xenograft", unique(ob$organism))) {
-        species <- "mixed"
-    } else {
-        species <- unique(ob$organism)
-    }
-
-    r_make_loom_files(sobj = ob,
-                      id_col = "sample_name",
-                      out_dir = "loom_output",
-                      species = species,
-                      bam_paths = bam_list[[ob_name]],
-                      cluster_account = "gdrobertslab",
-                      slurm_base = "output/velocity_analysis/slurmOut",
-                      sbatch_base = "output/velocity_analysis/sbatch_",
-                      sobj_name = ob_name
-                      )
-    }
-)
-```
-
 ## New velocity analysis function
 
 I realized that I should have just created individual loom files for the filtered_feature matrices, that way I can subset by any barcodes that I want. So i'm going to rewrite the r_make_loom_files function.
@@ -145,6 +58,7 @@ bams <-
                          )
                          )
 
+#bams from multiomic runs have different names
 bams <- ifelse(file.exists(bams),
                    bams,
                    gsub("possorted_genome", "gex_possorted", bams))
@@ -167,133 +81,42 @@ source("new_make_loom_files.r")
 # devtools::install("/home/gdrobertslab/lab/Analysis/MattGust/projects/rrrSingleCellUtils")
 
 new_make_loom_files(input_table = velo_input,
-                    out_dir = "new_looms/",
+                    out_dir = "loom_output/samples",
                     cluster_account = "gdrobertslab")
 ```
 
-### Figure out Which Samples Failed
+## Write off Metadata for Velocity Analysis
 
-Not all samples had loom files successfully created, so I'm going to identify these and rerun `r_make_loom_files`.
+In order to analyze the data, we need to save a table of cell-level metadata, including barcodes, seurat clusters, and annotations.
 
-Some more remained after this, so I'm running once more before digging deeper into this issue
-
-```{r re-make-looms}
-obj_list <- qs::qread("output/matt_obj_list.qs")
-
-failed_runs <- lapply(names(obj_list), function(ob_name) {
-    sids <- obj_list[[ob_name]]$sample_name %>% unique()
-    failed <- sids[!file.exists(paste0("loom_output/",
-                       ob_name,
-                       "/loom_files/",
-                       sids,
-                       ".loom"))]
-    if (length(failed) > 0) return(failed)
-})
-names(failed_runs) <- names(obj_list)
-
-non_null <- list()
-for (id in names(failed_runs)) {
-    if (!is.null(failed_runs[[id]])) non_null[[id]] <- failed_runs[[id]]
-}
-
-lapply(names(non_null), function(ob_name) {
-    ob <- obj_list[[ob_name]] %>%
-        subset(sample_name %in% non_null[[ob_name]])
-    r_make_loom_files(sobj = ob,
-                      id_col = "sample_name",
-                      out_dir = "loom_output",
-                      species = unique(ob$organism),
-                      bam_paths = bam_list[[ob_name]],
-                      cluster_account = "gdrobertslab",
-                      slurm_base = "output/velocity_analysis/slurmOut",
-                      sbatch_base = "output/velocity_analysis/sbatch_",
-                      sobj_name = ob_name)
-})
-```
-
-### Re-Do it for Xenografts
-
-Earlier my function couldn't handle PDX's since the only options for species were mouse or human, and the xenografts needed the mixed reference gtf since the chromosomes and genes have the species appended to them.
+First we need to read in our objects for this. The most up to date object seems to change frequently, but as of 2/19 at 3:15 pm i'm using the ojbects in tumor_vs_stroma.
 
 ```{r}
-pdxs <- obj_list[which(grepl("xeno", x = names(obj_list)))]
+obj_names <- c("mm_mets_normal_cells",
+               "mm_mets_cancer_cells",
+               "mm_prim_normal_cells",
+               "mm_prim_cancer_cells",
+               "patient_mets_cancer_cells_fdl",
+               "patient_prim_cancer_cells_fdl")
 
-lapply(names(pdxs), function(ob_name) {
-    ob <- obj_list[[ob_name]]
-    r_make_loom_files(sobj = ob,
-                      id_col = "sample_name",
-                      out_dir = "loom_output",
-                      species = "mixed",
-                      bam_paths = bam_list[[ob_name]],
-                      cluster_account = "gdrobertslab",
-                      slurm_base = "output/velocity_analysis/slurmOut",
-                      sbatch_base = "output/velocity_analysis/sbatch_",
-                      sobj_name = ob_name)
-})
+obj_list <- list()
+for (ob_name in obj_names) {
+    obj_list[[ob_name]] <-
+        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/tumor_vs_stroma/", ob_name, ".qs"))
+}
 ```
-
-## Add Metadata Columns to Objects
-
-### Re-cluster
-
-I realized that my seurat clusters are different from Yogesh's because I'm not using the same resultion as him for clustering. So I'm going to recreate these clusters using his resolutions.
-
-```{r re-run-clustering-velo}
-res_list <-
-    list("patient_prim_cancer_cells" = 0.1,
-         "patient_mets_cancer_cells" = 0.1,
-         "mm_prim_cancer_cells" = 0.3,
-         "mm_mets_cancer_cells" = 0.3,
-         "xeno_prim_human" = 0.15,
-         "xeno_mets_human" = 0.1,
-         "patient_prim_normal_cells" = 0.15,
-         "patient_mets_normal_cells" = 0.05,
-         "xeno_prim_mouse" = 0.1,
-         "xeno_mets_mouse" = 0.1,
-         "mm_prim_normal_cells" = 0.25,
-         "mm_mets_normal_cells" = 0.2)
-
-ob_names <- names(obj_list)
-obj_list <- lapply(ob_names, function(ob_name) {
-    process_seurat(obj_list[[ob_name]], resolution = res_list[[ob_name]])
-})
-names(obj_list) <- ob_names
-```
-
-### Cell Cycle
-
-I'm going to add cell cycle phases as a metadata feature to ensure that cell cycle effects aren't contributing to RNA velocity.
-
-```{r add-cc}
-obj_list <- lapply(obj_list, function(x) {
-    CellCycleScoring(x,
-                     s.features = cc.genes$s.genes,
-                     g2m.features = cc.genes$g2m.genes)
-})
-```
-
-### FDL
-
-```{r add-fdl}
-obj_list <- lapply(obj_list, run_fdl)
-qs::qsave(obj_list, "output/matt_obj_list.qs")
-```
-
-## Write off Metadata for Velocity Analysis
 
 ```{r write-off-md}
 lapply(names(obj_list), function(obj_name) {
     write_off_md(sobj = obj_list[[obj_name]],
                  id_col = "sample_name",
-                 output_dir = paste0("loom_output/",
-                                     obj_name,
-                                     "/metadata"),
+                 output_dir = paste0("loom_output/metadata",
+                                     obj_name),
                  vars_to_keep = c("sample_name",
                                   "seurat_clusters",
                                   "Ann_level1",
                                   "Ann_level2",
-                                  "Ann_level3",
-                                  "Phase"))
+                                  "Ann_level3"))
 })
 ```
 
