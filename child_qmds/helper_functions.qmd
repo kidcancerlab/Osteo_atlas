@@ -1096,18 +1096,18 @@ get_plot_list <- function(ob_name) {
     a velocity stream plot colored by seurat clusters in fdl space
 
 ```{python rna-velo-py-functions}
-def loom_to_an(obj_name):
+def loom_to_an(obj_name, loom_dir, metadata_dir):
     #Get sample id's from metadata files
-    md_files=os.listdir("new_looms/metadata/" + obj_name)
+    md_files=os.listdir(metadata_dir + "/" + obj_name)
     #initialize list to hold anndata objects
     ad_obs = []
     for one_md in md_files:
         #get sample id from file name
         sample_id = re.sub("_metadata.csv", "", one_md)
         #add object to list
-        tmp = anndata.read_loom("new_looms/" + sample_id + "/" + sample_id + ".loom")
+        tmp = anndata.read_loom(loom_dir + "/" + sample_id + "/" + sample_id + ".loom")
         #read in metadata file
-        md_path = "new_looms/metadata/" + obj_name + "/" + one_md
+        md_path = metadata_dir + "/" + obj_name + "/" + one_md
         metadata = pd.read_csv(md_path, index_col = "bc")
         #Subset anndata to only barcodes in metadata folder
         tmp = tmp[metadata.index]
@@ -1140,6 +1140,9 @@ def make_plots(ad_ob):
     scv.pl.velocity_embedding_stream(ad_ob, basis = "umap", color = "seurat_clusters")
     scv.pl.velocity_embedding(ad_ob, basis = "umap", color = "seurat_clusters")
     scv.pl.velocity_embedding_stream(ad_ob, basis = "umap", color = "Phase")
+    scv.pl.velocity_embedding_stream(ad_ob, basis = "umap", color = "Ann_Level3")
+    scv.pl.velocity_embedding_stream(ad_ob, basis = "umap", color = "Ann_Level2")
+    scv.pl.velocity_embedding_stream(ad_ob, basis = "umap", color = "Ann_Level1")
     scv.pl.velocity_embedding_stream(ad_ob, basis = "fdl", color = "seurat_clusters")
 
 def save_velo_plots(ad_ob, ob_name):
@@ -1147,8 +1150,7 @@ def save_velo_plots(ad_ob, ob_name):
     scv.tl.velocity_graph(ad_ob, backend = "threading")
     plotdict = {
         "umap_clusters": ["umap", "seurat_clusters"],
-        "umap_cc": ["umap", "Phase"],
-        "fdl_clusters": ["fdl", "seurat_clusters"]
+        "umap_ann3": ["umap", "Ann_Level3"]
     }
     for plt_name, plt_type in plotdict.items():
         file_end = ob_name + "_" + plt_name + ".png"
@@ -1158,19 +1160,13 @@ def save_velo_plots(ad_ob, ob_name):
                                          show = False,
                                          save = file_end,
                                          dpi = 300)
-    file_end = ob_name + "_embedding.png"
-    scv.pl.velocity_embedding(ad_ob,
-                              basis = "umap",
-                              color = "seurat_clusters",
-                              show = False,
-                              save = file_end,
-                              dpi = 300)
+
 
 ```
 
 ## Scenic plus regulon analysis function
 ```{r scenic_function}
-#| cache.vars = 'Run_GRA'
+"#| cache.vars = 'Run_GRA'
 Run_GRA <- function(sobject,
                     idents,
                     org,      #organism "mgi" for mouse, "hgnc" for human
