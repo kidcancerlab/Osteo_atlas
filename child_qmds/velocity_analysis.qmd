@@ -76,9 +76,74 @@ velo_input$species <- recode(velo_input$species,
 #install my version of rrrSingleCellUtils
 # devtools::install("/home/gdrobertslab/lab/Analysis/MattGust/projects/rrrSingleCellUtils")
 
-new_make_loom_files(input_table = velo_input,
+r_make_loom_files(input_table = velo_input,
                     out_dir = "loom_output/samples",
                     cluster_account = "gdrobertslab")
+
+#Need to do it for dog samples since they aren't in allsamples_details right now
+dog_samps <- read.table("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/misc/allsample_details.txt",
+                        header = TRUE) %>%
+    dplyr::select(sample_id = sample_name,
+                  species,
+                  data_source) %>%
+    subset(species == "canine") %>%
+    mutate(data_path =
+            recode(data_source,
+                   "CSU" = "/home/gdrobertslab/lab/ExternalData/Regan_lab/",
+                   "NCH" = "/home/gdrobertslab/lab/Counts_2/",
+                   "TU" = "/home/gdrobertslab/lab/ExternalData/Gardner/",
+                   "UoM" = "/home/gdrobertslab/lab/ExternalData/Modiano_Lab/Counts/")) %>%
+    mutate(h5_path =
+            recode(data_source,
+                   "NCH" = paste0(data_path,
+                                  sample_id,
+                                  "/filtered_feature_bc_matrix.h5"),
+                   "CSU" = paste0(data_path,
+                                  sample_id,
+                                  "/filtered_feature_bc_matrix.h5"),
+                   "TU" = paste0(data_path,
+                                 sample_id,
+                                 "/filtered_feature_bc_matrix.h5"),
+                   "UoM" = paste0(data_path,
+                                  sample_id,
+                                  "/filtered_feature_bc_matrix.h5"
+                                  ))) %>%
+    mutate(bam_path =
+           recode(data_source,
+                  "NCH" = paste0(data_path,
+                                 sample_id,
+                                 "/gex_possorted_bam.bam"),
+                  "CSU" = paste0(data_path,
+                                 sample_id,
+                                 "/",
+                                 sample_id,
+                                 "_possorted_genome_bam.bam"),
+                  "TU" = paste0(data_path,
+                                sample_id,
+                                "/possorted_genome_bam.bam"),
+                  "UoM" = paste0(data_path,
+                                 sample_id,
+                                 "/possorted_genome_bam.bam"
+                                 )))
+
+#Fix wrong bam file for one of the NCH samples
+dog_samps[dog_samps$sample_id == "S0032", ] <-
+    "/home/gdrobertslab/lab/Counts_2/S0032/possorted_genome_bam.bam"
+
+#Fix dan's weird sample names in h5_paths
+missing_h5 <- !file.exists(dog_samps$h5_path)
+dog_samps[missing_h5, ]$h5_path <-
+    paste0(dog_samps[missing_h5, ]$data_path,
+           dog_samps[missing_h5, ]$sample_id,
+           "/",
+           dog_samps[missing_h5, ]$sample_id,
+           "_filtered_feature_bc_matrix.h5")
+all(file.exists(dog_samps$h5_path) & file.exists(dog_samps$bam_path))
+
+dog_samps$gtf_path <- "/home/gdrobertslab/lab/GenRef/10x-canine-atlas_arc/genes/genes.gtf.gz"
+r_make_loom_files(input_table = dog_samps,
+                  out_dir = "loom_output/samples",
+                  cluster_account = "gdrobertslab")
 ```
 
 ## Write off Metadata for Velocity Analysis
@@ -112,7 +177,8 @@ lapply(names(obj_list), function(obj_name) {
                                   "seurat_clusters",
                                   "Ann_level1",
                                   "Ann_level2",
-                                  "Ann_level3"))
+                                  "Ann_level3"),
+                 handle_n_of_1 = FALSE)
 })
 ```
 
@@ -147,19 +213,22 @@ merged_ad = loom_to_an(obj_name = "mm_mets_cancer_cells",
 
 ob_names = os.listdir("loom_output/metadata")
 for ob in ob_names:
+    print("Processing " + ob)
     merged_ad = loom_to_an(obj_name = ob,
                            loom_dir = "loom_output/samples",
                            metadata_dir = "loom_output/metadata")
+    print("Created " + ob + "successfully")
     calc_velo(merged_ad)
     #save anndata object so you don't have to remake them
     merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
-
+    print("Calculated velocity for and saved off " + ob)
     scv.tl.velocity_graph(merged_ad, backend = "threading")
-
     #create plots
-    scv.pl.velocity_embedding_stream(merged_ad, basis = "umap", color = "seurat_clusters", show = False, save = ob + "_umap_clusters", dpi = 300)
-
+    scv.pl.velocity_embedding_stream(merged_ad, basis = "umap", color = "seurat_clusters", show = False, save = ob + "_umap_clusters.png", dpi = 300)
     #optionally create fdl plot
     if len(merged_ad.obsm["X_fdl"]) == 2:
-        scv.pl.velocity_embedding_stream(merged_ad, basis = "fdl", color = "seurat_clusters", show = False, save = ob + "_fdl_clusters", dpi = 300)
+        scv.pl.velocity_embedding_stream(merged_ad, basis = "fdl", color = "seurat_clusters", show = False, save = ob + "_fdl_clusters.png", dpi = 300)
+
+
+
 ```
