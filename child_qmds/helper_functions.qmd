@@ -103,7 +103,7 @@ human_lung_ref$free_annotation <-
 human_lung_ref$free_annotation <-
     str_replace_all(human_lung_ref$free_annotation, c(" " = "_"))
 
-#load in the human tumor cell from xenograft primary fro documentation
+#load in the human tumor cell from xenograft primary from documentation
 sobj <- qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs") %>%
     subset(sample_name %in% c("S0170", "S0042"))
 
@@ -121,8 +121,6 @@ qs::qsave(sobj,
 human_tumor_cell <- qs::qread("input/downloads/human_tumor_fromxenograft.qs")
 
 #mouse lung normal cells reference
-# mouse_lung_ref <- qs::qread("input/downloads/mouse_lung.qs")
-
 mouse_lung_ref <- qs::qread("input/downloads/normal_mouselung.qs")
 
 mouse_lung_ref$CellType <-
@@ -170,14 +168,14 @@ mouse_lung_ref$CellType <-
                       "^Vein$" = "Vein_cells",
                       "^Myofibroblast$" = "Myo_Fibroblasts",
                       "^Club$" = "Club_cells",
-                    "^Ionocyte$" = "Ionocyte",
-                    "^Ciliated$" = "Ciliated_cells",
-                    "^Pericytes$" = "Pericyte",
-                    "^Mesothelial$" = "Mesothelial_cells",
-                    "^Capillary$" = "Capillary_cells",
-                    "^Mast_Basophils$" = "Basophil_Mast",
-                    "^CD8_plus_T$" = "CD8T_cells",
-                    "^CD4_plus_T$" = "CD4T_cells"))
+                      "^Ionocyte$" = "Ionocyte",
+                      "^Ciliated$" = "Ciliated_cells",
+                      "^Pericytes$" = "Pericyte",
+                      "^Mesothelial$" = "Mesothelial_cells",
+                      "^Capillary$" = "Capillary_cells",
+                      "^Mast_Basophils$" = "Basophil_Mast",
+                      "^CD8_plus_T$" = "CD8T_cells",
+                      "^CD4_plus_T$" = "CD4T_cells"))
 
 #make a reference for all tumor cells, using cell culture data documantation
 mouse_tumor_cell <-
@@ -187,9 +185,6 @@ mouse_tumor_cell <-
 #create a column with the cell type
 mouse_tumor_cell$CellType <- "Tumor_cells"
 
-if (!dir.exists("input/downloads")) {
-    dir.create("input/downloads", recursive = TRUE)
-}
 #save the object
 qs::qsave(mouse_tumor_cell,
           file = "input/downloads/mm_tumor_cellculture.qs")
@@ -201,11 +196,10 @@ mouse_tumor_cell <- qs::qread("input/downloads/mm_tumor_cellculture.qs")
 
 ## Function to annotate cell types with mouse and human lung
 ```{r annotate_function}
-#| cache.vars: [annotate_celltypes, hpca, huim, mord, moim, ref4]
+#| cache.vars: [annotate_celltypes, hpca, huim, mord, moim]
 #| dependson: celltype_annotation_data
 hpca <- celldex::HumanPrimaryCellAtlasData()
 huim <- celldex::MonacoImmuneData()
-ref4 <- SeuratObject::GetAssayData(human_tumor_cell)
 
 hpca$label.main <-
             str_replace_all(hpca$label.main,
@@ -261,7 +255,7 @@ huim$label.main <-
 
 mord <- celldex::MouseRNAseqData()
 moim <- celldex::ImmGenData()
-ref4 <- SeuratObject::GetAssayData(mouse_tumor_cell)
+
 mord$label.main <-
     stringr::str_replace_all(mord$label.main,
                             c("^T cells$" = "T_cells",
@@ -331,7 +325,7 @@ annotate_celltypes <- function(sobject,
                                aggr_ref = FALSE,
                                label_type = "label.main",
                                ...) {
-    if (grepl("human", species) | grepl("canine", species)) {
+    if (grepl("human", species) || grepl("canine", species)) {
         ref <- list(hpca,
                     huim)
         labels <- list(hpca[[label_type]],
@@ -344,7 +338,7 @@ annotate_celltypes <- function(sobject,
                            huim[[label_type]],
                            human_tumor_cell$CellType)
         }
-        if (species == "human_lung" | species == "canine_lung") {
+        if (species == "human_lung" || species == "canine_lung") {
             ref <- list(hpca,
                         huim,
                         SeuratObject::GetAssayData(human_lung_ref))
@@ -440,7 +434,7 @@ run_degs <- function(sobject,
                            mc.preschedule = FALSE,
                            function(cluster_no) {
 
-        batch_df <- 
+        batch_df <-
             data.frame(sample_name = colnames(pseudobulk))
 
         batch_df_new <-
@@ -453,7 +447,7 @@ run_degs <- function(sobject,
             mutate(organism = sobject@meta.data[[organism_col]][[1]]) %>%
             mutate(cluster_no = str_replace_all(cluster_no, "-", "_"))
         #add the datasource and method as batch in batch_df_new from all_samples_csv for each sample_name
-        new_all_samples_csv <- 
+        new_all_samples_csv <-
             all_samples_csv %>%
             filter(sample_name %in% unique(sobject$sample_name)) %>%
             select(sample_name, method, data_source, model, location, organism)
@@ -529,7 +523,7 @@ run_gsea <- function(degs_result,
                            function(item) {
             gsea_input <- as.vector(degs_result[[item]]$log2FoldChange)
             names(gsea_input) <- degs_result[[item]]$gene
-            
+
             set.seed(199820)
             output <- fgsea::fgseaMultilevel(gsea_ref,
                                             gsea_input,
@@ -546,7 +540,7 @@ run_gsea <- function(degs_result,
                 ungroup() %>%
                 na.omit()
         })
-    names(gsea_output) <- names(degs_result)  
+    names(gsea_output) <- names(degs_result)
 
     return(gsea_output)
 }
@@ -793,7 +787,7 @@ make_panel_plot <- function(sobj,
     dimplot <- dimplot_better(sobj, group_by = comparison_col)
 
     degs_result <-
-        run_degs(sobject = sobj, 
+        run_degs(sobject = sobj,
                 comparison_col = comparison_col,
                 aggregate_by = aggregate_by,
                 organism_col = organism_col,
@@ -932,7 +926,7 @@ make_panel_plot <- function(sobj,
                     mutate(cluster = paste("Cluster", x),
                             pathway_group = cat_expl)
             })
-        
+
         directory <-
             paste0("output/gsea/", group, "/", label)
         if (!dir.exists(directory)) {
@@ -954,7 +948,7 @@ make_panel_plot <- function(sobj,
     # Drop in code to make heatmap here
         n_paths_per_cluster <- 20
 
-        use_pathways <- 
+        use_pathways <-
             gsea_result %>%
             bind_rows() %>%
             group_by(cluster) %>%
@@ -1026,7 +1020,7 @@ make_panel_plot <- function(sobj,
             ggplotify::as.ggplot(heatmap_plots$Reactome),
             ncol = 2) +
         patchwork::plot_annotation(title = label)
-    
+
     directory <-
         paste0("output/figures/gsea/", group)
     if (!dir.exists(directory)) {
@@ -1251,17 +1245,18 @@ Run_GRA <- function(sobject,
 ## Convert dogs to human orthologs
 ```{r dog_human_orthologs_function}
 #| cache.vars: dog_to_human_setup
-dog_to_human_setup <- function(object) {
+dog_to_human_setup <- function(object,
+                               run_harmony = TRUE) {
     raw_counts <-
         GetAssayData(object,
-                    slot = "counts")
+                     layer = "counts")
 
-    number_of_ENSEMBL_genes <- 
+    number_of_ENSEMBL_genes <-
         sum(str_detect(rownames(raw_counts), "^ENSCAFG"))
 
     raw_counts_new <-
         raw_counts[rownames(raw_counts) %in% orthologs$dog_gene_name, ]
-    rownames(raw_counts_new) <- 
+    rownames(raw_counts_new) <-
         orthologs$human_gene_ortholog[match(rownames(raw_counts_new), orthologs$dog_gene_name)]
     new_seurat_object <-
         CreateSeuratObject(counts = raw_counts_new) %>%
@@ -1269,21 +1264,19 @@ dog_to_human_setup <- function(object) {
     object <-
         new_seurat_object %>%
         process_seurat()
-    object <- 
+    if (run_harmony) {
+        object <-
         RunHarmony(object,
                     group.by.vars = c("sample_name",
                                     "data_source",
                                     "location"),
                     theta = c(7, 7, 7)) %>%
         process_seurat(reduction = "harmony")
+    }
 
     return(object)
 }
-
-
 ```
-
-
 
 ```{r helper_confirm_mclapply_worked}
 #| cache.vars: confirm_mclapply_worked
