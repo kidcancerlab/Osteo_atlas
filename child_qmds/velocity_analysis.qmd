@@ -127,7 +127,7 @@ dog_samps <- read.table("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/
                                  )))
 
 #Fix wrong bam file for one of the NCH samples
-dog_samps[dog_samps$sample_id == "S0032", ] <-
+dog_samps[dog_samps$sample_id == "S0032", ]$bam_path <-
     "/home/gdrobertslab/lab/Counts_2/S0032/possorted_genome_bam.bam"
 
 #Fix dan's weird sample names in h5_paths
@@ -141,6 +141,10 @@ dog_samps[missing_h5, ]$h5_path <-
 all(file.exists(dog_samps$h5_path) & file.exists(dog_samps$bam_path))
 
 dog_samps$gtf_path <- "/home/gdrobertslab/lab/GenRef/10x-canine-atlas_arc/genes/genes.gtf.gz"
+
+loom_paths <- paste0("loom_output/samples/", dog_samps$sample_id, "/", dog_samps$sample_id, ".loom")
+loom_paths[!file.exists(loom_paths)]
+
 r_make_loom_files(input_table = dog_samps,
                   out_dir = "loom_output/samples",
                   cluster_account = "gdrobertslab")
@@ -153,12 +157,12 @@ In order to analyze the data, we need to save a table of cell-level metadata, in
 First we need to read in our objects for this. The most up to date object seems to change frequently, but as of 2/19 at 3:15 pm i'm using the ojbects in tumor_vs_stroma.
 
 ```{r}
-obj_names <- c("mm_mets_normal_cells",
-               "mm_mets_cancer_cells",
-               "mm_prim_normal_cells",
-               "mm_prim_cancer_cells",
-               "patient_mets_cancer_cells_fdl",
-               "patient_prim_cancer_cells_fdl")
+yogi_prefix <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/"
+obj_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/tumor_vs_stroma"))
+#get only fdl files
+obj_names <- str_replace_all(obj_names[grep("fdl", obj_names)],
+                             ".qs",
+                             "")
 
 obj_list <- list()
 for (ob_name in obj_names) {
@@ -211,7 +215,11 @@ merged_ad = loom_to_an(obj_name = "mm_mets_cancer_cells",
                        loom_dir = "loom_output/samples",
                        metadata_dir = "loom_output/metadata/")
 
+dog_list=["dogs_prim_cancer_cells_fdl", "dogs_prim_normal_cells_fdl", "dogs_mets_cancer_cells_fdl", "dogs_mets_normal_cells_fdl"]
 ob_names = os.listdir("loom_output/metadata")
+ob_names = [x for x in ob_names if x not in dog_list]
+ob_names = [x for x in ob_names if x not in ["patient_mets_cancer_cells_fdl", "patient_prim_cancer_cells_fdl", "xeno_mets_human_fdl"]]
+
 for ob in ob_names:
     print("Processing " + ob)
     merged_ad = loom_to_an(obj_name = ob,
@@ -222,13 +230,61 @@ for ob in ob_names:
     #save anndata object so you don't have to remake them
     merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
     print("Calculated velocity for and saved off " + ob)
+
+
+#     scv.tl.velocity_graph(merged_ad, backend = "threading")
+#     #create plots
+#     scv.pl.velocity_embedding_stream(merged_ad, basis = "umap", color = "seurat_clusters", show = False, save = "scvelo/" + ob + "_umap_clusters.png", dpi = 300)
+#     #optionally create fdl plot
+#     if len(merged_ad.obsm["X_fdl"]) == 2:
+#         scv.pl.velocity_embedding_stream(merged_ad, basis = "fdl", color = "seurat_clusters", show = False, save = "scvelo/" + ob + "_fdl_clusters.png", dpi = 300)
+
+
+
+def write_ob_and_plots(ob):
+    print("starting on " + ob)
+    merged_ad=loom_to_an(obj_name = ob,
+                     loom_dir = "loom_output/samples",
+                     metadata_dir = "loom_output/metadata")
+    print("made " + ob + " , now calculating velocity")
+    calc_velo(merged_ad)
+    merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
+    print("calculated velocity and saved off " + ob)
+    #make the plots and save them off
     scv.tl.velocity_graph(merged_ad, backend = "threading")
-    #create plots
-    scv.pl.velocity_embedding_stream(merged_ad, basis = "umap", color = "seurat_clusters", show = False, save = ob + "_umap_clusters.png", dpi = 300)
-    #optionally create fdl plot
-    if len(merged_ad.obsm["X_fdl"]) == 2:
-        scv.pl.velocity_embedding_stream(merged_ad, basis = "fdl", color = "seurat_clusters", show = False, save = ob + "_fdl_clusters.png", dpi = 300)
+    #seurat clusters in umap space
+    scv.pl.velocity_embedding_stream(merged_ad,
+                                     basis = "umap",
+                                     color = "seurat_clusters",
+                                     show = False,
+                                     save = "scvelo/" + ob + "_umap_clusters.png")
+    #Ann_Level3 in umap space
+    scv.pl.velocity_embedding_stream(merged_ad,
+                                     basis = "umap",
+                                     color = "Ann_Level3",
+                                     show = False,
+                                     save = "scvelo/" + ob + "_umap_annotations.png")
+    #Seurat clusters in fdl space
+    scv.pl.velocity_embedding_stream(merged_ad,
+                                     basis = "fdl",
+                                     color = "seurat_clusters",
+                                     show = False,
+                                     save = "scvelo/" + ob + "_umap_clusters.png")
+    #Ann_Level3 in fdl space
+    scv.pl.velocity_embedding_stream(merged_ad,
+                                     basis = "fdl",
+                                     color = "Ann_Level3",
+                                     show = False,
+                                     save = "scvelo/" + ob + "_umap_annotations.png")
+    return(obj_name + "_parallel")
 
 
+#trying parallel stuff
+from multiprocessing import Pool
+with Pool(processes = 6) as pool:
+    output = pool.map(write_ob_and_plots, ob_names)
 
+
+#with Pool(processes = args.processes) as pool:
+    # output = pool.map(process_lines, chr_list
 ```
