@@ -49,9 +49,17 @@ We'll be using RCTD on full mode to perform cell-type annotation
 I need to create a reference object. This object is created using the RCTD constructor function, which requires a counts matrix, cell types, and nUMI
 
 ```{r}
-patient_mets <-
-    qs::qread("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/V3/patient_mets.qs")
+yogi_path <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/"
+#gotta merge patient_mets_cancer_cells and patient_mets_normal_cells
+patient_mets <- list()
 
+patient_mets[["cancer"]] <-
+    qs::qread(paste0(yogi_path,
+                    "output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs"))
+patient_mets[["stromal"]] <- qs::qread(paste0(yogi_path,
+                                              "output/seurat_objects/tumor_vs_stroma/patient_mets_normal_cells.qs"))
+
+patient_mets <- merge(patient_mets[["cancer"]], patient_mets[["stroma"]])
 #Ann_level3 was too granular, going to try using Ann_Level2
 spacexr_reference <-
     spacexr::Reference(GetAssayData(patient_mets, layer = "counts"),
