@@ -94,30 +94,6 @@ for (ob_name in names(spatial_list)) {
     norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
     spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
 }
-
-library(parallel)
-spatial_list <- mclapply(X = names(spatial_list),
-         FUN = function(ob_name) {
-    sp_ob <- spatial_list[[ob_name]]
-    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
-        rename(x = imagerow, y = imagecol)
-    #convert our object to an rctd object
-    my_data <- spacexr::SpatialRNA(coords,
-                                   GetAssayData(sp_ob, layer = "counts"))
-    rctd_obj <- spacexr::create.RCTD(my_data,
-                                     spacexr_reference,
-                                     max_cores = 6,
-                                     UMI_min = 3,
-                                     counts_MIN = 0, 
-                                     UMI_max = 900000000,
-                                     CELL_MIN_INSTANCE = 0)
-    rctd_out <- spacexr::run.RCTD(rctd_obj, doublet_mode = "full")
-    qs::qsave(rctd_out, paste0("output/spatial_objects/spacexr_", ob_name, ".qs"))
-
-    norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
-    return(AddMetaData(sp_ob, norm_weights)) },
-         mc.cores = 3)
-
 qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level2_annotations.qs")
 ```
 
