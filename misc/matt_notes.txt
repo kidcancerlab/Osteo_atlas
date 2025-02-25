@@ -6,3 +6,11 @@ What's done:
 To do:
     More polished analysis of doubletFinder
     Overlay velocity analysis with new cancer subpopulation annotations
+
+2/24
+What's done:
+    Am in the process of overlaying velocity analysis plots with annotations and seurat clusters
+
+To do:
+    Make sure that figures were made correctly in fix_everything
+    ^if so, clean up code for velocity analysis

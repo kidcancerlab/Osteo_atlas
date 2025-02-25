@@ -218,29 +218,6 @@ dog_list=["dogs_prim_cancer_cells_fdl", "dogs_prim_normal_cells_fdl", "dogs_mets
 ob_names = os.listdir("loom_output/metadata")
 ob_names = [x for x in ob_names if x not in dog_list]
 
-ob_names = ["xeno_prim_human_fdl", "mm_prim_cancer_cells_fdl", "mm_mets_cancer_cells_fdl"]
-
-for ob in ob_names:
-    print("Processing " + ob)
-    merged_ad = loom_to_an(obj_name = ob,
-                           loom_dir = "loom_output/samples",
-                           metadata_dir = "loom_output/metadata")
-    print("Created " + ob + "successfully")
-    calc_velo(merged_ad)
-    #save anndata object so you don't have to remake them
-    merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
-    print("Calculated velocity for and saved off " + ob)
-
-
-#     scv.tl.velocity_graph(merged_ad, backend = "threading")
-#     #create plots
-#     scv.pl.velocity_embedding_stream(merged_ad, basis = "umap", color = "seurat_clusters", show = False, save = "scvelo/" + ob + "_umap_clusters.png", dpi = 300)
-#     #optionally create fdl plot
-#     if len(merged_ad.obsm["X_fdl"]) == 2:
-#         scv.pl.velocity_embedding_stream(merged_ad, basis = "fdl", color = "seurat_clusters", show = False, save = "scvelo/" + ob + "_fdl_clusters.png", dpi = 300)
-
-
-
 def write_ob(ob):
     print("starting on " + ob)
     merged_ad=loom_to_an(obj_name = ob,
@@ -252,110 +229,23 @@ def write_ob(ob):
     merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
 
 
+write_ob("patient_mets_cancer_cells")
+write_ob("patient_prim_cancer_cells")
 
 #I realized the objects I created don't have Ann_Levels present, so I need to add those and create the additional plots
 
-ob_names = os.listdir("loom_output/metadata")
-ob_names = list(filter(lambda x:'fdl' not in x, ob_names))
-ob_names[1]
-
-def add_ann_level(ob_name):
-    if os.path.exists("loom_output/anndata/" + ob_name + ".ad"):
-        print("reading in " + ob_name)
-        ad = anndata.read("loom_output/anndata/" + ob_name + ".ad")
-        #read in all metadata files
-        md_files = os.listdir("loom_output/metadata/" + ob_name)
-        md_list = []
-        for one_md in md_files:
-            print(one_md + " for " + ob_name)
-            #get sample id from file name
-            sample_id = re.sub("_metadata.csv", "", one_md)
-            #read in md 
-            filt_md = pd.read_csv("loom_output/metadata/" + ob_name + "/" + one_md, index_col = "CellID").reindex(ad.obs.index).dropna()
-            md_list.append(filt_md)
-        merged_md = pd.concat(md_list)
-        #remove all columns that contain embeddings
-        tmp=~merged_md.columns.str.contains("(harmony)|(PC)|(umap)", na = False)
-        merged_md = merged_md[merged_md.columns[tmp.astype("bool")]]
-        #remove columns already present in object
-        merged_md = merged_md.filter(merged_md.columns.difference(ad.obs.columns))
-        ad.obs=ad.obs.merge(merged_md, how = "outer", left_index = True, right_index = True)
-        ad.write(filename = "loom_output/anndata/" + ob_name + ".ad")
-        return(ob_name + "_ann_levels")
-
-
-for ob in ob_names:
-    add_ann_level(ob)
-
-
-#make plots and save them off
-ob_names = os.listdir("loom_output/anndata")
-ob_names = list(filter(lambda x:'fdl' not in x, ob_names))
-ob_names = [x.replace(".ad", "") for x in ob_names]
-
 def save_plots(ob):
     ad_ob = anndata.read("loom_output/anndata/" + ob + ".ad")
-    scv.tl.velocity_graph(ad_ob, backend = "threading", n_jobs = 30)
     scv.pl.velocity_embedding_stream(ad_ob,
                                      basis = "umap",
                                      color = "seurat_clusters",
                                      show = False,
                                      save = ob + "_umap_clusters.png")
-    # #Ann_Level3 in umap space
-    # scv.pl.velocity_embedding_stream(ad_ob,
-    #                                  basis = "umap",
-    #                                  color = "Ann_Level3",
-    #                                  show = False,
-    #                                  save = ob + "_umap_annotations.png")
-    # #Seurat clusters in fdl space
-    # scv.pl.velocity_embedding_stream(ad_ob,
-    #                                     basis = "fdl",
-    #                                     color = "seurat_clusters",
-    #                                     show = False,
-    #                                     save = ob + "_fdl_clusters.png")
-    # # #Ann_Level3 in fdl space
-    # scv.pl.velocity_embedding_stream(ad_ob,
-    #                                     basis = "fdl",
-    #                                     color = "Ann_Level3",
-    #                                     show = False,
-    #                                     save = ob + "_fdl_annotations.png")
-
-
-#trying to fix the mistake i made by adding metadata to objects made from fdl folder
-def fix_everything(ob):
-    #first read in correct anndata object
-    ad = anndata.read("loom_output/anndata/" + ob + ".ad")
-    #read in metadata again
-    md_files = os.listdir("loom_output/metadata/" + ob)
-    md_list = []
-    for one_md in md_files:
-        print(one_md + " for " + ob)
-        sample_id = re.sub("_metadata.csv", "", one_md)
-        filt_md = pd.read_csv("loom_output/metadata/" + ob + "/" + one_md, index_col = "bc").reindex(ad.obs.index).dropna()
-        md_list.append(filt_md)
-    merged_md = pd.concat(md_list)
-    merged_md["seurat_clusters"] = pd.Categorical(merged_md["seurat_clusters"])
-    ad.obs = merged_md.reindex(ad.obs.index)
-    ad.obsm["X_umap"] = merged_md.filter(regex = "umap_").reindex(ad.obs.index).to_numpy()
-    scv.tl.velocity_graph(ad, backend = "threading", n_jobs = 36)
-    ad.write("loom_output/anndata/" + ob + ".ad")
-    scv.pl.velocity_embedding_stream(ad,
+    #Ann_Level3 in umap space
+    scv.pl.velocity_embedding_stream(ad_ob,
                                      basis = "umap",
                                      color = "Ann_Level3",
                                      show = False,
                                      save = ob + "_umap_annotations.png")
-    scv.pl.velocity_embedding_stream(ad,
-                                     basis = "umap",
-                                     color = "seurat_clusters",
-                                     show = False,
-                                     save = ob + "_umap_clusters.png")
-
-#only doing mouse models and patient samples for now
-ob_names = ["patient_mets_normal_cells", "patient_mets_cancer_cells", "patient_prim_normal_cells", "patient_prim_cancer_cells", "mm_mets_normal_cells", "mm_prim_cancer_cells"]
-
-
-for ob in ob_names:
-    fix_everything(ob)
-
 
 ```
