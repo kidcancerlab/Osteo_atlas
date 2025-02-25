@@ -51,19 +51,23 @@ I need to create a reference object. This object is created using the RCTD const
 ```{r}
 yogi_path <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/"
 #gotta merge patient_mets_cancer_cells and patient_mets_normal_cells
-patient_mets <- list()
-
-patient_mets[["cancer"]] <-
+patient_mets_cancer <-
     qs::qread(paste0(yogi_path,
-                    "output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs"))
-patient_mets[["stromal"]] <- qs::qread(paste0(yogi_path,
-                                              "output/seurat_objects/tumor_vs_stroma/patient_mets_normal_cells.qs"))
+                    "output/seurat_objects/final_tumor_vs_stroma/patient_mets_cancer_cells.qs"))
+patient_mets_normal <-
+    qs::qread(paste0(yogi_path,
+                     "output/seurat_objects/final_tumor_vs_stroma/patient_mets_normal_cells.qs"))
 
-patient_mets <- merge(patient_mets[["cancer"]], patient_mets[["stroma"]])
+patient_mets <- merge(patient_mets_cancer, patient_mets_normal) %>%
+    JoinLayers()
+
+cell_types <- unique(patient_mets$Ann_Level2)
+
 #Ann_level3 was too granular, going to try using Ann_Level2
 spacexr_reference <-
     spacexr::Reference(GetAssayData(patient_mets, layer = "counts"),
-                       as.factor(patient_mets$Ann_Level2))
+                       as.factor(patient_mets$Ann_Level2),
+                       n_max_cells = 2000)
 ```
 
 ### Run RCTD on Spatial Data
@@ -90,6 +94,30 @@ for (ob_name in names(spatial_list)) {
     norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
     spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
 }
+
+library(parallel)
+spatial_list <- mclapply(X = names(spatial_list),
+         FUN = function(ob_name) {
+    sp_ob <- spatial_list[[ob_name]]
+    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
+        rename(x = imagerow, y = imagecol)
+    #convert our object to an rctd object
+    my_data <- spacexr::SpatialRNA(coords,
+                                   GetAssayData(sp_ob, layer = "counts"))
+    rctd_obj <- spacexr::create.RCTD(my_data,
+                                     spacexr_reference,
+                                     max_cores = 6,
+                                     UMI_min = 3,
+                                     counts_MIN = 0, 
+                                     UMI_max = 900000000,
+                                     CELL_MIN_INSTANCE = 0)
+    rctd_out <- spacexr::run.RCTD(rctd_obj, doublet_mode = "full")
+    qs::qsave(rctd_out, paste0("output/spatial_objects/spacexr_", ob_name, ".qs"))
+
+    norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
+    return(AddMetaData(sp_ob, norm_weights)) },
+         mc.cores = 3)
+
 qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level2_annotations.qs")
 ```
 
