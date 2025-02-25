@@ -154,7 +154,7 @@ r_make_loom_files(input_table = dog_samps,
 
 In order to analyze the data, we need to save a table of cell-level metadata, including barcodes, seurat clusters, and annotations.
 
-First we need to read in our objects for this. The most up to date object seems to change frequently, but as of 2/19 at 3:15 pm i'm using the ojbects in tumor_vs_stroma.
+First we need to read in our objects for this. The most up to date object seems to change frequently, but as of 2/25 at 4:30 pm i'm using the ojbects in final_tumor_vs_stroma.
 
 ```{r}
 yogi_prefix <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/"
@@ -210,13 +210,7 @@ import re
 
 ```{python analyze-mm-mets-cancer-cells}
 #get names of loom files
-merged_ad = loom_to_an(obj_name = "mm_mets_cancer_cells",
-                       loom_dir = "loom_output/samples",
-                       metadata_dir = "loom_output/metadata/")
-
-dog_list=["dogs_prim_cancer_cells_fdl", "dogs_prim_normal_cells_fdl", "dogs_mets_cancer_cells_fdl", "dogs_mets_normal_cells_fdl"]
 ob_names = os.listdir("loom_output/metadata")
-ob_names = [x for x in ob_names if x not in dog_list]
 
 def write_ob(ob):
     print("starting on " + ob)
@@ -229,8 +223,8 @@ def write_ob(ob):
     merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
 
 
-write_ob("patient_mets_cancer_cells")
-write_ob("patient_prim_cancer_cells")
+for ob in ob_names:
+    write_ob(ob)
 
 #I realized the objects I created don't have Ann_Levels present, so I need to add those and create the additional plots
 
@@ -247,5 +241,8 @@ def save_plots(ob):
                                      color = "Ann_Level3",
                                      show = False,
                                      save = ob + "_umap_annotations.png")
+
+for ob in ob_names:
+    save_plots(ob)
 
 ```
