@@ -23,7 +23,13 @@ cancer_celltypes <- list(patient_prim = c("MSC",
                                          "Myofibroblasts",
                                          "Mesothelial",
                                          "Smooth_muscle_cells",
-                                         "Fibromyocyte"),
+                                         "Fibromyocyte",
+                                         "Adventitial_fibroblasts",
+                                         "Alveolar_fibroblasts",
+                                         "Peribronchial_fibroblasts",
+                                         "Subpleural_fibroblasts",
+                                         "Stromal_cells",
+                                         "SM_activated_stress_response"),
                         xeno_prim_human = c(),
                         xeno_mets_human = c(),
                         xeno_prim_mouse = c(),
@@ -189,7 +195,7 @@ for (group in c("patient_prim", "patient_mets",
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
-    #dimplot_better(object, group_by = c("new_annot_clust")) + NoLegend()
+    #dimplot_better(object, group_by = c("celltype_tumor_call")) + NoLegend()
     Idents(object) <-
         object$new_annot_clust
 
@@ -204,12 +210,12 @@ for (group in c("patient_prim", "patient_mets",
                 "normal_cells")
 
     object$original_call <- object$celltype_tumor_call
-    if (group == "patient_prim" || group == "patient_mets") {
-        object$celltype_tumor_call[object$annotations %in% annotations_cell_list[[group]] & object$celltype_tumor_call == "cancer_cells"] <- "kick"
-        object$celltype_tumor_call[object$annotations %in% cancer_celltypes[[group]] & object$celltype_tumor_call == "normal_cells"] <- "kick"
-        object <-
-            subset(object, celltype_tumor_call != "kick")
-    }
+    # if (group == "patient_prim" || group == "patient_mets") {
+    #     object$celltype_tumor_call[object$annotations %in% annotations_cell_list[[group]] & object$celltype_tumor_call == "cancer_cells"] <- "kick"
+    #     object$celltype_tumor_call[object$annotations %in% cancer_celltypes[[group]] & object$celltype_tumor_call == "normal_cells"] <- "kick"
+    #     object <-
+    #         subset(object, celltype_tumor_call != "kick")
+    # }
 
     # mislabelled_cell_ids_normal <-
     #     read_tsv(list.files(path = str_c("misc/mislabelled_ids/", group),
@@ -228,13 +234,13 @@ for (group in c("patient_prim", "patient_mets",
     # object$celltype_tumor_call[object$cell %in% mislabelled_cell_ids_tumor$cell] <- "cancer_cells"
 
     set.seed(199820)
-    object <-
-        object %>%
-        process_seurat() %>%
-        RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
-                   theta = harmony_params[[group]]$theta,
-                   lambda = harmony_params[[group]]$lambda) %>%
-        process_seurat(reduction = "harmony")
+    # object <-
+    #     object %>%
+    #     process_seurat() %>%
+    #     RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
+    #                theta = harmony_params[[group]]$theta,
+    #                lambda = harmony_params[[group]]$lambda) %>%
+    #     process_seurat(reduction = "harmony")
 
     directory <-
         str_c("output/id_tumor/celltype/")
@@ -325,7 +331,7 @@ fdl_results <-
             width = 16,
             height = 16)
 })
-
+#dimplot_better(object, group_by = "new_annot_clust") + NoLegend()
 ```
 
 ## Annotation cleanup
@@ -530,7 +536,22 @@ Annotation_cleanup <-
             "^Vd2 gd T cells$" = "T_cells",
             "^Macrophage_monocyte_derived_M_CSF_IFNg$" = "Macrophages",
             "^Non-Vd2 gd T cells$" = "T_cells",
-            "^Adventitial_fibroblasts$" = "Fibroblasts"),
+            "^Adventitial_fibroblasts$" = "Fibroblasts",
+            "^Chondrocytes_MSC_derived$" = "Mesenchymal",
+            "^BM$" = "Mesenchymal",
+            "^Macrophage_monocyte_derived_M_CSF_IFNg_Pam3Cys$" = "Macrophages",
+            "^Monocyte$" = "Monocytes",
+            "^Neurons_Schwann_cell$" = "Neurons",
+            "^Smooth_muscle_cells_vascular$" = "Smooth_muscle",
+            "^Tissue_stem_cells_BM_MSC_BMP2$" = "Mesenchymal",
+            "^Macrophages__MFIO5_II_480INT_$" = "Macrophages",
+            "^Monocytes__MO_6C_II_plus_$" = "Monocytes",
+            "^Smooth_muscle_cells_bronchial$" = "Smooth_muscle",
+            "^Smooth_muscle_cells_arterial$" = "Smooth_muscle",
+            "^Neuroepithelial_cell_ESC_derived$" = "Mesenchymal",
+            "^Chondrocytes_MSC_derived$" = "Mesenchymal",
+            "^MSC$" = "Mesenchymal",
+            "^NK_cell_CD56hiCD62L_plus$" = "NK_cells"),
         SingleR_Ann1_label =
             c("^B_cells$" = "Immune_Lymphoid",
             "^Dendritic_cells$" = "Immune_Myeloid",

@@ -1422,6 +1422,8 @@ Run_GRA <- function(sobject,
 ## Convert dogs to human orthologs
 ```{r dog_human_orthologs_function}
 # load the tsv for human_dog gene orthologs
+#| cache.vars: [orthologs, dog_to_human_setup, mouse_to_human_setup]
+
 orthologs <-
     read_tsv("input/downloads/dog_human_gene_orthologs.txt")
 
@@ -1464,7 +1466,9 @@ dog_to_human_setup <- function(object,
 
 
 #mouse to human orthologs object
-mouse_to_human_setup <- function(object) {
+mouse_to_human_setup <- function(object,
+                                 harm_vars,
+                                 theta) {
     raw_counts <-
         GetAssayData(object,
                      slot = "counts")
@@ -1495,10 +1499,8 @@ mouse_to_human_setup <- function(object) {
     
     object <-
         RunHarmony(object,
-                    group.by.vars = c("sample_name",
-                                    "model",
-                                    "location"),
-                    theta = c(7, 7, 7)) %>%
+                    group.by.vars = harm_vars,
+                    theta = theta) %>%
         process_seurat(reduction = "harmony")
 
     return(object)
