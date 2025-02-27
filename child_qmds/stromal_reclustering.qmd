@@ -451,62 +451,6 @@ Cleaned_Annotations <-
         VEC	=c("ACKR1", "PRDD23", "VWF", "CLU", "EPHB4", "IGFBP7", "NR2F2"),
         Exhausted_Tcells = c("CD3E", "PDCD1", "HAVCR2", "CD244", "LAG3", "CD38", "CD69", "PRDM1", "TOX", "CD101", "CTLA4")) 
 
-clusterbased_annot <- function(s_obj) {
-    Idents(s_obj) <- s_obj$seurat_clusters
-    clust_info <- tibble()
-    for (cluster in unique(s_obj$seurat_clusters)) {
-        set.seed(199820)
-        subset_object <- subset(s_obj, ident = cluster) %>%
-            FindVariableFeatures() %>%
-            ScaleData() %>%
-            # don't ask for more PCs than there are cells
-            RunPCA(npcs = min(50,
-                            sum(s_obj$seurat_clusters == cluster) - 1))
-
-        if (length(unique(subset_object$sample_name)) > 1 &&
-            ncol(subset_object) > 50) {
-            subset_object <- RunHarmony(subset_object,
-                                        group.by.vars = "sample_name") %>%
-                process_seurat(reduction = "harmony")
-        } else {
-            subset_object <- subset_object
-        }
-
-        subset_object$re_cluster <- str_c(cluster,
-                                        ".",
-                                        subset_object$seurat_clusters)
-
-        clust_info <- subset_object@meta.data %>%
-                as.data.frame() %>%
-                select(re_cluster) %>%
-                rbind(clust_info)
-    }
-
-    s_obj <- AddMetaData(s_obj, metadata = clust_info)
-    s_obj$new_annot_clust <- s_obj$re_cluster
-
-    cluster_celltypes <-
-        table(s_obj$re_cluster, s_obj$annotations) %>%
-        as.data.frame() %>%
-        group_by(Var1) %>%
-        arrange(desc(Freq), .by_group = TRUE) %>%
-        slice_head(n = 1)
-
-    for (i in seq_len(nrow(cluster_celltypes))) {
-        seurat_clust <- str_c("^", cluster_celltypes$Var1[i], "$") %>%
-            as.character()
-
-        celltype <- cluster_celltypes$Var2[i] %>%
-            as.character()
-
-        s_obj$new_annot_clust <-
-            str_replace_all(string = s_obj$new_annot_clust,
-                            pattern = seurat_clust,
-                            replacement = celltype)
-    }
-    return(s_obj)
-}
-
 # load the tsv for human_dog gene orthologs
 orthologs <-
     read_tsv("input/downloads/dog_human_gene_orthologs.txt")
@@ -599,6 +543,8 @@ for (item in seq_len(nrow(object_list))) {
                             resolution = 0.5)
         }
 
+        # read inn old metadata for annotations 
+        # note: have to run first without this section 
         filename <-
             system(paste0(
                 "ls output/metadata/celltype_stroma/",
@@ -607,6 +553,7 @@ for (item in seq_len(nrow(object_list))) {
                 cell_type,
                 "_* | tail -n 1"),
                 intern = TRUE)
+
         if (file.exists(filename)) {
             old_meta <- 
                 read_tsv(filename,
@@ -627,26 +574,29 @@ for (item in seq_len(nrow(object_list))) {
             width <-
                 length(unique(s_obj$old_ann_level3))
             
-            heatmap_previous_celltypes <-
-                pheatmap::pheatmap(table_clusters,
-                                    cluster_rows = FALSE,
-                                    cluster_cols = FALSE,
-                                    display_numbers = TRUE,
-                                    breaks = c(-1, -0.5, -0.1, 0.1, 0.5, 1),
-                                    silent = TRUE,
-                                    fontsize = 8,
-                                    fontsize_number = 8,
-                                    fontsize_row = 8,
-                                    fontsize_col = 8,
-                                    color = rev(RColorBrewer::brewer.pal(5, name = "RdBu")))
-
+            if (ncol(table_clusters) > 1) {
+                heatmap_previous_celltypes <-
+                    pheatmap::pheatmap(table_clusters,
+                                        cluster_rows = FALSE,
+                                        cluster_cols = FALSE,
+                                        display_numbers = TRUE,
+                                        #breaks = c(-1, -0.5, -0.1, 0.1, 0.5, 1),
+                                        silent = TRUE,
+                                        fontsize = 8,
+                                        scale = "row",
+                                        fontsize_number = 8,
+                                        fontsize_row = 8,
+                                        fontsize_col = 8,
+                                        color = RColorBrewer::brewer.pal(5, name = "Reds"))
+        
             ggsave(str_c("output/figures/relustering_normals/",
                         group, "/", cell_type,
                         "_heatmap_pre_celltype.png"),
                 plot = heatmap_previous_celltypes,
                 width = width,
-                height = (height - 7),
+                height = height,
                 bg = "white")
+            }
         }
         dimplot_seurat <-
             dimplot_better(s_obj,
@@ -791,6 +741,10 @@ for (item in seq_len(nrow(object_list))) {
                                                         "^15$" = "EC_Vein",
                                                         "^16$" = "Alv_EpithelialT1")
 
+object1 <- 
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                        "patient_prim_normal_cells",
+                        ".qs"))
 
 
 dimplot_better(s_obj,
@@ -798,19 +752,20 @@ dimplot_better(s_obj,
 
 cells <-
     s_obj %>%
-    subset(seurat_clusters == "16") %>%
+    subset(seurat_clusters == "4") %>%
     colnames()
 
-# FeaturePlot(s_obj,
-#             features = Osteoclast_TAMs)
+FeaturePlot(s_obj,
+            features = "cell_scores",
+            min.cutoff = 0.2)
 DimPlot(s_obj,
         cells.highlight = cells)
 
-DimPlot(object,
+DimPlot(object1,
         cells.highlight = cells)
 
-dimplot_better(object,
-              group_by = "new_annot_clust") +
+dimplot_better(object1,
+              group_by = "annotations") +
     ggtitle("new_annot_clust") +
     NoLegend()
 
@@ -819,7 +774,7 @@ FeaturePlot(s_obj,
 
 big_object<-
     qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
-                        "patient_mets",
+                        "patient_prim",
                         ".qs"))
 
 DimPlot(big_object,
@@ -848,19 +803,26 @@ dimplot_better(big_object1,
 
 # went over the aucell plots for manual annotations
 celltype_list <-
-    list(patient_prim_normal_cells = list(Immune_Lymphoid = c("^0$" = "CD8_T",
+    list(patient_prim_normal_cells = list(Mesenchymal = c("^0$" = "CAF",
+                                                        "^1$" = "CAF",
+                                                        "^2$" = "CAF",
+                                                        "^3$" = "CAF",
+                                                        "^4$" = "CAF",
+                                                        "^5$" = "CAF",
+                                                        "^6$" = "CAF",
+                                                        "^7$" = "CAF"),
+                                         Immune_Lymphoid = c("^0$" = "CD8_T",
                                                             "^1$" = "CD4_T",
-                                                            "^2$" = "Naive_T",
-                                                            "^3$" = "NK_cells",
-                                                            "^4$" = "Plasma_B",
-                                                            "^5$" = "Regulatory_T",
-                                                            "^6$" = "Proliferating_T",
+                                                            "^2$" = "NK_cells",
+                                                            "^3$" = "Naive_T",
+                                                            "^4$" = "Proliferating_T",
+                                                            "^5$" = "Plasma_B",
+                                                            "^6$" = "Regulatory_T",
                                                             "^7$" = "Memory_B",
-                                                            "^8$" = "CD8_T",
-                                                            "^9$" = "NK_cells",
+                                                            "^8$" = "DC",
+                                                            "^9$" = "CD8_T",
                                                             "^10$" = "CD8_T",
-                                                            "^11$" = "DC",
-                                                            "^12$" = "TAMs"),
+                                                            "^11$" = "CD8_T"),
                                          Immune_Myeloid = c("^0$" = "Osteoclast_TAMs",
                                                             "^1$" = "TAMs",
                                                             "^2$" = "TAMs",

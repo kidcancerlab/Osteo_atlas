@@ -279,6 +279,10 @@ convert_sobj_gene_name_species <- function(s_obj,
             dplyr::group_by(gene) |>
             mutate(n = dplyr::n()) |>
             mutate(keep = dplyr::if_else(!is.na(gene) & n == 1, TRUE, FALSE))
+    } else if (from == "dogs" && to == "human") {
+        s_obj <- 
+            dog_to_human_setup(s_obj)
+        return(s_obj)
     } else {
         stop("Invalid from/to conversion. Only mouse and human are supported.")
     }
