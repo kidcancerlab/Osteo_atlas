@@ -14,3 +14,15 @@ What's done:
 To do:
     Make sure that figures were made correctly in fix_everything
     ^if so, clean up code for velocity analysis
+
+3/3
+What's done:
+    Started playing around with the ranked genes from velocity analysis
+        looks like it overlaps well with degs
+    Re-running code to calculate fdl for all objects
+    Re-running velocity analysis with mode = "dynamical"
+
+To do:
+    Make sure last two steps from above ran
+    check overlap between velocity-driving genes and degs
+    Recreate velocity analysis plots overlaying fdl
