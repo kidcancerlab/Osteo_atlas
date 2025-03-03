@@ -110,9 +110,9 @@ lapply(names(obj_list), function(obj_name) {
                                      obj_name),
                  vars_to_keep = c("sample_name",
                                   "seurat_clusters",
-                                  "Ann_level1",
-                                  "Ann_level2",
-                                  "Ann_level3"),
+                                  "Ann_Level1",
+                                  "Ann_Level2",
+                                  "Ann_Level3"),
                  handle_n_of_1 = FALSE)
 })
 ```
@@ -138,7 +138,7 @@ import os
 import re
 ```
 
-### mm_mets_cancer_cells
+### Make Objects and Plots
 
 ```{python analyze-mm-mets-cancer-cells}
 #get names of loom files
@@ -179,25 +179,54 @@ def write_ob_and_plots(ob):
                                      basis = "umap",
                                      color = "seurat_clusters",
                                      show = False,
-                                     save = "scvelo/" + ob + "_umap_clusters.png")
+                                     save = ob + "_umap_clusters.png")
     #Ann_Level3 in umap space
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "umap",
                                      color = "Ann_Level3",
                                      show = False,
-                                     save = "scvelo/" + ob + "_umap_annotations.png")
+                                     save = ob + "_umap_annotations.png")
     return(obj_name + " is done")
 
+
 for ob in ["xeno_mets_mouse", "xeno_mets_human", "xeno_prim_mouse", "xeno_prim_human"]:
+    write_ob_and_plots(ob)
+```
+
+### Get Top Velocity Genes for Each Cluster/Cell Type
+
+I'll only be doing this for cancer objects
+
+```{python}
+tmp = anndata.read("loom_output/anndata/patient_mets_cancer_cells.ad")
+scv.tl.rank_velocity_genes(tmp, groupby="Ann_Level3", min_corr = 0.3)
+df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
+df.to_csv("loom_output/velocity_genes/patient_mets_cancer_cells.csv", index = False)
+```
+
+Let's look at these genes as modules in our single cell data.
+
+```{r}
+tmp <- obj_list[["patient_mets_cancer_cells"]]
+tmp_velo_genes <-
+    read.table("loom_output/velocity_genes/patient_mets_cancer_cells.csv",
+               sep = ",",
+               header = TRUE)
+
+tmp <- AddModuleScore(tmp,
+                      features = as.list(tmp_velo_genes),
+                      name = colnames(tmp_velo_genes))
 
 
 
-#trying parallel stuff
-from multiprocessing import Pool
-with Pool(processes = 6) as pool:
-    output = pool.map(write_ob_and_plots, ob_names)
+for (ann in colnames(tmp_velo_genes)) {
+    tmp <- AddModuleScore(tmp,
+                          features = tmp_velo_genes[, ann],
+                          name = ann)
+}
 
-
-#with Pool(processes = args.processes) as pool:
-    # output = pool.map(process_lines, chr_list
+FeaturePlot(tmp,
+            features = paste0(colnames(tmp_velo_genes), 1:6),
+            raster = FALSE,
+            cols = rev(brewer.pal(n = 11, name = "RdBu"))) | r_dim_plot(tmp, group.by = "Ann_Level3", raster = FALSE)
 ```
