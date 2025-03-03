@@ -152,7 +152,6 @@ merged_ad = loom_to_an(obj_name = "mm_mets_cancer_cells",
 dog_list=["dogs_prim_cancer_cells_fdl", "dogs_prim_normal_cells_fdl", "dogs_mets_cancer_cells_fdl", "dogs_mets_normal_cells_fdl"]
 ob_names = os.listdir("loom_output/metadata")
 ob_names = [x for x in ob_names if x not in dog_list]
-ob_names = [x for x in ob_names if x not in ["patient_mets_cancer_cells_fdl", "patient_prim_cancer_cells_fdl", "xeno_mets_human_fdl"]]
 
 for ob in ob_names:
     print("Processing " + ob)
@@ -189,6 +188,18 @@ def write_ob_and_plots(ob):
                                      color = "Ann_Level3",
                                      show = False,
                                      save = ob + "_umap_annotations.png")
+    #seurat_clusters in fdl
+    scv.pl.velocity_embedding_stream(merged_ad,
+                                     basis = "fdl",
+                                     color = "seurat_clusters",
+                                     show = False,
+                                     save = ob + "_fdl_clusters.png")
+    scv.pl.velocity_embedding_stream(merged_ad,
+                                     basis = "fdl",
+                                     color = "Ann_Level3",
+                                     show = False,
+                                     save = ob + "_fdl_annotations.png")
+
     return(obj_name + " is done")
 
 
@@ -205,6 +216,12 @@ tmp = anndata.read("loom_output/anndata/patient_mets_cancer_cells.ad")
 scv.tl.rank_velocity_genes(tmp, groupby="Ann_Level3", min_corr = 0.3)
 df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
 df.to_csv("loom_output/velocity_genes/patient_mets_cancer_cells.csv", index = False)
+
+#save it off now grouped by seurat clusters
+scv.tl.rank_velocity_genes(tmp, groupby="seurat_clusters", min_corr = 0.3)
+df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
+df.to_csv("loom_output/velocity_genes/patient_mets_cancer_cells_clusters.csv", index = False)
+
 ```
 
 Let's look at these genes as modules in our single cell data.
@@ -212,7 +229,7 @@ Let's look at these genes as modules in our single cell data.
 ```{r}
 tmp <- obj_list[["patient_mets_cancer_cells"]]
 tmp_velo_genes <-
-    read.table("loom_output/velocity_genes/patient_mets_cancer_cells.csv",
+    read.table("loom_output/velocity_genes/patient_mets_cancer_cells_clusters.csv",
                sep = ",",
                header = TRUE)
 
@@ -220,16 +237,9 @@ tmp <- AddModuleScore(tmp,
                       features = as.list(tmp_velo_genes),
                       name = colnames(tmp_velo_genes))
 
-
-
-for (ann in colnames(tmp_velo_genes)) {
-    tmp <- AddModuleScore(tmp,
-                          features = tmp_velo_genes[, ann],
-                          name = ann)
-}
-
 FeaturePlot(tmp,
-            features = paste0(colnames(tmp_velo_genes), 1:6),
+            features = paste0(colnames(tmp_velo_genes), 1:12),
             raster = FALSE,
-            cols = rev(brewer.pal(n = 11, name = "RdBu"))) | r_dim_plot(tmp, group.by = "Ann_Level3", raster = FALSE)
+            cols = rev(brewer.pal(n = 11, name = "RdBu")),
+            ncol = 6) / r_dim_plot(tmp, group.by = "seurat_clusters", raster = FALSE)
 ```
