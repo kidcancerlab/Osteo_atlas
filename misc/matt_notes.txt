@@ -6,3 +6,11 @@ What's done:
 To do:
     More polished analysis of doubletFinder
     Overlay velocity analysis with new cancer subpopulation annotations
+
+2/25
+What's done:
+    Re-ran deconvolution using objects from final_tumor_vs_stroma
+
+To do:
+    Re-run ischia for cell type co-occurrence
+    
