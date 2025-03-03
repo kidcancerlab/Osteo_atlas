@@ -100,6 +100,9 @@ for (ob_name in obj_names) {
     obj_list[[ob_name]] <-
         qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/", ob_name, ".qs"))
 }
+#run fdl
+obj_list <- lapply(obj_list, run_fdl)
+qs::qsave("output/seurat_objects/obj_list_03_03_2025.qs")
 ```
 
 ```{r write-off-md}
