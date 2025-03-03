@@ -89,16 +89,16 @@ First we need to read in our objects for this. The most up to date object seems 
 
 ```{r}
 yogi_prefix <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/"
-obj_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/tumor_vs_stroma"))
+obj_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/final_tumor_vs_stroma"))
 #get only fdl files
-obj_names <- str_replace_all(obj_names[grep("fdl", obj_names)],
+obj_names <- str_replace_all(obj_names,
                              ".qs",
                              "")
 
 obj_list <- list()
 for (ob_name in obj_names) {
     obj_list[[ob_name]] <-
-        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/tumor_vs_stroma/", ob_name, ".qs"))
+        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/", ob_name, ".qs"))
 }
 ```
 
@@ -163,15 +163,6 @@ for ob in ob_names:
     print("Calculated velocity for and saved off " + ob)
 
 
-#     scv.tl.velocity_graph(merged_ad, backend = "threading")
-#     #create plots
-#     scv.pl.velocity_embedding_stream(merged_ad, basis = "umap", color = "seurat_clusters", show = False, save = "scvelo/" + ob + "_umap_clusters.png", dpi = 300)
-#     #optionally create fdl plot
-#     if len(merged_ad.obsm["X_fdl"]) == 2:
-#         scv.pl.velocity_embedding_stream(merged_ad, basis = "fdl", color = "seurat_clusters", show = False, save = "scvelo/" + ob + "_fdl_clusters.png", dpi = 300)
-
-
-
 def write_ob_and_plots(ob):
     print("starting on " + ob)
     merged_ad=loom_to_an(obj_name = ob,
@@ -179,10 +170,10 @@ def write_ob_and_plots(ob):
                      metadata_dir = "loom_output/metadata")
     print("made " + ob + " , now calculating velocity")
     calc_velo(merged_ad)
+    scv.tl.velocity_graph(merged_ad, backend = "threading", n_jobs = 30)
     merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
     print("calculated velocity and saved off " + ob)
     #make the plots and save them off
-    scv.tl.velocity_graph(merged_ad, backend = "threading")
     #seurat clusters in umap space
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "umap",
@@ -195,19 +186,10 @@ def write_ob_and_plots(ob):
                                      color = "Ann_Level3",
                                      show = False,
                                      save = "scvelo/" + ob + "_umap_annotations.png")
-    #Seurat clusters in fdl space
-    scv.pl.velocity_embedding_stream(merged_ad,
-                                     basis = "fdl",
-                                     color = "seurat_clusters",
-                                     show = False,
-                                     save = "scvelo/" + ob + "_umap_clusters.png")
-    #Ann_Level3 in fdl space
-    scv.pl.velocity_embedding_stream(merged_ad,
-                                     basis = "fdl",
-                                     color = "Ann_Level3",
-                                     show = False,
-                                     save = "scvelo/" + ob + "_umap_annotations.png")
-    return(obj_name + "_parallel")
+    return(obj_name + " is done")
+
+for ob in ["xeno_mets_mouse", "xeno_mets_human", "xeno_prim_mouse", "xeno_prim_human"]:
+
 
 
 #trying parallel stuff
