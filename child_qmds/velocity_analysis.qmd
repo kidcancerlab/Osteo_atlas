@@ -101,6 +101,10 @@ for (ob_name in obj_names) {
         qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/", ob_name, ".qs"))
 }
 #run fdl
+parallel::detectCores()
+obj_list_fdl <- parallel::mclapply(obj_list, FUN = run_fdl, mc.cores = parallel::detectCores())
+
+
 obj_list <- lapply(obj_list, run_fdl)
 qs::qsave("output/seurat_objects/obj_list_03_03_2025.qs")
 ```
@@ -149,9 +153,8 @@ merged_ad = loom_to_an(obj_name = "mm_mets_cancer_cells",
                        loom_dir = "loom_output/samples",
                        metadata_dir = "loom_output/metadata/")
 
-dog_list=["dogs_prim_cancer_cells_fdl", "dogs_prim_normal_cells_fdl", "dogs_mets_cancer_cells_fdl", "dogs_mets_normal_cells_fdl"]
 ob_names = os.listdir("loom_output/metadata")
-ob_names = [x for x in ob_names if x not in dog_list]
+ob_names = list(filter(lambda x:"dog" not in x, ob_names))
 
 for ob in ob_names:
     print("Processing " + ob)
