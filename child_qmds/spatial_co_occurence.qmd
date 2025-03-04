@@ -149,7 +149,7 @@ head(cell_type_weights)
 
 ### Spatial Autocorrelation of Cell Types
 
-I'll be using ISCHIA to identify spatially co-occurring cell types
+I'll be using ISCHIA and BANKSY to identify spatially co-occurring cell types
 
 ```{r ISCHIA}
 # devtools::install_github("ati-lz/ISCHIA")
@@ -204,68 +204,6 @@ grid.arrange(grobs = lapply(co_occur_list[5:8], plot.celltype.cooccurence))
 plot.celltype.cooccurence(CC1_co_occur)
 ```
 
-## Adjacent Correlation
+```{r banksy}
 
-I'm going to use a modified version of pearson's correlation coefficient formula:
-$\frac{\sum_{i=1}^n (x_i - \bar{x})*(y_i - \bar{y})}{\sqrt{\Sigma({x_i - \bar{x}})^2}\sqrt{\Sigma({y_i - \bar{y}})^2}}$ which replaces the y observations with the mean y value for the 6 spots closest to our spot of interest.
-
-```{r}
-tmp <- spatial_list[[1]]
-ann_matrix <- tmp@meta.data[, cell_types]
-coords <- GetTissueCoordinates(tmp)
-coord_dist <- as.matrix(dist(coords))
-adjacent_cor <- as.data.frame(matrix("NULL",
-                                     nrow = length(cell_types),
-                                     ncol = length(cell_types)),
-                                     row.names = cell_types)
-colnames(adjacent_cor) <- cell_types
-
-
-adjacent_cell_cor <- function(annotation, coord_distance, cell_type1, cell_type2) {
-    #get means for each cell type to help with calculations
-    ct1_bar <- mean(annotation[, cell_type1])
-    ct2_bar <- mean(annotation[, cell_type2])
-
-    #Calculate denominator since it will be the same for 
-    denominator <-
-        sqrt(sum((annotation[, cell_type1] - ct1_bar)^2))*
-            sqrt(sum((annotation[, cell_type2] - ct2_bar)^2))
-
-    #create vector to hold numerator values to sum later
-    numerators <- c()
-    for (bc in rownames(annotation)) {
-        #get 6 closest spots (aside from the spot itself)
-        adj_bcs <- names(sort(coord_distance[bc, ])[2:7])
-        
-        #calculate numerator for this cell barcode
-        numerators[bc] <-
-            (annotation[bc, cell_type1] - ct1_bar)*mean(na.omit(annotation[adj_bcs, cell_type2] - ct2_bar))
-    }
-    return(sum(numerators)/denominator)
-}
-
-tot_start <- Sys.time()
-for (ct in cell_types) {
-    start <- Sys.time()
-    print(ct)
-    adjacent_cor[ct, ] <- sapply(X = cell_types,
-                                 FUN = adjacent_cell_cor,
-                                 annotation = ann_matrix,
-                                 coord_distance = coord_dist,
-                                 cell_type1 = ct)
-    end <- Sys.time()
-    print(end - start)
-}
-tot_end <- Sys.time()
-print(paste("Total time was", tot_end - tot_start))
-write.table(adjacent_cor,
-            "output/spatial_correlation/adjacent_correlation.tsv",
-            sep = "\t")
-
-
-mapply(X = cell_types,
-       FUN = adjacent_cell_cor,
-       annotation = ann_matrix,
-       coord_distance = coord_dist,
-       cell_type1 = cell_types)
 ```
