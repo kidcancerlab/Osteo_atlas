@@ -104,14 +104,12 @@ for (ob_name in obj_names) {
 parallel::detectCores()
 obj_list_fdl <- parallel::mclapply(obj_list, FUN = run_fdl, mc.cores = parallel::detectCores())
 
-
-obj_list <- lapply(obj_list, run_fdl)
-qs::qsave("output/seurat_objects/obj_list_03_03_2025.qs")
+qs::qsave(obj_list_fdl, "output/seurat_objects/obj_list_03_03_2025.qs")
 ```
 
 ```{r write-off-md}
-lapply(names(obj_list), function(obj_name) {
-    write_off_md(sobj = obj_list[[obj_name]],
+lapply(names(obj_list_fdl), function(obj_name) {
+    write_off_md(sobj = obj_list_fdl[[obj_name]],
                  id_col = "sample_name",
                  output_dir = paste0("loom_output/metadata/",
                                      obj_name),
@@ -140,6 +138,7 @@ import scvelo as scv
 import pandas as pd
 import numpy as np
 import matplotlib as plt
+from matplotlib import pyplot
 import scanpy as sc
 import os
 import re
@@ -149,23 +148,24 @@ import re
 
 ```{python analyze-mm-mets-cancer-cells}
 #get names of loom files
-merged_ad = loom_to_an(obj_name = "mm_mets_cancer_cells",
-                       loom_dir = "loom_output/samples",
-                       metadata_dir = "loom_output/metadata/")
-
 ob_names = os.listdir("loom_output/metadata")
 ob_names = list(filter(lambda x:"dog" not in x, ob_names))
 
+# for ob in ob_names:
+#     print("Processing " + ob)
+#     merged_ad = loom_to_an(obj_name = ob,
+#                            loom_dir = "loom_output/samples",
+#                            metadata_dir = "loom_output/metadata")
+#     print("Created " + ob + "successfully")
+#     calc_velo(merged_ad)
+#     #save anndata object so you don't have to remake them
+#     merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
+#     print("Calculated velocity for and saved off " + ob)
+
 for ob in ob_names:
-    print("Processing " + ob)
-    merged_ad = loom_to_an(obj_name = ob,
-                           loom_dir = "loom_output/samples",
-                           metadata_dir = "loom_output/metadata")
-    print("Created " + ob + "successfully")
-    calc_velo(merged_ad)
-    #save anndata object so you don't have to remake them
-    merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
-    print("Calculated velocity for and saved off " + ob)
+    write_ob_and_plots(ob)
+
+
 
 
 def write_ob_and_plots(ob):
@@ -175,7 +175,6 @@ def write_ob_and_plots(ob):
                      metadata_dir = "loom_output/metadata")
     print("made " + ob + " , now calculating velocity")
     calc_velo(merged_ad)
-    scv.tl.velocity_graph(merged_ad, backend = "threading", n_jobs = 30)
     merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
     print("calculated velocity and saved off " + ob)
     #make the plots and save them off
@@ -183,31 +182,29 @@ def write_ob_and_plots(ob):
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "umap",
                                      color = "seurat_clusters",
-                                     show = False,
-                                     save = ob + "_umap_clusters.png")
+                                     show = False)
+    pyplot.savefig("figures/scvelo/" + ob + "_umap_clusters.png")
     #Ann_Level3 in umap space
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "umap",
                                      color = "Ann_Level3",
-                                     show = False,
-                                     save = ob + "_umap_annotations.png")
+                                     show = False)
+    pyplot.savefig("figures/scvelo/" + ob + "_umap_annotations.png")
     #seurat_clusters in fdl
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "fdl",
                                      color = "seurat_clusters",
-                                     show = False,
-                                     save = ob + "_fdl_clusters.png")
+                                     show = False)
+    pyplot.savefig("figures/scvelo/" + ob + "_fdl_clusters.png")
+    #cell types in fdl
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "fdl",
                                      color = "Ann_Level3",
-                                     show = False,
-                                     save = ob + "_fdl_annotations.png")
+                                     show = False)
+    pyplot.savefig("figures/scvelo/" + ob + "_fdl_annotations.png")
+    return(ob + " is done")
 
-    return(obj_name + " is done")
 
-
-for ob in ["xeno_mets_mouse", "xeno_mets_human", "xeno_prim_mouse", "xeno_prim_human"]:
-    write_ob_and_plots(ob)
 ```
 
 ### Get Top Velocity Genes for Each Cluster/Cell Type
@@ -230,7 +227,7 @@ df.to_csv("loom_output/velocity_genes/patient_mets_cancer_cells_clusters.csv", i
 Let's look at these genes as modules in our single cell data.
 
 ```{r}
-tmp <- obj_list[["patient_mets_cancer_cells"]]
+tmp <- obj_list_fdl[["patient_mets_cancer_cells"]]
 tmp_velo_genes <-
     read.table("loom_output/velocity_genes/patient_mets_cancer_cells_clusters.csv",
                sep = ",",
