@@ -454,7 +454,8 @@ Annotation_cleanup <-
             "^Macrophage_monocyte_derived_S._aureus$" = "Macrophages",
             "^iPS_cells_CRL2097_foreskin$" = "Progenitors",
             "^Monocyte_F._tularensis_novicida$" = "Monocytes",
-            "^iPS_cells_adipose_stem_cells$" = "Progenitors"),
+            "^iPS_cells_adipose_stem_cells$" = "Progenitors",
+            "^Non-switched memory B cells$" = "Memory_Bcells"),
     SingleR_Ann2_label =
         c("^Fibroblasts_activated$" = "Fibroblasts",
             "^Fibroblasts_senescent$" = "Fibroblasts",

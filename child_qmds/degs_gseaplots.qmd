@@ -135,7 +135,7 @@ object_list <-
             "mm_mets_cancer_cells",         0.25,
             "xeno_prim_human",              0.3,
             "xeno_mets_human",              0.15,
-            "dogs_prim_cancer_cells",       0.1,
+            "dogs_prim_cancer_cells",       0.2,
             "dogs_mets_cancer_cells",       0.1)
 
 
@@ -637,9 +637,9 @@ object_list <-
             "patient_mets_cancer_cells",    0.15,
             "mm_prim_cancer_cells",         0.4,
             "mm_mets_cancer_cells",         0.25,
-            "xeno_prim_human",              0.2,
+            "xeno_prim_human",              0.3,
             "xeno_mets_human",              0.15,
-            "dogs_prim_cancer_cells",       0.1,
+            "dogs_prim_cancer_cells",       0.2,
             "dogs_mets_cancer_cells",       0.1
             )
 
@@ -739,76 +739,83 @@ for (i in seq_len(nrow(object_list))) {
     if (group == "xeno_prim_human") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,      
-                          c("^0$" = "Tumor_Progenitor",   #neuronal and bone development axon guidance
-                            "^1$" = "",   #not sure
-                            "^2$" = "Tumor_Proliferative",
-                            "^3$" = "Tumor_HyperMetabolic", 
-                            "^4$" = "Tumor_Interactive",
+                          c("^0$" = "Tumor_Fibrogenic",   #neuronal and bone development axon guidance
+                            "^1$" = "Tumor_Proliferative",   #not sure
+                            "^2$" = "Tumor_HyperMetabolic",
+                            "^3$" = "Tumor_Progenitor", 
+                            "^4$" = "Tumor_Ground",
                             "^5$" = "Tumor_Ground",
-                            "^6$" = "Tumor_Fibrogenic",     # BNIP3 expressed usually apoptotic
-                            "^7$" = "Tumor_Ground",
-                            "^8$" = "Tumor_Fibrogenic",
-                            "^9$" = "",
-                            "^10$" = "Tumor_HyperMetabolic",
+                            "^6$" = "Tumor_Ground",     # BNIP3 expressed usually apoptotic
+                            "^7$" = "Tumor_Progenitor",
+                            "^8$" = "Tumor_Interactive",
+                            "^9$" = "Tumor_Proliferative",
+                            "^10$" = "Tumor_Fibrogenic",
                             "^11$" = "Tumor_Ground",
-                            "^12$" = "Tumor_Fibrogenic"))
+                            "^12$" = "Tumor_Ground",
+                            "^13$" = "Tumor_Ground",
+                            "^14$" = "Tumor_Fibrogenic",
+                            "^15$" = "Tumor_HyperMetabolic"))
     }
     if (group == "xeno_mets_human") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Metabolic",
-                            "1" = "Tumor_ECM_Producing",
-                            "2" = "Tumor_Ground",   #not sure
-                            "3" = "Tumor_ECM_Producing",
-                            "4" = "Tumor_HyperMetabolic",
-                            "5" = "Tumor_Proliferative",
-                            "6" = "Tumor_Interractive"))
+                          c("0" = "Tumor_Progenitor",
+                            "1" = "Tumor_HyperMetabolic",
+                            "2" = "Tumor_Interactive",   #not sure
+                            "3" = "Tumor_Proliferative",
+                            "4" = "Tumor_Fibrogenic",
+                            "5" = "Tumor_Ground"))
     }
     if (group == "dogs_prim_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Fibrogenic",
-                            "1" = "Tumor_Progenitor",   #neuronal and bone development axon guidance
-                            "2" = "Tumor_Proliferative",   #not sure
-                            "3" = "Tumor_HyperMetabolic",
-                            "4" = "Tumor_Interactive",
-                            "5" = "Tumor_Myoid",
-                            "6" = "Tumor_Ground",
-                            "7" = "Tumor_Ground"))
+                          c("^0$" = "Tumor_Progenitor",
+                            "^1$" = "Tumor_Fibrogenic",   #neuronal and bone development axon guidance
+                            "^2$" = "Tumor_Proliferative",   #not sure
+                            "^3$" = "Tumor_HyperMetabolic",
+                            "^4$" = "Tumor_HyperMetabolic",
+                            "^5$" = "Tumor_Interactive",
+                            "^6$" = "Tumor_Progenitor",
+                            "^7$" = "Tumor_Interactive",
+                            "^8$" = "Tumor_Interactive",
+                            "^9$" = "Tumor_Fibrogenic",
+                            "^10$" = "Tumor_Ground",
+                            "^11$" = "Tumor_Ground",
+                            "^12$" = "Tumor_Ground"))
     }
     if (group == "dogs_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "",
+                          c("0" = "Tumor_Progenitor",
                             "1" = "Tumor_Proliferative",   #neuronal and bone development axon guidance
-                            "2" = "",   #not sure
-                            "3" = "Tumor_Interactive",
-                            "4" = "",
-                            "5" = "",
-                            "6" = "Tumor_Interactive",
-                            "7" = ""))
+                            "2" = "Tumor_Fibrogenic",   #not sure
+                            "3" = "Tumor_HyperMetabolic",
+                            "4" = "Tumor_Interactive",
+                            "5" = "Tumor_Interactive",
+                            "6" = "Tumor_HyperMetabolic",
+                            "7" = "Tumor_Ground"))
     }
     object$Ann_Level2 <- object$Ann_Level3
-    object$Ann_Level1 <- 
-        str_replace_all(object$Ann_Level2,
-                        c("^CAF$" = "Mesenchymal",
-                          "^Osteoblasts$" = "Mesenchymal",
-                          "^Macrophages$" = "Immune_Myeloid",
-                          "^Osteoclast_TAMs$" = "Immune_Myeloid",
-                          "^Tumor_Proliferative$" = "Tumor",
-                          "^Tumor_Ground$" = "Tumor",
-                          "^Tumor_Interactive$" = "Tumor",
-                          "^Tumor_Metabolic$" = "Tumor",
-                          "^Tumor_Fibrogenic$" = "Tumor",
-                          "^Tumor_HyperMetabolic$" = "Tumor",
-                          "^Tumor_Progenitor$" = "Tumor"))
+    # object$Ann_Level1 <- 
+    #     str_replace_all(object$Ann_Level2,
+    #                     c("^CAF$" = "Mesenchymal",
+    #                       "^Osteoblasts$" = "Mesenchymal",
+    #                       "^Macrophages$" = "Immune_Myeloid",
+    #                       "^Osteoclast_TAMs$" = "Immune_Myeloid",
+    #                       "^Tumor_Proliferative$" = "Tumor",
+    #                       "^Tumor_Ground$" = "Tumor",
+    #                       "^Tumor_Interactive$" = "Tumor",
+    #                       "^Tumor_Metabolic$" = "Tumor",
+    #                       "^Tumor_Fibrogenic$" = "Tumor",
+    #                       "^Tumor_HyperMetabolic$" = "Tumor",
+    #                       "^Tumor_Progenitor$" = "Tumor"))
     
-    object$Ann_Level0 <- 
-        str_replace_all(object$Ann_Level1,
-                        c("^Immune_Myeloid$" = "Host",
-                          "^Epithelial_Endothelial$" = "Host",
-                          "^Immune_Lymphoid$" = "Host",
-                          "^Mesenchymal$" = "Host"))
+    # object$Ann_Level0 <- 
+    #     str_replace_all(object$Ann_Level1,
+    #                     c("^Immune_Myeloid$" = "Host",
+    #                       "^Epithelial_Endothelial$" = "Host",
+    #                       "^Immune_Lymphoid$" = "Host",
+    #                       "^Mesenchymal$" = "Host"))
 
     annotation_dimplot1 <-
         dimplot_better(object,
