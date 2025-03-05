@@ -260,8 +260,29 @@ merge_obj <-
         cancer_sobj_list$patient_mets_cancer_cells) %>%
     JoinLayers() %>%
     process_seurat()
+harmony_sobj <- 
+    merge_obj %>%
+    RunHarmony(group.by.vars = c("sample_name", "data_source", "method"),
+                theta = c(12, 12, 12),
+                lambda = c(0.1, 0.1, 0.1)) %>%
+    process_seurat(reduction = "harmony")
 
+harm_obj <-
+    harmony_sobj %>%
+    FindClusters(resolution = 0.1)
 
+dimplot_better(harm_obj,
+                group_by = "seurat_clusters",
+                raster = F) + 
+    NoLegend()
+
+DotPlot(harmony_sobj,
+    features = c("F3"),
+    group.by = "unique",
+    #split.by = "method",
+    scale = FALSE) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_y_discrete(labels = function(x) gsub("_", " ", x))
 #make a boxplot of gene expression for F3 and F7
 VlnPlot(merge_obj,
         features = c("F3", "F7"),
@@ -276,21 +297,32 @@ VlnPlot(merge_obj,
 VlnPlot(merge_obj,
         features = "F3",
         group.by = "unique",
-        pt.size = 0.4,
-        cols = c("blue", "red")) +
-    ggplot2::geom_bloxplot() +
-    NoLegend() +
+        split.by = "method",
+        pt.size = 0.01) +
+    #ggplot2::geom_bloxplot() +
+    #NoLegend() +
     theme(aspect.ratio=1) +
-    ggtitle("VlnPlot of F7")
+    ggtitle("VlnPlot of F3")
 
 FeaturePlot(harmony_sobj,
-            features = c("F3", "F10"),
-            split.by = "unique",
+            features = c("F3"),
+            split.by = "method",
             ncol = 2,
-            order = T) +
+            order = T,
+            raster=F) +
     NoLegend() +
     theme(aspect.ratio=1) +
-    ggtitle("FeaturePlot of F3 and F7")
+    ggtitle("FeaturePlot of F3")
+
+FeaturePlot(harmony_sobj,
+            features = c("F10"),
+            split.by = "unique",
+            ncol = 2,
+            order = T,
+            raster=F) +
+    NoLegend() +
+    theme(aspect.ratio=1) +
+    ggtitle("FeaturePlot of F10")
 
 
 # Extract expression data
