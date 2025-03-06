@@ -10,7 +10,8 @@ cell_count_table <- tibble::tibble(celltypes = character())
 
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
-                "xeno_prim_mouse", "xeno_mets_mouse")) {
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
     object <- 
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
@@ -125,7 +126,7 @@ ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
         bg = "white")
 
 
-#dimplot_better(sobj_list$mm_prim_normal_cells, group_by = "Ann_Level3", raster=F, pt.size = 0.7) 
+#dimplot_better(sobj_list$dogs_mets_normal_cells, group_by = "Ann_Level3", raster=F, pt.size = 0.7) 
 
 ```
 
