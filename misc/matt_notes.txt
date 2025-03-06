@@ -14,3 +14,5 @@ What's done:
 To do:
     Re-run ischia for cell type co-occurrence
     
+3/6
+Tried running Banksy for neighborhood analysis, am stuck on converting seurat object to SpatialExperiment object
