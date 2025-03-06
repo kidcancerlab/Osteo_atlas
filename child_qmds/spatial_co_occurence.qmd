@@ -205,5 +205,62 @@ plot.celltype.cooccurence(CC1_co_occur)
 ```
 
 ```{r banksy}
+#had to update my packages to R 4.4.0 for this
+#going to restart with samples with no deconvolution info
+spatial_list <- qs::qread("output/spatial_objects/spatial_list_level2_annotations.qs")
+library(Banksy)
+library(rrrSingleCellUtils)
+library(SingleCellExperiment)
+library(SpatialExperiment)
 
+#convert seurat objects to SpatialExperiments
+seurat_to_spe <- function(sample_id) {
+    ## Get seurat object
+    seu <- spatial_list[[sample_id]]
+    
+    ## Convert to SCE
+    sce <- Seurat::as.SingleCellExperiment(seu)
+    
+    ## Extract spatial coordinates
+    spatialCoords <- as.matrix(
+        seu@images[["slice1"]]@coordinates[, c("imagecol", "imagerow")])
+    
+    ## Extract and process image data
+    img <- SpatialExperiment::SpatialImage(
+        x = as.raster(seu@images[["slice1"]]@image))
+    
+    imgData <- tibble(
+        sample_id = sample_id,
+        image_id = "slice1",
+        data = base::I(list(img)),
+        scaleFactor = seu@images[["slice1"]]@scale.factors$lowres)
+    
+    # Convert to SpatialExperiment
+    spe <- SpatialExperiment::SpatialExperiment(
+        assays = assays(sce),
+        rowData = rowData(sce),
+        colData = colData(sce),
+        metadata = metadata(sce),
+        reducedDims = reducedDims(sce),
+        altExps = altExps(sce),
+        sample_id = sample_id,
+        spatialCoords = spatialCoords,
+        imgData = imgData
+    )
+    # indicate all spots are on the tissue
+    spe$in_tissue <- 1
+    spe$sample_id <- sample_id
+    # Return Spatial Experiment object
+    spe
+}
+
+spe_list <- lapply(names(spatial_list), seurat_to_spe)
+
+#compute hvgs
+hvgs <- lapply(spatial_list, function(x) {
+    VariableFeatures(FindVariableFeatures(x, nfeatures = 2000))
+})
+hvgs <- Reduce(union, hvgs)
+
+#add data to spatial Experiment
 ```
