@@ -1131,7 +1131,7 @@ def loom_to_an(obj_name, loom_dir, metadata_dir):
 
 
 def calc_velo(ad_ob, mode = "dynamical", group = "seurat_clusters"):
-    sc.v.pp.filter_and_normalize(ad_ob, n_top_genes = 2000)
+    scv.pp.filter_and_normalize(ad_ob, n_top_genes = 2000)
     sc.pp.neighbors(ad_ob, n_pcs = 30, n_neighbors = 30)
     scv.pp.moments(ad_ob)
     scv.tl.recover_dynamics(ad_ob, n_jobs = 30)
