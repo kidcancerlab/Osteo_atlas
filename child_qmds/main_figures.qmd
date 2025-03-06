@@ -125,6 +125,7 @@ ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
         bg = "white")
 
 
+#dimplot_better(sobj_list$mm_prim_normal_cells, group_by = "Ann_Level3", raster=F, pt.size = 0.7) 
 
 ```
 
@@ -249,6 +250,9 @@ ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.png",
         bg = "white")
 
 
+dimplot_better(cancer_sobj_list$mm_prim_cancer_cells,
+                group_by = "Ann_Level3") + 
+    NoLegend()
 ```
 
 
