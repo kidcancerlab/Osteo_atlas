@@ -138,8 +138,6 @@ object_list <-
             "dogs_prim_cancer_cells",       0.2,
             "dogs_mets_cancer_cells",       0.1)
 
-
-
 # run force directed layout
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
@@ -347,7 +345,6 @@ write_tsv(x = all_data_celltypes, file = filename)
 orthologs <-
     read_tsv("input/downloads/dog_human_gene_orthologs.txt")
 
-#object list
 object_list <-
     tribble(~group,                         ~res_value,
             "patient_prim_cancer_cells",    0.15,
@@ -356,7 +353,7 @@ object_list <-
             "mm_mets_cancer_cells",         0.25,
             "xeno_prim_human",              0.3,
             "xeno_mets_human",              0.15,
-            "dogs_prim_cancer_cells",       0.1,
+            "dogs_prim_cancer_cells",       0.2,
             "dogs_mets_cancer_cells",       0.1)
 
 for (i in seq_len(nrow(object_list))) {
@@ -556,7 +553,7 @@ object_list <-
             "mm_mets_cancer_cells",         0.25,
             "xeno_prim_human",              0.3,
             "xeno_mets_human",              0.15,
-            "dogs_prim_cancer_cells",       0.1,
+            "dogs_prim_cancer_cells",       0.2,
             "dogs_mets_cancer_cells",       0.1)
 
 for (i in seq_len(nrow(object_list))) {
@@ -796,26 +793,6 @@ for (i in seq_len(nrow(object_list))) {
                             "7" = "Tumor_Ground"))
     }
     object$Ann_Level2 <- object$Ann_Level3
-    # object$Ann_Level1 <- 
-    #     str_replace_all(object$Ann_Level2,
-    #                     c("^CAF$" = "Mesenchymal",
-    #                       "^Osteoblasts$" = "Mesenchymal",
-    #                       "^Macrophages$" = "Immune_Myeloid",
-    #                       "^Osteoclast_TAMs$" = "Immune_Myeloid",
-    #                       "^Tumor_Proliferative$" = "Tumor",
-    #                       "^Tumor_Ground$" = "Tumor",
-    #                       "^Tumor_Interactive$" = "Tumor",
-    #                       "^Tumor_Metabolic$" = "Tumor",
-    #                       "^Tumor_Fibrogenic$" = "Tumor",
-    #                       "^Tumor_HyperMetabolic$" = "Tumor",
-    #                       "^Tumor_Progenitor$" = "Tumor"))
-    
-    # object$Ann_Level0 <- 
-    #     str_replace_all(object$Ann_Level1,
-    #                     c("^Immune_Myeloid$" = "Host",
-    #                       "^Epithelial_Endothelial$" = "Host",
-    #                       "^Immune_Lymphoid$" = "Host",
-    #                       "^Mesenchymal$" = "Host"))
 
     annotation_dimplot1 <-
         dimplot_better(object,
