@@ -127,11 +127,11 @@ for (item in seq_len(nrow(object_list))) {
                         group,
                         ".qs"))
 
-    #convert the dogs to human genes
-    if (object$organism[1] == "dog") {
-        object <-
-            dog_to_human_setup(object = object)
-    }
+    # #convert the dogs to human genes
+    # if (object$organism[1] == "dog") {
+    #     object <-
+    #         dog_to_human_setup(object = object)
+    # }
     
     dimplot_main <-
         dimplot_better(object,
@@ -309,7 +309,7 @@ Immune_Myeloid <-
         #RTM_TAMs = c("LYVE1", "HES1", "FOLR2"),
         #Angio_TAMs = c("VEGFA", "ANGPT2", "ANGPTL4", "SSP1"),
         Osteoclast_TAMs = c("MMP9", "CTSK", "CKB", "CST3", "NFATC1"),
-        Scar_Macs = c("SPP1", "TREM2", "GPNMB", "FABP5", "CTSS"),
+        Scar_TAMs = c("SPP1", "TREM2", "GPNMB", "FABP5", "CTSS"),
         TAMs = c("MERTK", "FOLR2", "SELENOP", "MS4A7"),
         IFN_TAMs = c("CXCL10", "IFIT2", "IFIT1"),
         cMonocyte = c("S100A12", "CCR2", "CD14", "LYZ"),
@@ -405,51 +405,6 @@ Epithelial_Endothelial <-
          Ciliated_Cells = c("FOXJ1", "DNAI1", "DNAI2", "TP63", "KRT5", "KRT13",
                             "MUC5AC", "RSPH1", "RSPH9", "TUBA1A", "CCDC17", "CCDC39", "CCDC181"),
         Tuft_Cells = c("TRPM5", "DCLK1", "CLCA1", "TFF3"))
-
-Cleaned_Annotations <- 
-    list(Osteo_Sig =c("COL9A1", "RUNX2", "IBSP", "MRC2", "COL5A3", "VIM",
-                    "SPP1",    "MIK67", "COL2A1", "COL12A1", "ALPL", "LOX", "TOP2A","COL11A1", "COL11A2", "PDGFD", "CTHRC1", "CLEC11A", "TNC", "COL27A1", "SOX9", "TGFBI", "SATB2"),
-        Adventitial_Fibro	=c("COL6A2", "SFRP2", "IGFBP6", "MMP2"), #AZIMUTH HLCA FINEST ANNOTATION
-        AEC	=c("DKK2", "GJA5", "SERPINE2", "HEY1", "EFNB2", "NOTCH1", "BMX", "CXCL12"),
-        Alv_Fibro1 =c("TCF21", "WNT2", "SLC38A5", "MEOX2", "OLML3", "VCAM1", "COL13A1", "ENPEP", "ADH1B", "G0S2", "LBH", "ITGA8", "CDH11", "PLXDC2", "CDO1"),
-        Alv_Fibro2 =c("MFAP5", "SCARA5", "COL14A1", "GPC3", "CCDC80", "RARRES2", "LGALS1", "PCOLCE", "OGN", "FSTL1"),
-        Alv_Mac	=c("ALOX5AP", "CD68", "CTSD", "FCER1G", "MARCO", "SPI1", "SIGLEC1", "ABCG1", "FABP4"),
-        ASMC	=c("DES", "ACTA2", "LGR6", "DSTN", "TPM2", "TAGLN", "MYH11", "ACTG2", "MYLK"),
-        AT1	=c("HOPX", "AGER", "RTKN2", "EMP2", "CLDN18", "LMO7", "CLIC3", "KRT7"),
-        AT2	=c("SFTPC", "LAMP3", "SLC34A2", "SFTPB", "SFTPA1", "NPC2", "NAPSA"),
-        B_cells	=c("CD69", "CORO1A", "LIMD2", "BANK1", "LAPTM5", "CXCR4", "LTB", "CD79A", "CD37", "MS4A1"), #AZIMUTH HLCA LEVEL 5 ANNOTATION
-        Basal	=c("KRT5", "TP63", "KRT14", "NGFR", "ITGA6", "IGFBP4", "ALCAM"),
-        CAP1	=c("APLNR", "IL7R", "GPIHBP1", "FCN3", "EDN1", "SLC6A4", "TEK"),
-        CAP2	=c("CA4", "APLN", "EDNRB", "HPGD"),
-        CD4_T =c("CORO1A", "KLRB1", "CD3E", "LTB", "CXCR4", "IL7R", "TRAC", "IL32", "CD2", "CD3D"),
-        CD8_T	=c("CD8A", "CD3E", "CCL4", "CD2", "CXCR4", "GZMA", "NKG7", "IL32", "CD3D", "CCL5"),
-        Ciliated	=c("FOXJ1", "RSPH1", "DYBLRB2", "FAM183A", "NME5", "TPPP3", "TUBA1A", "TUBB4B", "TMEM190"),
-        Classical_Mono	=c("LST1", "IL1B", "LYZ", "COTL1", "S100A9", "VCAN", "S100A8", "S100A12", "AIF1", "FCN1"), #AZIMUTH HLCA FINEST ANNOTATION
-        DC = c("CORO1A", "MS4A6A", "ITGB2", "GPR183", "HLA-DRB1", "HLA-DPB1", "HLA-DPA1", "HLA-DQB1", "HLA-DQA1", "HLA-DMA"), #AZIMUTH HLCA LEVEL 3 ANNOTATION
-        Fibromyocytes	=c("NEXN", "ACTG2", "LMOD1", "PPP1R14A", "DES", "FLNA", "TPM2", "PLN", "SELM"), #AZIMUTH HLCA FINEST ANNOTATION
-        Interstitial_Mac	=c("C1QA", "C1QB", "C1QC", "IL1B", "MS4A4A", "C3AR1", "CD163", "FCGR2A", "NPL", "SLCO2B1"),
-        Infl_Mono	=c("S100A8", "S100A9", "CD14", "VCAN"),
-        Ionocyte	=c("CFTR", "FOXI1", "ASCL3", "ATP6V0B", "AZGP1", "HES6", "TMEM61"),
-        LEC	=c("PROX1", "MMRN1", "CCL21", "PDPN", "PTX3", "NRP2", "NFE2L2", "FOXC2"),
-        MEC	=c("KRT14", "MYH11", "TP63", "KRT5", "ACTA2", "TAGLN"),
-        Mesothelial	=c("WT1", "FREM2", "UPK3B"),
-        Mono_Mac	=c("LYZ", "ACP5", "TYROBP", "LGALS1", "CD68", "AIF1", "CTSL", "EMP3", "FCER1G", "LAPTM5"), #AZIMUTH HLCA FINEST ANNOTATION
-        Myofibro	=c("CALD1", "CYR61", "TAGLN", "MT1X", "PRELP", "TPM2", "GPX3", "CTGF", "SPARCL1"), #AZIMUTH HLCA LEVEL 5 ANNOTATION
-        Neut =c("S100A8", "S100A9", "IFITM2", "FCGR3B", "IL1B", "CCR2", "CSF1R"),
-        NK_cells	=c("GZMA", "CD7", "CCL4", "CST7", "NKG7", "GNLY", "CTSW", "CCL5", "GZMB", "PRF1"), #AZIMUTH HLCA LEVEL 5 ANNOTATION
-        Non_Classical_Mono	=c("PSAP", "FCGR3A", "FCN1", "CORO1A", "COTL1", "FCER1G", "LAPTM5", "CTSS", "AIF1", "LST1"), #AZIMUTH HLCA FINEST ANNOTATION
-        Osteoclast =c("ACP5", "CTSK", "ITGB3", "MMP13", "MMP9"),
-        Patrolling_Mon	=c("CDKN1C", "PTP4A3", "HES4", "TNFRSF8"),
-        Plasma	=c("ITM2C", "TNFRSF17", "FKBP11", "IGKC", "IGHA1", "IGHG1", "CD79A", "JCHAIN", "MZB1", "ISG20"), #AZIMUTH HLCA LEVEL 5 ANNOTATION
-        pDC =c("CLEC4C", "LILRA4", "IRF7", "PLD4"),
-        Pericyte =c("LAMC3", "TRPC6", "HIGD1B", "PDGFRB", "COX4I2", "KCNK3", "NOTCH3", "CSPG4"),
-        Serous	=c("LTF", "LYZ", "CCL28", "SAA2", "PIGR", "SLPI"),
-        SMC	=c("PRKCDBP", "NDUFA4L2", "MYL9", "ACTA2", "MGP", "CALD1", "TPM1", "TAGLN", "IGFBP7", "TPM2"), #AZIMUTH HLCA LEVEL 5 ANNOTATION
-        Subpleural_Fibro	=c("SERPING1", "C1R", "NNMT", "MT1E", "MT1X", "PLA2G2A", "SELM", "MT1M"), #AZIMUTH HLCA FINEST ANNOTATION
-        SVEC	=c("ACKR1", "ABCB1", "VWA1"),
-        Treg =c("FOXP3", "CTLA4", "IL2RA"),
-        VEC	=c("ACKR1", "PRDD23", "VWF", "CLU", "EPHB4", "IGFBP7", "NR2F2"),
-        Exhausted_Tcells = c("CD3E", "PDCD1", "HAVCR2", "CD244", "LAG3", "CD38", "CD69", "PRDM1", "TOX", "CD101", "CTLA4")) 
 
 # load the tsv for human_dog gene orthologs
 orthologs <-
@@ -740,87 +695,6 @@ for (item in seq_len(nrow(object_list))) {
                 bg = "white")
     }
 }
-
-
-                            Immune_Myeloid = c("^0$" = "TAMs",
-                                                    "^1$" = "Neutrophils",
-                                                    "^2$" = "Inflam_TAMs",
-                                                    "^3$" = "Osteoclast_TAMs",
-                                                    "^4$" = "TAMs",
-                                                    "^5$" = "Monocytes",
-                                                    "^6$" = "IFN_TAMs",
-                                                    "^7$" = "DC",
-                                                    "^8$" = "Monocytes",
-                                                    "^9$" = "Monocytes",
-                                                    "^10$" = "Inflam_TAMs",
-                                                    "^11$" = "Monocytes",
-                                                    "^12$" = "Osteoclast_TAMs",
-                                                    "^13$" = "DC",
-                                                    "^14$" = "Neutrophils",
-                                                    "^15$" = "DC",
-                                                    "^16$" = "Neutrophils",
-                                                    "^17$" = "Inflam_TAMs",
-                                                    "^18$" = "Plasmocytoid_DC",
-                                                    "^19$" = "Mast")
-
-object1 <- 
-        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
-                        "patient_prim_normal_cells",
-                        ".qs"))
-
-
-dimplot_better(s_obj,
-              group_by = "seurat_clusters")
-CAF =7
-cells <-
-    s_obj %>%
-    subset(seurat_clusters == "5") %>%
-    colnames()
-
-DimPlot(s_obj,
-        cells.highlight = cells)
-
-DimPlot(object,
-        cells.highlight = cells)
-
-dimplot_better(object,
-              group_by = "new_annot_clust") +
-    ggtitle("new_annot_clust") +
-    NoLegend()
-
-FeaturePlot(s_obj,
-            features = c("CTSS", "SPP1", "TREM2", "GPNMB", "FABP5"))
-
-merged <- 
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                            group, ".qs"))
-
-DimPlot(merged,
-              cells.highlight = cells, raster=F) 
-
-
-big_object<-
-    qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
-                        "dogs_prim",
-                        ".qs"))
-
-DimPlot(big_object,
-        cells.highlight = cells,
-        raster = F)
-
-dimplot_better(big_object,
-              group_by = "new_annot_clust") +
-    ggtitle("new_annot_clust") +
-    NoLegend()
-
-big_object1<-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                        "dogs_mets",
-                        ".qs"))
-dimplot_better(big_object1,
-              group_by = "Ann_Level3") +
-    ggtitle("new_annot_clust") +
-    NoLegend()
 
 ```
 
@@ -1125,14 +999,14 @@ celltype_list <-
                                                         "^3$" = "T_Reg",
                                                         "^4$" = "NK_cells",
                                                         "^5$" = "Prolif_T",
-                                                        "^6$" = "Plasma_B",
+                                                        "^6$" = "Prolif_TAMs",
                                                         "^7$" = "CD8_T",
                                                         "^8$" = "Memory_B",
                                                         "^9$" = "CD4_T",
                                                         "^10$" = "Plasma_B",
                                                         "^11$" = "CD4_T",
                                                         "^12$" = "NK_cells"),
-                                Immune_Myeloid = c("^0$" = "TAMs",
+                                Immune_Myeloid = c("^0$" = "Scar_TAMs",
                                                     "^1$" = "Neutrophils",
                                                     "^2$" = "Inflam_TAMs",
                                                     "^3$" = "Osteoclast_TAMs",
@@ -1140,7 +1014,7 @@ celltype_list <-
                                                     "^5$" = "Monocytes",
                                                     "^6$" = "IFN_TAMs",
                                                     "^7$" = "DC",
-                                                    "^8$" = "Monocytes",
+                                                    "^8$" = "Prolif_TAMs",
                                                     "^9$" = "Monocytes",
                                                     "^10$" = "Inflam_TAMs",
                                                     "^11$" = "Monocytes",
@@ -1163,7 +1037,7 @@ celltype_list <-
         dogs_mets_normal_cells = list(Mesenchymal = c("^0$" = "Myo_CAF",
                                                     "^1$" ="Subplueral_CAF",
                                                     "^2$"= "Alv_CAF",
-                                                    "$3$" = "Subplueral_CAF",
+                                                    "^3$" = "Subplueral_CAF",
                                                     "^4$" = "Adv_CAF",
                                                     "^5$" = "Alv_EpithelialT2",
                                                     "^6$" = "Pericytes",
@@ -1187,19 +1061,19 @@ celltype_list <-
                                                 "^13$" = "CD4_T"),
                             Immune_Myeloid = c("^0$" = "Alv_TAMs",
                                                 "^1$" = "Inflam_TAMs",
-                                                "^2$" = "IFN_TAMs",
+                                                "^2$" = "Scar_TAMs",
                                                 "^3$" = "TAMs",
                                                 "^4$" = "DC",
                                                 "^5$" = "TAMs",
                                                 "^6$" = "Inflam_TAMs",
                                                 "^7$" = "Inflam_TAMs",
-                                                "^8$" = "IFN_TAMs",
+                                                "^8$" = "Prolif_TAMs",
                                                 "^9$" = "IFN_TAMs",
                                                 "^10$" = "Osteoclast_TAMs",
                                                 "^11$" = "DC",
                                                 "^12$" = "Inflam_TAMs",
                                                 "^13$" = "DC",
-                                                "^14$" = "IFN_TAMs",
+                                                "^14$" = "Scar_TAMs",
                                                 "^15$" = "Inflam_TAMs",
                                                 "^16$" = "Alv_TAMs",
                                                 "^17$" = "Mast",
@@ -1355,7 +1229,7 @@ for (item in seq_len(nrow(object_list))) {
         print(str_c("Finished processing ", cell_type, " for ", group))
     }
 }
-
+#dimplot_better(s_obj,group_by = "Ann_Level3")
 ```
 
 
@@ -1413,32 +1287,36 @@ for (item in seq_len(nrow(object_list))) {
 
 }
 
-dimplot_better(sobj_list$Mesenchymal,
-              group_by = "Ann_Level3")
-dimplot_better(sobj_list$Immune_Lymphoid,
-              group_by = "Ann_Level3")
-dimplot_better(sobj_list$Immune_Myeloid,
-              group_by = "Ann_Level3")
-dimplot_better(sobj_list$Epithelial_Endothelial,
-              group_by = "Ann_Level3")
+# dimplot_better(sobj_list$Mesenchymal,
+#               group_by = "Ann_Level3")
+# dimplot_better(sobj_list$Immune_Lymphoid,
+#               group_by = "Ann_Level3")
+# dimplot_better(sobj_list$Immune_Myeloid,
+#               group_by = "Ann_Level3")
+# dimplot_better(sobj_list$Epithelial_Endothelial,
+#               group_by = "Ann_Level3")
 
-FeaturePlot(sobj_list$Immune_Myeloid,
-            features = (c("CTSS", "SPP1", "TREM2", "GPNMB", "FABP5")))
-            nichenetr::convert_human_to_mouse_symbols() %>%
-                    na.omit() %>%
-                    unique()
+# FeaturePlot(sobj_list$Immune_Myeloid,
+#             features = )
+#             nichenetr::convert_human_to_mouse_symbols() %>%
+#                     na.omit() %>%
+#                     unique()
 
-merged <- 
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                            group,".qs"))
+# merged <- 
+#     qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+#                             group,".qs"))
 
-dimplot_better(merged,
-              group_by = "Ann_Level3",
-              raster = F) + NoLegend()
+# dimplot_better(merged,
+#               group_by = "Ann_Level3",
+#               raster = F) + NoLegend()
 
+# FeaturePlot(merged,
+#             features = "CTSS")
 
-
-
+# VlnPlot(merged,
+#         features = "CTSS",
+#         group.by = "Ann_Level3",
+#         pt.size = 0.1)
 
 
 harmony_params <-
@@ -1448,14 +1326,14 @@ harmony_params <-
                              theta = c(1, 5, 5),
                              lambda = c(0.5, 0.5, 0.5)),
         patient_mets = list(group_by = c("sample_name",
-                                         "method",
-                                         "data_source"),
-                            theta = c(1, 7, 7),
-                            lambda = c(0.5, 0.5, 0.5)),
+                                            "method",
+                                            "data_source"),
+                            theta = c(7, 7, 7),
+                            lambda = c(0.1, 0.1, 0.1)),
         xeno_prim_human = list(group_by = c("sample_name",
                                             "location",
                                             "data_source"),
-                               theta = c(2, 7, 15),
+                               theta = c(12, 12, 12),
                                lambda = c(0.1, 0.1, 0.1)),
         xeno_mets_human = list(group_by = c("sample_name",
                                             "method",
@@ -1485,10 +1363,10 @@ harmony_params <-
                           theta = c(7, 7, 7),
                           lambda = c(0.5, 0.5, 0.5)),
         dogs_mets = list(group_by = c("sample_name",
-                                       "data_source",
-                                       "location"),
-                          theta = c(7, 7, 7),
-                          lambda = c(0.5, 0.5, 0.5)),
+                                    "location",
+                                    "data_source"),
+                          theta = c(7, 12, 12),
+                          lambda = c(0.1, 0.1, 0.1)),
         normal_bone = list(group_by = c("sample_name"),
                            theta = c(7)))
 
@@ -1499,7 +1377,9 @@ object_list <-
             "mm_prim_normal_cells",         "mm_prim_cancer_cells",        "mm_prim",
             "mm_mets_normal_cells",         "mm_mets_cancer_cells",        "mm_mets",
             "xeno_prim_mouse",              "xeno_prim_human",             "dont_use",
-            "xeno_mets_mouse",              "xeno_mets_human",             "dont_use")
+            "xeno_mets_mouse",              "xeno_mets_human",             "dont_use",
+            "dogs_prim_normal_cells",       "dogs_prim_cancer_cells",      "dogs_prim",
+            "dogs_mets_normal_cells",       "dogs_mets_cancer_cells",      "dogs_mets")
 
 for (item in seq_len(nrow(object_list))) {
     group1 <- object_list$group1[item]
@@ -1513,41 +1393,48 @@ for (item in seq_len(nrow(object_list))) {
 
     stroma_obj$Ann_Level2 <- 
         str_replace_all(stroma_obj$Ann_Level3,
-                        c("^Angio_TAMs$" = "Macrophages",
-                          "^CAF$" = "Fibroblasts",
+                        c("^Angio_TAMs$" = "TAMs",
                           "^CD4_T$" = "T_cells",
                           "^CD8_T$" = "T_cells",
                           "^EC_Blood$" = "Endothelial_cells",
                           "^EC_Lymphatic$" = "Endothelial_cells",
-                          "^IFN_TAMs$" = "Macrophages",
-                          "^Inflam_TAMs$" = "Macrophages",
+                          "^IFN_TAMs$" = "TAMs",
+                          "^Inflam_TAMs$" = "TAMs",
                           "^Memory_B$" = "B_cells",
                           "^Naive_T$" = "T_cells",
                           "^Normal_Fibroblasts$" = "Fibroblasts",
                           "^Osteoblasts$" = "Osteoblasts",
-                          "^Osteoclast_TAMs$" = "Macrophages",
+                          "^Osteoclast_TAMs$" = "TAMs",
                           "^Plasma_B$" = "B_cells",
                           "^Plasmocytoid_DC$" = "DC",
-                          "^Prolif_TAMs$" = "Macrophages",
-                          "^Regulatory_T$" = "T_cells",
-                          "^Proliferating_T$" = "T_cells",
-                          "^TAMs$" = "Macrophages",
+                          "^Prolif_TAMs$" = "TAMs",
+                          "^T_Reg$" = "T_cells",
+                          "^Prolif_T$" = "T_cells",
+                          "^TAMs$" = "TAMs",
                           "^Alv_EpithelialT1$" = "Epithelial_cells",
                           "^Alv_EpithelialT2$" = "Epithelial_cells",
                           "^Alv_Fibroblasts$" = "Fibroblasts",
-                          "^Alv_Macrophages$" = "Macrophages",
-                          "^Int_Macrophages$" = "Macrophages",
+                          "^Alv_Macrophages$" = "TAMs",
+                          "^Int_Macrophages$" = "TAMs",
                           "^PreDC$" = "DC",
-                          "^Scar_TAMs$" = "Macrophages",
+                          "^Scar_TAMs$" = "TAMs",
                           "^Transitional_Epithelial$" = "Epithelial_cells",
                           "^preDC$" = "DC",
-                          "^Proli_TAMs$" = "Macrophages",
+                          "^Proli_TAMs$" = "TAMs",
                           "^Myofibroblasts$" = "Fibroblasts",
                           "^Tumor_Metabolic$" = "Tumor",
                           "^EC_Artery$" = "Endothelial_cells",
                           "^EC_Capillary$" = "Endothelial_cells",
                           "^EC_Vein$" = "Endothelial_cells",
-                          "^EC_Lymphatic$" = "Endothelial_cells"))
+                          "^Subplueral_CAF$" = "CAF",
+                          "^Myo_CAF$" = "CAF",
+                          "^Alv_CAF$" = "CAF",
+                          "^Peribronchial_CAF$" = "CAF",
+                          "^Alv_TAMs$" = "TAMs",
+                          "^Tuft_cells$" = "Epithelial_cells",
+                          "^Ciliated_cells$" = "Epithelial_cells",
+                          "^Adv_CAF$" = "CAF",
+                          "^Lymphocytes$" = "T_cells"))
 
     stroma_obj$Ann_Level1 <- 
         str_replace_all(stroma_obj$Ann_Level2,
@@ -1573,7 +1460,11 @@ for (item in seq_len(nrow(object_list))) {
                           "^Erythrocytes$" = "Immune_Myeloid",
                           "^Tuft_cells$" = "Epithelial_Endothelial",
                           "^Stromal_cells$" = "Mesenchymal",
-                          "^Mast$" = "Immune_Myeloid"))
+                          "^Mast$" = "Immune_Myeloid",
+                          "^TAMs$" = "Immune_Myeloid",
+                          "^CAF$" = "Mesenchymal",
+                          "^Ciliated_cells$" = "Epithelial_Endothelial",
+                          "^Naive_NKT$" = "Immune_Lymphoid"))
 
     stroma_obj$Ann_Level0 <- 
         str_replace_all(stroma_obj$Ann_Level1,
@@ -1619,7 +1510,8 @@ for (item in seq_len(nrow(object_list))) {
 for (group in c("patient_prim", "patient_mets",
                 "mm_prim", "mm_mets",
                 "xeno_prim_human", "xeno_mets_human",
-                "xeno_prim_mouse", "xeno_mets_mouse")) {
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim", "dogs_mets")) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
@@ -1640,16 +1532,20 @@ for (group in c("patient_prim", "patient_mets",
                     ".tsv"))
 
     combined_plot1 <-
-        dimplot_better(object, group_by = "Ann_Level3") + NoLegend()
+        dimplot_better(object, group_by = "Ann_Level3", raster = F, pt.size = 0.7) + 
+        NoLegend()
 
     combined_plot2 <-
-        dimplot_better(object, group_by = "Ann_Level2") + NoLegend()
+        dimplot_better(object, group_by = "Ann_Level2", raster = F, pt.size = 0.7) + 
+        NoLegend()
 
     combined_plot3 <-
-        dimplot_better(object, group_by = "Ann_Level1") + NoLegend()
+        dimplot_better(object, group_by = "Ann_Level1", raster = F, pt.size = 0.7) +
+        NoLegend()
 
     combined_plot4 <-
-        dimplot_better(object, group_by = "Ann_Level0") + NoLegend()
+        dimplot_better(object, group_by = "Ann_Level0", raster = F, pt.size = 0.7) +
+        NoLegend()
 
     all_plots <- 
         patchwork::wrap_plots(combined_plot1,
