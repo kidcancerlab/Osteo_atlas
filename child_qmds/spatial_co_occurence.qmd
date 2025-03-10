@@ -213,107 +213,74 @@ library(SpatialExperiment)
 library(scuttle)
 library(scater)
 
-###Going to test on OS1
-s_obj <- spatial_list[[1]]
-#Initialize SpatialExperiment objects
-spat_counts <- GetAssayData(s_obj, layer = "counts")
-locs <- GetTissueCoordinates(s_obj)
-se <- SpatialExperiment(assay =  list(counts = spat_counts),
-                        spatialCoords = as.matrix(locs))
-#no need to QC as seurat object has already been QC'ed
-#normalize to mean library size
-se <- computeLibraryFactors(se)
-aname <- "normcounts"
-assay(se, aname) <- normalizeCounts(se, log = FALSE)
-#Compute neighborhood matrices
-#lambda = 0 will correspond to non-spatial clustering, and lambda = 0.2 corresponds to banksy clustering
-#banksy clustering incorporates cell spot environment information into its clustering
-lambda = c(0, 0.2)
-k_geom = c(15, 30)
-se <- Banksy::computeBanksy(se,
-                            assay_name = aname,
-                            compute_agf = TRUE,
-                            k_geom = k_geom)
+### Calculate banksy clusters for each object
+for (ob_name in names(spatial_list)) {
+    s_obj <- spatial_list[[ob_name]]
+    #Initialize SpatialExperiment objects
+    spat_counts <- GetAssayData(s_obj, layer = "counts")
+    locs <- GetTissueCoordinates(s_obj)
+    se <- SpatialExperiment(assay =  list(counts = spat_counts),
+                            spatialCoords = as.matrix(locs))
+    #no need to QC as seurat object has already been QC'ed
+    #normalize to mean library size
+    se <- computeLibraryFactors(se)
+    aname <- "normcounts"
+    assay(se, aname) <- normalizeCounts(se, log = FALSE)
+    #Compute neighborhood matrices
+    #lambda = 0 will correspond to non-spatial clustering, and lambda = 0.2 corresponds to banksy   clustering
+    #banksy clustering incorporates cell spot environment information into its clustering
+    lambda = c(0, 0.2)
+    k_geom = c(15, 30)
+    se <- Banksy::computeBanksy(se,
+                                assay_name = aname,
+                                compute_agf = TRUE,
+                                k_geom = k_geom)
 
+    #next run PCA on the banksy matrix and perform clustering;
+    #setting use_agf to true uses both M, the weighted mean of gene expression in the neighborhood, and G, the azimuthal gabor filter(?) -- this just allows cells that aren't physically proximal to be identified as the same cell type
+    set.seed(17)
+    se <- runBanksyPCA(se, use_agf = TRUE, lambda = lambda)
+    se <- runBanksyUMAP(se, use_agf = TRUE, lambda = lambda)
+    se <- clusterBanksy(se, use_agf = TRUE, lambda = lambda)
+    #relabel clustering runs to minimize their differences (not sure the point of this step)
+    se <- Banksy::connectClusters(se)
+    #add banksy clusters to seurat object
+    s_obj$banksy_clusts <- se$clust_M1_lam0.2_k50_res1[match(colnames(s_obj), colnames(se))]
 
-#next run PCA on the banksy matrix and perform clustering;
-#setting use_agf to true uses both M, the weighted mean of gene expression in the neighborhood, and G, the azimuthal gabor filter(?) -- this just allows cells that aren't physically proximal to be identified as the same cell type
-set.seed(17)
-se <- runBanksyPCA(se, use_agf = TRUE, lambda = lambda)
-se <- runBanksyUMAP(se, use_agf = TRUE, lambda = lambda)
-se <- clusterBanksy(se, use_agf = TRUE, lambda = lambda)
-#relabel clustering runs to minimize their differences (not sure the point of this step)
-se <- Banksy::connectClusters(se)
+    spatial_list[[ob_name]] <- s_obj
+}
+qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level2_annotations.qs")
 
 #Visualize clustering output
-cnames <- colnames(colData(se))
-cnames <- cnames[grep("^clust", cnames)]
-colData(se) <- cbind(colData(se), spatialCoords(se))
-plot_nsp <- plotColData(se,
-                        x = "imagerow",
-                        y = "imagecol",
-                        point_size = 1.2,
-                        colour_by = cnames[1])
-plot_bank <- plotColData(se,
-                         x = "imagerow",
-                         y = "imagecol",
-                         point_size = 1.5,
-                         colour_by = cnames[2])
-
-#add banksy clusters to seurat object
-s_obj$banksy_clusts <- se$clust_M1_lam0.2_k50_res1[match(colnames(s_obj), colnames(se))]
-
-SpatialDimPlot(s_obj,
+for (ob_name in names(spatial_list)) {
+    png(paste0("figures/spatial/", ob_name, "_banksy_cluster_umap.png"), width = 800)
+    print(
+        SpatialDimPlot(spatial_list[[ob_name]],
                group = "banksy_clusts",
-               pt.size.factor = 1500,
+               pt.size.factor = size.factors[[ob_name]],
                image.alpha = 0,
-               label = TRUE) | SpatialDimPlot(s_obj, pt.size.factor = 0)
-
-r_dim_plot(s_obj, group = c("seurat_clusters", "banksy_clusts"))
-
-#Lets see what cell types (from the deconvolution data) are enriched in each banksy cluster
-deconv_mat <- s_obj@meta.data[, c(cell_types, "banksy_clusts")]
-mean_deconv <- colMeans(deconv_mat[, cell_types])
-
-tmp <- list()
-for (bc in unique(deconv_mat$banksy_clusts)) {
-    tmp[[bc]] <- subset(deconv_mat, banksy_clusts == bc) %>%
-        dplyr::select(cell_types) %>%
-        colMeans()
-    tmp[[bc]]["banksy_clust"] <- bc
-    as.data.frame(x = tmp[[bc]], col.names = "mean_deconv")
+               label = TRUE) |
+    SpatialDimPlot(spatial_list[[ob_name]], pt.size.factor = 0)
+    )
+    dev.off()
 }
 
-bind_rows(tmp, id = "banksy_clust") %>%
-    pivot_longer(cols = cell_types, names_to = "cell_type", values_to = "mean_deconv") %>%
-    print(n = 30)
+#Make heatmaps
+for (ob_name in names(spatial_list)) {
+    s_obj <- spatial_list[[ob_name]]
+    deconv_mat <- s_obj@meta.data[, c(cell_types, "banksy_clusts")]
+    tmp <- list()
+    for (bc in unique(deconv_mat$banksy_clusts)) {
+        tmp[[bc]] <- subset(deconv_mat, banksy_clusts == bc) %>%
+            dplyr::select(cell_types) %>%
+            colMeans()
+        tmp[[bc]] <- as.data.frame(x = tmp[[bc]])
+        colnames(tmp[[bc]]) <- paste0("banksy_", bc)
+    }
+    bind_tmp <- bind_cols(tmp)
 
-
-s <- SpatialDimPlot(s_obj,
-               group = "banksy_clusts",
-               pt.size.factor = 1500,
-               image.alpha = 0,
-               label = TRUE)
-
-
-ggplot(bind_rows(tmp)) +
-    geom_tile(x = )
-
-
-
-group_by(deconv_mat, banksy_clusts) %>%
-    summarize(colMeans())
-
-
-
-
-
-
-deconv_list <- split(deconv_mat, f = deconv_mat$banksy_clusts)
-lapply(deconv_list, function(x) {
-    dplyr::select(x, -banksy_clusts) %>%
-    
-})
-
-
+    png(paste0("figures/spatial/", ob_name, "_banksy_deconv_heatmap.png"))
+    print(pheatmap::pheatmap(bind_tmp, scale = "row"))
+    dev.off()
+}
 ```
