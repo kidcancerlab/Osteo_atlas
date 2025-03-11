@@ -241,11 +241,12 @@ for (ob_name in names(spatial_list)) {
     set.seed(17)
     se <- runBanksyPCA(se, use_agf = TRUE, lambda = lambda)
     se <- runBanksyUMAP(se, use_agf = TRUE, lambda = lambda)
-    se <- clusterBanksy(se, use_agf = TRUE, lambda = lambda)
+    se <- clusterBanksy(se, use_agf = TRUE, lambda = lambda, resolution = seq(0.3, 1.5, by = 0.1))
     #relabel clustering runs to minimize their differences (not sure the point of this step)
     se <- Banksy::connectClusters(se)
     #add banksy clusters to seurat object
-    s_obj$banksy_clusts <- se$clust_M1_lam0.2_k50_res1[match(colnames(s_obj), colnames(se))]
+    compareClusters(se, func = "ARI")
+    s_obj$banksy_clusts <- se$clust_M1_lam0.2_k50_res0.8[match(colnames(s_obj), colnames(se))]
 
     spatial_list[[ob_name]] <- s_obj
 }
@@ -283,4 +284,20 @@ for (ob_name in names(spatial_list)) {
     print(pheatmap::pheatmap(bind_tmp, scale = "row"))
     dev.off()
 }
+
+#going to make heat maps of % of spots within banksy cluster with deconv score greater than mean for all cell types
+s_obj <- spatial_list[[1]]
+mean_deconv <- apply(s_obj@meta.data[, cell_types], 2, mean)
+
+tmp <- list()
+for (bc in unique(s_obj$banksy_clusts)) {
+    tmp[[bc]] <- subset(s_obj@meta.data, banksy_clusts == bc) %>%
+        select(cell_types)
+    tmp[[bc]] <- colMeans(tmp[[bc]] > mean_deconv)
+    tmp[[bc]] <- as.data.frame(x = tmp[[bc]])
+    colnames(tmp[[bc]]) <- paste0("banksy_", bc)
+}
+binded_res <- bind_cols(tmp)
+pheatmap::pheatmap(binded_res)
+
 ```
