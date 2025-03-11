@@ -183,25 +183,25 @@ def write_ob_and_plots(ob):
                                      basis = "umap",
                                      color = "seurat_clusters",
                                      show = False)
-    pyplot.savefig("figures/scvelo/" + ob + "_umap_clusters.png")
+    pyplot.savefig("figures/scvelo/Ryan/" + ob + "_umap_clusters.svg")
     #Ann_Level3 in umap space
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "umap",
                                      color = "Ann_Level3",
                                      show = False)
-    pyplot.savefig("figures/scvelo/" + ob + "_umap_annotations.png")
+    pyplot.savefig("figures/scvelo/Ryan/" + ob + "_umap_annotations.svg")
     #seurat_clusters in fdl
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "fdl",
                                      color = "seurat_clusters",
                                      show = False)
-    pyplot.savefig("figures/scvelo/" + ob + "_fdl_clusters.png")
+    pyplot.savefig("figures/scvelo/Ryan/" + ob + "_fdl_clusters.svg")
     #cell types in fdl
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "fdl",
                                      color = "Ann_Level3",
                                      show = False)
-    pyplot.savefig("figures/scvelo/" + ob + "_fdl_annotations.png")
+    pyplot.savefig("figures/scvelo/Ryan/" + ob + "_fdl_annotations.svg")
     return(ob + " is done")
 
 
