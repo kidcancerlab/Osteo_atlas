@@ -31,6 +31,7 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
         dplyr::full_join(cell_count, by = "celltypes")
 }
 
+
 cell_count_prep <- cell_count_table %>%
     mutate_all(~replace_na(., 0)) %>%
     column_to_rownames("celltypes") %>%
@@ -53,7 +54,7 @@ stromal_celltype_heatmap<-
                         color = colorRampPalette(c("white", "red"))(100),
                         legend = FALSE)
 
-stash_plot(stromal_celltype_heatmap[[4]], "stromal_celltype_heatmap")
+# stash_plot(stromal_celltype_heatmap[[4]], "stromal_celltype_heatmap")
 
 ggsave(filename = "output/figures/Final_Annotations/stromal_celltype_heatmap.png",
         plot = stromal_celltype_heatmap,
@@ -69,7 +70,9 @@ celltypes <-
     unique(sobj_list$mm_prim_normal_cells$Ann_Level3),
     unique(sobj_list$mm_mets_normal_cells$Ann_Level3),
     unique(sobj_list$xeno_prim_mouse$Ann_Level3),
-    unique(sobj_list$xeno_mets_mouse$Ann_Level3)) %>%
+    unique(sobj_list$xeno_mets_mouse$Ann_Level3),
+    unique(sobj_list$dogs_prim_normal_cells$Ann_Level3),
+    unique(sobj_list$dogs_mets_normal_cells$Ann_Level3)) %>%
     unique()
 
 cols <- c(plot_cols, sample(rainbow(length(celltypes))))
@@ -84,16 +87,28 @@ title_replacement <-
         mm_prim_normal_cells = "Mouse Primary Stroma",
         mm_mets_normal_cells = "Mouse Metatatic Stroma",
         xeno_prim_mouse = "Xenograft Primary Stroma",
-        xeno_mets_mouse = "Xenograft Metastatic Stroma")
+        xeno_mets_mouse = "Xenograft Metastatic Stroma",
+        dogs_prim_normal_cells = "Dog Primary Stroma",
+        dogs_mets_normal_cells = "Dog Metastatic Stroma")
 
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
-                "xeno_prim_mouse", "xeno_mets_mouse")) {
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
     object <- 
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
-
+    order <-
+        object$Ann_Level3 %>%
+        table() %>%
+        as.data.frame() %>%
+        arrange(desc(Freq)) %>%
+        dplyr::rename(!!group := Freq,
+                      celltypes := ".") %>%
+        dplyr::pull(celltypes) %>%
+        as.vector()
+        
     dimplot <-
         DimPlot(object,
                 group.by = "Ann_Level3",
@@ -101,7 +116,9 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 label = T,
                 repel = T,
                 cols = cols,
-                label.size = 2.5) +
+                label.size = 2.5,
+                raster = F,
+                pt.size = 0.5) +
             coord_fixed() +
             #scale_color_manual(values = cols) +
             NoLegend() +
@@ -116,18 +133,43 @@ stromal_panel_plot <-
             ncol = 2) +
         patchwork::plot_annotation(title = "Stromal cell types Ann_Level3")
 
-stash_plot(stromal_panel_plot, "stromal_panel_plot")
+# stash_plot(stromal_panel_plot, "stromal_panel_plot")
 
 ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
         plot = stromal_panel_plot,
         width = 14,
-        height = 21,
+        height = 28,
         limitsize = FALSE,
         bg = "white")
 
 
-#dimplot_better(sobj_list$dogs_mets_normal_cells, group_by = "Ann_Level3", raster=F, pt.size = 0.7) 
+#dimplot_better(object, group_by = "markers", raster=F, pt.size = 0.2) 
+Idents(object) <- object$Ann_Level3
+object$compare <- 
+    ifelse(object$Ann_Level3 == "Neutrophils", "Neutrophils", "compared_to")
 
+Idents(object) <- object$compare
+nuet <-
+    FindMarkers(object = object,
+                ident.1 = "Neutrophils",
+                ident.2 = "compared_to",
+                min.pct = 0.25,
+                logfc.threshold = 0.25,
+                test.use = "wilcox",
+                only.pos = TRUE)
+
+genes <-
+    nuet %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    arrange(desc(avg_log2FC)) %>%
+    rownames_to_column(var = "gene") %>%
+     dplyr::filter(!str_starts(gene, "ENSCAF"))
+
+Top30 <-
+    genes %>%
+    select(gene) %>%
+    slice(1:30) %>%
+    as.vector()
 ```
 
 
@@ -139,9 +181,10 @@ cell_count_table <- tibble::tibble(celltypes = character())
 
 for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 "mm_prim_cancer_cells", "mm_mets_cancer_cells",
-                "xeno_prim_human", "xeno_mets_human")) {
+                "xeno_prim_human", "xeno_mets_human",
+                "dogs_prim_cancer_cells", "dogs_mets_cancer_cells")) {
     object <- 
-        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
 
@@ -180,9 +223,9 @@ cancer_cell_percent <-
          number_format = "%.1f",
          color = colorRampPalette(c("white", "red"))(100))
 
-stash_plot(cancer_cell_percent[[4]], "tumor_celltype_heatmap")
+# stash_plot(cancer_cell_percent[[4]], "tumor_celltype_heatmap")
 
-ggsave(filename = "output/figures/Final_Annotations/cancer_celltype_heatmap.png",
+ggsave(filename = "output/figures/Final_Annotations/tumor_celltype_heatmap.png",
         plot = cancer_cell_percent,
         width = 10,
         height = 7,
@@ -195,7 +238,9 @@ celltypes <-
     unique(cancer_sobj_list$mm_prim_cancer_cells$Ann_Level3),
     unique(cancer_sobj_list$mm_mets_cancer_cells$Ann_Level3),
     unique(cancer_sobj_list$xeno_prim_human$Ann_Level3),
-    unique(cancer_sobj_list$xeno_mets_human$Ann_Level3)) %>%
+    unique(cancer_sobj_list$xeno_mets_human$Ann_Level3),
+    unique(cancer_sobj_list$dogs_prim_cancer_cells$Ann_Level3),
+    unique(cancer_sobj_list$dogs_mets_cancer_cells$Ann_Level3)) %>%
     unique()
 cols <- c(plot_cols, sample(rainbow(length(celltypes))))
 
@@ -210,11 +255,14 @@ title_replacement <-
         mm_prim_cancer_cells = "Mouse Primary Tumor",
         mm_mets_cancer_cells = "Mouse Metastatic Tumor",
         xeno_prim_human = "Xenograft Primary Tumor",
-        xeno_mets_human = "Xenograft Metastatic Tumor")
+        xeno_mets_human = "Xenograft Metastatic Tumor",
+        dogs_prim_cancer_cells = "Dog Primary Tumor",
+        dogs_mets_cancer_cells = "Dog Metastatic Tumor")
 
 for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 "mm_prim_cancer_cells", "mm_mets_cancer_cells",
-                "xeno_prim_human", "xeno_mets_human")) {
+                "xeno_prim_human", "xeno_mets_human",
+                "dogs_prim_cancer_cells", "dogs_mets_cancer_cells")) {
     object <- 
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
@@ -227,6 +275,8 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 label = T,
                 repel = T,
                 cols = cols,
+                raster = F,
+                pt.size = 0.5,
                 label.size = 2.5) +
             coord_fixed() +
             NoLegend() +
@@ -241,7 +291,7 @@ cancer_panel_plot <-
             ncol = 2) +
         patchwork::plot_annotation(title = "Tumor subpopulations Ann_Level3")
 
-stash_plot(cancer_panel_plot, "tumor_panel_plot")
+# stash_plot(cancer_panel_plot, "tumor_panel_plot")
 
 ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.png",
         plot = cancer_panel_plot,
@@ -250,11 +300,411 @@ ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.png",
         limitsize = FALSE,
         bg = "white")
 
-
-dimplot_better(cancer_sobj_list$mm_prim_cancer_cells,
-                group_by = "Ann_Level3") + 
-    NoLegend()
 ```
+
+### Put everything together cancer cells
+```{r}
+
+# load the cancer final object
+cancer_sobj_list <-  list()
+cell_count_table <- tibble::tibble(celltypes = character())
+
+for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
+                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
+                "xeno_prim_human", "xeno_mets_human",
+                "dogs_prim_cancer_cells", "dogs_mets_cancer_cells")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    #dimplot_better(object, group_by = "Ann_Level3", raster=F, pt.size = 0.7)
+
+    organism <- 
+        object$organism[1]
+
+    if (organism[1] == "mouse") {
+        object <-
+            mouse_to_human_setup(object,
+                                harm_vars = "sample_name",
+                                theta = 7)
+    }
+
+    cancer_sobj_list[[group]] <- object
+
+}
+
+merged_sobj <- 
+    merge(x = cancer_sobj_list[[1]],
+        y = cancer_sobj_list[2:length(cancer_sobj_list)],
+        add.cell.id = names(cancer_sobj_list)) %>%
+    JoinLayers() %>%
+    process_seurat()
+
+qs::qsave(merged_sobj,
+        str_c("output/seurat_objects/final_combined_sobjs/",
+                "all_cancer_cells",
+                ".qs"))
+
+harmony_sobj <-
+    merged_sobj %>%
+    RunHarmony(group.by.vars = c("sample_name", "data_source", "method", "unique"),
+                theta = c(12, 12, 12, 12),
+                lambda = c(0.1, 0.1, 0.1, 0.1)) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.15)
+
+qs::qsave(harmony_sobj,
+        str_c("output/seurat_objects/final_combined_sobjs/",
+                "harmony_all_cancer_cells",
+                ".qs"))
+
+all_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                "harmony_all_cancer_cells",
+                ".qs"))
+
+dimplot_better(all_tumor,
+            group_by = "unique") + 
+    NoLegend()
+dimplot_better(all_tumor,
+            group_by = "Ann_Level3") +
+    NoLegend()
+
+dimplot_list <- list()
+
+for (group in unique(all_tumor$unique)) {
+    object <- 
+        subset(all_tumor,
+                subset = unique == group)
+
+    dimplot <-
+        dimplot_better(object,
+                group_by = "Ann_Level3",
+                raster = F,
+                pt.size = 0.5,
+                label.size = 2.5) +
+            coord_fixed() +
+            NoLegend() +
+            ggtitle(group) +
+            theme(aspect.ratio=1)
+
+    dimplot_list[[group]] <- dimplot
+}
+
+cancer_panel_plot <-
+    patchwork::wrap_plots(plotlist = dimplot_list,
+            ncol = 4) +
+        patchwork::plot_annotation(title = "Tumor subpopulations Ann_Level3")
+
+
+patient_prim_mets <-
+    merge(x = cancer_sobj_list$patient_prim_cancer_cells,
+        y = cancer_sobj_list$patient_mets_cancer_cells) %>%
+    JoinLayers() %>%
+    process_seurat()
+qs::qsave(patient_prim_mets,
+        str_c("output/seurat_objects/final_combined_sobjs/",
+                "patient_prim_mets",
+                ".qs"))
+patient_harmony_sobj <-
+    patient_prim_mets %>%
+    RunHarmony(group.by.vars = c("sample_name", "data_source", "method", "unique"),
+                theta = c(12, 12, 12, 12),
+                lambda = c(0.1, 0.1, 0.1, 0.1)) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.15)
+qs::qsave(patient_harmony_sobj,
+        str_c("output/seurat_objects/final_combined_sobjs/",
+                "harmony_patient_prim_mets",
+                ".qs"))
+
+patient_obj <-
+    qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                "harmony_patient_prim_mets.qs"))
+patient_obj <-
+    FindClusters(patient_obj,
+                resolution = 0.2)
+dimplot_better(patient_obj,
+            group_by = "Ann_Level3",
+            #split_by = "unique",
+            raster =F,
+            pt.size = 1) +
+    NoLegend()
+FeaturePlot(patient_obj, feature = "BNIP3", raster =F, pt.size = 1)
+
+patient_obj$new_ids <-
+    str_replace_all(patient_obj$seurat_clusters,
+                    c("^0$" = "Fibrogenic",
+                    "^1$" = "Progenitor",
+                    "^2$" = "Proliferative",
+                    "^3$" = "Hypermetabolic",
+                    "^4$" = "Interactive",
+                    "^5$" = "Interactive",
+                    "^6$" = "Interactive",
+                    "^7$" = "Progenitor",
+                    "^8$" = "Progenitor",
+                    "^9$" = "Fibrogenic",
+                    "^10$" = "Fibrogenic",
+                    "^11$" = "Ground"))
+
+# xenograft human
+xeno_prim_mets <-
+    merge(x = cancer_sobj_list$xeno_prim_human,
+        y = cancer_sobj_list$xeno_mets_human) %>%
+    JoinLayers() %>%
+    process_seurat()
+qs::qsave(xeno_prim_mets,
+        str_c("output/seurat_objects/final_combined_sobjs/",
+                "xeno_prim_mets",
+                ".qs"))
+xeno_harmony_sobj <-
+    xeno_prim_mets %>%
+    RunHarmony(group.by.vars = c("sample_name", "data_source", "method", "unique"),
+                theta = c(12, 12, 12, 12),
+                lambda = c(0.1, 0.1, 0.1, 0.1)) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.15)
+qs::qsave(xeno_harmony_sobj,
+        str_c("output/seurat_objects/final_combined_sobjs/",
+                "harmony_xeno_prim_mets",
+                ".qs"))
+
+mouse_prim_mets <-
+    merge(x = cancer_sobj_list$mm_prim_cancer_cells,
+        y = cancer_sobj_list$mm_mets_cancer_cells) %>%
+    JoinLayers() %>%
+    process_seurat()
+qs::qsave(mouse_prim_mets,
+        str_c("output/seurat_objects/final_combined_sobjs/",
+                "mouse_prim_mets",
+                ".qs"))
+mouse_harmony_sobj <-
+    mouse_prim_mets %>%
+    RunHarmony(group.by.vars = c("sample_name", "data_source", "unique"),
+                theta = c(12, 12, 12),
+                lambda = c(0.1, 0.1, 0.1)) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.15)
+qs::qsave(mouse_harmony_sobj,
+        str_c("output/seurat_objects/final_combined_sobjs/",
+                "harmony_mouse_prim_mets",
+                ".qs"))
+
+# dog_prim_mets
+dog_prim_mets <-
+    merge(x = cancer_sobj_list$dogs_prim_cancer_cells,
+        y = cancer_sobj_list$dogs_mets_cancer_cells) %>%
+    JoinLayers() %>%
+    process_seurat()
+qs::qsave(dog_prim_mets,
+        str_c("output/seurat_objects/final_combined_sobjs/",
+                "dog_prim_mets",
+                ".qs"))
+dog_harmony_sobj <-
+    dog_prim_mets %>%
+    RunHarmony(group.by.vars = c("sample_name", "data_source", "unique"),
+                theta = c(12, 12, 12),
+                lambda = c(0.1, 0.1, 0.1)) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.15)
+qs::qsave(dog_harmony_sobj,
+        str_c("output/seurat_objects/final_combined_sobjs/",
+                "harmony_dog_prim_mets",
+                ".qs"))
+
+
+
+
+harmony_params <-
+    list(patient_prim = list(group_by = c("sample_name",
+                                          "method",
+                                          "data_source"),
+                             theta = c(1, 5, 5),
+                             lambda = c(0.5, 0.5, 0.5)),
+        patient_mets = list(group_by = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                            theta = c(7, 7, 7),
+                            lambda = c(0.1, 0.1, 0.1)),
+        xeno_prim_human = list(group_by = c("sample_name",
+                                            "location",
+                                            "data_source"),
+                               theta = c(12, 12, 12),
+                               lambda = c(0.1, 0.1, 0.1)),
+        xeno_mets_human = list(group_by = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                               theta = c(2, 7, 15),
+                               lambda = c(0.7, 0.1, 0.1)),
+        xeno_prim_mouse = list(group_by = c("sample_name",
+                                            "data_source"),
+                                theta = c(7, 7),
+                                lambda = c(0.5, 0.5)),
+        xeno_mets_mouse = list(group_by = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                               theta = c(7, 7, 7),
+                               lambda = c(0.5, 0.5, 0.5)),
+        mm_prim = list(group_by = c("sample_name",
+                                    "model"),
+                       theta = c(12, 12),
+                       lambda = c(0.1, 0.1)),
+        mm_mets = list(group_by = c("sample_name",
+                                    "model"),
+                       theta = c(12, 12),
+                       lambda = c(0.1, 0.1)),
+        dogs_prim = list(group_by = c("sample_name",
+                                       "data_source",
+                                       "location"),
+                          theta = c(7, 7, 7),
+                          lambda = c(0.5, 0.5, 0.5)),
+        dogs_mets = list(group_by = c("sample_name",
+                                    "location",
+                                    "data_source"),
+                          theta = c(7, 12, 12),
+                          lambda = c(0.1, 0.1, 0.1)),
+        normal_bone = list(group_by = c("sample_name"),
+                           theta = c(7)))
+
+theme_set(
+    theme_classic(base_size = 20) +
+    theme(
+        axis.title.y = element_text(
+            margin = ggplot2::margin(0, 20, 0, 0),
+            size = 10,
+            color = "black",
+            face = "bold"
+        ),
+        axis.title.x = element_text(
+            hjust = 0.5,
+            margin = ggplot2::margin(20, 0, 0, 0),
+            size = 10,
+            color = "black",
+            face = "bold"
+        ),
+        plot.title = element_text(
+            hjust = 0.5,
+            size = 10,
+            face = "bold"
+        ),
+        legend.text = element_text(size = 8, face = "bold")
+    )
+)
+
+# load the tsv for human_dog gene orthologs
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
+
+#GSEA Miltilevel
+cat_tib <- dplyr::tribble(
+    ~category, ~subcategory,   ~cat_expl,
+    "H",        "NA",          "Hallmark_paths",
+    "C2",       "CP:KEGG",     "KEGG",
+    "C3",       "TFT:GTRD",    "Transcription_factor_targets",
+    "C6",       "NA",          "Oncogenic_signature",
+    "C5",       "GO:BP",       "Biological_processes",
+    "C2",       "CP:REACTOME", "Reactome")
+
+panel_plots <- list()
+
+object_list <-
+    tribble(~group,                         ~res_value,
+            "harmony_patient_prim_mets",    0.2,
+            "harmony_xeno_prim_mets",    0.2,
+            "harmony_mouse_prim_mets",         0.3,
+            "harmony_dog_prim_mets",         0.15)
+
+
+# Make degs gsea panel plot
+for (item in seq_len(nrow(object_list))) {
+    group <- object_list$group[item]
+    res_value <- object_list$res_value[item]
+
+    object <-   
+        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                        group, ".qs"))
+    #dimplot_better(object, group_by = "Ann_Level3", raster=F)
+    #dimplot_better(object, group_by = "seurat_clusters", raster=F)
+    object <-
+        FindClusters(object,
+                    resolution = res_value)
+
+    make_panel_plot(sobj = object,
+                    comparison_col = "seurat_clusters",
+                    label = "seurat_clusters",
+                    group = group,
+                    aggregate_by = c("sample_name", "seurat_clusters"),
+                    organism_col = "organism",
+                    subset = FALSE,
+                    batch_var = "data_source")
+}
+
+
+object$new_ids <-
+    str_replace_all(object$seurat_clusters,
+                    c("^0$" = "Fibrogenic",
+                    "^1$" = "Progenitor",
+                    "^2$" = "Proliferative",
+                    "^3$" = "Hypermetabolic",
+                    "^4$" = "Interactive",
+                    "^5$" = "Ground",
+                    "^6$" = "Fibrogenic",
+                    "^7$" = "Interactive",
+                    "^8$" = "Ground",
+                    "^9$" = "Ground",
+                    "^10$" = "Ground",
+                    "^11$" = "Ground",
+                    "^12$" = "Fibrogenic",
+                    "^13$" = "Fibrogenic",
+                    "^14$" = "Ground",
+                    "^15$" = "Hypermetabolic",
+                    "^16$" = "Ground",
+                    "^17$" = "Hypermetabolic"))
+dimplot_better(object, group_by = "new_ids", raster=F)
+patient_prim = list(group_by = c("sample_name",
+                                          "method",
+                                          "data_source"),
+                             theta = c(1, 5, 5),
+                             lambda = c(0.5, 0.5, 0.5)),
+        patient_mets = list(group_by = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                            theta = c(7, 7, 7),
+                            lambda = c(0.1, 0.1, 0.1))
+prim <-
+    subset(object,
+            subset = unique == "patient_prim") %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = c("sample_name",
+                                          "method",
+                                          "data_source"),
+                             theta = c(1, 5, 5),
+                             lambda = c(0.5, 0.5, 0.5)) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.1)
+
+mets <-
+    subset(object,
+            subset = unique == "patient_mets") %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = c("sample_name",
+                                            "method",
+                                            "data_source"),
+                            theta = c(7, 7, 7),
+                            lambda = c(0.1, 0.1, 0.1)) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.1)
+dimplot_better(prim,
+            group_by = "new_ids",
+            #split_by = "unique",
+            raster =F,
+            pt.size = 1) +
+    NoLegend()
+
+
+```
+
+
 
 
 

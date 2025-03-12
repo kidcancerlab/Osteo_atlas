@@ -19,7 +19,7 @@ for (i in seq_len(nrow(object_list))) {
     all_sample <- all_sample %>%
         FindVariableFeatures(nfeatures = 5000) %>%
         ScaleData()
-    
+
     dimplot_main <-
         dimplot_better(all_sample,
                       group_by = c("seurat_clusters")) +
