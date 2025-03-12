@@ -14,12 +14,15 @@ motifAnnotations_mgi <- motifAnnotations
 
 object_list <-
     tribble(~group,                         ~res_value, ~org,
-            "patient_prim_cancer_cells",    0.1,        "hgnc",
-            "patient_mets_cancer_cells",    0.1,        "hgnc",
-            "mm_prim_cancer_cells",         0.3,        "mgi",
-            "mm_mets_cancer_cells",         0.1,        "mgi",
-            "xeno_prim_human",              0.15,        "hgnc",
-            "xeno_mets_human",              0.1,        "hgnc")
+            "patient_prim_cancer_cells",    0.15,        "hgnc",
+            "patient_mets_cancer_cells",    0.15,        "hgnc",
+            "mm_prim_cancer_cells",         0.4,        "mgi",
+            "mm_mets_cancer_cells",         0.25,        "mgi",
+            "xeno_prim_human",              0.3,        "hgnc",
+            "xeno_mets_human",              0.15,        "hgnc",
+            "dogs_prim_cancer_cells",       0.2,        "hgnc",
+            "dogs_mets_cancer_cells",       0.1,        "hgnc")
+
 
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
@@ -59,7 +62,11 @@ for (i in seq_len(nrow(object_list))) {
         t() %>%
         scale(center = FALSE, scale = TRUE) %>%
         t()
-
+    
+    #save the heatmap
+    if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
+        dir.create(str_c("output/figures/regulon_analysis/", group))
+    }
     #make heatmap to show average regulon activity per cell type or cluster
     average_reg_heatmap <- 
         pheatmap::pheatmap(regulon_activity_scaled,
@@ -74,10 +81,6 @@ for (i in seq_len(nrow(object_list))) {
     plot_width <- 
         ceiling(ncol(regulon_activity_scaled)/1.3)
 
-    #save the heatmap
-    if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
-        dir.create(str_c("output/figures/regulon_analysis/", group))
-    }
     ggsave(str_c(filename = "output/figures/regulon_analysis/",
                             group,
                             "/average_reg_heatmap.png"),
@@ -127,6 +130,9 @@ for (i in seq_len(nrow(object_list))) {
         ceiling(ncol(binary_activity_perc_subset)/1.2)
 
     #save the heatmap
+    if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
+        dir.create(str_c("output/figures/regulon_analysis/", group))
+    }
     ggsave(str_c("output/figures/regulon_analysis/",
                  group,
                  "/binarized_heatmap.png"),
