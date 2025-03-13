@@ -1359,7 +1359,7 @@ for (item in seq_len(nrow(object_list))) {
         RunHarmony(group.by.vars = "sample_name",
                    theta = 7) %>%
         process_seurat(reduction = "harmony")
-    #dimplot_better(merged_sobj,group_by = "Ann_Level3")
+    #dimplot_better(merged_sobj,group_by = "Ann_Level3") 
 
     directory <-
         str_c("output/seurat_objects/final_tumor_vs_stroma/")
