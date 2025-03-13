@@ -10,18 +10,20 @@ TAM_cell_count_table <- tibble::tibble(celltypes = character())
 
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
-                "xeno_prim_mouse", "xeno_mets_mouse")) {
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
 
+    #dimplot_better(object, group_by = "Ann_Level2")
     # Subset the object to only include Macrophages and Monocytes and DC or whatever present
     Idents(object) <- "Ann_Level2"
     mac_obj <-
         subset(object,
                idents = intersect(Idents(object),
-                                c("Macrophages", "Monocytes"))) %>%
+                                c("TAMs", "Monocytes"))) %>%
         process_seurat()
 
     mac_obj_list[[group]] <- mac_obj
@@ -62,7 +64,7 @@ TAMs_cell_percent <-
          number_format = "%.1f",
          color = colorRampPalette(c("white", "red"))(100))
 
-stash_plot(TAMs_cell_percent[[4]], "TAMs_celltype_heatmap")
+# stash_plot(TAMs_cell_percent[[4]], "TAMs_celltype_heatmap")
 
 ggsave(filename = "output/figures/Final_Annotations/TAMs_celltype_heatmap.png",
         plot = TAMs_cell_percent,
@@ -91,7 +93,9 @@ title_replacement <-
         mm_prim_normal_cells = "Mouse Primary Stroma",
         mm_mets_normal_cells = "Mouse Metatatic Stroma",
         xeno_prim_mouse = "Xenograft Primary Stroma",
-        xeno_mets_mouse = "Xenograft Metastatic Stroma")
+        xeno_mets_mouse = "Xenograft Metastatic Stroma",
+        dogs_prim_normal_cells = "Dog Primary Stroma",
+        dogs_mets_normal_cells = "Dog Metastatic Stroma")
 
 # make dimplot list
 macs_dimplot_list <- list()
@@ -99,7 +103,8 @@ harm_mac_obj_list <- list()
 
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
-                "xeno_prim_mouse", "xeno_mets_mouse")) {
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
@@ -110,7 +115,7 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
     mac_obj <-
         subset(object,
                idents = intersect(Idents(object),
-                                c("Macrophages", "Monocytes"))) %>%
+                                c("TAMs", "Monocytes"))) %>%
         process_seurat()
 
     harm_mac_obj <-
@@ -118,33 +123,41 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
         RunHarmony(group.by.vars = c("sample_name")) %>%
         process_seurat(reduction = "harmony")
     
-    # run force directed layout on the harmonized object
-     force_directed_layout <- 
-        run_fdl(sobject = harm_mac_obj)
+    if (!dir.exists("output/seurat_objects/TAMs_objects")) {
+        dir.create("output/seurat_objects/TAMs_objects")
+    }
+    qs::qsave(harm_mac_obj, 
+              str_c("output/seurat_objects/TAMs_objects/",
+                    group,
+                    ".qs"))
+    
+    # # run force directed layout on the harmonized object
+    #  force_directed_layout <- 
+    #     run_fdl(sobject = harm_mac_obj)
 
-    split_fdl_plot <- 
-        dimplot_better(force_directed_layout,
-                group_by = "Ann_Level3",
-                reduction = "fdl") +
-            NoLegend() +
-            ggtitle(title_replacement[group][1])
+    # split_fdl_plot <- 
+    #     dimplot_better(force_directed_layout,
+    #             group_by = "Ann_Level3",
+    #             reduction = "fdl") +
+    #         NoLegend() +
+    #         ggtitle(title_replacement[group][1])
 
-    ggsave(filename = str_c("output/figures/TAMs_analysis/", group, "_mac_fdl_plot.png"),
-            plot = split_fdl_plot,
-            width = 10,
-            height = 10,
-            limitsize = FALSE,
-            bg = "white")
+    # ggsave(filename = str_c("output/figures/TAMs_analysis/", group, "_mac_fdl_plot.png"),
+    #         plot = split_fdl_plot,
+    #         width = 10,
+    #         height = 10,
+    #         limitsize = FALSE,
+    #         bg = "white")
 
     # make the panel plot
-     make_panel_plot(sobj = harm_mac_obj,
-                    comparison_col = "Ann_Level3",
-                    label = "Ann_Level3",
-                    group = group,
-                    aggregate_by = c("sample_name", "Ann_Level3"),
-                    organism_col = "organism",
-                    subset = FALSE,
-                    batch_var = "data_source")
+    #  make_panel_plot(sobj = harm_mac_obj,
+    #                 comparison_col = "Ann_Level3",
+    #                 label = "Ann_Level3",
+    #                 group = group,
+    #                 aggregate_by = c("sample_name", "Ann_Level3"),
+    #                 organism_col = "organism",
+    #                 subset = FALSE,
+    #                 batch_var = "data_source")
 
     # Plot the dimplot
     dimplot <-
@@ -169,7 +182,7 @@ dimplots_panel <-
     patchwork::wrap_plots(plotlist = macs_dimplot_list, ncol = 2) +
     patchwork::plot_annotation(title = "Macrophage Cell Type Ann_Level3")
 
-stash_plot(dimplots_panel, "macrophage_panel_plot")
+# stash_plot(dimplots_panel, "macrophage_panel_plot")
 
 ggsave(filename = "output/figures/Final_Annotations/macrophage_panel_plots.png",
         plot = dimplots_panel,
@@ -192,15 +205,16 @@ macrophage_features_cells <- list(
 
 #set the order of the cells for the dotplot
 order_TAMs <-
-    c("Osteoclast_TAMs", "Prolif_TAMs", "Monocytes", "IFN_TAMs",  "Inflam_TAMs", 
-      "Scar_TAMs", "Int_Macrophages", "Alv_Macrophages", "TAMs")
+    c("Osteoclast_TAMs", "Prolif_TAMs", "Monocytes", "IFN_TAMs", 
+     "Inflam_TAMs", "Scar_TAMs", "Alv_TAMs", "TAMs")
 
 # Generate a feature dotplot for the macrophages from the different groups
 dotplot_list <- list()
 
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
-                "xeno_prim_mouse", "xeno_mets_mouse")) {
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
     order_features <-
         c("MMP9", "CTSK", "NFATC1",
           "MKI67", "CDK1", "TOP2A",
