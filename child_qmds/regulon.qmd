@@ -23,20 +23,18 @@ object_list <-
             "dogs_prim_cancer_cells",       0.2,        "hgnc",
             "dogs_mets_cancer_cells",       0.1,        "hgnc")
 
-
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
     res_value <- object_list$res_value[i]
     org <- object_list$org[i]
 
-    object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
-                              group,
-                              ".qs")) %>%
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs")) %>%
         FindClusters(resolution = res_value)
 
-    # dimplot <- 
-    #     dimplot_better(object,
-    #                   group_by = "seurat_clusters")
+    # dimplot <- dimplot_better(object, group_by = "Ann_Level3")
     GRA_output <-
         Run_GRA(sobject = object,
                 idents = "seurat_clusters",
