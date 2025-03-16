@@ -1140,14 +1140,14 @@ mm_mets_stroma <-
     qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_mets_normal_cells.qs"))
 
 dog_prim_tumor <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dog_prim_cancer_cells.qs"))
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_prim_cancer_cells.qs"))
 dog_prim_stroma <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dog_prim_normal_cells.qs"))
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_prim_normal_cells.qs"))
 
 dog_mets_tumor <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dog_mets_cancer_cells.qs"))
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_mets_cancer_cells.qs"))
 dog_mets_stroma <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dog_mets_normal_cells.qs"))
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_mets_normal_cells.qs"))
 
 
 Annotate_celltypes <- function(obj,
