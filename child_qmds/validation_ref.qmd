@@ -1129,9 +1129,30 @@ patient_mets_tumor <-
 patient_mets_stroma <-
     qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets_normal_cells.qs"))
 
+mm_prim_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_prim_cancer_cells.qs"))
+mm_prim_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_prim_normal_cells.qs"))
+
+mm_mets_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_mets_cancer_cells.qs"))
+mm_mets_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_mets_normal_cells.qs"))
+
+dog_prim_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dog_prim_cancer_cells.qs"))
+dog_prim_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dog_prim_normal_cells.qs"))
+
+dog_mets_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dog_mets_cancer_cells.qs"))
+dog_mets_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dog_mets_normal_cells.qs"))
+
+
 Annotate_celltypes <- function(obj,
                               markers,
-                              resolution,
+                              resolution = 0.2,
                               modulescore_label = "modulescore",
                               modulescore_cutoff = 0.5,
                               recursive_cluster = TRUE,
@@ -1321,6 +1342,8 @@ Annotate_celltypes <- function(obj,
                           "^Epithelial_Endothelial$" = "Host",
                           "^Immune_Lymphoid$" = "Host",
                           "^Mesenchymal$" = "Host"))
+    
+    annotated_stroma$Ann_Level0 <- "Host"
 
     final_obj <- 
         merge(annotated_tumor,
@@ -1340,20 +1363,22 @@ dimplot_better(obj, group_by = "seurat_clusters") +
     NoLegend()
 
 
-markers <- c("COL1A1", "COL1A2", "FBLN1", "SATB2", "RUNX2",
+markers <- c("COL1A1", "COL1A2", "SATB2", "RUNX2",
              "TNC", "CTHRC1", "MRC2", "IBSP", "PDGFD")
 
 
 object <-
-    annotate_celltypes(obj = obj,
+    Annotate_celltypes(obj = obj,
                         markers = markers,
                         resolution = 0.2,
                         modulescore_label = "modulescore",
-                        modulescore_cutoff = 0.5,
+                        modulescore_cutoff = 0.4,
                         recursive_cluster = TRUE,
                         species = "human",
                         aggr_ref = TRUE,
                         with_tumor = TRUE,
                         tissue_location = "bone")
 
+dimplot_better(object, group_by = "Ann_Level3") +
+    NoLegend()
 ```
