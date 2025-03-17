@@ -30,7 +30,7 @@ for (i in seq_len(length(all_groups))) {
     group <- all_groups[i]
 
     object <- 
-        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
     #dimplot_better(object, group_by = "new_annot_clust") + NoLegend()
@@ -219,7 +219,7 @@ for (i in seq_len(nrow(object_list))) {
         FindClusters(object,
                     resolution = res_value)
     #dimplot_better(object, group_by = "seurat_clusters", raster =F)
-
+    ## remmeber to put the run_degs filter to 10% of the cells
     make_panel_plot(sobj = object,
                     comparison_col = "seurat_clusters",
                     label = "seurat_clusters",
@@ -872,6 +872,8 @@ for (i in seq_len(nrow(object_list))) {
 ## Trial for marker based annotation of tumor subpopulations
 ```{r markers_based_tumor_annot, echo = FALSE}
 ## Annotate the cancer clusters based on the markers
+
+
 tumor_markers <- list(
   Tumor_Metabolic = c("SLC2A1", "HK2", "LDHA", "CA9", "IDH1", "IDH2"),
   Tumor_Proliferative = c("MKI67", "PCNA", "CCND1", "MYC", "E2F1", "TOP2A"),
@@ -1034,14 +1036,8 @@ gsea_result <-
             species = sobj$organism[1])
 
 "patient_mets_cancer_cells" 
-pat <- "REACTOME_IMMUNOREGULATORY_INTERACTIONS_BETWEEN_A_LYMPHOID_AND_A_NON_LYMPHOID_CELL"
 
-leading <-
-    gsea_result$`7` %>% 
-    filter(pathway == pat) %>%
-    pull(leadingEdge)
 
-make_panel_plot(objecrt)
 ```
 
 
@@ -1234,4 +1230,206 @@ for (i in seq_len(nrow(object_list))) {
 
 }
 
+```
+
+
+## Markers for the tumor cells using pathway analysis
+this chunk will identify the shared markers across the tumor subpopulations using
+patient primary and metastatic datasets
+```{r markers_for_tumor}
+
+obj_list <- list()
+
+HyperMetabolic <- list()
+Fibrogenic <- list()
+Progenitor <- list()
+Proliferative <- list()
+Interactive <- list()
+Ground <- list()
+
+percent_diff <-
+    tribble(~population,            ~percent_diff_num,
+            "Tumor_HyperMetabolic", 0.05,
+            "Tumor_Fibrogenic",     0.20,
+            "Tumor_Progenitor",     0.20,
+            "Tumor_Proliferative",  0.40,
+            "Tumor_Interactive",    0.30,
+            "Tumor_Ground",         0.15)
+
+
+for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells"
+                # "mm_prim_cancer_cells", "mm_mets_cancer_cells",
+                # "xeno_prim_human", "xeno_mets_human",
+                # "dogs_prim_cancer_cells", "dogs_mets_cancer_cells"
+                )) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    obj_list[[group]] <- object
+    
+    Idents(object) <- object$Ann_Level3
+    genes <-
+        FindAllMarkers(object,
+                        only.pos = TRUE,
+                        min.pct = 0.25,
+                        logfc.threshold = 0.25)
+    
+    for (item in seq_len(nrow(percent_diff))) {
+        tumor_sub <- percent_diff$population[item]
+        percent_differ <- percent_diff$percent_diff_num[item]
+
+        genes_per_group <-
+            genes %>%
+            filter(cluster == tumor_sub) %>%
+            mutate(percent_diff = pct.1 - pct.2) %>%
+            filter(percent_diff > percent_differ) %>%
+            arrange(desc(avg_log2FC))
+
+        if (length(rownames(genes_per_group)) > 0) {
+            if (tumor_sub == "Tumor_HyperMetabolic") {
+                HyperMetabolic[[group]] <- genes_per_group
+            }
+            if (tumor_sub == "Tumor_Fibrogenic") {
+                Fibrogenic[[group]] <- genes_per_group
+            }
+            if (tumor_sub == "Tumor_Progenitor") {
+                Progenitor[[group]] <- genes_per_group
+            }
+            if (tumor_sub == "Tumor_Proliferative") {
+                Proliferative[[group]] <- genes_per_group
+            }
+            if (tumor_sub == "Tumor_Interactive") {
+                Interactive[[group]] <- genes_per_group
+            }
+            if (tumor_sub == "Tumor_Ground") {
+                Ground[[group]] <- genes_per_group
+            }
+        }
+    }
+}
+
+hyper <-
+    intersect(HyperMetabolic$patient_prim_cancer_cells$gene,         HyperMetabolic$patient_mets_cancer_cells$gene)
+
+fibrogenic_shared <- 
+    intersect(Fibrogenic$patient_prim_cancer_cells$gene,                   Fibrogenic$patient_mets_cancer_cells$gene)
+
+progenitor_shared <-
+    intersect(Progenitor$patient_prim_cancer_cells$gene,                 Progenitor$patient_mets_cancer_cells$gene)
+
+prolif <-
+    intersect(Proliferative$patient_prim_cancer_cells$gene,             Proliferative$patient_mets_cancer_cells$gene)
+
+inter <-
+    intersect(Interactive$patient_prim_cancer_cells$gene,              Interactive$patient_mets_cancer_cells$gene)
+
+groun <-
+    intersect(Ground$patient_prim_cancer_cells$gene,                   Ground$patient_mets_cancer_cells$gene)
+
+
+VlnPlot(obj_list$patient_prim_cancer_cells,
+        features = groun,
+        group.by = "Ann_Level3",
+        pt.size = 0)
+
+
+VlnPlot(obj_list$patient_mets_cancer_cells,
+        features = groun,
+        group.by = "Ann_Level3",
+        pt.size = 0)
+
+
+HyperMetabolic_markers <- c("MT1X", "SLC22A9", "SLC35F1")
+
+fibrogenic_markers <- c("COL4A1", "ITGBL1", "COL4A2", "CCDC102B", "COL8A1", "TFPI", "POSTN")
+
+progenitor_markers <- c("CD36", "ROBO2", "FAT3", "PLCB4", "TMTC2")
+
+prolif_markers <- c("MKI67", "CENPE", "TOP2A", "GTSE1", "NUSAP1", "PRC1", "CENPF", "DIAPH3")
+
+interactive_markers <- c("LAPTM5", "PTPRC", "RBM47", "PTPRE", "SRGN", "TYMP", "CTSB")
+
+ground_markers <- c("CNTN5", "HAPLN1", "PRR16", "ID4")
+
+
+
+
+objct_i <-
+    qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                    "harmony_human_xeno_cancer_cells.qs"))
+ 
+DimPlot(objct_i,
+              group.by = "Ann_Level3",
+            split.by = "unique",
+              raster=F) +
+    NoLegend()
+objct_i <-
+    FindClusters(objct_i,
+                 resolution = 0.1)
+dimplot_better(objct_i, group_by = "seurat_clusters")
+ 
+patient_prim <-
+    subset(objct_i,
+           unique == "patient_prim")
+dimplot_better(patient_prim, group_by = "Ann_Level3")
+ 
+patient_mets <-
+    subset(objct_i,
+           unique == "patient_mets")
+dimplot_better(patient_mets, group_by = "Ann_Level3")
+ 
+xeno_prim <-
+    subset(objct_i,
+           unique == "xeno_prim_human")
+dimplot_better(xeno_prim, group_by = "Ann_Level3")
+FeaturePlot(xeno)
+ 
+xeno_mets <-
+    subset(objct_i,
+           unique == "xeno_mets_human")
+dimplot_better(xeno_mets, group_by = "Ann_Level3")
+
+
+patient_me <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    "patient_mets_cancer_cells",
+                    ".qs"))
+
+harm_mets <-
+    patient_me %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = c("sample_name",
+                                 "method",
+                                 "data_source"),
+               theta = c(7, 12, 12),
+               lambda = c(0.1, 0.1, 0.1)) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.2)
+dimplot_better(harm_mets, group_by = "seurat_clusters")
+
+
+harm_mets <-
+    patient_me %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = c("sample_name",
+                                 "method",
+                                 "data_source"),
+               theta = c(7, 12, 12),
+               lambda = c(0.5, 0.1, 0.1)) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.2)
+dimplot_better(harm_mets, group_by = "seurat_clusters")
+
+harm_mets <-
+    FindClusters(harm_mets,
+                 resolution = 0.3)
+
+dimplot_better(patient_me, group_by = "Ann_Level3")
+dimplot_better(patient_me, group_by = "seurat_clusters")
+
+oatient<-
+    FindClusters(patient_me,
+                 resolution = 0.25)
+dimplot_better(oatient, group_by = "seurat_clusters")
 ```

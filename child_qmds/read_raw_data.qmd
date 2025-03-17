@@ -533,6 +533,13 @@ for (group in unique(all_samples_csv$unique)) {
         rbind(counts_afterQC) %>%
         arrange(unique)
 }
+write_tsv(counts_afterQC, "output/counts/cell_counts_afterQC.txt")
+
+sum_per_group <-
+    counts_afterQC %>%
+    group_by(unique) %>%
+    summarise(total_cells = sum(N_cells_after),
+              .groups = "drop")
 
 combined_table <- 
     dplyr::full_join(counts, counts_afterQC, by = c("sample_name", "unique")) %>%
