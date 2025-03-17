@@ -117,13 +117,18 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 repel = T,
                 cols = cols,
                 label.size = 2.5,
-                raster = F,
-                pt.size = 0.5) +
+                raster = F) +
             coord_fixed() +
             #scale_color_manual(values = cols) +
             NoLegend() +
             ggtitle(title_replacement[group][1]) +
             theme(aspect.ratio=1)
+    
+    qs::qsave(dimplot,
+            str_c("output/figures/Final_Annotations/ryan_needs/stromal_plots/",
+                group,
+                "_dimplot.qs"))
+    stash_plot(dimplot, str_c(group, "_dimplot"))
 
     dimplot_list[[group]] <- dimplot
 }
@@ -133,7 +138,7 @@ stromal_panel_plot <-
             ncol = 2) +
         patchwork::plot_annotation(title = "Stromal cell types Ann_Level3")
 
-# stash_plot(stromal_panel_plot, "stromal_panel_plot")
+stash_plot(stromal_panel_plot, "stromal_panel_plot")
 
 ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
         plot = stromal_panel_plot,
@@ -142,34 +147,10 @@ ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
         limitsize = FALSE,
         bg = "white")
 
+qs::qsave(stromal_panel_plot,
+        str_c("output/figures/Final_Annotations/ryan_needs/stromal_panel_plot.qs"))
 
-#dimplot_better(object, group_by = "markers", raster=F, pt.size = 0.2) 
-Idents(object) <- object$Ann_Level3
-object$compare <- 
-    ifelse(object$Ann_Level3 == "Neutrophils", "Neutrophils", "compared_to")
 
-Idents(object) <- object$compare
-nuet <-
-    FindMarkers(object = object,
-                ident.1 = "Neutrophils",
-                ident.2 = "compared_to",
-                min.pct = 0.25,
-                logfc.threshold = 0.25,
-                test.use = "wilcox",
-                only.pos = TRUE)
-
-genes <-
-    nuet %>%
-    dplyr::filter(p_val_adj < 0.05) %>%
-    arrange(desc(avg_log2FC)) %>%
-    rownames_to_column(var = "gene") %>%
-     dplyr::filter(!str_starts(gene, "ENSCAF"))
-
-Top30 <-
-    genes %>%
-    select(gene) %>%
-    slice(1:30) %>%
-    as.vector()
 ```
 
 
@@ -282,6 +263,12 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
             NoLegend() +
             ggtitle(title_replacement[group][1]) +
             theme(aspect.ratio=1)
+    
+    qs::qsave(cancer_plot,
+            str_c("output/figures/Final_Annotations/ryan_needs/tumor_plots/",
+                group,
+                "_dimplot.qs"))
+    stash_plot(cancer_plot, str_c(group, "_dimplot"))
 
     cancer_plot_list[[group]] <- cancer_plot
 }
@@ -291,7 +278,10 @@ cancer_panel_plot <-
             ncol = 2) +
         patchwork::plot_annotation(title = "Tumor subpopulations Ann_Level3")
 
-# stash_plot(cancer_panel_plot, "tumor_panel_plot")
+stash_plot(cancer_panel_plot, "tumor_panel_plot")
+qs::qsave(cancer_panel_plot,
+        str_c("output/figures/Final_Annotations/ryan_needs/tumor_panel_plot.qs"))
+
 
 ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.png",
         plot = cancer_panel_plot,
@@ -355,7 +345,7 @@ harmony_sobj <-
 
 qs::qsave(harmony_sobj,
         str_c("output/seurat_objects/final_combined_sobjs/",
-                "harmony_all_cancer_cells",
+                "harmony_human_xeno_cancer_cells",
                 ".qs"))
 
 all_tumor <-

@@ -532,6 +532,12 @@ for (item in seq_len(nrow(object_list))) {
                             resolution = 0.6)
         }
 
+        if (group == "dogs_mets_normal_cells" && cell_type == "Immune_Myeloid") {
+            s_obj <-
+                FindClusters(s_obj,
+                            resolution = 1.5)
+        }
+
         # read inn old metadata for annotations 
         # note: have to run first without this section 
         filename <-
@@ -1093,24 +1099,28 @@ celltype_list <-
                                                 "^14$" = "DC1",
                                                 "^15$" = "CD4_T"),
                             Immune_Myeloid = c("^0$" = "Alv_TAMs",
-                                                "^1$" = "Inflam_TAMs",
-                                                "^2$" = "Scar_TAMs",
-                                                "^3$" = "TAMs",
-                                                "^4$" = "DC2",
-                                                "^5$" = "TAMs",
-                                                "^6$" = "apCAFs",
-                                                "^7$" = "Inflam_TAMs",
-                                                "^8$" = "Prolif_TAMs",
-                                                "^9$" = "IFN_TAMs",
-                                                "^10$" = "Osteoclast_TAMs",
-                                                "^11$" = "DC1",
-                                                "^12$" = "Inflam_TAMs",
-                                                "^13$" = "pDC",
-                                                "^14$" = "Scar_TAMs",
+                                                "^1$" = "TAMs",
+                                                "^2$" = "DC2",
+                                                "^3$" = "Scar_TAMs",
+                                                "^4$" = "Inflam_TAMs",
+                                                "^5$" = "Inflam_TAMs",
+                                                "^6$" = "TAMs",
+                                                "^7$" = "apCAFs",
+                                                "^8$" = "Inflam_TAMs",
+                                                "^9$" = "Prolif_TAMs",
+                                                "^10$" = "IFN_TAMs",
+                                                "^11$" = "Osteoclast_TAMs",
+                                                "^12$" = "Scar_TAMs",
+                                                "^13$" = "Monocytes",
+                                                "^14$" = "DC1",
                                                 "^15$" = "Inflam_TAMs",
                                                 "^16$" = "Alv_TAMs",
-                                                "^17$" = "Mast",
-                                                "^18$" = "Alv_TAMs"),
+                                                "^17$" = "pDC",
+                                                "^18$" = "Inflam_TAMs",
+                                                "^19$" = "Scar_TAMs",
+                                                "^20$" = "Alv_TAMs",
+                                                "^21$" = "Mast",
+                                                "^22$" = "Alv_TAMs"),
                             Epithelial_Endothelial = c("^0$" = "Endothelial_Vein",
                                                         "^1$" = "Endothelial_Capillary",
                                                         "^2$" = "AT2",
@@ -1229,6 +1239,12 @@ for (item in seq_len(nrow(object_list))) {
             s_obj <-
                 FindClusters(s_obj,
                             resolution = 0.6)
+        }
+
+        if (group == "dogs_mets_normal_cells" && cell_type == "Immune_Myeloid") {
+            s_obj <-
+                FindClusters(s_obj,
+                            resolution = 1.5)
         }
 
         s_obj$Ann_Level3 <-
