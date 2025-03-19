@@ -579,7 +579,6 @@ Annotation_cleanup <-
 orthologs <-
     read_tsv("input/downloads/dog_human_gene_orthologs.txt")
 
-
 #Harmony parameters for the split
 harmony_params <-
     list(patient_prim = list(group_by = c("sample_name",
@@ -590,8 +589,8 @@ harmony_params <-
         patient_mets = list(group_by = c("sample_name",
                                             "method",
                                             "data_source"),
-                            theta = c(7, 7, 7),
-                            lambda = c(0.1, 0.1, 0.1)),
+                            theta = c(1, 7, 7),
+                            lambda = c(0.5, 0.5, 0.5)),
         xeno_prim_human = list(group_by = c("sample_name",
                                             "location",
                                             "data_source"),
@@ -664,8 +663,6 @@ for (group in c("patient_prim", "patient_mets",
             subset(object,
                    sample_name != "S0200" & sample_name != "S0201")
     }
-    
-    DimPlot(object, cells.highlight = tumor_ids$cell_ids)
 
     for (cell_group_name in c("cancer_cells", "normal_cells")) {
         sub_group <- str_c(group, "_", cell_group_name)
