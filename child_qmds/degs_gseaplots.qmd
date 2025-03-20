@@ -129,14 +129,14 @@ panel_plots <- list()
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.15,
-            "patient_mets_cancer_cells",    0.25,
-            "mm_prim_cancer_cells",         1,
-            "mm_mets_cancer_cells",         1,
-            "xeno_prim_human",              0.3,
-            "xeno_mets_human",              0.4,
+            # "patient_prim_cancer_cells",    0.15,
+            # "patient_mets_cancer_cells",    0.25,
+            # "mm_prim_cancer_cells",         1,
+            # "mm_mets_cancer_cells",         1,
+            # "xeno_prim_human",              0.3,
+            # "xeno_mets_human",              0.4,
             "dogs_prim_cancer_cells",       0.2,
-            "dogs_mets_cancer_cells",       0.5
+            "dogs_mets_cancer_cells",       0.3
             )
 
 # run force directed layout
@@ -639,7 +639,7 @@ object_list <-
             "xeno_prim_human",              0.3,
             "xeno_mets_human",              0.4,
             "dogs_prim_cancer_cells",       0.2,
-            "dogs_mets_cancer_cells",       0.5
+            "dogs_mets_cancer_cells",       0.3
             )
 
 for (i in seq_len(nrow(object_list))) {
@@ -654,7 +654,7 @@ for (i in seq_len(nrow(object_list))) {
                 ".qs"
             )
         ) %>%
-        FindClusters(resolution = 0.2)
+        FindClusters(resolution = res_value)
 
     object$Ann_Level0 <- "Tumor"
     object$Ann_Level1 <- "Tumor"
@@ -716,95 +716,101 @@ for (i in seq_len(nrow(object_list))) {
     if (group == "mm_prim_cancer_cells") {       #KEGG pathways are good to differentiate the clusters
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Fibrogenic",
-                            "1" = "Tumor_Proliferative",
-                            "2" = "Tumor_HyperMetabolic",  
-                            "3" = "Tumor_HyperMetabolic",   #neuronal and bone development, axon guidance
-                            "4" = "Tumor_Proliferative",
-                            "5" = "Tumor_Progenitor",
-                            "6" = "Tumor_Apoptosis",   #Apoptotic
-                            "7" = "Tumor_Interactive",
-                            "8" = "Tumor_Progenitor",
-                            "9" = "Tumor_Interactive",
-                            "10" = "Tumor_HyperMetabolic",
-                            "11" = "Tumor_HyperMetabolic"))
+                          c("^0$" = "Tumor_Fibrogenic",
+                            "^1$" = "Tumor_Proliferative",
+                            "^2$" = "Tumor_HyperMetabolic",  
+                            "^3$" = "Tumor_HyperMetabolic",   #neuronal and bone development, axon guidance
+                            "^4$" = "Tumor_Proliferative",
+                            "^5$" = "Tumor_Progenitor",
+                            "^6$" = "Tumor_Apoptosis",   #Apoptotic
+                            "^7$" = "Tumor_Interactive",
+                            "^8$" = "Tumor_Progenitor",
+                            "^9$" = "Tumor_Interactive",
+                            "^10$" = "Tumor_HyperMetabolic",
+                            "^11$" = "Tumor_HyperMetabolic"))
     }
     if (group == "mm_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Proliferative",    #
-                            "1" = "Tumor_HyperMetabolic",   
-                            "2" = "Tumor_Progenitor",
-                            "3" = "Tumor_Apoptosis",           #Apoptotic
-                            "4" = "Tumor_Progenitor",
-                            "5" = "Tumor_Proliferative",
-                            "6" = "Tumor_Interactive",
-                            "7" = "Tumor_Fibrogenic",
-                            "8" = "Tumor_Fibrogenic",
-                            "9" = "Tumor_Progenitor",
-                            "10" = "Tumor_Fibrogenic",
-                            "11" = "Tumor_Interactive",
-                            "12" = "Tumor_HyperMetabolic"))
-    }
-    if (group == "xeno_prim_human") {
-        object$Ann_Level3 <-
-            str_replace_all(object$seurat_clusters,      
-                          c("^0$" = "Tumor_Fibrogenic",   #neuronal and bone development axon guidance
-                            "^1$" = "Tumor_Proliferative",   #not sure
-                            "^2$" = "Tumor_HyperMetabolic",
-                            "^3$" = "Tumor_Progenitor", 
-                            "^4$" = "Tumor_Ground",
-                            "^5$" = "Tumor_Ground",
-                            "^6$" = "Tumor_Ground",     # BNIP3 expressed usually apoptotic
-                            "^7$" = "Tumor_Progenitor",
-                            "^8$" = "Tumor_Interactive",
-                            "^9$" = "Tumor_Proliferative",
+                          c("^0$" = "Tumor_Proliferative",    #
+                            "^1$" = "Tumor_HyperMetabolic",   
+                            "^2$" = "Tumor_Progenitor",
+                            "^3$" = "Tumor_Apoptosis",           #Apoptotic
+                            "^4$" = "Tumor_Progenitor",
+                            "^5$" = "Tumor_Proliferative",
+                            "^6$" = "Tumor_Interactive",
+                            "^7$" = "Tumor_Fibrogenic",
+                            "^8$" = "Tumor_Fibrogenic",
+                            "^9$" = "Tumor_Progenitor",
                             "^10$" = "Tumor_Fibrogenic",
-                            "^11$" = "Tumor_Ground",
-                            "^12$" = "Tumor_Ground",
-                            "^13$" = "Tumor_Ground",
-                            "^14$" = "Tumor_Fibrogenic",
-                            "^15$" = "Tumor_HyperMetabolic"))
+                            "^11$" = "Tumor_Interactive",
+                            "^12$" = "Tumor_HyperMetabolic"))
     }
-    if (group == "xeno_mets_human") {
-        object$Ann_Level3 <-
-            str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Progenitor",
-                            "1" = "Tumor_HyperMetabolic",
-                            "2" = "Tumor_Interactive",   #not sure
-                            "3" = "Tumor_Proliferative",
-                            "4" = "Tumor_Fibrogenic",
-                            "5" = "Tumor_Ground"))
-    }
+    # if (group == "xeno_prim_human") {
+    #     object$Ann_Level3 <-
+    #         str_replace_all(object$seurat_clusters,      
+    #                       c("^0$" = "Tumor_Fibrogenic",   #neuronal and bone development axon guidance
+    #                         "^1$" = "Tumor_Proliferative",   #not sure
+    #                         "^2$" = "Tumor_HyperMetabolic",
+    #                         "^3$" = "Tumor_Progenitor", 
+    #                         "^4$" = "Tumor_Ground",
+    #                         "^5$" = "Tumor_Ground",
+    #                         "^6$" = "Tumor_Ground",     # BNIP3 expressed usually apoptotic
+    #                         "^7$" = "Tumor_Progenitor",
+    #                         "^8$" = "Tumor_Interactive",
+    #                         "^9$" = "Tumor_Proliferative",
+    #                         "^10$" = "Tumor_Fibrogenic",
+    #                         "^11$" = "Tumor_Ground",
+    #                         "^12$" = "Tumor_Ground",
+    #                         "^13$" = "Tumor_Ground",
+    #                         "^14$" = "Tumor_Fibrogenic",
+    #                         "^15$" = "Tumor_HyperMetabolic"))
+    # }
+    # if (group == "xeno_mets_human") {
+    #     object$Ann_Level3 <-
+    #         str_replace_all(object$seurat_clusters,
+    #                       c("0" = "Tumor_Progenitor",
+    #                         "1" = "Tumor_HyperMetabolic",
+    #                         "2" = "Tumor_Interactive",   #not sure
+    #                         "3" = "Tumor_Proliferative",
+    #                         "4" = "Tumor_Fibrogenic",
+    #                         "5" = "Tumor_Ground"))
+    # }
     if (group == "dogs_prim_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
                           c("^0$" = "Tumor_Progenitor",
-                            "^1$" = "Tumor_Fibrogenic",   #neuronal and bone development axon guidance
-                            "^2$" = "Tumor_Proliferative",   #not sure
+                            "^1$" = "Tumor_Fibrogenic",   
+                            "^2$" = "Tumor_Proliferative",   
                             "^3$" = "Tumor_HyperMetabolic",
-                            "^4$" = "Tumor_HyperMetabolic",
+                            "^4$" = "Tumor_Fibrogenic",
                             "^5$" = "Tumor_Interactive",
                             "^6$" = "Tumor_Progenitor",
-                            "^7$" = "Tumor_Interactive",
-                            "^8$" = "Tumor_Interactive",
-                            "^9$" = "Tumor_Fibrogenic",
-                            "^10$" = "Tumor_Ground",
-                            "^11$" = "Tumor_Ground",
-                            "^12$" = "Tumor_Ground"))
+                            "^7$" = "Tumor_Fibrogenic", 
+                            "^8$" = "Tumor_Fibrogenic",   
+                            "^9$" = "Tumor_Apoptosis",
+                            "^10$" = "Tumor_Proliferative",
+                            "^11$" = "Tumor_HyperMetabolic",
+                            "^12$" = "Tumor_HyperMetabolic"))
     }
     if (group == "dogs_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Progenitor",
-                            "1" = "Tumor_Proliferative",   #neuronal and bone development axon guidance
-                            "2" = "Tumor_Fibrogenic",   #not sure
-                            "3" = "Tumor_HyperMetabolic",
-                            "4" = "Tumor_Interactive",
-                            "5" = "Tumor_Interactive",
-                            "6" = "Tumor_HyperMetabolic",
-                            "7" = "Tumor_Ground"))
+                          c("^0$" = "Tumor_HyperMetabolic",
+                            "^1$" = "Tumor_Fibrogenic",  
+                            "^2$" = "Tumor_Proliferative",   
+                            "^3$" = "Tumor_Progenitor",
+                            "^4$" = "Tumor_Interactive",
+                            "^5$" = "Tumor_Apoptosis",
+                            "^6$" = "Tumor_Proliferative",
+                            "^7$" = "Tumor_Interactive",
+                            "^8$" = "Tumor_Interactive",
+                            "^9$" = "Tumor_Interactive",
+                            "^10$" = "Tumor_HyperMetabolic",
+                            "^11$" = "Tumor_Interactive",
+                            "^12$" = "Tumor_Interactive"))
     }
+
     object$Ann_Level2 <- object$Ann_Level3
 
     annotation_dimplot1 <-
@@ -877,6 +883,8 @@ for (i in seq_len(nrow(object_list))) {
     print(str_c("Finished processing ", "for ", group))
 
 }
+
+
 
 ```
 
@@ -954,27 +962,22 @@ for (item in seq_len(nrow(combine_tumor_per_species))) {
 }
 
 ## trying to find the subpopulation specific markers from combined patient object 
-prim_mets <-
+prim_mets_dog <-
     qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
-                    "harmony_patient_prim_mets",
+                    "dog_prim_mets",
                     ".qs"))
- 
-Idents(prim_mets) <- prim_mets$Ann_Level3
-genes <-
-    FindAllMarkers(prim_mets,
-                    only.pos = TRUE,
-                    min.pct = 0.25,
-                    logfc.threshold = 0.25)
- 
-markers <-
-    genes %>%
-    filter(cluster == "Tumor_Progenitor") %>%
-    mutate(percent_diff = pct.1 - pct.2) %>%
-    filter(percent_diff > 0.3) %>%
-    arrange(desc(avg_log2FC)) %>%
-    #arrange(desc(percent_diff)) %>%
-    pull(gene)
+prim_mets_dog <- FindClusters(prim_mets_dog, resolution = 0.35)
 
+dimplot_better(prim_mets_dog, group_by = "seurat_clusters")
+
+make_panel_plot(sobj = prim_mets_dog,
+                    comparison_col = "seurat_clusters",
+                    label = "seurat_clusters",
+                    group = "harmony_dog_prim_mets",
+                    aggregate_by = c("sample_name", "seurat_clusters"),
+                    organism_col = "organism",
+                    subset = FALSE,
+                    batch_var = "data_source")
 
 
 
@@ -1024,21 +1027,52 @@ prim_patient_xeno <-
     qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
                     "prim_patient_xeno",
                     ".qs"))
-dimplot_better(prim_patient_xeno, group_by = "Ann_Level3")
 
-pprim <-
-    subset(prim_patient_xeno,
-            unique == "patient_prim")
-dimplot_better(pprim, group_by = "Ann_Level3")
+prim_patient_xeno$newid <-
+    str_replace_all(prim_patient_xeno$seurat_clusters,
+                  c("^0$" = "Tumor_Proliferative",
+                    "^1$" = "Tumor_Fibrogenic",
+                    "^2$" = "Tumor_HyperMetabolic",  
+                    "^3$" = "Tumor_HyperMetabolic",   
+                    "^4$" = "Tumor_Progenitor",   
+                    "^5$" = "Tumor_Progenitor",  
+                    "^6$" = "Tumor_Fibrogenic",  # is hypermetabolic coz similar
+                    "^7$" = "Tumor_Fibrogenic",
+                    "^8$" = "Tumor_Interactive",
+                    "^9$" = "Tumor_Interactive",
+                    "^10$" = "Tumor_Proliferative",
+                    "^11$" = "Tumor_Interactive",
+                    "^12$" = "Tumor_Proliferative",
+                    "^13$" = "Tumor_HyperMetabolic",
+                    "^14$" = "Tumor_Progenitor",
+                    "^15$" = "Tumor_Fibrogenic",
+                    "^16$" = "Tumor_HyperMetabolic",
+                    "^17$" = "Tumor_HyperMetabolic",
+                    "^18$" = "Tumor_Interactive",
+                    "^19$" = "Tumor_Progenitor",
+                    "^20$" = "Tumor_Interactive",
+                    "^21$" = "Tumor_Interactive",
+                    "^22$" = "Tumor_Proliferative",
+                    "^23$" = "Tumor_Interactive"))
 
-xeno_prim <-
-    subset(prim_patient_xeno,
-            unique == "xeno_prim_human")
 
-dimplot_better(xeno_prim, group_by = "seurat_clusters")
-dimplot_better(xeno_prim, group_by = "Ann_Level3")
+metadata <-
+    prim_patient_xeno@meta.data %>%
+    subset(unique == "xeno_prim_human") %>%
+    select(newid)
 
-VlnPlot(xeno_prim, features = "BNIP3", group.by = "seurat_clusters")
+xeno_prim_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    "xeno_prim_human",
+                    ".qs"))
+
+xeno_prim_tumor <- 
+    AddMetaData(xeno_prim_tumor, metadata = metadata)
+
+xeno_prim1 <-
+    xeno_prim %>%
+    FindClusters(resolution = 0.3)
+dimplot_better(xeno_prim1, group_by = "seurat_clusters")
 
 
 
@@ -1046,42 +1080,64 @@ VlnPlot(xeno_prim, features = "BNIP3", group.by = "seurat_clusters")
 
 
 
-
-mets_patient_xeno1 <-
+mets_patient_xeno <-
     qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
                     "mets_patient_xeno",
                     ".qs"))
-mets_patient_xeno <-
-    mets_patient_xeno %>%
-     FindClusters(resolution = 0.35)
 
-dimplot_better(mets_patient_xeno, group_by = "seurat_clusters")
+mets_patient_xeno$newid <-
+    str_replace_all(mets_patient_xeno$seurat_clusters,
+                  c("^0$" = "Tumor_HyperMetabolic",
+                    "^1$" = "Tumor_Proliferative",
+                    "^2$" = "Tumor_Progenitor",  
+                    "^3$" = "Tumor_Fibrogenic",   
+                    "^4$" = "Tumor_Interactive",   
+                    "^5$" = "Tumor_Apoptosis",  
+                    "^6$" = "Tumor_HyperMetabolic", 
+                    "^7$" = "Tumor_Fibrogenic",
+                    "^8$" = "Tumor_HyperMetabolic",
+                    "^9$" = "Tumor_Interactive",
+                    "^10$" = "Tumor_Progenitor",
+                    "^11$" = "Tumor_Apoptosis",
+                    "^12$" = "Tumor_HyperMetabolic",
+                    "^13$" = "Tumor_Fibrogenic",
+                    "^14$" = "Tumor_HyperMetabolic",
+                    "^15$" = "Tumor_Fibrogenic",
+                    "^16$" = "Tumor_Fibrogenic",
+                    "^17$" = "Tumor_Progenitor",
+                    "^18$" = "Tumor_Progenitor",
+                    "^19$" = "Tumor_Fibrogenic",
+                    "^20$" = "Tumor_HyperMetabolic",
+                    "^21$" = "Tumor_HyperMetabolic",
+                    "^22$" = "Tumor_Fibrogenic"))
+metadata <-
+    mets_patient_xeno@meta.data %>%
+    subset(unique == "xeno_mets_human") %>%
+    select(newid)
 
-dimplot_better(mets_patient_xeno, group_by = "Ann_Level3")
+xeno_mets_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    "xeno_mets_human",
+                    ".qs"))
 
-VlnPlot(mets_patient_xeno, features = "CD36", group.by = "seurat_clusters", pt.size = 0)
-pmets <-
-    subset(mets_patient_xeno,
-            unique == "patient_mets")
-dimplot_better(pmets, group_by = "Ann_Level3")
-dimplot_better(pmets, group_by = "seurat_clusters")
+xeno_mets_tumor <- 
+    AddMetaData(xeno_mets_tumor, metadata = metadata)
+
 xeno_mets <-
     subset(mets_patient_xeno,
             unique == "xeno_mets_human")
 
-make_panel_plot(sobj = xeno_mets,
-                    comparison_col = "seurat_clusters",
-                    label = "seurat_clusters",
-                    group = "xeno_mets_human",
-                    aggregate_by = c("sample_name", "seurat_clusters"),
-                    organism_col = "organism",
-                    subset = FALSE,
-                    batch_var = "data_source")
+dimplot_better(xeno_mets, group_by = "newid")
 
-dimplot_better(xeno_mets, group_by = "Ann_Level3")
 dimplot_better(xeno_mets, group_by = "seurat_clusters")
 
-VlnPlot(xeno_mets, features = "CD36", group.by = "seurat_clusters", pt.size = 0)
+FeaturePlot(xeno_mets, features = "BNIP3")
+
+VlnPlot(xeno_mets, features = c("HLA-DRA", "HLA-DQA1", "HLA-DMB",
+                            "CD74", "CD68", "CD83", "CD84", "CD14", "CD53"), group.by = "newid", pt.size = 0)
+
+
+
 ```
 
 
