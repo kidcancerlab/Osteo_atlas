@@ -296,7 +296,7 @@ cancer_panel_plot <-
             ncol = 2) +
         patchwork::plot_annotation(title = "Tumor subpopulations Ann_Level3")
 
-stash_plot(cancer_panel_plot, "tumor_panel_plot")
+# stash_plot(cancer_panel_plot, "tumor_panel_plot")
 qs::qsave(cancer_panel_plot,
         str_c("output/figures/Final_Annotations/ryan_needs/tumor_panel_plot.qs"))
 
@@ -308,5 +308,108 @@ ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.png",
         limitsize = FALSE,
         bg = "white")
 
-```
 
+patient_mice_hypermetabolic <- c("RPL37A", "RPS18", "RPL39", "RPL35")
+
+xenograf_hypermetabolic <- c("TSIX", "AL035427.1", "AL354733.3", "AC011933.4")
+
+
+    
+# make a cancer dotplot
+tumor_features_cells <- list(
+    Tumor_Fibrogenic = c("COL6A3", "COL3A1", "PDGFRB", "COL6A1"),
+    Tumor_Progenitor = c("ROBO2", "CD36", "SATB2"),
+    Tumor_Interactive = c("CD74", "CSF1R", "PTPRC", "PTPRJ"),
+    Tumor_Proliferative = c("CENPF", "ASPM", "BIRC5", "AURKB"),
+    Tumor_Apoptosis = c("BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104"),
+    Tumor_HyperMetabolic = c("MT1G", "MT1X", "FABP5")
+)
+
+#set the order of the cells for the dotplot
+order_Tumors <-
+    c("Tumor_Fibrogenic", "Tumor_Progenitor",
+      "Tumor_Interactive", "Tumor_Proliferative", 
+     "Tumor_Apoptosis", "Tumor_HyperMetabolic")
+
+# Generate a feature dotplot for the macrophages from the different groups
+dotplot_list <- list()
+
+for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
+                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
+                "xeno_prim_human", "xeno_mets_human",
+                "dogs_prim_cancer_cells", "dogs_mets_cancer_cells")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    order_features <-
+        c("COL6A3", "COL3A1", "PDGFRB", "COL6A1",
+          "ROBO2", "CD36", "SATB2",
+          "CD74", "CSF1R", "PTPRC", "PTPRJ",
+          "CENPF", "ASPM", "BIRC5", "AURKB",
+          "BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104",
+          "MT1G", "MT1X", "FABP5"
+          )
+
+    unique_cells <-
+        unique(cancer_sobj_list[[group]]$Ann_Level3) 
+
+    dotplot_markers <-
+        tumor_features_cells[unique_cells] %>%
+        unlist() %>%
+        as.vector()
+
+    species <- 
+        cancer_sobj_list[[group]]$organism[1]
+    
+    # Convert macrophage_features to mouse genes if species is mouse
+    if (species == "mouse") {
+        dotplot_markers <- 
+            nichenetr::convert_human_to_mouse_symbols(dotplot_markers) %>%
+            na.omit() %>%
+            as.character()
+        order_features <- 
+            nichenetr::convert_human_to_mouse_symbols(order_features) %>%
+            na.omit() %>%
+            unique()
+    }
+
+    # Filter for features present in the group
+    present_features <- 
+        intersect(dotplot_markers, rownames(cancer_sobj_list[[group]]))
+
+    # Filter for features present in the group
+    order_tumor_subset <-
+        intersect(order_Tumors, unique(cancer_sobj_list[[group]]$Ann_Level3))
+
+    dotplot <- 
+        DotPlot(cancer_sobj_list[[group]],
+            features = present_features,
+            group.by = "Ann_Level3",
+            cols = "RdBu",
+            dot.scale = 10,
+            col.max = 1.5) +
+            scale_y_discrete(limits = rev(order_tumor_subset)) +
+            scale_x_discrete(limits = intersect(order_features, present_features)) +
+            #ggtitle(title_replacement[group][1]) +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+            coord_fixed()
+    dotplot_list[[group]] <- dotplot
+}
+
+# Combine the dotplots into a single panel
+dotplot_panel <- 
+    patchwork::wrap_plots(plotlist = dotplot_list, ncol = 2) +
+    patchwork::plot_annotation(title = "Tumor Cell Type Markers")
+
+# stash_plot(dotplot_panel, "tumor_marker_dotplot")
+
+ggsave(filename = "output/figures/Final_Annotations/tumor_marker_dotplot.png",
+        plot = dotplot_panel,
+        width = 30,
+        height = 20,
+        limitsize = FALSE,
+        bg = "white")
+
+```

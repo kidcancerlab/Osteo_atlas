@@ -508,9 +508,19 @@ as 5000 max cells per sample for similar dataset representation
 all_samples_csv <- 
     readr::read_tsv("misc/allsample_details.txt",
                     show_col_types = FALSE) %>%
-    filter(unique != "normal_bone")
+    filter(unique != "normal_bone",
+           unique != "dogs_cc") 
 
 counts_afterQC <- tibble()
+
+#run the QC and merge seurat objects
+# number <- list()
+# number_of_samples <- all_samples_csv %>%
+#     group_by(unique, data_source) %>%
+#     summarise(number_of_samples = n(), .groups = "drop")
+
+# print(number_of_samples)
+
 
 for (group in unique(all_samples_csv$unique)) {
     object <- 
