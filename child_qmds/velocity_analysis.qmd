@@ -137,7 +137,6 @@ import anndata
 import scvelo as scv
 import pandas as pd
 import numpy as np
-import matplotlib as plt
 from matplotlib import pyplot
 import scanpy as sc
 import os
@@ -170,37 +169,42 @@ for ob in ob_names:
 
 def write_ob_and_plots(ob):
     print("starting on " + ob)
-    merged_ad=loom_to_an(obj_name = ob,
-                     loom_dir = "loom_output/samples",
-                     metadata_dir = "loom_output/metadata")
-    print("made " + ob + " , now calculating velocity")
-    calc_velo(merged_ad)
-    merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
-    print("calculated velocity and saved off " + ob)
+    # merged_ad=loom_to_an(obj_name = ob,
+    #                  loom_dir = "loom_output/samples",
+    #                  metadata_dir = "loom_output/metadata")
+    # print("made " + ob + " , now calculating velocity")
+    # calc_velo(merged_ad)
+    # merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
+    # print("calculated velocity and saved off " + ob)
+    merged_ad = anndata.read("loom_output/anndata/" + ob + ".ad")
     #make the plots and save them off
     #seurat clusters in umap space
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "umap",
                                      color = "seurat_clusters",
-                                     show = False)
+                                     show = False,
+                                     sort_order = False)
     pyplot.savefig("figures/scvelo/Ryan/" + ob + "_umap_clusters.svg")
     #Ann_Level3 in umap space
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "umap",
                                      color = "Ann_Level3",
-                                     show = False)
+                                     show = False,
+                                     sort_order = False)
     pyplot.savefig("figures/scvelo/Ryan/" + ob + "_umap_annotations.svg")
     #seurat_clusters in fdl
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "fdl",
                                      color = "seurat_clusters",
-                                     show = False)
+                                     show = False,
+                                     sort_order = False)
     pyplot.savefig("figures/scvelo/Ryan/" + ob + "_fdl_clusters.svg")
     #cell types in fdl
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "fdl",
                                      color = "Ann_Level3",
-                                     show = False)
+                                     show = False,
+                                     sort_order = False)
     pyplot.savefig("figures/scvelo/Ryan/" + ob + "_fdl_annotations.svg")
     return(ob + " is done")
 
