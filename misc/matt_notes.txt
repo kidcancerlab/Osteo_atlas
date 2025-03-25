@@ -7,15 +7,6 @@ To do:
     More polished analysis of doubletFinder
     Overlay velocity analysis with new cancer subpopulation annotations
 
-2/25
-What's done:
-    Re-ran deconvolution using objects from final_tumor_vs_stroma
-
-To do:
-    Re-run ischia for cell type co-occurrence
-    
-3/6
-Tried running Banksy for neighborhood analysis, am stuck on converting seurat object to SpatialExperiment object
 2/24
 What's done:
     Am in the process of overlaying velocity analysis plots with annotations and seurat clusters
@@ -23,6 +14,13 @@ What's done:
 To do:
     Make sure that figures were made correctly in fix_everything
     ^if so, clean up code for velocity analysis
+
+2/25
+What's done:
+    Re-ran deconvolution using objects from final_tumor_vs_stroma
+
+To do:
+    Re-run ischia for cell type co-occurrence
 
 3/3
 What's done:
@@ -35,3 +33,6 @@ To do:
     Make sure last two steps from above ran
     check overlap between velocity-driving genes and degs
     Recreate velocity analysis plots overlaying fdl
+
+3/6
+Tried running Banksy for neighborhood analysis, am stuck on converting seurat object to SpatialExperiment object
