@@ -16,3 +16,22 @@ To do:
     
 3/6
 Tried running Banksy for neighborhood analysis, am stuck on converting seurat object to SpatialExperiment object
+2/24
+What's done:
+    Am in the process of overlaying velocity analysis plots with annotations and seurat clusters
+
+To do:
+    Make sure that figures were made correctly in fix_everything
+    ^if so, clean up code for velocity analysis
+
+3/3
+What's done:
+    Started playing around with the ranked genes from velocity analysis
+        looks like it overlaps well with degs
+    Re-running code to calculate fdl for all objects
+    Re-running velocity analysis with mode = "dynamical"
+
+To do:
+    Make sure last two steps from above ran
+    check overlap between velocity-driving genes and degs
+    Recreate velocity analysis plots overlaying fdl

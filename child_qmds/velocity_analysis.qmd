@@ -19,133 +19,64 @@ velo_input <- read.table("misc/allsample_details.txt",
     mutate(data_path = paste0(
             recode(data_source,
                    "GEO" = "/home/gdrobertslab/lab/Counts_2/",
-                    "NCH" = "/home/gdrobertslab/lab/Counts_2/",
-                    "SJ" = "/home/gdrobertslab/lab/ExternalData/Patel_lab/",
-                    "NCI_POB" = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/"))) %>%
-    unique()
+                   "NCH" = "/home/gdrobertslab/lab/Counts_2/",
+                   "SJ" = "/home/gdrobertslab/lab/ExternalData/Patel_lab/",
+                   "NCI_POB" = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/",
+                   "CSU" = "/home/gdrobertslab/lab/ExternalData/Regan_lab/",
+                   "TU" = "/home/gdrobertslab/lab/ExternalData/Gardner/",
+                   "UoM" = "/home/gdrobertslab/lab/ExternalData/Modiano_Lab/Counts/"))) %>%
+    unique() %>%
+    mutate(#add h5 paths
+           h5_path = ifelse(data_source == "NCI_POB",
+                            paste0(data_path,
+                                   "03_FilteredMatricesH5/",
+                                   sample_id,
+                                   "_filtered_feature_bc_matrix.h5"),
+                            paste0(data_path,
+                                   sample_id,
+                                   "/filtered_feature_bc_matrix.h5")),
+           #add bam paths
+           bam_path = ifelse(data_source == "NCI_POB",
+                             paste0(data_path,
+                                    "BAMs/",
+                                    sample_id,
+                                    "_gex_possorted_bam.bam"),
+                             ifelse(data_source == "CSU",
+                                    paste0(data_path,
+                                           sample_id,
+                                           "/",
+                                           sample_id,
+                                           "_possorted_genome_bam.bam"),
+                                    paste0(data_path,
+                                           sample_id,
+                                           "/possorted_genome_bam.bam"))),
+           gtf_path = recode(species,
+                             "canine" = "/home/gdrobertslab/lab/GenRef/10x-canine-atlas_arc/genes/genes.gtf.gz",
+                             "mousemodel" = "/home/gdrobertslab/lab/GenRef/10x-mm10_arc/genes/genes.gtf.gz",
+                             "patient" = "/home/gdrobertslab/lab/GenRef/10x-hg38_arc/genes/genes.gtf.gz",
+                             "xenograft" = "/home/gdrobertslab/lab/GenRef/10x-hg38-mm10_arc/genes/genes.gtf.gz"))
+#fix edge cases for h5's (subset of dan regan's objects) and bams (subset of nch ones)
+velo_input$h5_path[!file.exists(velo_input$h5_path)] <-
+    paste0(velo_input$data_path,
+          velo_input$sample_id,
+          "/",
+          velo_input$sample_id,
+          "_possorted_genome_bam.bam")[!file.exists(velo_input$h5_path)]
+velo_input$bam_path[!file.exists(velo_input$bam_path)] <-
+    paste0(velo_input$data_path,
+           velo_input$sample_id,
+           "/gex_possorted_bam.bam")[!file.exists(velo_input$bam_path)]
+
+all(file.exists(velo_input$h5_path) & file.exists(velo_input$bam_path))
+
 rownames(velo_input) <- NULL
 
-h5s <- ifelse(velo_input$data_source == "NCI_POB",
-                             paste0(velo_input$data_path,
-                                    "03_FilteredMatricesH5/",
-                                    velo_input$sample_id,
-                                    "_filtered_feature_bc_matrix.h5"),
-                             paste0(velo_input$data_path,
-                                    velo_input$sample_id,
-                                    "/filtered_feature_bc_matrix.h5"))
-
-velo_input$h5_path <- h5s
-
-ext_data_path <- "/home/gdrobertslab/lab/ExternalData/"
-
-bams <-
-    ifelse(
-           velo_input$data_source %in% c("NCH", "GEO"),
-           paste0("/home/gdrobertslab/lab/Counts_2/",
-                  velo_input$sample_id,
-                  "/possorted_genome_bam.bam"),
-           ifelse(
-                  velo_input$data_source == "NCI_POB",
-                  paste0(ext_data_path,
-                         "McEachron_lab/BAMs/",
-                         velo_input$sample_id,
-                         "_gex_possorted_bam.bam"),
-                  paste0(ext_data_path,
-                         "Patel_lab/",
-                         velo_input$sample_id,
-                         "/possorted_genome_bam.bam")
-                         )
-                         )
-
-#bams from multiomic runs have different names
-bams <- ifelse(file.exists(bams),
-                   bams,
-                   gsub("possorted_genome", "gex_possorted", bams))
-
-velo_input$bam_path <- bams
-
-
-#rewrite species to match list in make loom function
-unique(velo_input$species)
-velo_input$species <- recode(velo_input$species,
-       "patient" = "human",
-       "xenograft" = "mixed",
-       "mousemodel" = "mouse")
-
-#new_function is new_make_loom_files
-#install my version of rrrSingleCellUtils
-# devtools::install("/home/gdrobertslab/lab/Analysis/MattGust/projects/rrrSingleCellUtils")
-
-r_make_loom_files(input_table = velo_input,
-                    out_dir = "loom_output/samples",
-                    cluster_account = "gdrobertslab")
-
-#Need to do it for dog samples since they aren't in allsamples_details right now
-dog_samps <- read.table("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/misc/allsample_details.txt",
-                        header = TRUE) %>%
-    dplyr::select(sample_id = sample_name,
-                  species,
-                  data_source) %>%
-    subset(species == "canine") %>%
-    mutate(data_path =
-            recode(data_source,
-                   "CSU" = "/home/gdrobertslab/lab/ExternalData/Regan_lab/",
-                   "NCH" = "/home/gdrobertslab/lab/Counts_2/",
-                   "TU" = "/home/gdrobertslab/lab/ExternalData/Gardner/",
-                   "UoM" = "/home/gdrobertslab/lab/ExternalData/Modiano_Lab/Counts/")) %>%
-    mutate(h5_path =
-            recode(data_source,
-                   "NCH" = paste0(data_path,
-                                  sample_id,
-                                  "/filtered_feature_bc_matrix.h5"),
-                   "CSU" = paste0(data_path,
-                                  sample_id,
-                                  "/filtered_feature_bc_matrix.h5"),
-                   "TU" = paste0(data_path,
-                                 sample_id,
-                                 "/filtered_feature_bc_matrix.h5"),
-                   "UoM" = paste0(data_path,
-                                  sample_id,
-                                  "/filtered_feature_bc_matrix.h5"
-                                  ))) %>%
-    mutate(bam_path =
-           recode(data_source,
-                  "NCH" = paste0(data_path,
-                                 sample_id,
-                                 "/gex_possorted_bam.bam"),
-                  "CSU" = paste0(data_path,
-                                 sample_id,
-                                 "/",
-                                 sample_id,
-                                 "_possorted_genome_bam.bam"),
-                  "TU" = paste0(data_path,
-                                sample_id,
-                                "/possorted_genome_bam.bam"),
-                  "UoM" = paste0(data_path,
-                                 sample_id,
-                                 "/possorted_genome_bam.bam"
-                                 )))
-
-#Fix wrong bam file for one of the NCH samples
-dog_samps[dog_samps$sample_id == "S0032", ]$bam_path <-
-    "/home/gdrobertslab/lab/Counts_2/S0032/possorted_genome_bam.bam"
-
-#Fix dan's weird sample names in h5_paths
-missing_h5 <- !file.exists(dog_samps$h5_path)
-dog_samps[missing_h5, ]$h5_path <-
-    paste0(dog_samps[missing_h5, ]$data_path,
-           dog_samps[missing_h5, ]$sample_id,
-           "/",
-           dog_samps[missing_h5, ]$sample_id,
-           "_filtered_feature_bc_matrix.h5")
-all(file.exists(dog_samps$h5_path) & file.exists(dog_samps$bam_path))
-
-dog_samps$gtf_path <- "/home/gdrobertslab/lab/GenRef/10x-canine-atlas_arc/genes/genes.gtf.gz"
-
-loom_paths <- paste0("loom_output/samples/", dog_samps$sample_id, "/", dog_samps$sample_id, ".loom")
+loom_paths <- paste0("loom_output/samples/", velo_input$sample_id, "/", velo_input$sample_id, ".loom")
 loom_paths[!file.exists(loom_paths)]
 
-r_make_loom_files(input_table = dog_samps,
+velo_input <- velo_input[!file.exists(loom_paths), ]
+
+r_make_loom_files(input_table = velo_input,
                   out_dir = "loom_output/samples",
                   cluster_account = "gdrobertslab")
 ```
@@ -158,30 +89,35 @@ First we need to read in our objects for this. The most up to date object seems 
 
 ```{r}
 yogi_prefix <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/"
-obj_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/tumor_vs_stroma"))
+obj_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/final_tumor_vs_stroma"))
 #get only fdl files
-obj_names <- str_replace_all(obj_names[grep("fdl", obj_names)],
+obj_names <- str_replace_all(obj_names,
                              ".qs",
                              "")
 
 obj_list <- list()
 for (ob_name in obj_names) {
     obj_list[[ob_name]] <-
-        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/tumor_vs_stroma/", ob_name, ".qs"))
+        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/", ob_name, ".qs"))
 }
+#run fdl
+parallel::detectCores()
+obj_list_fdl <- parallel::mclapply(obj_list, FUN = run_fdl, mc.cores = parallel::detectCores())
+
+qs::qsave(obj_list_fdl, "output/seurat_objects/obj_list_03_03_2025.qs")
 ```
 
 ```{r write-off-md}
-lapply(names(obj_list), function(obj_name) {
-    write_off_md(sobj = obj_list[[obj_name]],
+lapply(names(obj_list_fdl), function(obj_name) {
+    write_off_md(sobj = obj_list_fdl[[obj_name]],
                  id_col = "sample_name",
                  output_dir = paste0("loom_output/metadata/",
                                      obj_name),
                  vars_to_keep = c("sample_name",
                                   "seurat_clusters",
-                                  "Ann_level1",
-                                  "Ann_level2",
-                                  "Ann_level3"),
+                                  "Ann_Level1",
+                                  "Ann_Level2",
+                                  "Ann_Level3"),
                  handle_n_of_1 = FALSE)
 })
 ```
@@ -201,90 +137,113 @@ import anndata
 import scvelo as scv
 import pandas as pd
 import numpy as np
-import matplotlib as plt
+from matplotlib import pyplot
 import scanpy as sc
 import os
 import re
 ```
 
-### mm_mets_cancer_cells
+### Make Objects and Plots
 
 ```{python analyze-mm-mets-cancer-cells}
 #get names of loom files
-merged_ad = loom_to_an(obj_name = "mm_mets_cancer_cells",
-                       loom_dir = "loom_output/samples",
-                       metadata_dir = "loom_output/metadata/")
-
-dog_list=["dogs_prim_cancer_cells_fdl", "dogs_prim_normal_cells_fdl", "dogs_mets_cancer_cells_fdl", "dogs_mets_normal_cells_fdl"]
 ob_names = os.listdir("loom_output/metadata")
-ob_names = [x for x in ob_names if x not in dog_list]
-ob_names = [x for x in ob_names if x not in ["patient_mets_cancer_cells_fdl", "patient_prim_cancer_cells_fdl", "xeno_mets_human_fdl"]]
+ob_names = list(filter(lambda x:"dog" not in x, ob_names))
+
+# for ob in ob_names:
+#     print("Processing " + ob)
+#     merged_ad = loom_to_an(obj_name = ob,
+#                            loom_dir = "loom_output/samples",
+#                            metadata_dir = "loom_output/metadata")
+#     print("Created " + ob + "successfully")
+#     calc_velo(merged_ad)
+#     #save anndata object so you don't have to remake them
+#     merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
+#     print("Calculated velocity for and saved off " + ob)
 
 for ob in ob_names:
-    print("Processing " + ob)
-    merged_ad = loom_to_an(obj_name = ob,
-                           loom_dir = "loom_output/samples",
-                           metadata_dir = "loom_output/metadata")
-    print("Created " + ob + "successfully")
-    calc_velo(merged_ad)
-    #save anndata object so you don't have to remake them
-    merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
-    print("Calculated velocity for and saved off " + ob)
+    write_ob_and_plots(ob)
 
-
-#     scv.tl.velocity_graph(merged_ad, backend = "threading")
-#     #create plots
-#     scv.pl.velocity_embedding_stream(merged_ad, basis = "umap", color = "seurat_clusters", show = False, save = "scvelo/" + ob + "_umap_clusters.png", dpi = 300)
-#     #optionally create fdl plot
-#     if len(merged_ad.obsm["X_fdl"]) == 2:
-#         scv.pl.velocity_embedding_stream(merged_ad, basis = "fdl", color = "seurat_clusters", show = False, save = "scvelo/" + ob + "_fdl_clusters.png", dpi = 300)
 
 
 
 def write_ob_and_plots(ob):
     print("starting on " + ob)
-    merged_ad=loom_to_an(obj_name = ob,
-                     loom_dir = "loom_output/samples",
-                     metadata_dir = "loom_output/metadata")
-    print("made " + ob + " , now calculating velocity")
-    calc_velo(merged_ad)
-    merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
-    print("calculated velocity and saved off " + ob)
+    # merged_ad=loom_to_an(obj_name = ob,
+    #                  loom_dir = "loom_output/samples",
+    #                  metadata_dir = "loom_output/metadata")
+    # print("made " + ob + " , now calculating velocity")
+    # calc_velo(merged_ad)
+    # merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
+    # print("calculated velocity and saved off " + ob)
+    merged_ad = anndata.read("loom_output/anndata/" + ob + ".ad")
     #make the plots and save them off
-    scv.tl.velocity_graph(merged_ad, backend = "threading")
     #seurat clusters in umap space
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "umap",
                                      color = "seurat_clusters",
                                      show = False,
-                                     save = "scvelo/" + ob + "_umap_clusters.png")
+                                     sort_order = False)
+    pyplot.savefig("figures/scvelo/Ryan/" + ob + "_umap_clusters.svg")
     #Ann_Level3 in umap space
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "umap",
                                      color = "Ann_Level3",
                                      show = False,
-                                     save = "scvelo/" + ob + "_umap_annotations.png")
-    #Seurat clusters in fdl space
+                                     sort_order = False)
+    pyplot.savefig("figures/scvelo/Ryan/" + ob + "_umap_annotations.svg")
+    #seurat_clusters in fdl
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "fdl",
                                      color = "seurat_clusters",
                                      show = False,
-                                     save = "scvelo/" + ob + "_umap_clusters.png")
-    #Ann_Level3 in fdl space
+                                     sort_order = False)
+    pyplot.savefig("figures/scvelo/Ryan/" + ob + "_fdl_clusters.svg")
+    #cell types in fdl
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "fdl",
                                      color = "Ann_Level3",
                                      show = False,
-                                     save = "scvelo/" + ob + "_umap_annotations.png")
-    return(obj_name + "_parallel")
+                                     sort_order = False)
+    pyplot.savefig("figures/scvelo/Ryan/" + ob + "_fdl_annotations.svg")
+    return(ob + " is done")
 
 
-#trying parallel stuff
-from multiprocessing import Pool
-with Pool(processes = 6) as pool:
-    output = pool.map(write_ob_and_plots, ob_names)
+```
 
+### Get Top Velocity Genes for Each Cluster/Cell Type
 
-#with Pool(processes = args.processes) as pool:
-    # output = pool.map(process_lines, chr_list
+I'll only be doing this for cancer objects
+
+```{python}
+tmp = anndata.read("loom_output/anndata/patient_mets_cancer_cells.ad")
+scv.tl.rank_velocity_genes(tmp, groupby="Ann_Level3", min_corr = 0.3)
+df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
+df.to_csv("loom_output/velocity_genes/patient_mets_cancer_cells.csv", index = False)
+
+#save it off now grouped by seurat clusters
+scv.tl.rank_velocity_genes(tmp, groupby="seurat_clusters", min_corr = 0.3)
+df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
+df.to_csv("loom_output/velocity_genes/patient_mets_cancer_cells_clusters.csv", index = False)
+
+```
+
+Let's look at these genes as modules in our single cell data.
+
+```{r}
+tmp <- obj_list_fdl[["patient_mets_cancer_cells"]]
+tmp_velo_genes <-
+    read.table("loom_output/velocity_genes/patient_mets_cancer_cells_clusters.csv",
+               sep = ",",
+               header = TRUE)
+
+tmp <- AddModuleScore(tmp,
+                      features = as.list(tmp_velo_genes),
+                      name = colnames(tmp_velo_genes))
+
+FeaturePlot(tmp,
+            features = paste0(colnames(tmp_velo_genes), 1:12),
+            raster = FALSE,
+            cols = rev(brewer.pal(n = 11, name = "RdBu")),
+            ncol = 6) / r_dim_plot(tmp, group.by = "seurat_clusters", raster = FALSE)
 ```
