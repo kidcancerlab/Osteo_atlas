@@ -29,15 +29,21 @@ for (ob_name in names(spatial_list)) {
     x$sample_name <- ob_name
     spatial_list[[ob_name]] <- x
 }
-```
 
-```{r}
-SpatialDimPlot(tmp, label = TRUE, label.size = 3, pt.size.factor = 1200)
-SpatialFeaturePlot(tmp,
-                   features = c("COL1A1",
-                                "SATB2",
-                                "nCount_Spatial"),
-                   pt.size.factor = 1200)
+#plot just the h&e slides
+he_plts <- lapply(names(spatial_list), function(x) {
+    p <- SpatialDimPlot(spatial_list[[x]], pt.size.factor=0) +
+        NoLegend() +
+        labs(title = x)
+    png(paste0("figures/spatial/h_and_e_", x, ".png"))
+    print(p)
+    dev.off()
+    return(p)
+})
+
+png("figures/spatial/h_and_e_all.png", width = 800, height = 500)
+grid.arrange(grobs = he_plts, ncol = 4)
+dev.off()
 ```
 
 ## Label Cell Types Using Spacexr
@@ -52,6 +58,8 @@ I need to create a reference object. This object is created using the RCTD const
 yogi_path <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/"
 
 patient_mets <- qs::qread(paste0(yogi_path, "final_tumor_vs_stroma/patient_mets.qs"))
+
+dimplot_better(patient_mets, group = "Ann_Level2", raster = FALSE)
 
 cell_types <- unique(patient_mets$Ann_Level2)
 
@@ -89,57 +97,6 @@ for (ob_name in names(spatial_list)) {
 qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level2_annotations.qs")
 ```
 
-## Explore Cell Type Annotations
-
-For each spot, spacexr assigned a score out of 1 for each cell type. I want to use these results to identify cell types present in different spots.
-
-### Identify Significant Cell Type Scores
-
-Before we assign cell types to spots, I'm going to filter out not meaningful spots using a simple permutation threshold. Any cell types that do not meet this threshold for a particular cell will be zeroed out, and the remaining non-zero cell types will be rescaled to add up to one.
-
-```{r cell-type-permutation}
-#get matrix of spots x cell_type
-### EXTEND TO ALL SAMPLES LATER; JUST DOING ONE FOR SIMPLICITY SAKE
-tmp <- spatial_list[[1]]
-cell_types <- unique(patient_mets$Ann_Level3)
-annotation_matrix <- tmp@meta.data[ , cell_types]
-
-#use max as cell_type
-ann_df <- as.data.frame(annotation_matrix)
-ann_df$high_score <- apply(ann_df, MARGIN = 1, function(x) {
-    high_score = max(x)
-})
-
-ct <- c()
-for(i in rownames(ann_df)) {
-    ct_scores <- ann_df[i, 1:ncol(ann_df)]
-    ct[i] <- names(ct_scores)[which(ct_scores == ann_df[i, ]$high_score)]
-}
-
-#visualize highest cell type score for a given spot
-tmp <- AddMetaData(tmp, ct, col.name = "cell_type")
-SpatialDimPlot(tmp, group.by = "cell_type", pt.size.factor = 1500, label = TRUE)
-
-table(ct)
-
-#heatmap of correlation between cell type scores within one spot
-cor_hmaps <- list()
-for (ob in names(spatial_list)) {
-    ann_matrix <- spatial_list[[ob]]@meta.data[ , cell_types]
-    cor_hmaps[[ob]] <- pheatmap::pheatmap(cor(ann_matrix)^2,
-                                          scale = "none",
-                                          col = viridis::inferno(50))
-}
-
-grid.arrange(grobs = cor_hmaps)
-
-scaled_ann_df <- scale(annotation_matrix)
-heatmap(cor(scaled_ann_df), scale = "none", col = viridis::inferno(50))
-
-
-summary(annotation_matrix)
-```
-
 ## Plot Tumor Cell Scores
 
 The first sanity check we can perform is looking at how the tumor cell types' feature scores look compared to the H&E slides.
@@ -156,19 +113,15 @@ size.factors <- list("OS1_Seurat" = 1500,
 
 for (ob in names(spatial_list)) {
     tmp <- spatial_list[[ob]]
-    tmp$Tumor_Cumulative <- tmp$Tumor_Metabolic +
-                             tmp$Tumor_Inflammatory +
-                             tmp$Tumor_Proliferative +
-                             tmp$Tumor_Ground +
-                             tmp$Tumor_ImmuneRegulatory
+    tmp$Tumor_Cumulative <- tmp$Tumor_Fibrogenic +
+                             tmp$Tumor_Apoptosis +
+                             tmp$Tumor_HyperMetabolic +
+                             tmp$Tumor_Interactive +
+                             tmp$Tumor_Progenitor +
+                             tmp$Tumor_Proliferative
     plot_list <- list("H&E" = SpatialDimPlot(tmp,
                                              pt.size.factor = 0) + NoLegend())
-    tumor_feats <- c("Tumor_Metabolic",
-                     "Tumor_Inflammatory",
-                     "Tumor_Proliferative",
-                     "Tumor_Ground",
-                     "Tumor_ImmuneRegulatory",
-                     "Tumor_Cumulative")
+    tumor_feats <- grep("Tumor", colnames(tmp@meta.data), value = TRUE)
 
     tumor_plts <- lapply(tumor_feats, function(x) {
         SpatialFeaturePlot(tmp,
@@ -180,7 +133,7 @@ for (ob in names(spatial_list)) {
     plot_list <- c(plot_list, tumor_plts)
     
     #create matrix for ideal figure arrangement
-    layout <- matrix(data = c(1, NA, 2, 5, 3, 6, 4, 7),
+    layout <- matrix(data = c(1, 2, 3, 4, 5, 6, 7, 8),
                             nrow = 2)
     png(paste0("figures/spatial/tumor_scores", ob, ".png"), res = 400, width = 6000, height = 3000)
     grid.arrange(grobs = plot_list,
