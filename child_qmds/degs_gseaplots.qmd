@@ -136,7 +136,7 @@ object_list <-
             "xeno_prim_human",              0.3,
             "xeno_mets_human",              0.4,
             "dogs_prim_cancer_cells",       0.2,
-            "dogs_mets_cancer_cells",       0.3
+            "dogs_mets_cancer_cells",       0.45
             )
 
 # run force directed layout
@@ -636,10 +636,10 @@ object_list <-
             "patient_mets_cancer_cells",    0.25,
             "mm_prim_cancer_cells",         1.5,
             "mm_mets_cancer_cells",         1,
-            "xeno_prim_human",              0.3,
-            "xeno_mets_human",              0.4,
+            # "xeno_prim_human",              0.3,
+            # "xeno_mets_human",              0.4,
             "dogs_prim_cancer_cells",       0.2,
-            "dogs_mets_cancer_cells",       0.3
+            "dogs_mets_cancer_cells",       0.45
             )
 
 for (i in seq_len(nrow(object_list))) {
@@ -683,19 +683,19 @@ for (i in seq_len(nrow(object_list))) {
             str_replace_all(object$seurat_clusters,
                           c("^0$" = "Tumor_Progenitor",   #neuronal and bone development, CD36 degs
                             "^1$" = "Tumor_Fibrogenic",
-                            "^2$" = "Tumor_HyperMetabolic",  
+                            "^2$" = "Tumor_Synthetic",  
                             "^3$" = "Tumor_Proliferative",   
                             "^4$" = "Tumor_Apoptosis",   
                             "^5$" = "Tumor_Interactive",  
-                            "^6$" = "Tumor_HyperMetabolic",  # is hypermetabolic coz similar
+                            "^6$" = "Tumor_Synthetic",  # is hypermetabolic coz similar
                             "^7$" = "Tumor_Fibrogenic",
-                            "^8$" = "Tumor_HyperMetabolic"))  #by the degs and fdl
+                            "^8$" = "Tumor_Synthetic"))  #by the degs and fdl
     }
     if (group == "patient_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
                            c("^0$" = "Tumor_Progenitor",    
-                            "^1$" = "Tumor_HyperMetabolic", 
+                            "^1$" = "Tumor_Synthetic", 
                             "^2$" = "Tumor_Proliferative",  
                             "^3$" = "Tumor_Fibrogenic",
                             "^4$" = "Tumor_Interactive",
@@ -703,12 +703,12 @@ for (i in seq_len(nrow(object_list))) {
                             "^6$" = "Tumor_Interactive",
                             "^7$" = "Tumor_Proliferative",
                             "^8$" = "Tumor_Interactive",
-                            "^9$" = "Tumor_HyperMetabolic", 
+                            "^9$" = "Tumor_Synthetic", 
                             "^10$" = "Tumor_Proliferative",
                             "^11$" = "Tumor_Fibrogenic",
                             "^12$" = "Tumor_Fibrogenic",
                             "^13$" = "Tumor_Interactive",
-                            "^14$" = "Tumor_HyperMetabolic",
+                            "^14$" = "Tumor_Synthetic",
                             "^15$" = "Tumor_Apoptosis",
                             "^16$" = "Tumor_Progenitor",
                             "^17$" = "Tumor_Progenitor"))
@@ -720,8 +720,8 @@ for (i in seq_len(nrow(object_list))) {
                             "^1$" = "Tumor_Progenitor",
                             "^2$" = "Tumor_Proliferative",  
                             "^3$" = "Tumor_Progenitor",  
-                            "^4$" = "Tumor_HyperMetabolic",
-                            "^5$" = "Tumor_HyperMetabolic",
+                            "^4$" = "Tumor_Synthetic",
+                            "^5$" = "Tumor_Synthetic",
                             "^6$" = "Tumor_Apoptosis",   
                             "^7$" = "Tumor_Apoptosis",
                             "^8$" = "Tumor_Proliferative",
@@ -729,14 +729,14 @@ for (i in seq_len(nrow(object_list))) {
                             "^10$" = "Tumor_Fibrogenic",
                             "^11$" = "Tumor_Fibrogenic",
                             "^12$" = "Tumor_Interactive",
-                            "^13$" = "Tumor_HyperMetabolic",
-                            "^14$" = "Tumor_HyperMetabolic"))
+                            "^13$" = "Tumor_Synthetic",
+                            "^14$" = "Tumor_Synthetic"))
     }
     if (group == "mm_mets_cancer_cells") {
         object$Ann_Level3 <-
-            str_replace_all(mm_mets$seurat_clusters,
+            str_replace_all(object$seurat_clusters,
                           c("^0$" = "Tumor_Proliferative",    #
-                            "^1$" = "Tumor_HyperMetabolic",   
+                            "^1$" = "Tumor_Synthetic",   
                             "^2$" = "Tumor_Progenitor",
                             "^3$" = "Tumor_Apoptosis",           #Apoptotic
                             "^4$" = "Tumor_Progenitor",
@@ -747,7 +747,7 @@ for (i in seq_len(nrow(object_list))) {
                             "^9$" = "Tumor_Progenitor",
                             "^10$" = "Tumor_Progenitor",
                             "^11$" = "Tumor_Interactive",
-                            "^12$" = "Tumor_HyperMetabolic"))
+                            "^12$" = "Tumor_Synthetic"))
     }
     # if (group == "xeno_prim_human") {
     #     object$Ann_Level3 <-
@@ -785,33 +785,38 @@ for (i in seq_len(nrow(object_list))) {
                           c("^0$" = "Tumor_Progenitor",
                             "^1$" = "Tumor_Fibrogenic",   
                             "^2$" = "Tumor_Proliferative",   
-                            "^3$" = "Tumor_HyperMetabolic",
-                            "^4$" = "Tumor_Fibrogenic",
+                            "^3$" = "Tumor_Synthetic",
+                            "^4$" = "Tumor_Synthetic",
                             "^5$" = "Tumor_Interactive",
                             "^6$" = "Tumor_Progenitor",
                             "^7$" = "Tumor_Fibrogenic", 
                             "^8$" = "Tumor_Fibrogenic",   
                             "^9$" = "Tumor_Apoptosis",
                             "^10$" = "Tumor_Proliferative",
-                            "^11$" = "Tumor_HyperMetabolic",
-                            "^12$" = "Tumor_HyperMetabolic"))
+                            "^11$" = "Tumor_Synthetic",
+                            "^12$" = "Tumor_Synthetic"))
     }
     if (group == "dogs_mets_cancer_cells") {
         object$Ann_Level3 <-
-            str_replace_all(doog_mets$seurat_clusters,
-                          c("^0$" = "Tumor_HyperMetabolic",
-                            "^1$" = "Tumor_Fibrogenic",  
-                            "^2$" = "Tumor_Proliferative",   
-                            "^3$" = "Tumor_Progenitor",
-                            "^4$" = "Tumor_Interactive",
-                            "^5$" = "Tumor_Apoptosis",
-                            "^6$" = "Tumor_Proliferative",
-                            "^7$" = "Tumor_Fibrogenic",
-                            "^8$" = "Tumor_Proliferative",
-                            "^9$" = "Tumor_Fibrogenic",
-                            "^10$" = "Tumor_Progenitor",
-                            "^11$" = "Tumor_Interactive",
-                            "^12$" = "Tumor_Interactive"))
+            str_replace_all(object$seurat_clusters,
+                          c("^0$" = "Tumor_Fibrogenic",
+                            "^1$" = "Tumor_Proliferative",  
+                            "^2$" = "Tumor_Progenitor",   
+                            "^3$" = "Tumor_Progenitor",  #or hypermetabolic
+                            "^4$" = "Tumor_Synthetic",
+                            "^5$" = "Tumor_Interactive",   
+                            "^6$" = "Tumor_Progenitor",
+                            "^7$" = "Tumor_Apoptosis",
+                            "^8$" = "Tumor_Interactive",
+                            "^9$" = "Tumor_Proliferative",
+                            "^10$" = "Tumor_Fibrogenic",
+                            "^11$" = "Tumor_Proliferative",
+                            "^12$" = "Tumor_Fibrogenic",
+                            "^13$" = "Tumor_Interactive",
+                            "^14$" = "Tumor_Progenitor",
+                            "^15$" = "Tumor_Interactive",
+                            "^16$" = "Tumor_Progenitor",
+                            "^17$" = "Tumor_Proliferative"))
     }
 
     object$Ann_Level2 <- object$Ann_Level3
@@ -902,9 +907,9 @@ cell_count_table <- tibble::tibble(celltypes = character())
 combine_tumor_per_species <-
     tribble(~primary,                     ~metastatic,                ~combined,
             "patient_prim_cancer_cells", "patient_mets_cancer_cells", "patient_prim_mets",
-            "mm_prim_cancer_cells",      "mm_mets_cancer_cells",      "mouse_prim_mets"
-            # "xeno_prim_human",           "xeno_mets_human",           "xeno_prim_mets",
-            # "dogs_prim_cancer_cells",    "dogs_mets_cancer_cells",    "dog_prim_mets"
+            "mm_prim_cancer_cells",      "mm_mets_cancer_cells",      "mouse_prim_mets",
+            "xeno_prim_human",           "xeno_mets_human",           "xeno_prim_mets",
+            "dogs_prim_cancer_cells",    "dogs_mets_cancer_cells",    "dog_prim_mets"
             )
 
 harmony_parameters <-
@@ -1053,7 +1058,7 @@ subset_xeno_prim <-
 
 subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "12"] <- "Tumor_Proliferative"
 subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "23"] <- "Tumor_Proliferative"
-subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "13"] <- "Tumor_HyperMetabolic"
+subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "13"] <- "Tumor_Synthetic"
 # subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "17"] <- "Tumor_Interactive"
 # subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "8"] <- "Tumor_Interactive"
 subset_xeno_prim$Ann_Level3 <- subset_xeno_prim$newid
@@ -1194,22 +1199,54 @@ for (group in c(
     }
 }
 
+hyperm <- c("BGLAP", "RPL14", "ATP5PF", "RPL29.1")
+
+metabolic <- c("UQCRB", "LDHB", "MDH2", "ATP5MC3", "ATP5MC1", "TIMM13", "COX6C", "PHB2", "ATP5ME", "ATP5MF", "COX7C", "MRPS12", "UQCRH", "NDUFAB1", "ATP5PF", "TOMM22", "ATP5MC2", "HSD17B10", "SLC25A4", "ATP5PO")
+
+dogs_metas <- c("UQCRQ", "ATP5PO", "COX7A2L", "NDUFB6", "NDUFB3", "HSD17B10", "NDUFA8", "PDHB", "ATP5MF", "ATP5MC3", "COX5B", "TIMM9", "CYCS", "NDUFB4", "MRPL11", "ATP6V1D")
+mice_meta <- c(
+    "Uqcrh", "Atp5j", "Cox8a", "Atp5e", "Timm13", "Cox7b", "Atp5h", 
+    "Uqcrq", "Gpi1", "Cox7c", "Ndufab1", "Atp5g2", "Ndufa7", "Atp5g1", 
+    "Slc25a4", "Cox6c", "Ndufa2", "Cox6b1", "Cox7a2l"
+)
+
+DimPlot(obj_list$dogs_mets_cancer_cells, cells.highlight = cells)
+
+dimplot_better(obj_list$mm_prim_cancer_cells, group_by = "Ann_Level3") +
+    NoLegend()
+
+DotPlot(obj_list$dogs_prim_cancer_cells,
+        features = mice_meta %>%
+                    nichenetr::convert_mouse_to_human_symbols() %>%
+                    as.character(),
+        group.by = "Ann_Level3")
 
 
+DotPlot(obj_list$dogs_mets_cancer_cells,
+        features = dogs_metas,
+        group.by = "Ann_Level3")
 
-patient_mice_hypermetabolic <- c("RPL37A", "RPS18", "RPL39", "RPL35")
+FeaturePlot(obj_list$patient_prim_cancer_cells,
+            features = "CD68",
+            raster=F,
+            order=T) 
 
-xenograf_hypermetabolic <- c("TSIX", "AL035427.1", "AL354733.3", "AC011933.4")
+samples <-
+    obj_list$patient_prim_cancer_cells %>%
+    subset(Ann_Level3 == "Tumor_Interactive")
 
-
-
+table(samples$sample_name) %>% as.data.frame() %>%
+    arrange(desc(Freq))
+markers <- c("IL1", "IL6", "CD86", "IL10RA", "CCR1", "CCL4", "CCL3", "CXCL8",
+            "TNFRSF1B", "CCL3L1", "IL18", "ICAM1", "CXCL2", "CCL5", "CCL2")
 tumor_features_cells <- list(
+    Osteosarcoma = c("RUNX2", "COL1A1", "COL1A2"),
     Tumor_Fibrogenic = c("COL6A3", "COL3A1", "PDGFRB", "COL6A1"),
     Tumor_Progenitor = c("ROBO2", "CD36", "SATB2"),
     Tumor_Interactive = c("CD74", "CSF1R", "PTPRC", "PTPRJ"),
     Tumor_Proliferative = c("CENPF", "ASPM", "BIRC5", "AURKB"),
     Tumor_Apoptosis = c("BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104"),
-
+    Tumor_HyperMetabolic = c("RPL37A", "RPS18", "RPL39", "RPL35")
 )
 
 
@@ -1307,8 +1344,8 @@ apoptosis <-
 
 hyperm <-
    Reduce(intersect, list(
-                        #    HyperMetabolic$patient_prim_cancer_cells,
-                        #    HyperMetabolic$patient_mets_cancer_cells,
+                           HyperMetabolic$patient_prim_cancer_cells,
+                           HyperMetabolic$patient_mets_cancer_cells,
                         #    HyperMetabolic$mm_prim_cancer_cells,
                         #    HyperMetabolic$mm_mets_cancer_cells,
                         #    HyperMetabolic$xeno_prim_human,

@@ -286,7 +286,7 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
             width = 6,
             height = 6,
             device = "svg")
-    stash_plot(cancer_plot, str_c(group, "_dimplot"))
+    # stash_plot(cancer_plot, str_c(group, "_dimplot"))
 
     cancer_plot_list[[group]] <- cancer_plot
 }
@@ -299,7 +299,6 @@ cancer_panel_plot <-
 # stash_plot(cancer_panel_plot, "tumor_panel_plot")
 qs::qsave(cancer_panel_plot,
         str_c("output/figures/Final_Annotations/ryan_needs/tumor_panel_plot.qs"))
-
 
 ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.png",
         plot = cancer_panel_plot,
@@ -316,13 +315,35 @@ xenograf_hypermetabolic <- c("TSIX", "AL035427.1", "AL354733.3", "AC011933.4")
 
     
 # make a cancer dotplot
-tumor_features_cells <- list(
+tumor_features <- list(
+    Osteosarcoma = c("RUNX2", "COL1A1", "COL1A2"),
     Tumor_Fibrogenic = c("COL6A3", "COL3A1", "PDGFRB", "COL6A1"),
     Tumor_Progenitor = c("ROBO2", "CD36", "SATB2"),
     Tumor_Interactive = c("CD74", "CSF1R", "PTPRC", "PTPRJ"),
     Tumor_Proliferative = c("CENPF", "ASPM", "BIRC5", "AURKB"),
     Tumor_Apoptosis = c("BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104"),
-    Tumor_HyperMetabolic = c("MT1G", "MT1X", "FABP5")
+    Tumor_HyperMetabolic = c("RPL37A", "RPS18", "RPL39", "RPL35")
+)
+
+humanP_mice_markers <- list(
+    Osteosarcoma = c("RUNX2", "COL1A1", "COL1A2"),
+    Tumor_Fibrogenic = c("COL6A3", "COL3A1", "PDGFRB", "COL6A1"),
+    Tumor_Progenitor = c("ROBO2", "CD36", "SATB2"),
+    Tumor_Interactive = c("CD74", "CSF1R", "PTPRC", "PTPRJ"),
+    Tumor_Proliferative = c("CENPF", "ASPM", "BIRC5", "AURKB"),
+    Tumor_Apoptosis = c("BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104"),
+    Tumor_HyperMetabolic = c("RPL37A", "RPS18", "RPL39", "RPL35", "RPL14", "ATP5PF", "RPL29.1")
+)
+
+xeno_markers <-
+    list(
+    Osteosarcoma = c("RUNX2", "COL1A1", "COL1A2"),
+    Tumor_Fibrogenic = c("COL6A3", "COL3A1", "PDGFRB", "COL6A1"),
+    Tumor_Progenitor = c("ROBO2", "CD36", "SATB2"),
+    Tumor_Interactive = c("CD74", "CSF1R", "PTPRC", "PTPRJ"),
+    Tumor_Proliferative = c("CENPF", "ASPM", "BIRC5", "AURKB"),
+    Tumor_Apoptosis = c("BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104"),
+    Tumor_HyperMetabolic = c("TSIX", "AL035427.1", "AL354733.3", "AC011933.4")
 )
 
 #set the order of the cells for the dotplot
@@ -344,17 +365,24 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                         ".qs"))
 
     order_features <-
-        c("COL6A3", "COL3A1", "PDGFRB", "COL6A1",
+        c("RUNX2", "COL1A1", "COL1A2"
+          "COL6A3", "COL3A1", "PDGFRB", "COL6A1",
           "ROBO2", "CD36", "SATB2",
           "CD74", "CSF1R", "PTPRC", "PTPRJ",
           "CENPF", "ASPM", "BIRC5", "AURKB",
           "BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104",
-          "MT1G", "MT1X", "FABP5"
+          "RPL37A", "RPS18", "RPL39", "RPL35", "RPL14", "ATP5PF", "RPL29.1",
+          "TSIX", "AL035427.1", "AL354733.3", "AC011933.4"
           )
 
     unique_cells <-
         unique(cancer_sobj_list[[group]]$Ann_Level3) 
 
+    if (group %in% c("xeno_prim_human", "xeno_mets_human")) {
+        tumor_features_cells <- xeno_markers
+    } else {
+        tumor_features_cells <- humanP_mice_markers
+    }
     dotplot_markers <-
         tumor_features_cells[unique_cells] %>%
         unlist() %>%

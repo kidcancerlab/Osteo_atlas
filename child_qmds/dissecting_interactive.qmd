@@ -1,0 +1,291 @@
+---
+title: "Dissecting the interactive tumor cells scRNA-seq data"
+output: github_document
+---
+# Dissecting the interactive tumor cells scRNA-seq data
+1. Show that the interacitve tumor cells were identified as anuploid or as tumor
+cells by the tumor calling pipeline
+2. Show and compare the expression of immune and tumor markers in both tumor and
+stroma or marcophages
+3. Map tumor interacitve to the the tumor+stroma data
+4. take a couple of markers like CD74 and others and show the expression using featureplots
+
+
+```{r dissecting_interactive, echo=FALSE, message=FALSE, warning=FALSE}
+
+for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    dimplot1 <- 
+        dimplot_better(object, group_by = "class") +
+        NoLegend()
+    dimplot2 <-
+        dimplot_better(object, group_by = "CNV_status") +
+        NoLegend()
+    dimplot3 <-
+        dimplot_better(object, group_by = "final_snv_call") +
+        NoLegend()
+    dimplot4 <-
+        dimplot_better(object, group_by = "scevan_tumor_call") +
+        NoLegend()
+    dimplot5 <-
+        dimplot_better(object, group_by = "scatomic_tumor_call") +
+        NoLegend()
+    dimplot6 <-
+        dimplot_better(object, group_by = "celltype_tumor_call") +
+        NoLegend()
+    dimplot7 <-
+        dimplot_better(object, group_by = "SingleR_Ann3") +
+        NoLegend()
+    dimplot8 <-
+        dimplot_better(object, group_by = "sample_name") +
+        NoLegend()
+    dimplot9 <-
+        dimplot_better(object, group_by = "data_source") +
+        NoLegend()
+    dimplot10 <-
+        dimplot_better(object, group_by = "method") +
+        NoLegend()
+
+    all_tumor_dimplots <- 
+        patchwork::wrap_plots(dimplot1, dimplot2, dimplot3,
+                            dimplot4, dimplot5, dimplot6,
+                            dimplot7, dimplot8, dimplot9,
+                            dimplot10,
+                            ncol = 2,
+                            widths = 14,
+                            heights = 35) +
+        patchwork::plot_annotation(title = group,
+                                   theme = theme(plot.title = element_text(size = 10)))
+
+    directory <-
+        str_c("output/figures/interactive_dissecting/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+
+    ggsave(str_c("output/figures/interactive_dissecting/",
+                group,
+                "/",
+                "tumor_metadata.png"),
+            plot = all_tumor_dimplots,
+            width = 14,
+            height = 35)
+}
+```
+
+### Mix TAMs and tumor cells
+In this section, we will take the interactive tumor cells and mix them with the TAMs to see how they cluster together. We will also visualize the expression of some immune markers in both tumor and TAMs.
+```{r mix_tams_and_tumor, echo=FALSE, message=FALSE, warning=FALSE}
+
+dimplot_group <-
+    c("Ann_Level3", "celltype_tumor_call", "final_snv_call",
+      "scevan_tumor_call", "scatomic_tumor_call", "CNV_status",
+      "class", "new_annot_clust", "sample_name", "data_source", "method")
+
+# grab the tumor and TAMs
+for (group in c("patient_prim", "patient_mets")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    #just interactive and TAMs
+    interactive_TAMs <-
+        subset(object, subset = (Ann_Level3 == "Tumor_Interactive" | Ann_Level2 == "TAMs"))
+
+    int_TAMs_reprocess <-
+        interactive_TAMs %>%
+        process_seurat() %>%
+        RunHarmony("sample_name",
+                    theta=7) %>%
+        process_seurat(reduction = "harmony")
+    
+    dimplot_list_int_tams <- list()
+    for (names in dimplot_group) {
+        dimplot_list_int_tams[[names]] <-
+            dimplot_better(int_TAMs_reprocess, group_by = names) +
+            NoLegend()
+    }
+    just_interactive_and_TAMs_dotplot <-
+        DotPlot(int_TAMs_reprocess,
+                group.by = "Ann_Level3",
+                cols = "RdBu",
+                scale = F,
+                features = c("CD74", "CD14", "CD68", "COL1A1", "COL1A2", "RUNX2")) +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    ggsave(str_c("output/figures/interactive_dissecting/",
+                group, "_cancer_cells",
+                "/",
+                "just_interactive_and_TAMs_dotplot.png"),
+            plot = just_interactive_and_TAMs_dotplot,
+            width = 6,
+            height = 6,
+            limitsize = FALSE,
+            bg = "white")
+
+    macs_int_tams_dimplots <-
+        patchwork::wrap_plots(dimplot_list_int_tams$Ann_Level3,
+                             dimplot_list_int_tams$class,
+                             dimplot_list_int_tams$celltype_tumor_call,
+                             dimplot_list_int_tams$new_annot_clust,
+                             dimplot_list_int_tams$final_snv_call,
+                             dimplot_list_int_tams$sample_name,
+                             dimplot_list_int_tams$scevan_tumor_call,
+                             dimplot_list_int_tams$data_source,
+                             dimplot_list_int_tams$scatomic_tumor_call,
+                             dimplot_list_int_tams$method,
+                             dimplot_list_int_tams$CNV_status,
+                            ncol = 2,
+                            widths = 14,
+                            heights = 42) +
+        patchwork::plot_annotation(title = group,
+                                   theme = theme(plot.title = element_text(size = 10)))
+
+    ggsave(str_c("output/figures/interactive_dissecting/",
+                group, "_cancer_cells",
+                "/",
+                "just_interactive_and_TAMs.png"),
+            plot = macs_int_tams_dimplots,
+            width = 14,
+            height = 42,
+            limitsize = FALSE,
+            bg = "white")
+
+    # all tumor and TAMs
+    Tumor_TAMs <-
+        subset(object, subset = (Ann_Level1 == "Tumor" | Ann_Level2 == "TAMs"))
+
+    Tumor_TAMs_reprocess <-
+        Tumor_TAMs %>%
+        process_seurat() %>%
+        RunHarmony("sample_name",
+                    theta=7) %>%
+        process_seurat(reduction = "harmony")
+
+    dimplot1 <-
+        DimPlot(Tumor_TAMs_reprocess,
+                raster = F,
+                cells.highlight = subset(Tumor_TAMs_reprocess,
+                                         Ann_Level3 == "Tumor_Interactive") %>%
+                                         colnames()) +
+        NoLegend()
+
+    dimplot_list <- list()  
+    for (names in dimplot_group) {
+        dimplot_list[[names]] <-
+            dimplot_better(Tumor_TAMs_reprocess, group_by = names) +
+            NoLegend()
+    }
+
+    all_tumor_tams_dotplot <-
+        DotPlot(Tumor_TAMs_reprocess,
+            group.by = "Ann_Level3",
+            cols = "RdBu",
+            scale = F,
+            features = c("CD74", "CD14", "CD68", "COL1A1", "COL1A2", "RUNX2")) +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+    ggsave(str_c("output/figures/interactive_dissecting/",
+                group, "_cancer_cells",
+                "/",
+                "all_tumor_tams_dotplot.png"),
+            plot = all_tumor_tams_dotplot,
+            width = 10,
+            height = 10,
+            limitsize = FALSE,
+            bg = "white")
+
+    macs_tumor_dimplots <-
+        patchwork::wrap_plots(dimplot1,
+                             dimplot_list$Ann_Level3,
+                             dimplot_list$class,
+                             dimplot_list$celltype_tumor_call,
+                             dimplot_list$new_annot_clust,
+                             dimplot_list$final_snv_call,
+                             dimplot_list$sample_name,
+                             dimplot_list$scevan_tumor_call,
+                             dimplot_list$data_source,
+                             dimplot_list$scatomic_tumor_call,
+                             dimplot_list$method,
+                             dimplot_list$CNV_status,
+                            ncol = 2,
+                            widths = 14,
+                            heights = 49) +
+        patchwork::plot_annotation(title = group,
+                                   theme = theme(plot.title = element_text(size = 10)))
+    
+    ggsave(str_c("output/figures/interactive_dissecting/",
+                group, "_cancer_cells",
+                "/",
+                "all_tumor_TAMs.png"),
+            plot = macs_tumor_dimplots,
+            width = 14,
+            height = 49,
+            limitsize = FALSE,
+            bg = "white")
+}
+
+
+```
+
+### Reinforce immune markers by xenograft
+In this section, we will take the interactive tumor cells and mix them with the xenograft data to see how they cluster together. We will also visualize the expression of some immune markers in both tumor and xenograft.
+
+```{r reinforce_immunemarkers_by_xenograft}
+
+
+for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
+                "xeno_prim_human", "xeno_mets_human")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    plot_list <- list()
+
+    list <-
+        c("CD74", "CD14", "CD68", "PTPRC",
+          "PTPRJ", "CSF1R", "nCount_RNA", "nFeature_RNA")
+        
+    for (gene in list) {
+        plot_list[[gene]] <-
+            FeaturePlot(object,
+                        features = gene,
+                        raster = F,
+                        order = T) +
+            coord_fixed() 
+
+    }
+    all_genes_plot <-
+        patchwork::wrap_plots(plotlist = plot_list,
+                             ncol = 2) +
+        patchwork::plot_annotation(title = group,
+                                   theme = theme(plot.title = element_text(size = 10)))
+
+    directory <-
+        str_c("output/figures/interactive_dissecting/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+    ggsave(str_c("output/figures/interactive_dissecting/",
+                group,
+                "/",
+                "featureplot_immunemarker_plot.png"),
+            plot = all_genes_plot,
+            width = 14,
+            height = 28,
+            limitsize = FALSE,
+            bg = "white")
+}
+
+
+
+
+
+
+
+
+
+```

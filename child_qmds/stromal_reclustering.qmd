@@ -1354,7 +1354,7 @@ harmony_params <-
         patient_mets = list(group_by = c("sample_name",
                                             "method",
                                             "data_source"),
-                            theta = c(7, 7, 7),
+                            theta = c(12, 12, 12),
                             lambda = c(0.1, 0.1, 0.1)),
         xeno_prim_human = list(group_by = c("sample_name",
                                             "location",
@@ -1521,6 +1521,7 @@ for (item in seq_len(nrow(object_list))) {
                           "^Epithelial_Endothelial$" = "Host",
                           "^Immune_Lymphoid$" = "Host",
                           "^Mesenchymal$" = "Host"))
+    #dimplot_better(stroma_obj, group_by = "Ann_Level3") + NoLegend()
 
     qs::qsave(x = stroma_obj,
               file = str_c("output/seurat_objects/final_tumor_vs_stroma/",
@@ -1550,7 +1551,13 @@ for (item in seq_len(nrow(object_list))) {
 }
 
 
-#dimplot_better(stroma_obj,group_by = "Ann_Level2", raster =F) +NoLegend()
+#dimplot_better(combined_obj,group_by = "Ann_Level3") +NoLegend()
+tumor_int <-
+    subset(combined_obj, subset = (Ann_Level3 == "Tumor_Interactive"))
+FeaturePlot(tumor_int, features = "nCount_RNA", raster=F, order=T)
+
+#dimplot_better(tumor_int, group_by = "Ann_Level3") + NoLegend()
+
 ```
 
 
