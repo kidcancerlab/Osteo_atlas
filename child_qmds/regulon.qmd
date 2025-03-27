@@ -37,7 +37,7 @@ for (i in seq_len(nrow(object_list))) {
     # dimplot <- dimplot_better(object, group_by = "Ann_Level3")
     GRA_output <-
         Run_GRA(sobject = object,
-                idents = "seurat_clusters",
+                idents = "Ann_Level3",
                 org = org,
                 subset = "yes",
                 subset_cell_number = 5000)

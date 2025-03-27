@@ -1024,11 +1024,12 @@ for (item in seq_len(nrow(combine_tumor_per_site))) {
                     lambda = c(0.1, 0.1, 0.1, 0.1)) %>%
         process_seurat(reduction = "harmony",
                         resolution = res_value)
-
+    
     qs::qsave(object,
             str_c("output/seurat_objects/final_combined_sobjs/",
                     comb_group,
                     ".qs"))
+
 }
 
 ## Clean up for the prim_patient_xeno
@@ -1037,7 +1038,6 @@ prim_patient_xeno <-
                     "prim_patient_xeno",
                     ".qs"))
 
-#dimplot_better(subset_xeno_prim, group_by = "seurat_clusters")
 cluster_annotations <-
     prim_patient_xeno@meta.data %>%
     subset(unique == "patient_prim") %>%
@@ -1052,23 +1052,26 @@ replacement_vector <-
 prim_patient_xeno$newid <-
     str_replace_all(prim_patient_xeno$seurat_clusters, replacement_vector)
 
+#dimplot_better(prim_patient_xeno, group_by = c("newid"), split_by = "unique")
 subset_xeno_prim <-
     subset(prim_patient_xeno,
             unique == "xeno_prim_human")
 
-subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "12"] <- "Tumor_Proliferative"
-subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "23"] <- "Tumor_Proliferative"
-subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "13"] <- "Tumor_Synthetic"
+subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "10"] <- "Tumor_Synthetic"
+subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "12"] <- "Tumor_Synthetic"
+subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "23"] <- "Tumor_Synthetic"
+subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "14"] <- "Tumor_Synthetic"
 # subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "17"] <- "Tumor_Interactive"
 # subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "8"] <- "Tumor_Interactive"
 subset_xeno_prim$Ann_Level3 <- subset_xeno_prim$newid
+#dimplot_better(subset_xeno_prim, group_by = "Ann_Level3")
 
 qs::qsave(subset_xeno_prim,
         str_c("output/seurat_objects/final_tumor_vs_stroma/",
                 "xeno_prim_human",
                 ".qs"))
 
-dimplot_better(subset_xeno_prim, group_by = "Ann_Level3")
+
 # Clean up for the xenograft mets
 mets_patient_xeno <-
     qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
@@ -1092,14 +1095,18 @@ mets_patient_xeno$newid <-
 subset_xeno_mets <-
     subset(mets_patient_xeno,
             unique == "xeno_mets_human")
-# dimplot_better(subset_xeno_mets, group_by = "Ann_Level3")
-# FeaturePlot(subset_xeno_mets, features = "COL3A1")
+
+subset_xeno_mets$newid[subset_xeno_mets$seurat_clusters == "11"] <- "Tumor_Synthetic"
+subset_xeno_mets$newid[subset_xeno_mets$seurat_clusters == "10"] <- "Tumor_Synthetic"
+subset_xeno_mets$newid[subset_xeno_mets$seurat_clusters == "18"] <- "Tumor_Synthetic"
 subset_xeno_mets$newid[subset_xeno_mets$seurat_clusters == "22"] <- "Tumor_Fibrogenic"
 subset_xeno_mets$newid[subset_xeno_mets$seurat_clusters == "5"] <- "Tumor_Apoptosis"
 #subset_xeno_mets$newid[subset_xeno_mets$seurat_clusters == "4"] <- "Tumor_Interactive"
-subset_xeno_mets$newid[subset_xeno_mets$seurat_clusters == "11"] <- "Tumor_Fibrogenic"
+#subset_xeno_mets$newid[subset_xeno_mets$seurat_clusters == "11"] <- "Tumor_Fibrogenic"
 # subset_xeno_mets$newid[subset_xeno_mets$seurat_clusters == "9"] <- "Tumor_Fibrogenic"
 subset_xeno_mets$Ann_Level3 <- subset_xeno_mets$newid
+
+#dimplot_better(subset_xeno_mets, group_by = "Ann_Level3")
 qs::qsave(subset_xeno_mets,
         str_c("output/seurat_objects/final_tumor_vs_stroma/",
                 "xeno_mets_human",
@@ -1115,7 +1122,7 @@ patient primary and metastatic datasets
 
 obj_list <- list()
 
-HyperMetabolic <- list()
+Synthetic <- list()
 Fibrogenic <- list()
 Progenitor <- list()
 Proliferative <- list()
@@ -1125,7 +1132,7 @@ Apoptosis <- list()
 ## Human dataset
 percent_diff <-
     tribble(~population,            ~percent_diff_num,
-            "Tumor_HyperMetabolic", 0.05,
+            "Tumor_Synthetic", 0.05,
             "Tumor_Fibrogenic",     0.20,
             "Tumor_Progenitor",     0.15,
             "Tumor_Proliferative",  0.40,
@@ -1148,7 +1155,8 @@ for (group in c(
     species <- object$organism[1]
     
     Idents(object) <- object$Ann_Level3
-    #dimplot_better(object, group_by = "Ann_Level3")
+    #dimplot_better(object, group_by = c("Ann_Level3", "seurat_clusters")) 
+    #FeaturePlot(object, features = c("BNIP3","RPL37A", "RPS18", "RPL39", "RPL35", "MRPL23", "MRPL9"), order = TRUE)
     genes <-
         FindAllMarkers(object,
                         only.pos = TRUE,
@@ -1177,8 +1185,8 @@ for (group in c(
             as.character()
 
         if (length(genes_per_group) > 0) {
-            if (tumor_sub == "Tumor_HyperMetabolic") {
-                HyperMetabolic[[group]] <- genes_per_group
+            if (tumor_sub == "Tumor_Synthetic") {
+                Synthetic[[group]] <- genes_per_group
             }
             if (tumor_sub == "Tumor_Fibrogenic") {
                 Fibrogenic[[group]] <- genes_per_group
@@ -1199,35 +1207,23 @@ for (group in c(
     }
 }
 
-hyperm <- c("BGLAP", "RPL14", "ATP5PF", "RPL29.1")
 
-metabolic <- c("UQCRB", "LDHB", "MDH2", "ATP5MC3", "ATP5MC1", "TIMM13", "COX6C", "PHB2", "ATP5ME", "ATP5MF", "COX7C", "MRPS12", "UQCRH", "NDUFAB1", "ATP5PF", "TOMM22", "ATP5MC2", "HSD17B10", "SLC25A4", "ATP5PO")
 
-dogs_metas <- c("UQCRQ", "ATP5PO", "COX7A2L", "NDUFB6", "NDUFB3", "HSD17B10", "NDUFA8", "PDHB", "ATP5MF", "ATP5MC3", "COX5B", "TIMM9", "CYCS", "NDUFB4", "MRPL11", "ATP6V1D")
-mice_meta <- c(
-    "Uqcrh", "Atp5j", "Cox8a", "Atp5e", "Timm13", "Cox7b", "Atp5h", 
-    "Uqcrq", "Gpi1", "Cox7c", "Ndufab1", "Atp5g2", "Ndufa7", "Atp5g1", 
-    "Slc25a4", "Cox6c", "Ndufa2", "Cox6b1", "Cox7a2l"
-)
 
-DimPlot(obj_list$dogs_mets_cancer_cells, cells.highlight = cells)
 
-dimplot_better(obj_list$mm_prim_cancer_cells, group_by = "Ann_Level3") +
-    NoLegend()
-
-DotPlot(obj_list$dogs_prim_cancer_cells,
-        features = mice_meta %>%
-                    nichenetr::convert_mouse_to_human_symbols() %>%
+DotPlot(obj_list$mm_prim_cancer_cells,
+        features = features %>%
+                    nichenetr::convert_human_to_mouse_symbols() %>%
                     as.character(),
         group.by = "Ann_Level3")
 
 
-DotPlot(obj_list$dogs_mets_cancer_cells,
-        features = dogs_metas,
-        group.by = "Ann_Level3")
+DotPlot(obj_list$xeno_mets_human,
+    features = c("CD274"),
+    group.by = "Ann_Level3")
 
 FeaturePlot(obj_list$patient_prim_cancer_cells,
-            features = "CD68",
+            features = "CD274",
             raster=F,
             order=T) 
 
@@ -1243,10 +1239,10 @@ tumor_features_cells <- list(
     Osteosarcoma = c("RUNX2", "COL1A1", "COL1A2"),
     Tumor_Fibrogenic = c("COL6A3", "COL3A1", "PDGFRB", "COL6A1"),
     Tumor_Progenitor = c("ROBO2", "CD36", "SATB2"),
-    Tumor_Interactive = c("CD74", "CSF1R", "PTPRC", "PTPRJ"),
+    Tumor_Interactive = c("CTSB", "CSF1R", "PTPRC", "PTPRJ"),
     Tumor_Proliferative = c("CENPF", "ASPM", "BIRC5", "AURKB"),
     Tumor_Apoptosis = c("BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104"),
-    Tumor_HyperMetabolic = c("RPL37A", "RPS18", "RPL39", "RPL35")
+    Tumor_Synthetic = c("RPL37A", "RPS18", "RPL39", "RPL35")
 )
 
 
@@ -1320,12 +1316,12 @@ prolif <-
 
 inter <-
     Reduce(intersect, list(
-                        #    Interactive$patient_prim_cancer_cells,
-                        #    Interactive$patient_mets_cancer_cells,
+                           #Interactive$patient_prim_cancer_cells,
+                           #Interactive$patient_mets_cancer_cells,
                         #    Interactive$mm_prim_cancer_cells,
                         #    Interactive$mm_mets_cancer_cells,
-                           Interactive$xeno_prim_human,
-                           Interactive$xeno_mets_human,
+                        #    Interactive$xeno_prim_human,
+                        #    Interactive$xeno_mets_human,
                            Interactive$dogs_prim_cancer_cells,
                            Interactive$dogs_mets_cancer_cells
                            ))
@@ -1342,16 +1338,16 @@ apoptosis <-
                            Apoptosis$dogs_mets_cancer_cells
                            ))
 
-hyperm <-
+synthe <-
    Reduce(intersect, list(
-                           HyperMetabolic$patient_prim_cancer_cells,
-                           HyperMetabolic$patient_mets_cancer_cells,
-                        #    HyperMetabolic$mm_prim_cancer_cells,
-                        #    HyperMetabolic$mm_mets_cancer_cells,
-                        #    HyperMetabolic$xeno_prim_human,
-                        #    HyperMetabolic$xeno_mets_human,
-                           HyperMetabolic$dogs_prim_cancer_cells,
-                           HyperMetabolic$dogs_mets_cancer_cells
+                           Synthetic$patient_prim_cancer_cells,
+                           Synthetic$patient_mets_cancer_cells,
+                        #    Synthetic$mm_prim_cancer_cells,
+                        #    Synthetic$mm_mets_cancer_cells,
+                        #    Synthetic$xeno_prim_human,
+                        #    Synthetic$xeno_mets_human,
+                           Synthetic$dogs_prim_cancer_cells,
+                           Synthetic$dogs_mets_cancer_cells
                            ))
 
 ## progenitor and ground need revisiting

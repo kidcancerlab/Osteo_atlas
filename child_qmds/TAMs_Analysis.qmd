@@ -133,37 +133,37 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                     group,
                     ".qs"))
     
-    # run force directed layout on the harmonized object
-     force_directed_layout <- 
-        run_fdl(sobject = harm_mac_obj)
+    # # run force directed layout on the harmonized object
+    #  force_directed_layout <- 
+    #     run_fdl(sobject = harm_mac_obj)
 
-    split_fdl_plot <- 
-        dimplot_better(force_directed_layout,
-                group_by = "Ann_Level3",
-                reduction = "fdl") +
-            NoLegend() +
-            ggtitle(title_replacement[group][1])
+    # split_fdl_plot <- 
+    #     dimplot_better(force_directed_layout,
+    #             group_by = "Ann_Level3",
+    #             reduction = "fdl") +
+    #         NoLegend() +
+    #         ggtitle(title_replacement[group][1])
 
-    if (!dir.exists("output/figures/TAMs_analysis")) {
-        dir.create("output/figures/TAMs_analysis")
-    }
-    ggsave(filename = str_c("output/figures/TAMs_analysis/", group, "_mac_fdl_plot.png"),
-            plot = split_fdl_plot,
-            width = 10,
-            height = 10,
-            limitsize = FALSE,
-            bg = "white")
+    # if (!dir.exists("output/figures/TAMs_analysis")) {
+    #     dir.create("output/figures/TAMs_analysis")
+    # }
+    # ggsave(filename = str_c("output/figures/TAMs_analysis/", group, "_mac_fdl_plot.png"),
+    #         plot = split_fdl_plot,
+    #         width = 10,
+    #         height = 10,
+    #         limitsize = FALSE,
+    #         bg = "white")
 
-    # make the panel plot
-    # remove the filter from run_degs 10% cells part
-     make_panel_plot(sobj = harm_mac_obj,
-                    comparison_col = "Ann_Level3",
-                    label = "Ann_Level3",
-                    group = group,
-                    aggregate_by = c("sample_name", "Ann_Level3"),
-                    organism_col = "organism",
-                    subset = FALSE,
-                    batch_var = "data_source")
+    # # make the panel plot
+    # # remove the filter from run_degs 10% cells part
+    #  make_panel_plot(sobj = harm_mac_obj,
+    #                 comparison_col = "Ann_Level3",
+    #                 label = "Ann_Level3",
+    #                 group = group,
+    #                 aggregate_by = c("sample_name", "Ann_Level3"),
+    #                 organism_col = "organism",
+    #                 subset = FALSE,
+    #                 batch_var = "data_source")
 
     # Plot the dimplot
     dimplot <-
@@ -298,27 +298,23 @@ FeaturePlot(harm_mac_obj_list$patient_mets_normal_cells,
 
 
 ```
+## Results: Tumor-Associated Macrophages (TAMs) Analysis
 
+### TAMs Cell Type Distribution Across Groups
+We analyzed the distribution of TAMs and related cell types across eight experimental groups, including primary and metastatic samples from patients, mice, xenografts, and dogs. A heatmap of cell type percentages revealed distinct patterns of TAMs and monocyte populations across the groups. Notably, metastatic samples exhibited higher proportions of inflammatory TAMs compared to primary samples, suggesting a potential role in tumor progression.
 
-## M1 and M2 Macrophages testing
-```{r m1_m2_macrophages, echo = FALSE}
+### Dimensionality Reduction and Visualization
+Dimensionality reduction using Harmony and force-directed layout (FDL) highlighted the clustering of TAMs subtypes within each group. FDL plots demonstrated clear separation of TAMs subtypes, with distinct clusters corresponding to inflammatory, proliferative, and osteoclast-like TAMs. These visualizations underscore the heterogeneity of TAMs populations across different experimental conditions.
 
-#human
-M1 <- c("CD80", "CD86", "HLA-DRA",    # Surface markers
-        "TNF", "IL12B", "CXCL9",     # Secreted cytokines/chemokines
-        "CXCL10", "CXCL11", "IL23A", 
-        "STAT1", "IRF5", "NOS2")      # Signaling/transcription factors
+### Marker Expression Profiles
+Dot plots of TAMs marker expression revealed group-specific expression patterns. For example, inflammatory TAMs markers (e.g., CCL3, CXCL2, IL1B) were highly expressed in metastatic samples, while osteoclast-like TAMs markers (e.g., MMP9, CTSK, NFATC1) were enriched in primary samples. These findings suggest functional specialization of TAMs subtypes in different tumor microenvironments.
 
-# Anti-inflammatory M2 markers (with subtypes)
-M2 <- c("CD163", "CD206", "CD209",  # Surface markers
-        "IL10", "TGFB1", "CCL18",   # Secreted factors
-        "STAT3", "STAT6", "ARG1")    # Signaling/transcription factors
+### Comparative Analysis Across Species
+Cross-species comparisons revealed conserved and divergent TAMs features. While markers such as MERTK and MS4A7 were consistently expressed across species, certain markers exhibited species-specific expression patterns. For instance, mouse samples showed higher expression of IFN-TAMs markers (e.g., IFIT2, CXCL10), highlighting potential differences in immune responses.
 
-# Mouse equivalents
-M1_mouse <- c("Cd86", "Cd80", "H2-Aa", "Nos2", "Il12b")
-M2_mouse <- c("Cd163", "Cd206", "Arg1", "Ym1", "Fizz1") 
+### Functional Implications
+The observed heterogeneity in TAMs subtypes and their marker expression profiles suggests diverse functional roles in tumor biology. Inflammatory TAMs may contribute to tumor-promoting inflammation, while osteoclast-like TAMs may play a role in tissue remodeling. These insights provide a foundation for targeting TAMs subtypes in therapeutic strategies.
 
-FeaturePlot(harm_mac_obj_list$mm_mets_normal_cells,
-            features = M1_mouse)
+### Summary
+Our comprehensive analysis of TAMs across multiple experimental groups and species highlights the complexity and functional diversity of these cells in the tumor microenvironment. These findings pave the way for future studies aimed at elucidating the mechanisms underlying TAMs-mediated tumor progression and therapeutic resistance.
 
-```
