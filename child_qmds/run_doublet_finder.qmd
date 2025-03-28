@@ -40,7 +40,19 @@ sample_info <- dplyr::select(sample_info, sample_name, data_source) %>%
                                "GEO" = "/home/gdrobertslab/lab/Counts_2/",
                                "NCH" = "/home/gdrobertslab/lab/Counts_2/",
                                "SJ" = "/home/gdrobertslab/lab/ExternalData/Patel_lab/",
-                               "NCI_POB" = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/"))
+                               "NCI_POB" = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/03_FilteredMatricesH5/",
+                               "CSU" = "/home/gdrobertslab/lab/ExternalData/Regan_lab/",
+                               "TU" = "/home/gdrobertslab/lab/ExternalData/Gardner/",
+                               "UoM" = "/home/gdrobertslab/lab/ExternalData/Modiano_Lab/"))
+
+count_path_end <- list("GEO" = "/home/gdrobertslab/lab/",
+                       "NCH" = "/home/gdrobertslab/lab/",
+                       "SJ" = "/home/gdrobertslab/lab/",
+                       "NCI_POB" = "/home/gdrobertslab/lab/",
+                       "CSU" = "/home/gdrobertslab/lab/",
+                       "TU" = "/home/gdrobertslab/lab/",
+                       "UoM" = "/home/gdrobertslab/lab/")
+
 
 #make new data frame for doublet finder input
 df_input <- sample_info
@@ -67,44 +79,55 @@ sample_info$h5_path <-
                          "/filtered_feature_bc_matrix.h5")))
 
 
-#create 10x counts folders for troy and anand's data
-for (i in seq_len(nrow(sample_info))) {
-    print(sample_info$sample_name[i])
-    
-    #Check if its a SJ or NIH sample; these are the only ones that need new
-    #count folders
-    if (sample_info$data_source[i] == "NCI_POB" | sample_info$data_source[i] == "SJ") {
-        if (sample_info$data_source[[i]] == "NCI_POB") {
-            #Make new data path if it's NIH
-            new_data_path <- paste0(atlas_path,
-                                    "DoubletFinder/troy_counts/",
-                                    sample_info$sample_name[i])
-            sample_info$data_path[i] <- new_data_path
-        } else {
-            #make new data path if it's SJ
-            new_data_path <- paste0(atlas_path,
-                                    "DoubletFinder/anand_counts/",
-                                    sample_info$sample_name[i])
-            sample_info$data_path[i] <- new_data_path
-        }
-        if (!dir.exists(new_data_path)) {
-            #Read in counts matrix if a folder hasn't already been made for that sample
-            tmp_h5 <- Read10X_h5(sample_info$h5_path[i]) 
-            if (class(tmp_h5) == "list") {
-                tmp_h5 <- tmp_h5[["Gene Expression"]]
-            }
-            DropletUtils::write10xCounts(x = tmp_h5,
-                                         path = new_data_path,
-                                         version = "3")
-        }
+#create 10x counts folders for troy and anand's data; and Regan, Gardner, and Modiano
+needs_counts <- subset(sample_info, data_source %in% c("SJ", "NCI_POB", "CSU", "TU", "UoM"))
 
-    } else {
-        sample_info$data_path[i] <-
-            paste0("/home/gdrobertslab/lab/Counts_2/",
-                   sample_info$sample_name[i],
-                   "/filtered_feature_bc_matrix/")
+#make paths to h5 files
+needs_counts <- mutate(needs_counts,
+       h5_path = paste0(data_path,
+                        recode(data_source,
+                               "SJ" = paste0(sample_name, "/filtered_feature_bc_matrix.h5"),
+                               "NCI_POB" = paste0(sample_name, "_filtered_feature_bc_matrix.h5"),
+                               "CSU" = paste0(sample_name,
+                                              "/",
+                                              ifelse(startsWith(sample_name, "OSLM"),
+                                                     paste0(sample_name, "_filtered_feature_bc_matrix.h5"),
+                                                     "filtered_feature_bc_matrix.h5")
+                                              ),
+                               "TU" = paste0(sample_name, "/filtered_feature_bc_matrix.h5"),
+                               "UoM" = paste0("cellranger_", sample_name, "/filtered_feature_bc_matrix.h5"))
+       )) %>%
+    unique()
+
+
+#write counts to folders
+system("mkdir -p DoubletFinder/Counts/SJ DoubletFinder/Counts/NCI_POB DoubletFinder/Counts/CSU DoubletFinder/Counts/TU DoubletFinder/Counts/UoM")
+#set up will be DoubletFinder/`data_source`/`sample_name`/filtered_feature_bc_matrix
+for (i in 1:nrow(needs_counts)) {
+    #only do it if the counts folder doesn't exist
+    if (!dir.exists(paste0("DoubletFinder/Counts/",
+                          needs_counts$data_source[i],
+                          "/",
+                          needs_counts$sample_name[i]))) {
+
+        h5_data <- Read10X_h5(needs_counts$h5_path[i])
+        if (class(h5_data) == "list") h5_data <- h5_data[["Gene Expression"]]
+        write10xCounts(path = paste0("DoubletFinder/Counts/",
+                                    needs_counts$data_source[i],
+                                    "/",
+                                    needs_counts$sample_name[i]),
+                    x = h5_data,
+                    barcodes = colnames(h5_data),
+                    type = "sparse")
     }
 }
+
+sample_info$count_path <- ifelse(sample_info$data_source %in% c("NCH", "GEO"),
+                                 paste0(sample_info$data_path, sample_info$sample_name, "/filtered_feature_bc_matrix"),
+                                 paste0("DoubletFinder/Counts/", sample_info$data_source, "/", sample_info$sample_name))
+
+df_input <- select(sample_info, sample_name, count_path) %>% unique()
+
 
 #Check that all count paths in df_input exist
 dir.exists(df_input$count_path)
@@ -112,13 +135,14 @@ dir.exists(df_input$count_path)
 write.table(df_input,
              "misc/doubletfinder_input.txt",
              quote = FALSE,
-             row.names = FALSE)
+             row.names = FALSE,
+             col.names = FALSE)
 ```
 
 ### Submit Batch Jobs
 
 ```{bash}
-sbatch DoubletFinder/run_doubletfinder.sh
+sbatch DoubletFinder/run_demuxafy.sh
 ```
 
 ## Evaluate Demuxafy Results
