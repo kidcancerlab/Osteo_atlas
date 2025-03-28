@@ -42,6 +42,15 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
 
 }
 
+title_replacement <- 
+    list(patient_prim_normal_cells = "Patient Primary",
+        patient_mets_normal_cells = "Patient Metatatic",
+        mm_prim_normal_cells = "Mouse Primary",
+        mm_mets_normal_cells = "Mouse Metatatic",
+        xeno_prim_mouse = "Xenograft Primary",
+        xeno_mets_mouse = "Xenograft Metastatic",
+        dogs_prim_normal_cells = "Dog Primary",
+        dogs_mets_normal_cells = "Dog Metastatic")
 # Generate a heatmap of the cell count data
 cell_count_prep <- 
     TAM_cell_count_table %>%
@@ -53,25 +62,36 @@ cell_count_prep <-
 cell_count_percent <-
     sweep(cell_count_prep, 1, rowSums(cell_count_prep), FUN = "/") * 100
 
+# Generate a heatmap of the cell count data
 TAMs_cell_percent <-
     pheatmap::pheatmap(cell_count_percent,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         display_numbers = TRUE,
-         fontsize_number = 10,
-         main = "Cell Count Percentage Heatmap",
-         scale = "none",
-         number_format = "%.1f",
-         color = colorRampPalette(c("white", "red"))(100))
-
+                        cluster_rows = FALSE,
+                        cluster_cols = TRUE,
+                        display_numbers = TRUE,
+                        fontsize_number = 7,
+                        main = "Cell Count Percentage Heatmap",
+                        scale = "none",
+                        number_format = "%.1f",
+                        silent = TRUE,
+                        color = colorRampPalette(c("white", "red"))(100),
+                        legend = FALSE,
+                        angle_col = 45,
+                        labels_col = gsub("_", " ", colnames(cell_count_percent)),
+                        labels_row = title_replacement[rownames(cell_count_percent)] %>% unlist(),
+                        gaps_row = NULL,
+                        gaps_col = NULL,
+                        border_color = "grey",
+                        fontsize_row = 10,
+                        fontsize_col = 10) 
 # stash_plot(TAMs_cell_percent[[4]], "TAMs_celltype_heatmap")
 
-ggsave(filename = "output/figures/Final_Annotations/TAMs_celltype_heatmap.png",
+ggsave(filename = "output/figures/Final_Annotations/TAMs_celltype_heatmap.pdf",
         plot = TAMs_cell_percent,
-        width = 7,
+        width = 12,
         height = 5,
         limitsize = FALSE,
         bg = "white")
+    
 
 
 #prepare theme for the celltypes color
@@ -89,15 +109,6 @@ cols <- c(plot_cols, sample(rainbow(length(mac_celltypes))))
 
 names(cols) <- mac_celltypes
 
-title_replacement <- 
-    list(patient_prim_normal_cells = "Patient Primary Stroma",
-        patient_mets_normal_cells = "Patient Metatatic Stroma",
-        mm_prim_normal_cells = "Mouse Primary Stroma",
-        mm_mets_normal_cells = "Mouse Metatatic Stroma",
-        xeno_prim_mouse = "Xenograft Primary Stroma",
-        xeno_mets_mouse = "Xenograft Metastatic Stroma",
-        dogs_prim_normal_cells = "Dog Primary Stroma",
-        dogs_mets_normal_cells = "Dog Metastatic Stroma")
 
 # make dimplot list
 macs_dimplot_list <- list()
@@ -124,7 +135,8 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
         mac_obj %>%
         RunHarmony(group.by.vars = c("sample_name")) %>%
         process_seurat(reduction = "harmony")
-    
+    #dimplot_better(harm_mac_obj, group_by = "Ann_Level3")
+
     if (!dir.exists("output/seurat_objects/TAMs_objects")) {
         dir.create("output/seurat_objects/TAMs_objects")
     }
@@ -164,7 +176,17 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
     #                 organism_col = "organism",
     #                 subset = FALSE,
     #                 batch_var = "data_source")
+                }
 
+for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
+
+    harm_mac_obj <-
+        qs::qread(str_c("output/seurat_objects/TAMs_objects/",
+                        group,
+                        ".qs"))
     # Plot the dimplot
     dimplot <-
         DimPlot(harm_mac_obj,
@@ -173,7 +195,7 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 label = T,
                 repel = T,
                 cols = cols,
-                label.size = 2.5) +
+                label.size = 4) +
             coord_fixed() +
             NoLegend() +
             ggtitle(title_replacement[group][1]) +
@@ -190,10 +212,16 @@ dimplots_panel <-
 
 # stash_plot(dimplots_panel, "macrophage_panel_plot")
 
+ggsave(filename = "output/figures/Final_Annotations/macrophage_panel_plots.pdf",
+        plot = dimplots_panel,
+        width = 14,
+        height = 28,
+        limitsize = FALSE,
+        bg = "white")
 ggsave(filename = "output/figures/Final_Annotations/macrophage_panel_plots.png",
         plot = dimplots_panel,
-        width = 20,
-        height = 30,
+        width = 14,
+        height = 28,
         limitsize = FALSE,
         bg = "white")
 
@@ -209,10 +237,11 @@ macrophage_features_cells <- list(
     TAMs = c("MERTK","SELENOP", "MS4A7")
 )
 
+
 #set the order of the cells for the dotplot
 order_TAMs <-
-    c("Osteoclast_TAMs", "Prolif_TAMs", "Monocytes", "IFN_TAMs", 
-     "Inflam_TAMs", "Scar_TAMs", "Alv_TAMs", "TAMs")
+    c("Osteoclast TAMs", "Prolif TAMs", "Monocytes", "IFN TAMs", 
+     "Inflam TAMs", "Scar TAMs", "Alv TAMs", "TAMs")
 
 # Generate a feature dotplot for the macrophages from the different groups
 dotplot_list <- list()
@@ -258,43 +287,55 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
     present_features <- 
         intersect(dotplot_markers, rownames(harm_mac_obj_list[[group]]))
 
+    
+    # generate a new col with labels
+    harm_mac_obj_list[[group]]$plot_label <- 
+        harm_mac_obj_list[[group]]$Ann_Level3 %>%
+         as.character() %>%
+            gsub("_", " ", .)
+
+        
     # Filter for features present in the group
     order_TAMs_subset <-
-        intersect(order_TAMs, unique(harm_mac_obj_list[[group]]$Ann_Level3))
+        intersect(order_TAMs, unique(harm_mac_obj_list[[group]]$plot_label))
 
     dotplot <- 
         DotPlot(harm_mac_obj_list[[group]],
             features = present_features,
-            group.by = "Ann_Level3",
+            group.by = "plot_label",
             cols = "RdBu",
-            dot.scale = 10,
+            dot.scale = 6,
             col.max = 1.5) +
             scale_y_discrete(limits = rev(order_TAMs_subset)) +
             scale_x_discrete(limits = intersect(order_features, present_features)) +
-            #ggtitle(title_replacement[group][1]) +
+            ggtitle(title_replacement[group][1]) +
             theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
-            coord_fixed()
+            coord_fixed() + 
+            labs(x = NULL, y = NULL)
+
     dotplot_list[[group]] <- dotplot
 }
 
 # Combine the dotplots into a single panel
 dotplot_panel <- 
-    patchwork::wrap_plots(plotlist = dotplot_list, ncol = 2) +
+    patchwork::wrap_plots(plotlist = dotplot_list, ncol = 1) +
     patchwork::plot_annotation(title = "Macrophage Cell Type Markers")
 
 # stash_plot(dotplot_panel, "macrophage_dotplot_panel")
 
-ggsave(filename = "output/figures/Final_Annotations/macrophage_dotplot_panel.png",
+ggsave(filename = "output/figures/Final_Annotations/macrophage_dotplot_panel.pdf",
         plot = dotplot_panel,
-        width = 30,
-        height = 20,
+        width = 14,
+        height = 28,
         limitsize = FALSE,
         bg = "white")
 
-
-FeaturePlot(harm_mac_obj_list$patient_mets_normal_cells,
-            features = macrophage_features_cells$Inflam_TAMs, order = T)
-
+ggsave(filename = "output/figures/Final_Annotations/macrophage_dotplot_panel.png",
+        plot = dotplot_panel,
+        width = 14,
+        height = 28,
+        limitsize = FALSE,
+        bg = "white")
 
 
 ```

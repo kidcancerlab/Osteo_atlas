@@ -416,6 +416,8 @@ Epithelial_Endothelial <-
                             "MUC5AC", "RSPH1", "RSPH9", "TUBA1A", "CCDC17", "CCDC39", "CCDC181"),
         Tuft_Cells = c("TRPM5", "DCLK1", "CLCA1", "TFF3"))
 
+
+
 # load the tsv for human_dog gene orthologs
 orthologs <-
     read_tsv("input/downloads/dog_human_gene_orthologs.txt")
@@ -1071,7 +1073,7 @@ celltype_list <-
                                                             "^5$" = "Endothelial_Vein",
                                                             "^6$" = "Endothelial_Vein",
                                                             "^7$" = "Endothelial_Vein")),
-        dogs_mets_normal_cells = list(Mesenchymal = c("^0$" = "myCAFs",
+        dogs_mets_normal_cells = list(Mesenchymal = c("^0$" = "Smooth_muscle",
                                                     "^1$" ="apCAFs",
                                                     "^2$"= "Alv_CAFs",
                                                     "^3$" = "apCAFs",
@@ -1111,10 +1113,10 @@ celltype_list <-
                                                 "^10$" = "IFN_TAMs",
                                                 "^11$" = "Osteoclast_TAMs",
                                                 "^12$" = "Scar_TAMs",
-                                                "^13$" = "Monocytes",
+                                                "^13$" = "Inflam_TAMs",
                                                 "^14$" = "DC1",
                                                 "^15$" = "Inflam_TAMs",
-                                                "^16$" = "Alv_TAMs",
+                                                "^16$" = "Monocytes",
                                                 "^17$" = "pDC",
                                                 "^18$" = "Inflam_TAMs",
                                                 "^19$" = "Scar_TAMs",
@@ -1284,8 +1286,7 @@ for (item in seq_len(nrow(object_list))) {
         print(str_c("Finished processing ", cell_type, " for ", group))
     }
 }
-
-
+#dimplot_better(s_obj, group_by = "Ann_Level3")
 ```
 
 
@@ -1592,19 +1593,19 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets",
                     ".tsv"))
 
     combined_plot1 <-
-        dimplot_better(object, group_by = "Ann_Level3", raster = F) + 
+        dimplot_better(object, group_by = "Ann_Level3") + 
         NoLegend()
 
     combined_plot2 <-
-        dimplot_better(object, group_by = "Ann_Level2", raster = F) + 
+        dimplot_better(object, group_by = "Ann_Level2") + 
         NoLegend()
 
     combined_plot3 <-
-        dimplot_better(object, group_by = "Ann_Level1", raster = F) +
+        dimplot_better(object, group_by = "Ann_Level1") +
         NoLegend()
 
     combined_plot4 <-
-        dimplot_better(object, group_by = "Ann_Level0", raster = F) +
+        dimplot_better(object, group_by = "Ann_Level0") +
         NoLegend()
 
     all_plots <- 
@@ -1612,7 +1613,7 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets",
                     combined_plot2,
                     combined_plot3,
                     combined_plot4,
-                    nrow = 2) +
+                    ncol = 2) +
             patchwork::plot_annotation(title = group)
     
     directory <-
@@ -1656,4 +1657,155 @@ for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets",
 
 
 
+```
+
+
+## Describe Markers for Ann_Level2
+```{r describe_markers_Ann_Level2_stroma}
+obj_list <- list()
+
+CAFs <- list()
+T_cells <- list()
+NK_cells <- list()
+DC <- list()
+B_cells <- list()
+TAMs <- list()
+Monocytes <- list()
+Mast <- list()
+Endothelial_cells <- list()
+Pericytes <- list()
+Smooth_muscle <- list()
+Epithelial_cells <- list()
+Neutrophils <- list()
+Naive_NKT <- list()
+
+## ann level2 for all across datasets
+percent_diff <-
+    tribble(~population,            ~percent_diff_num,
+            "CAFs",                 0.20,
+            "T_cells",              0.15,
+            "NK_cells",             0.10,
+            "DC",                   0.10,
+            "B_cells",              0.10,
+            "TAMs",                 0.25,
+            "Monocytes",            0.15,
+            "Mast",                 0.10,
+            "Endothelial_cells",    0.20,
+            "Pericytes",            0.15,
+            "Smooth_muscle",        0.15,
+            "Epithelial_cells",     0.20,
+            "Neutrophils",          0.15,
+            "Naive_NKT",            0.10
+            )
+
+
+for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs")) 
+
+    obj_list[[group]] <- object
+    species <- object$organism[1]
+
+    Idents(object) <- object$Ann_Level2
+    #dimplot_better(object, group_by = c("Ann_Level3", "seurat_clusters")) 
+    #FeaturePlot(object, features = c("BNIP3","RPL37A", "RPS18", "RPL39", "RPL35", "MRPL23", "MRPL9"), order = TRUE)
+    genes <-
+        FindAllMarkers(object,
+                        only.pos = TRUE,
+                        min.pct = 0.3,
+                        logfc.threshold = 0.2)
+    if (species == "mouse") {
+        genes$gene <- 
+            nichenetr::convert_mouse_to_human_symbols(genes$gene) %>%
+            as.character()
+    }
+
+    for (item in seq_len(nrow(percent_diff))) {
+        celltype <- percent_diff$population[item]
+        percent_differ <- percent_diff$percent_diff_num[item]
+
+        genes_per_group <-
+            genes %>%
+            filter(cluster == celltype) %>%
+            mutate(percent_diff = pct.1 - pct.2) %>%
+            arrange(desc(percent_diff)) %>%
+            slice_head(n=100) %>%
+            #arrange(desc(avg_log2FC)) %>%
+            pull(gene) %>%
+            unique() %>%
+            na.omit() %>%
+            as.character()
+
+        if (length(genes_per_group) > 0) {
+            if (celltype == "CAFs") {
+            CAFs[[group]] <- genes_per_group
+            } else if (celltype == "T_cells") {
+            T_cells[[group]] <- genes_per_group
+            } else if (celltype == "NK_cells") {
+            NK_cells[[group]] <- genes_per_group
+            } else if (celltype == "DC") {
+            DC[[group]] <- genes_per_group
+            } else if (celltype == "B_cells") {
+            B_cells[[group]] <- genes_per_group
+            } else if (celltype == "TAMs") {
+            TAMs[[group]] <- genes_per_group
+            } else if (celltype == "Monocytes") {
+            Monocytes[[group]] <- genes_per_group
+            } else if (celltype == "Mast") {
+            Mast[[group]] <- genes_per_group
+            } else if (celltype == "Endothelial_cells") {
+            Endothelial_cells[[group]] <- genes_per_group
+            } else if (celltype == "Pericytes") {
+            Pericytes[[group]] <- genes_per_group
+            } else if (celltype == "Smooth_muscle") {
+            Smooth_muscle[[group]] <- genes_per_group
+            } else if (celltype == "Epithelial_cells") {
+            Epithelial_cells[[group]] <- genes_per_group
+            } else if (celltype == "Neutrophils") {
+            Neutrophils[[group]] <- genes_per_group
+            } else if (celltype == "Naive_NKT") {
+            Naive_NKT[[group]] <- genes_per_group
+            }
+        }
+    }
+}
+
+# intersect
+
+CAF_intersect <- Reduce(intersect, CAFs)
+T_cells_intersect <- Reduce(intersect, T_cells)
+NK_cells_intersect <- Reduce(intersect, NK_cells)
+DC_intersect <- Reduce(intersect, DC)
+B_cells_intersect <- Reduce(intersect, B_cells)
+TAMs_intersect <- Reduce(intersect, TAMs)
+Monocytes_intersect <- Reduce(intersect, Monocytes)
+Mast_intersect <- Reduce(intersect, Mast)
+Endothelial_cells_intersect <- Reduce(intersect, Endothelial_cells)
+Pericytes_intersect <- Reduce(intersect, Pericytes)
+Smooth_muscle_intersect <- Reduce(intersect, Smooth_muscle)
+Epithelial_cells_intersect <- Reduce(intersect, Epithelial_cells)
+Neutrophils_intersect <- Reduce(intersect, Neutrophils)
+Naive_NKT_intersect <- Reduce(intersect, Naive_NKT)
+# create a list of all the genes
+
+markers <-
+    list(CAFs = c("COL3A1", "COL5A2", "FBN1"),
+         T_cells = c("CD3D", "CD3E", "CD2"),
+         NK_cells = c("NKG7", "KLRK1", "KLRD1"),
+         DC = c("CD1C", "CD86", "CD83"),
+         B_cells = c("CD79B", "CD79A", "BLNK"),
+         TAMs = c("CSF1R", "CYBB", "MRC1"),
+         Monocytes = c("CD14", "LYZ", "S100A9"),
+         Neutrophils = c("S100A8", "FCGR3B", "NGAL"),
+         Mast = c("TPSAB1", "TPSB2", "KIT"),
+         Endothelial_cells = c("PECAM1", "VWF", "FLT1"),
+         Pericytes = c("RGS5", "PDGFRB", "ACTA2"),
+         Smooth_muscle = c("ACTA2", "TAGLN", "MYH11"),
+         Epithelial_cells = c("PATJ", "EGFR", "CDH1"),
+         Naive_NKT = c("TOX","ETS1", "IKZF1"))
 ```

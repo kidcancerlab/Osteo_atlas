@@ -41,40 +41,50 @@ cell_count_prep <- cell_count_table %>%
 cell_count_percent <-
     sweep(cell_count_prep, 1, rowSums(cell_count_prep), FUN = "/") * 100
 
+title_replacement <- 
+    list(patient_prim_normal_cells = "Patient Primary",
+        patient_mets_normal_cells = "Patient Metatatic",
+        mm_prim_normal_cells = "Mouse Primary",
+        mm_mets_normal_cells = "Mouse Metatatic",
+        xeno_prim_mouse = "Xenograft Primary",
+        xeno_mets_mouse = "Xenograft Metastatic",
+        dogs_prim_normal_cells = "Dog Primary",
+        dogs_mets_normal_cells = "Dog Metastatic")
+
+# Generate a heatmap of the cell count data
 stromal_celltype_heatmap<-
     pheatmap::pheatmap(cell_count_percent,
-                        cluster_rows = FALSE,
-                        cluster_cols = FALSE,
-                        display_numbers = TRUE,
-                        fontsize_number = 10,
-                        main = "Cell Count Percentage Heatmap",
-                        scale = "none",
-                        number_format = "%.1f",
-                        silent = TRUE,
-                        color = colorRampPalette(c("white", "red"))(100),
-                        legend = FALSE)
+                            cluster_rows = FALSE,
+                            cluster_cols = TRUE,
+                            display_numbers = TRUE,
+                            fontsize_number = 7,
+                            main = "Cell Count Percentage Heatmap",
+                            scale = "none",
+                            number_format = "%.1f",
+                            silent = TRUE,
+                            color = colorRampPalette(c("white", "red"))(100),
+                            legend = FALSE,
+                            angle_col = 45,
+                            labels_col = gsub("_", " ", colnames(cell_count_percent)),
+                            labels_row = title_replacement[rownames(cell_count_percent)] %>% unlist(),
+                            gaps_row = NULL,
+                            gaps_col = NULL,
+                            border_color = "grey",
+                            fontsize_row = 10,
+                            fontsize_col = 10,
+                            cellwidth = 20, # Increase cell width
+                            cellheight = 20) # Increase cell height
 
 # stash_plot(stromal_celltype_heatmap[[4]], "stromal_celltype_heatmap")
 
-ggsave(filename = "output/figures/Final_Annotations/stromal_celltype_heatmap.png",
+ggsave(filename = "output/figures/Final_Annotations/stromal_celltype_heatmap.pdf",
         plot = stromal_celltype_heatmap,
-        width = 20,
-        height = 5,
+        width = 8,
+        height = 4,
         limitsize = FALSE,
         bg = "white")
 
 #prepare colors for the dimplot
-celltypes <-
-    c(unique(sobj_list$patient_prim_normal_cells$Ann_Level3),
-    unique(sobj_list$patient_mets_normal_cells$Ann_Level3),
-    unique(sobj_list$mm_prim_normal_cells$Ann_Level3),
-    unique(sobj_list$mm_mets_normal_cells$Ann_Level3),
-    unique(sobj_list$xeno_prim_mouse$Ann_Level3),
-    unique(sobj_list$xeno_mets_mouse$Ann_Level3),
-    unique(sobj_list$dogs_prim_normal_cells$Ann_Level3),
-    unique(sobj_list$dogs_mets_normal_cells$Ann_Level3)) %>%
-    unique()
-
 celltypes <-
     c(unique(sobj_list$patient_prim_normal_cells$Ann_Level2),
     unique(sobj_list$patient_mets_normal_cells$Ann_Level2),
@@ -86,22 +96,12 @@ celltypes <-
     unique(sobj_list$dogs_mets_normal_cells$Ann_Level2)) %>%
     unique()
 
-
 cols <- c(plot_cols, sample(rainbow(length(celltypes))))
 
 names(cols) <- celltypes
 
 dimplot_list <- list()
 
-title_replacement <- 
-    list(patient_prim_normal_cells = "Patient Primary Stroma",
-        patient_mets_normal_cells = "Patient Metatatic Stroma",
-        mm_prim_normal_cells = "Mouse Primary Stroma",
-        mm_mets_normal_cells = "Mouse Metatatic Stroma",
-        xeno_prim_mouse = "Xenograft Primary Stroma",
-        xeno_mets_mouse = "Xenograft Metastatic Stroma",
-        dogs_prim_normal_cells = "Dog Primary Stroma",
-        dogs_mets_normal_cells = "Dog Metastatic Stroma")
 
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
@@ -112,7 +112,7 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                         group,
                         ".qs"))
     order <-
-        object$Ann_Level3 %>%
+        object$Ann_Level2 %>%
         table() %>%
         as.data.frame() %>%
         arrange(desc(Freq)) %>%
@@ -128,34 +128,25 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 label = T,
                 repel = T,
                 cols = cols,
-                label.size = 2.5,
+                label.size = 4,
                 raster = F) +
             coord_fixed() +
             #scale_color_manual(values = cols) +
             NoLegend() +
             ggtitle(title_replacement[group][1]) +
             theme(aspect.ratio=1)
-    
-    ggsave(plot = dimplot,
-            filename = str_c("output/figures/heather/",
-                group,
-                "_dimplot.svg"),
-            width = 6,
-            height = 6,
-            device = "svg")
-    stash_plot(dimplot, str_c(group, "_dimplot"))
 
     dimplot_list[[group]] <- dimplot
+
+
 }
 
 stromal_panel_plot <-
     patchwork::wrap_plots(plotlist = dimplot_list,
             ncol = 2) +
-        patchwork::plot_annotation(title = "Stromal cell types Ann_Level3")
+        patchwork::plot_annotation(title = "Stromal cell types Ann_Level2")
 
-stash_plot(stromal_panel_plot, "stromal_panel_plot")
-
-ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
+ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.pdf",
         plot = stromal_panel_plot,
         width = 14,
         height = 28,
@@ -164,6 +155,147 @@ ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
 
 qs::qsave(stromal_panel_plot,
         str_c("output/figures/Final_Annotations/ryan_needs/stromal_panel_plot.qs"))
+
+
+
+# make a dotplot
+dotplot_list <- list()
+
+celltypes <-
+    c(unique(sobj_list$patient_prim_normal_cells$Ann_Level2),
+    unique(sobj_list$patient_mets_normal_cells$Ann_Level2),
+    unique(sobj_list$mm_prim_normal_cells$Ann_Level2),
+    unique(sobj_list$mm_mets_normal_cells$Ann_Level2),
+    unique(sobj_list$xeno_prim_mouse$Ann_Level2),
+    unique(sobj_list$xeno_mets_mouse$Ann_Level2),
+    unique(sobj_list$dogs_prim_normal_cells$Ann_Level2),
+    unique(sobj_list$dogs_mets_normal_cells$Ann_Level2)) %>%
+    unique()
+
+cell_markers <- 
+    list(CAFs = c("COL3A1", "COL5A2", "FBN1"),
+         Smooth_muscle = c("ACTA2", "TAGLN", "MYH11"),
+         Pericytes = c("RGS5", "PDGFRB", "ACTA2"),
+         T_cells = c("CD3D", "CD3E", "CD2"),
+         NK_cells = c("NKG7", "KLRK1", "KLRD1"),
+         Naive_NKT = c("TOX","ETS1", "IKZF1"),
+         DC = c("CD1C", "CD86", "CD83"),
+         TAMs = c("CSF1R", "CYBB", "MRC1"),
+         Monocytes = c("CD14", "LYZ", "S100A9"),
+         Neutrophils = c("S100A8", "FCGR3B", "NGAL"),
+         B_cells = c("CD79B", "CD79A", "BLNK"),
+         Mast = c("TPSAB1", "TPSB2", "KIT"),
+         Endothelial_cells = c("PECAM1", "VWF", "FLT1"),
+         Epithelial_cells = c("PATJ", "EGFR", "CDH1"))
+
+order_stroma <-
+    c("CAFs", "Smooth muscle", "Pericytes", "T cells", "NK cells", "Naive NKT", 
+        "DC", "TAMs", "Monocytes", "Neutrophils", "B cells", "Mast",
+        "Endothelial cells", "Epithelial cells")
+
+for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs")) 
+                        
+    Idents(object) <- object$Ann_Level2
+
+    order_features <- 
+        c(cell_markers$CAFs,
+          cell_markers$Smooth_muscle,
+          cell_markers$Pericytes,
+          cell_markers$T_cells,
+          cell_markers$NK_cells,
+          cell_markers$Naive_NKT,
+          cell_markers$DC,
+          cell_markers$TAMs,
+          cell_markers$Monocytes,
+          cell_markers$Neutrophils,
+          cell_markers$B_cells,
+          cell_markers$Mast,
+          cell_markers$Endothelial_cells,
+          cell_markers$Epithelial_cells) %>%
+        unlist()
+
+    unique_cells <-
+        unique(sobj_list[[group]]$Ann_Level2) 
+
+    # if (group %in% c("xeno_prim_human", "xeno_mets_human")) {
+    #     tumor_features_cells <- xeno_markers
+    # } else {
+    #     tumor_features_cells <- humanP_mice_markers
+    # }
+    dotplot_markers <-
+        cell_markers[unique_cells] %>%
+        unlist() %>%
+        as.vector()
+
+    species <- 
+        sobj_list[[group]]$organism[1]
+    
+    # Convert macrophage_features to mouse genes if species is mouse
+    if (species == "mouse") {
+        dotplot_markers <- 
+            nichenetr::convert_human_to_mouse_symbols(dotplot_markers) %>%
+            na.omit() %>%
+            as.character()
+        order_features <- 
+            nichenetr::convert_human_to_mouse_symbols(order_features) %>%
+            na.omit() %>%
+            unique()
+    }
+
+    # Filter for features present in the group
+    present_features <- 
+        intersect(dotplot_markers, rownames(sobj_list[[group]]))
+
+    # Filter for features present in the group
+
+    sobj_list[[group]]$plot_labels <-
+        sobj_list[[group]]$Ann_Level2 %>%
+        as.character() %>%
+        gsub("_", " ", .)
+
+    order_stroma_subset <-
+        intersect(order_stroma, unique(sobj_list[[group]]$plot_labels))
+    
+
+    dotplot <-
+        DotPlot(sobj_list[[group]],
+            features = present_features,
+            group.by = "plot_labels",
+            cols = "RdBu",
+            dot.scale = 7,
+            col.max = 1.5) +
+            scale_y_discrete(limits = rev(order_stroma_subset)) +
+            scale_x_discrete(limits = intersect(order_features, present_features)) +
+            ggtitle(title_replacement[group][1]) +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+            coord_fixed() + 
+            labs(x = NULL, y = NULL)
+
+
+    dotplot_list[[group]] <- dotplot
+}
+
+# Combine the dotplots into a single panel
+
+dotplot_panel <- 
+    patchwork::wrap_plots(plotlist = dotplot_list, ncol = 1) +
+    patchwork::plot_annotation(title = "Stromal Cell Type Markers")
+
+# stash_plot(dotplot_panel, "stromal_marker_dotplot")
+
+ggsave(filename = "output/figures/Final_Annotations/stromal_marker_dotplot.pdf",
+        plot = dotplot_panel,
+        width = 14,
+        height = 35,
+        limitsize = FALSE,
+        bg = "white")
 
 
 ```

@@ -7,7 +7,7 @@ dimplot_better <- function(object,
                            group_by = NULL,
                            cols,
                            ncol = 1,
-                           label.size = 2.5,
+                           label.size = 4,
                            split_by = NULL,
                            ...) {
     DimPlot(object,
