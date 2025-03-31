@@ -45,14 +45,15 @@ for (ob in names(spatial_list)) {
     Sys.sleep(0.1)
 }
 
-
-### Create one single annotation matrix with scores from all objects
+cell_types <- unique(patient_mets$Ann_Level2)
+### Create one single annotation matrix with scores from all objects, minus Tumor_Cumulative
 ann_mat_list <- lapply(spatial_list, function(x) {
-    x@meta.data[ , c(cell_types, "Tumor_Cumulative")]
+    x@meta.data[ , c(cell_types)]
 })
 
+#make one big matrix with deconvolution scores (for correlation purposes)
 full_ann_matrix <- bind_rows(ann_mat_list)
-png("figures/spatial/all_sample_correlation.png", width = 1200, height = 1200)
+png("figures/spatial/all_sample_correlation.png", width = 900, height = 900)
 pheatmap::pheatmap(cor(full_ann_matrix[, cell_types], method = "spearman"),
                    scale = "none",
                    low = "blue",
@@ -63,32 +64,36 @@ pheatmap::pheatmap(cor(full_ann_matrix[, cell_types], method = "spearman"),
                    fontsize = 16)
 dev.off()
 
-full_ann_matrix %>%
-    select(-c(Tumor_Metabolic,
-              Tumor_Proliferative,
-              Tumor_ImmuneRegulatory,
-              Tumor_Ground,
-              Tumor_Inflammatory)) %>%
-    cor(method = "spearman") %>%
-    as.data.frame() %>%
-    rownames_to_column("celltype1") %>%
-    mutate(celltype1 = as.factor(celltype1) %>%
-                fct_reorder(Tumor_Cumulative)) %>%
-    filter(celltype1 != "Tumor_Cumulative") %>%
-    ggplot(aes(x = "", y = celltype1)) +
-    geom_tile(aes(fill = Tumor_Cumulative)) +
-    scale_fill_gradient2(low = "blue",
-                         high = "red",
-                         mid = "white",
-                         midpoint = 0)
+#make heatmaps for each sample
+cell_type_heatmaps <- lapply(names(ann_mat_list), function(x) {
+    p <- pheatmap::pheatmap(cor(ann_mat_list[[x]], method = "spearman"),
+                       scale = "none",
+                       low = "blue",
+                       high = "red",
+                       mid = "white",
+                       midpoint = 0,
+                       angle_col = 45,
+                       fontsize = 16)
+    png(paste0("figures/spatial/cell_type_heatmap_", x, ".png"), width = 900, height = 900)
+    print(p)
+    dev.off()
+    return(p)
+})
+
+#Make feature plots for cell types that correlate with each other
+#epithelial and endothelial
+plt_list <- lapply(names(spatial_list), function(x) {
+    SpatialFeaturePlot(spatial_list[[x]],
+                       features = c("Endothelial_cells", "Epithelial_cells"),
+                       pt.size.factor = size.factors[[x]],
+                       image.alpha = 0)
+})
+
+grid.arrange(grobs = plt_list, ncol = 2)
 
 
-tumor_types <- c("Tumor_Metabolic",
-               "Tumor_Proliferative",
-               "Tumor_ImmuneRegulatory",
-               "Tumor_Ground",
-               "Tumor_Inflammatory")
-
+#see what cell types are most highly correlated with tumor subpopulations
+tumor_types <- grep("Tumor", cell_types, value = TRUE)
 for (feat in tumor_types) {
     #convert variable holding name of column to quosure
     feat_quo <- enquo(feat)
@@ -111,58 +116,84 @@ for (feat in tumor_types) {
                              mid = "white",
                              midpoint = 0) +
         ggtitle(paste("Cell Type Correlation with", feat, "\n in the Same Spot"))
-    png(paste0("figures/spatial/cell_type_correlation_", feat, "_level3.png"))
+    png(paste0("figures/spatial/cell_type_correlation_", feat, "_level2.png"))
     print(p)
     dev.off()
 }
 ```
 
-```{r scratch}
-for(ob in names(spatial_list)) {
-    tmp <- spatial_list[[3]]
-    macs_tumor <- c("Scar_TAMs",
-                    "Osteoclast_TAMs",
-                    "Prolif_TAMs",
-                    "Normal_Fibroblasts",
-                    "Tuft_cells",
-                    "Tumor_Cumulative",
-                    "CAF")
-    png(paste0("figures/spatial/tumor_macs_", ob, ".png"), width = 800)
-    SpatialFeaturePlot(tmp,
-                    features = macs_tumor,
-                    pt.size.factor = size.factors[[ob]],
-                    image.alpha = 0,
-                    ncol = 4)
-    SpatialDimPlot(tmp, pt.size.factor = 0)
-    dev.off()
-}
-
-
-#going to try weighing annotation scores by distance?
-coords <- GetTissueCoordinates(tmp)
-coords[1:5, ]
-coord_dist <- as.matrix(dist(coords))
-cell_type_weights <- 1/(coord_dist+1)*tmp@meta.data[,cell_types]
-head(cell_type_weights)
-
-```
-
 ### Spatial Autocorrelation of Cell Types
+
+#### ISCHIA
 
 I'll be using ISCHIA and BANKSY to identify spatially co-occurring cell types
 
 ```{r ISCHIA}
+for (ob_name in names(spatial_list)) {
+    tmp <- spatial_list[[ob_name]]
+    annotation_matrix <- tmp@meta.data[, cell_types]
+    deconv_mat <- as.matrix(annotation_matrix)
+    #find composition clusters 
+    #This identifies spots tissue-wide with similar cellular composition; this will enable us to robustly identify communicating cell types within each spot (kinda like pseudo bulking on like spots)
+    #Identify how many clusters there should be
+    Composition.cluster.k(deconv_mat, 30)
+    k <- readline("How many clusters?")
+    k <- as.numeric(k)
+    tmp <- Composition.cluster(tmp, deconv_mat, k = k)
+    png(paste0("figures/spatial/composition_cluster_", ob_name, ".png", width = 600))
+    print(SpatialDimPlot(tmp,
+                         group.by = "CompositionCluster_CC",
+                         pt.size.factor = size.factors[[ob_name]],
+                         label = TRUE,
+                         image.alpha = 0) |
+           SpatialDimPlot(tmp, pt.size.factor = 0))
+    dev.off()
+    enriched_ct_plots <- lapply(unique(tmp$CompositionCluster_CC),
+                                function(cc) {
+        Composition_cluster_enrichedCelltypes(tmp, cc, deconv_mat)
+                                })
+    png(paste0("figures/spatial/ISCHIA_enriched_cell_types_", ob_name, ".png"),
+        height = 1600,
+        width = 2000)
+    grid.arrange(grobs = enriched_ct_plots, ncol = 4)
+    dev.off()
+
+    png(paste0("figures/spatial/ISCHIA_coocurring_cells_", ob_name, ".png"),
+        height = 1600,
+        width = 2000)
+    co_occur_list <- lapply(as.list(unique(tmp$CompositionCluster_CC)),
+                            spatial.celltype.cooccurence,
+                            spatial.object = tmp,
+                            deconv.prob.mat = deconv_mat,
+                            Condition = unique(tmp$orig.ident),
+                            prob.th = 0.05)
+    grid.arrange(grobs = lapply(co_occur_list,
+                                plot.celltype.cooccurence),
+                 ncol = 4)
+
+    dev.off()
+    spatial_list[[ob_name]] <- tmp
+}
+
+co_occur_list <- lapply(as.list(unique(tmp$Composition_Cluster_CC)),
+                        spatial.celltype.cooccurence,
+                        spatial.object = tmp,
+                        deconv.prob.mat = deconv_mat,
+                        Condition = unique(tmp$orig.ident),
+                        prob.th = 0.05)
+grid.arrange(grobs = lapply(co_occur_list, plot.celltype.cooccurence), ncol = 4)
+
+
 # devtools::install_github("ati-lz/ISCHIA")
 library(ISCHIA)
 #we'll be using our `tmp` object, which is the sample named "OS1_Seurat"
 #extract devonvolution matrix
 #our deconvolution matrix is the same as our `annotation_matrix` object
-tmp <- spatial_list[[1]]
+tmp <- spatial_list[[8]]
 annotation_matrix <- tmp@meta.data[, cell_types]
 deconv_mat <- as.matrix(annotation_matrix)
 
 #Composition clustering of the deconvoluted spots
-#This identifies spots tissue-wide with similar cellular composition; this will enable us to robustly identify communicating cell types within each spot (kinda like pseudo bulking on like spots)
 #First identify number of clusters there should be?
 Composition.cluster.k(deconv_mat, 30)
 
@@ -172,7 +203,7 @@ tmp <- Composition.cluster(tmp, deconv_mat, 8)
 table(tmp$CompositionCluster_CC)
 SpatialDimPlot(tmp,
                group.by = "CompositionCluster_CC",
-               pt.size.factor = 1500,
+               pt.size.factor = size.factors[[8]],
                label = TRUE) | SpatialDimPlot(tmp, pt.size.factor = 0)
 
 enriched_ct_plots <- lapply(unique(tmp$CompositionCluster_CC), function(cc) {
@@ -185,7 +216,7 @@ grid.arrange(grobs = enriched_ct_plots)
 tmp_umaps <- Composition_cluster_umap(tmp, deconv_mat)
 #Check cell type occurences
 #examine globally
-tmp$CompositionCluster_CC <- "global"
+# tmp$CompositionCluster_CC <- "global"
 CC1_co_occur <- spatial.celltype.cooccurence(tmp,
                                              deconv_mat,
                                              COI = "global",
@@ -198,13 +229,16 @@ co_occur_list <- lapply(as.list(paste0("CC", 1:8)),
                         deconv.prob.mat = deconv_mat,
                         Condition = unique(tmp$orig.ident),
                         prob.th = 0.05)
-grid.arrange(grobs = lapply(co_occur_list[5:8], plot.celltype.cooccurence))
+grid.arrange(grobs = lapply(co_occur_list[1:4], plot.celltype.cooccurence))
 
 
 plot.celltype.cooccurence(CC1_co_occur)
 ```
 
+#### BANKSY
+
 ```{r banksy}
+
 #had to update my packages to R 4.4.0 for this
 #going to restart with samples with no deconvolution info
 spatial_list <- qs::qread("output/spatial_objects/spatial_list_level2_annotations.qs")
@@ -270,23 +304,26 @@ for (ob_name in names(spatial_list)) {
 for (ob_name in names(spatial_list)) {
     s_obj <- spatial_list[[ob_name]]
     deconv_mat <- s_obj@meta.data[, c(cell_types, "banksy_clusts")]
+    #get cell type means
+    # ct_means <- colMeans(as.matrix(s_obj@meta.data[, cell_types]))
     tmp <- list()
     for (bc in unique(deconv_mat$banksy_clusts)) {
-        tmp[[bc]] <- subset(deconv_mat, banksy_clusts == bc) %>%
-            dplyr::select(cell_types) %>%
-            colMeans()
+        ct_means <- colMeans(as.matrix(s_obj@meta.data[which(s_obj$banksy_clusts != bc), cell_types]))
+        tmp_mat <- subset(deconv_mat, banksy_clusts == bc) %>%
+            dplyr::select(cell_types)
+        tmp[[bc]] <- colMeans(tmp_mat > ct_means)
         tmp[[bc]] <- as.data.frame(x = tmp[[bc]])
         colnames(tmp[[bc]]) <- paste0("banksy_", bc)
     }
     bind_tmp <- bind_cols(tmp)
 
-    png(paste0("figures/spatial/", ob_name, "_banksy_deconv_heatmap.png"))
+    png(paste0("figures/spatial/", ob_name, "_banksy_mean_deconv_heatmap.png"))
     print(pheatmap::pheatmap(bind_tmp, scale = "row"))
     dev.off()
 }
 
 #going to make heat maps of % of spots within banksy cluster with deconv score greater than mean for all cell types
-s_obj <- spatial_list[[1]]
+s_obj <- spatial_list[[6]]
 mean_deconv <- apply(s_obj@meta.data[, cell_types], 2, mean)
 
 tmp <- list()
@@ -299,5 +336,33 @@ for (bc in unique(s_obj$banksy_clusts)) {
 }
 binded_res <- bind_cols(tmp)
 pheatmap::pheatmap(binded_res)
+SpatialDimPlot(s_obj, group = "banksy_clusts", pt.size.factor = 3000) | SpatialDimPlot(s_obj, pt.size.factor = 0)
+
+```
+
+#### Seurat Clusters
+
+```{r cluster-based-correlation}
+#Making seurat_cluster based heatmaps like I did for banksy
+for (ob_name in names(spatial_list)) {
+    s_obj <- spatial_list[[ob_name]]
+    deconv_mat <- s_obj@meta.data[, c(cell_types, "seurat_clusters")]
+    #get cell type means
+    tmp <- list()
+    for (clust in unique(s_obj$seurat_clusters)) {
+        ct_means <- colMeans(s_obj@meta.data[which(s_obj$seurat_clusters != clust),
+                                             cell_types])
+        tmp_mat <- subset(deconv_mat, seurat_clusters == clust) %>%
+            dplyr::select(cell_types)
+        tmp[[clust]] <- colMeans(tmp_mat > ct_means)
+        tmp[[clust]] <- as.data.frame(x = tmp[[clust]])
+        colnames(tmp[[clust]]) <- paste0("cluster_", clust)
+    }
+    bind_tmp <- bind_cols(tmp)
+
+    png(paste0("figures/spatial/seurat_cluster_heatmap_", ob_name, ".png"))
+    print(pheatmap::pheatmap(bind_tmp, scale = "row"))
+    dev.off()
+}
 
 ```
