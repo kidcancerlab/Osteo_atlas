@@ -174,16 +174,22 @@ singularity exec --bind /home/gdrobertslab/lab/Analysis/MattGust/projects/Robert
 
 ```{r overlay-demuxafy-results}
 #we'll be using the objects from final_tumor_vs_stroma
-ob_names <- c("mm_mets",
-              "mm_prim",
-              "patient_mets",
-              "patient_prim",
+ob_names <- c("mm_mets_cancer_cells",
+              "mm_mets_normal_cells",
+              "mm_prim_cancer_cells",
+              "mm_prim_normal_cells",
+              "patient_mets_cancer_cells",
+              "patient_mets_normal_cells",
+              "patient_prim_cancer_cells",
+              "patient_prim_normal_cells",
               "xeno_mets_human",
               "xeno_mets_mouse",
               "xeno_prim_human",
               "xeno_prim_mouse",
-              "dogs_mets",
-              "dogs_prim")
+              "dogs_mets_cancer_cells",
+              "dogs_mets_normal_cells",
+              "dogs_prim_cancer_cells",
+              "dogs_prim_normal_cells")
 obj_list <- list()
 all_demux <- list()
 
@@ -225,6 +231,20 @@ for (ob_name in ob_names) {
 }
 qs::qsave(obj_list, "output/seurat_objects/demuxafied_obj_list.qs")
 qs::qsave(all_demux, "DoubletFinder/all_demuxafy_results.qs")
+
+#make list of cancer objects, wanna see if tumor interactive is still messed up
+cancer_obs <- obj_list[grep("cancer", names(obj_list), value = TRUE)]
+
+for (ob in names(obj_list)) {
+    png(paste0("figures/DoubletFinder/results_by_annotation_", ob, ".png"),
+        width = 2000,
+        height = 800)
+    print(dimplot_better(obj_list[[ob]],
+                         group = c("Ann_Level3",
+                                   "MajoritySinglet_DropletType"),
+                         ncol = 2))
+    dev.off()
+}
 ```
 
 ### Investigate Tumor Interactive
