@@ -150,32 +150,18 @@ import re
 ob_names = os.listdir("loom_output/metadata")
 ob_names = list(filter(lambda x:"dog" not in x, ob_names))
 
-# for ob in ob_names:
-#     print("Processing " + ob)
-#     merged_ad = loom_to_an(obj_name = ob,
-#                            loom_dir = "loom_output/samples",
-#                            metadata_dir = "loom_output/metadata")
-#     print("Created " + ob + "successfully")
-#     calc_velo(merged_ad)
-#     #save anndata object so you don't have to remake them
-#     merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
-#     print("Calculated velocity for and saved off " + ob)
-
 for ob in ob_names:
     write_ob_and_plots(ob)
 
-
-
-
 def write_ob_and_plots(ob):
     print("starting on " + ob)
-    # merged_ad=loom_to_an(obj_name = ob,
-    #                  loom_dir = "loom_output/samples",
-    #                  metadata_dir = "loom_output/metadata")
-    # print("made " + ob + " , now calculating velocity")
-    # calc_velo(merged_ad)
-    # merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
-    # print("calculated velocity and saved off " + ob)
+    merged_ad=loom_to_an(obj_name = ob,
+                     loom_dir = "loom_output/samples",
+                     metadata_dir = "loom_output/metadata")
+    print("made " + ob + " , now calculating velocity")
+    calc_velo(merged_ad)
+    merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
+    print("calculated velocity and saved off " + ob)
     merged_ad = anndata.read("loom_output/anndata/" + ob + ".ad")
     #make the plots and save them off
     #seurat clusters in umap space
