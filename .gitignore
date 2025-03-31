@@ -86,4 +86,6 @@ demuxafy_figs
 
 
 #doublet finder tests
-pdx_clinical_chimera
+*.bin
+*.weights
+*.tree
