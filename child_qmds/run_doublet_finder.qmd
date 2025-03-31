@@ -147,34 +147,53 @@ sbatch DoubletFinder/run_demuxafy.sh
 
 ## Evaluate Demuxafy Results
 
-Note that scds did not work for samples SJOS063824_X1 and SJOS013768_X3
+Note that scds did not work for samples SJOS063824_X1 and SJOS013768_X3.
+
+### Re-combine results for those missing scds
+
+```{bash combine-results-SJOS063824_X1-SJOS013768_X3}
+singularity exec --bind /home/gdrobertslab/lab/Analysis/MattGust/projects/Roberts_Lab/Osteo_atlas \
+    /home/gdrobertslab/lab/Tools/Demuxafy.sif \
+    Combine_Results.R \
+    -o DoubletFinder/output/SJOS063824_X1/combined/combined_doublets.tsv \
+    -t DoubletFinder/output/SJOS063824_X1/DoubletDetection \
+    -n DoubletFinder/output/SJOS063824_X1/scDblFinder \
+    -m 'MajoritySinglet'
+
+singularity exec --bind /home/gdrobertslab/lab/Analysis/MattGust/projects/Roberts_Lab/Osteo_atlas \
+    /home/gdrobertslab/lab/Tools/Demuxafy.sif \
+    Combine_Results.R \
+    -o DoubletFinder/output/SJOS013768_X3/combined/combined_doublets.tsv \
+    -t DoubletFinder/output/SJOS013768_X3/DoubletDetection \
+    -n DoubletFinder/output/SJOS013768_X3/scDblFinder \
+    -m 'MajoritySinglet'
+
+```
 
 ### Add Results to Seurat Objects
 
 ```{r overlay-demuxafy-results}
 #we'll be using the objects from final_tumor_vs_stroma
-ob_names <- c("mm_mets_cancer_cells",
-              "mm_mets_normal_cells",
-              "mm_prim_cancer_cells",
-              "mm_prim_normal_cells",
-              "patient_mets_cancer_cells",
-              "patient_mets_normal_cells",
-              "patient_prim_cancer_cells",
-              "patient_prim_normal_cells",
+ob_names <- c("mm_mets",
+              "mm_prim",
+              "patient_mets",
+              "patient_prim",
               "xeno_mets_human",
               "xeno_mets_mouse",
               "xeno_prim_human",
-              "xeno_prim_mouse")
+              "xeno_prim_mouse",
+              "dogs_mets",
+              "dogs_prim")
 obj_list <- list()
 all_demux <- list()
 
 for (ob_name in ob_names) {
     print(paste("loading", ob_name))
     #Read in seurat object from Yogesh's folder
-    tmp_ob <- qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/comb_sobjs/",
+    tmp_ob <- qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/",
                                        ob_name,
                                        ".qs"))
-    tmp_ob <- reconstruct_cell_types(tmp_ob)
+    # tmp_ob <- reconstruct_cell_types(tmp_ob)
     #read in demuxafy results
     demuxafy_res <- list()
     for (sid in unique(tmp_ob$sample_name)) {
@@ -205,6 +224,7 @@ for (ob_name in ob_names) {
     obj_list[[ob_name]] <- AddMetaData(tmp_ob, metadata = all_demux[[ob_name]])
 }
 qs::qsave(obj_list, "output/seurat_objects/demuxafied_obj_list.qs")
+qs::qsave(all_demux, "DoubletFinder/all_demuxafy_results.qs")
 ```
 
 ### Investigate Tumor Interactive
