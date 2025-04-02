@@ -1399,13 +1399,13 @@ harmony_params <-
 
 object_list <-
     tribble(~group1,                         ~group2,                       ~group3,
-            "patient_prim_normal_cells",    "patient_prim_cancer_cells",   "patient_prim",
+            # "patient_prim_normal_cells",    "patient_prim_cancer_cells",   "patient_prim",
             "patient_mets_normal_cells",    "patient_mets_cancer_cells",   "patient_mets",
-            "mm_prim_normal_cells",         "mm_prim_cancer_cells",        "mm_prim",
-            "mm_mets_normal_cells",         "mm_mets_cancer_cells",        "mm_mets",
-            "xeno_prim_mouse",              "xeno_prim_human",             "dont_use",
-            "xeno_mets_mouse",              "xeno_mets_human",             "dont_use",
-            "dogs_prim_normal_cells",       "dogs_prim_cancer_cells",      "dogs_prim",
+            # "mm_prim_normal_cells",         "mm_prim_cancer_cells",        "mm_prim",
+            # "mm_mets_normal_cells",         "mm_mets_cancer_cells",        "mm_mets",
+            # "xeno_prim_mouse",              "xeno_prim_human",             "dont_use",
+            # "xeno_mets_mouse",              "xeno_mets_human",             "dont_use",
+            # "dogs_prim_normal_cells",       "dogs_prim_cancer_cells",      "dogs_prim",
             "dogs_mets_normal_cells",       "dogs_mets_cancer_cells",      "dogs_mets")
 
 for (item in seq_len(nrow(object_list))) {
@@ -1552,12 +1552,6 @@ for (item in seq_len(nrow(object_list))) {
 }
 
 
-#dimplot_better(combined_obj,group_by = "Ann_Level3") +NoLegend()
-tumor_int <-
-    subset(combined_obj, subset = (Ann_Level3 == "Tumor_Interactive"))
-FeaturePlot(tumor_int, features = "nCount_RNA", raster=F, order=T)
-
-#dimplot_better(tumor_int, group_by = "Ann_Level3") + NoLegend()
 
 ```
 

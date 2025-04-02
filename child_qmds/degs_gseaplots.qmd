@@ -550,13 +550,14 @@ hist(genelist$percent_target_degs)
 object_list <-
     tribble(~group,                         ~res_value,
             "patient_prim_cancer_cells",    0.15,
-            "patient_mets_cancer_cells",    0.25,
-            "mm_prim_cancer_cells",         0.4,
-            "mm_mets_cancer_cells",         0.25,
-            "xeno_prim_human",              0.3,
-            "xeno_mets_human",              0.15,
+            "patient_mets_cancer_cells",    0.35,
+            "mm_prim_cancer_cells",         1.5,
+            "mm_mets_cancer_cells",         1,
+            # "xeno_prim_human",              0.3,
+            # "xeno_mets_human",              0.4,
             "dogs_prim_cancer_cells",       0.2,
-            "dogs_mets_cancer_cells",       0.1)
+            "dogs_mets_cancer_cells",       0.45
+            )
 
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
@@ -622,7 +623,7 @@ for (i in seq_len(nrow(object_list))) {
 
 }
 
-
+#DotPlot(object, group.by = "seurat_clusters", features = "BNIP3")
 ```
 
 
@@ -633,7 +634,7 @@ for (i in seq_len(nrow(object_list))) {
 object_list <-
     tribble(~group,                         ~res_value,
             "patient_prim_cancer_cells",    0.15,
-            "patient_mets_cancer_cells",    0.25,
+            "patient_mets_cancer_cells",    0.35,
             "mm_prim_cancer_cells",         1.5,
             "mm_mets_cancer_cells",         1,
             # "xeno_prim_human",              0.3,
@@ -700,18 +701,22 @@ for (i in seq_len(nrow(object_list))) {
                             "^3$" = "Tumor_Fibrogenic",
                             "^4$" = "Tumor_Interactive",
                             "^5$" = "Tumor_Fibrogenic",
-                            "^6$" = "Tumor_Interactive",
-                            "^7$" = "Tumor_Proliferative",
-                            "^8$" = "Tumor_Interactive",
-                            "^9$" = "Tumor_Synthetic", 
-                            "^10$" = "Tumor_Proliferative",
-                            "^11$" = "Tumor_Fibrogenic",
-                            "^12$" = "Tumor_Fibrogenic",
-                            "^13$" = "Tumor_Interactive",
-                            "^14$" = "Tumor_Synthetic",
-                            "^15$" = "Tumor_Apoptosis",
-                            "^16$" = "Tumor_Progenitor",
-                            "^17$" = "Tumor_Progenitor"))
+                            "^6$" = "Tumor_Fibrogenic",
+                            "^7$" = "Tumor_Interactive",
+                            "^8$" = "Tumor_Proliferative",
+                            "^9$" = "Tumor_Apoptosis", 
+                            "^10$" = "Tumor_Interactive",
+                            "^11$" = "Tumor_Synthetic",
+                            "^12$" = "Tumor_Interactive",
+                            "^13$" = "Tumor_Proliferative",
+                            "^14$" = "Tumor_Interactive",
+                            "^15$" = "Tumor_Fibrogenic",
+                            "^16$" = "Tumor_Fibrogenic",
+                            "^17$" = "Tumor_Fibrogenic",
+                            "^18$" = "Tumor_Interactive",
+                            "^19$" = "Tumor_Apoptosis",   #Apoptotic
+                            "^20$" = "Tumor_Proliferative",
+                            "^21$" = "Tumor_Progenitor"))
     }
     if (group == "mm_prim_cancer_cells") {       #KEGG pathways are good to differentiate the clusters
         object$Ann_Level3 <-
@@ -810,7 +815,7 @@ for (i in seq_len(nrow(object_list))) {
                             "^8$" = "Tumor_Interactive",
                             "^9$" = "Tumor_Proliferative",
                             "^10$" = "Tumor_Fibrogenic",
-                            "^11$" = "Tumor_Proliferative",
+                            "^11$" = "Tumor_Apoptosis",
                             "^12$" = "Tumor_Fibrogenic",
                             "^13$" = "Tumor_Interactive",
                             "^14$" = "Tumor_Progenitor",
@@ -1064,7 +1069,9 @@ subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "14"] <- "Tumor_Synth
 # subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "17"] <- "Tumor_Interactive"
 # subset_xeno_prim$newid[subset_xeno_prim$seurat_clusters == "8"] <- "Tumor_Interactive"
 subset_xeno_prim$Ann_Level3 <- subset_xeno_prim$newid
-#dimplot_better(subset_xeno_prim, group_by = "Ann_Level3")
+subset_xeno_prim$Ann_Level2 <- subset_xeno_prim$Ann_Level3
+subset_xeno_prim$Ann_Level1 <- "Tumor" # since all are tumors
+subset_xeno_prim$Ann_Level0 <- "Tumor" # since all are tumors
 
 qs::qsave(subset_xeno_prim,
         str_c("output/seurat_objects/final_tumor_vs_stroma/",
@@ -1105,6 +1112,9 @@ subset_xeno_mets$newid[subset_xeno_mets$seurat_clusters == "5"] <- "Tumor_Apopto
 #subset_xeno_mets$newid[subset_xeno_mets$seurat_clusters == "11"] <- "Tumor_Fibrogenic"
 # subset_xeno_mets$newid[subset_xeno_mets$seurat_clusters == "9"] <- "Tumor_Fibrogenic"
 subset_xeno_mets$Ann_Level3 <- subset_xeno_mets$newid
+subset_xeno_mets$Ann_Level2 <- subset_xeno_mets$Ann_Level3
+subset_xeno_mets$Ann_Level1 <- "Tumor" # since all are tumors
+subset_xeno_mets$Ann_Level0 <- "Tumor" # since all are tumors
 
 #dimplot_better(subset_xeno_mets, group_by = "Ann_Level3")
 qs::qsave(subset_xeno_mets,
@@ -1207,43 +1217,6 @@ for (group in c(
     }
 }
 
-
-
-
-
-DotPlot(obj_list$mm_prim_cancer_cells,
-        features = features %>%
-                    nichenetr::convert_human_to_mouse_symbols() %>%
-                    as.character(),
-        group.by = "Ann_Level3")
-
-
-DotPlot(obj_list$xeno_mets_human,
-    features = c("CD274"),
-    group.by = "Ann_Level3")
-
-FeaturePlot(obj_list$patient_prim_cancer_cells,
-            features = "CD274",
-            raster=F,
-            order=T) 
-
-samples <-
-    obj_list$patient_prim_cancer_cells %>%
-    subset(Ann_Level3 == "Tumor_Interactive")
-
-table(samples$sample_name) %>% as.data.frame() %>%
-    arrange(desc(Freq))
-markers <- c("IL1", "IL6", "CD86", "IL10RA", "CCR1", "CCL4", "CCL3", "CXCL8",
-            "TNFRSF1B", "CCL3L1", "IL18", "ICAM1", "CXCL2", "CCL5", "CCL2")
-tumor_features_cells <- list(
-    Osteosarcoma = c("RUNX2", "COL1A1", "COL1A2"),
-    Tumor_Fibrogenic = c("COL6A3", "COL3A1", "PDGFRB", "COL6A1"),
-    Tumor_Progenitor = c("ROBO2", "CD36", "SATB2"),
-    Tumor_Interactive = c("CTSB", "CSF1R", "PTPRC", "PTPRJ"),
-    Tumor_Proliferative = c("CENPF", "ASPM", "BIRC5", "AURKB"),
-    Tumor_Apoptosis = c("BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104"),
-    Tumor_Synthetic = c("RPL37A", "RPS18", "RPL39", "RPL35")
-)
 
 
 specific <-

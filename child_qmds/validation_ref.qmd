@@ -1005,6 +1005,101 @@ Clusterbased_annot <- function(s_obj) {
     return(s_obj)
 }
 
+patient_prim_tumor <- 
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim_cancer_cells.qs"))
+patient_prim_stroma <- 
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim_normal_cells.qs"))
+
+patient_mets_tumor <- 
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets_cancer_cells.qs"))
+patient_mets_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets_normal_cells.qs"))
+
+mm_prim_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_prim_cancer_cells.qs"))
+mm_prim_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_prim_normal_cells.qs"))
+
+mm_mets_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_mets_cancer_cells.qs"))
+mm_mets_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_mets_normal_cells.qs"))
+
+dog_prim_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_prim_cancer_cells.qs"))
+dog_prim_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_prim_normal_cells.qs"))
+
+dog_mets_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_mets_cancer_cells.qs"))
+dog_mets_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_mets_normal_cells.qs"))
+
+# Annotate tumor cells using SingleR and find what cells are tumor cells vs stroma cells
+annotate_tumor <- function(sobject,
+                            species,
+                            aggr_ref = TRUE,
+                            tissue_location) {
+    if (species == "human" && tissue_location == "bone") {
+        ref_obj <- 
+            list(GetAssayData(patient_prim_tumor),
+                 GetAssayData(patient_prim_stroma))
+        labels <-
+            list(patient_prim_tumor$Ann_Level1,
+                 patient_prim_stroma$Ann_Level2)
+    } else if (species == "human" && tissue_location == "lung") {
+        ref_obj <- 
+            list(GetAssayData(patient_mets_tumor),
+                 GetAssayData(patient_mets_stroma))
+        labels <-
+            list(patient_mets_tumor$Ann_Level1,
+                 patient_mets_stroma$Ann_Level2)
+    } else if (species == "mouse" && tissue_location == "bone") {
+        ref_obj <- 
+            list(GetAssayData(mm_prim_tumor),
+                 GetAssayData(mm_prim_stroma))
+        labels <-
+            list(mm_prim_tumor$Ann_Level1,
+                 mm_prim_stroma$Ann_Level2)
+    } else if (species == "mouse" && tissue_location == "lung") {
+        ref_obj <- 
+            list(GetAssayData(mm_mets_tumor),
+                 GetAssayData(mm_mets_stroma))
+        labels <-
+            list(mm_mets_tumor$Ann_Level1,
+                 mm_mets_stroma$Ann_Level2)
+    } else if (species == "dog" && tissue_location == "bone") {
+        ref_obj <-
+            list(GetAssayData(dog_prim_tumor),
+                 GetAssayData(dog_prim_stroma))
+        labels <-
+            list(dog_prim_tumor$Ann_Level1,
+                 dog_prim_stroma$Ann_Level2)
+    } else if (species == "dog" && tissue_location == "lung") {
+        ref_obj <- 
+            list(GetAssayData(dog_mets_tumor),
+                 GetAssayData(dog_mets_stroma))
+        labels <-
+            list(dog_mets_tumor$Ann_Level1,
+                 dog_mets_stroma$Ann_Level2)
+    }
+    # run SingleR annotation
+    ann_obj <-
+        SingleR::SingleR(test = as.SingleCellExperiment(sobject),
+                        ref = ref_obj,
+                        labels = labels,
+                        aggr.ref = aggr_ref)
+    # add the annotations to the Seurat object
+    sobject$annotations <- ann_obj$labels
+
+    # cell scores
+    sobject$tumor_stroma_cell_scores <-
+        apply(X = ann_obj$scores,
+            MARGIN = 1,
+            function(x) max(x, na.rm = TRUE))
+
+    return(sobject)
+}
 
 
 split_tumor_vs_stroma <- function(obj,
@@ -1015,7 +1110,8 @@ split_tumor_vs_stroma <- function(obj,
                             recursive_cluster = TRUE,
                             species = "human",
                             aggr_ref = TRUE,
-                            with_tumor = TRUE) {
+                            with_tumor = TRUE,
+                            tissue_location) {
     obj <- 
         AddModuleScore(obj,
                         features = list(markers),
@@ -1043,7 +1139,7 @@ split_tumor_vs_stroma <- function(obj,
         dplyr::group_by(recursive_clusters) %>%
         dplyr::summarise(median = median(!!sym(modulescore_label), na.rm = TRUE)) %>%
         dplyr::arrange(desc(median))
-    
+
     tumor_clusters <-
         bulk_score_per_cluster %>%
         dplyr::filter(median >= modulescore_cutoff) %>%
@@ -1053,7 +1149,7 @@ split_tumor_vs_stroma <- function(obj,
         bulk_score_per_cluster %>%
         dplyr::filter(median < modulescore_cutoff) %>%
         dplyr::pull(recursive_clusters)
-    
+
     tumor <-
         subset(obj,
                 recursive_clusters %in% tumor_clusters) %>%
@@ -1069,21 +1165,21 @@ split_tumor_vs_stroma <- function(obj,
             process_seurat(resolution = resolution)
 
         ann_obj <-
-            annotate_celltypes(sobject = sub_tumor,
-                                species = species,
-                                with_tumor = with_tumor,
-                                aggr_ref = aggr_ref)
+            annotate_tumor(sobject = sub_tumor,
+                            species = species,
+                            aggr_ref = aggr_ref,
+                            tissue_location = tissue_location)
 
         # save the ids
         normal_ids <-
             ann_obj@meta.data %>%
-            filter(annotations != "Tumor_cells") %>%
+            filter(annotations != "Tumor") %>%
             rownames_to_column("cell_ids") %>%
             select(cell_ids)
 
         tumor_ids <-
             ann_obj@meta.data %>%
-            filter(annotations == "Tumor_cells") %>%
+            filter(annotations == "Tumor") %>%
             rownames_to_column("cell_ids") %>%
             select(cell_ids)
 
@@ -1115,40 +1211,12 @@ split_tumor_vs_stroma <- function(obj,
 
     return(list(tumor = clean_tumor,
                 stroma = clean_stroma))
-
 }
-
-
-patient_prim_tumor <- 
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim_cancer_cells.qs"))
-patient_prim_stroma <- 
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim_normal_cells.qs"))
-
-patient_mets_tumor <- 
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets_cancer_cells.qs"))
-patient_mets_stroma <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets_normal_cells.qs"))
-
-mm_prim_tumor <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_prim_cancer_cells.qs"))
-mm_prim_stroma <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_prim_normal_cells.qs"))
-
-mm_mets_tumor <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_mets_cancer_cells.qs"))
-mm_mets_stroma <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_mets_normal_cells.qs"))
-
-dog_prim_tumor <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_prim_cancer_cells.qs"))
-dog_prim_stroma <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_prim_normal_cells.qs"))
-
-dog_mets_tumor <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_mets_cancer_cells.qs"))
-dog_mets_stroma <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_mets_normal_cells.qs"))
-
+#dimplot_better(annotated_tumor, group_by = "Ann_Level3") + NoLegend()
+DotPlot(annotated_tumor, features = "BNIP3", group.by = "seurat_clusters")
+sobj_list <-
+    list(tumor = clean_tumor,
+         stroma = clean_stroma)
 
 Annotate_celltypes <- function(obj,
                               markers,

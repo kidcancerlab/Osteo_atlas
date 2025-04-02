@@ -2,6 +2,396 @@
 In this qmd, i will just make the main result figures and stash_plot save them
 
 ## Result 1 figures
+```{r, figure_cancer_panel, echo = FALSE}
+# load the cancer final object
+cancer_sobj_list <-  list()
+cell_count_table <- tibble::tibble(celltypes = character())
+
+for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
+                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
+                "xeno_prim_human", "xeno_mets_human",
+                "dogs_prim_cancer_cells", "dogs_mets_cancer_cells")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    cancer_sobj_list[[group]] <- object
+                
+    cell_count <-
+        object$Ann_Level3 %>%
+        table() %>%
+        as.data.frame() %>%
+        arrange(desc(Freq)) %>%
+        dplyr::rename(!!group := Freq,
+                      celltypes := ".")
+
+    cell_count_table <- cell_count_table %>%
+        dplyr::full_join(cell_count, by = "celltypes")
+}
+
+#title replacement
+title_replacement <- 
+    list(patient_prim_cancer_cells = "Patient Primary",
+        patient_mets_cancer_cells = "Patient Metastatic",
+        mm_prim_cancer_cells = "Mouse Primary",
+        mm_mets_cancer_cells = "Mouse Metastatic",
+        xeno_prim_human = "Xenograft Primary",
+        xeno_mets_human = "Xenograft Metastatic",
+        dogs_prim_cancer_cells = "Dog Primary",
+        dogs_mets_cancer_cells = "Dog Metastatic")
+
+# Generate a heatmap of the cell count data
+cell_count_prep <- 
+    cell_count_table %>%
+    mutate_all(~replace_na(., 0)) %>%
+    column_to_rownames("celltypes") %>%
+    t()
+
+# Calculate the percentage for each cell type
+cell_count_percent <- sweep(cell_count_prep, 1, rowSums(cell_count_prep), FUN = "/") * 100
+
+cancer_cell_percent<- 
+    pheatmap::pheatmap(cell_count_percent,
+                    cluster_rows = FALSE,
+                    cluster_cols = FALSE,
+                    display_numbers = TRUE,
+                    fontsize_number = 13,
+                    main = "Cell Count Percentage Heatmap",
+                    fontsize_row = 13,
+                    fontsize_col = 13,
+                    scale = "none",
+                    number_format = "%.1f",
+                    color = colorRampPalette(c("white", "red"))(100),
+                    labels_col = gsub("Tumor_", "", colnames(cell_count_percent)),
+                    labels_row = title_replacement[rownames(cell_count_percent)] %>% unlist())
+
+# stash_plot(cancer_cell_percent[[4]], "tumor_celltype_heatmap")
+
+ggsave(filename = "output/figures/Final_Annotations/tumor_celltype_heatmap.pdf",
+        plot = cancer_cell_percent,
+        width = 10,
+        height = 5,
+        limitsize = FALSE,
+        bg = "white")
+#prepare colors for the plot
+celltypes <-
+    c(unique(cancer_sobj_list$patient_prim_cancer_cells$Ann_Level2),
+    unique(cancer_sobj_list$patient_mets_cancer_cells$Ann_Level2),
+    unique(cancer_sobj_list$mm_prim_cancer_cells$Ann_Level2),
+    unique(cancer_sobj_list$mm_mets_cancer_cells$Ann_Level2),
+    unique(cancer_sobj_list$xeno_prim_human$Ann_Level2),
+    unique(cancer_sobj_list$xeno_mets_human$Ann_Level2),
+    unique(cancer_sobj_list$dogs_prim_cancer_cells$Ann_Level2),
+    unique(cancer_sobj_list$dogs_mets_cancer_cells$Ann_Level2)) %>%
+    unique() %>%
+    str_replace("_", " ")
+cols <- c(plot_cols, sample(rainbow(length(celltypes))))
+
+names(cols) <- celltypes
+
+#plots for cancer panel
+cancer_plot_list <- list()
+barplot_list <- list()
+
+# vector for data source colors
+data_source_unique <- 
+    c("GEO", "SJ", "NCH", "NCI_POB", "CSU", "TU", "UoM")
+data_source_colors <- 
+    scales::brewer_pal(palette = "Dark2")(length(data_source_unique))
+names(data_source_colors) <- data_source_unique
+
+# vector for method colors
+method_unique <- 
+    c("single_cell", "single_nucleus")
+method_colors <-
+    scales::brewer_pal(palette = "Set1")(length(method_unique))
+names(method_colors) <- method_unique
+
+for (group in c(
+                "patient_prim_cancer_cells", "patient_mets_cancer_cells",
+                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
+                "xeno_prim_human", "xeno_mets_human",
+                "dogs_prim_cancer_cells", "dogs_mets_cancer_cells"
+                )) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    object$plot_labels <-
+        object$Ann_Level3 %>%
+        as.character() %>%
+        gsub("_", " ", .) # for plotting
+    
+    celltype_subset_cols <-
+        cols[sort(unique(object$plot_labels))] 
+
+    cell_count_per_sample <-
+        table(object$Ann_Level2, object$sample_name) %>%
+        as.data.frame() %>%
+        dplyr::rename(CellType = Var1, Sample = Var2, Count = Freq) %>%
+        group_by(Sample) %>%
+        mutate(Count = Count / sum(Count) * 100) %>%
+        ungroup() %>%
+        mutate(Method = object$method[match(Sample, object$sample_name)],
+                DataSource = object$data_source[match(Sample, object$sample_name)])
+    # Create a bar plot
+    plot1 <-
+        ggplot(cell_count_per_sample, aes(x = Sample, y = Count, fill = CellType)) +
+                    geom_bar(stat = "identity", position = "stack") +
+                    theme_minimal() +
+                    scale_fill_manual(values = as.vector(celltype_subset_cols),
+                                      labels = gsub("Tumor ", "", gsub("_", " ", names(celltype_subset_cols)))) +
+                    labs(y = NULL, x = "Sample", fill = "Cell Type") +
+                    theme(x = NULL,
+                            y = NULL,
+                            plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+                        axis.text.x = element_text(angle = 45, hjust = 1, face = "bold"),
+                        axis.title.x = element_text(face = "bold"),
+                        axis.title.y = element_text(face = "bold"),
+                        axis.text.y = element_blank(),
+                        legend.position = "right",
+                        legend.direction = "vertical",
+                        panel.grid.major = element_blank(),
+                        panel.grid.minor = element_blank(),
+                        legend.key.size = unit(0.4, 'cm'),
+                        legend.title = element_text(face = "bold", hjust = 0.5),
+                        plot.margin = margin(t = 0, r = 0.5, b = 0, l = 1.5, unit = "cm")) +
+                    scale_x_discrete(labels = function(x) gsub("_GEX_FL|Modiano_|_3GEX_FL", "", x))
+    plot2 <-
+        ggplot(cell_count_per_sample, 
+                aes(x = Sample, y = 1, fill = Method)) +
+        geom_bar(stat = "identity", position = "stack") +
+        theme_minimal() +
+            scale_fill_manual(values = method_colors,
+                    labels = gsub("_", " ", unique(cell_count_per_sample$Method))) +
+        theme(x = NULL, 
+                y = NULL,
+            axis.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank(),
+            legend.position = "right",
+            legend.direction = "vertical",
+            legend.key.size = unit(0.4, 'cm'),
+            legend.spacing.x = unit(0.5, 'cm'), # Specify distance between legend items
+            legend.spacing.y = unit(0.5, 'cm'), # Specify distance between legend rows
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            legend.title = element_text(face = "bold", hjust = 0.5)) +
+        labs(x = NULL,
+                y = NULL)
+
+    plot3 <-
+        ggplot(cell_count_per_sample,
+            aes(x = Sample, y = 1, fill = DataSource)) +
+        geom_bar(stat = "identity", position = "stack") +
+        theme_minimal() +
+        scale_fill_manual(values = data_source_colors,
+                          name = "Source") +
+        theme(x = NULL, 
+            y = NULL,
+            axis.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank(),
+            legend.position = "right",
+            legend.direction = "vertical",
+            legend.key.size = unit(0.4, 'cm'),
+            legend.spacing.x = unit(0.5, 'cm'), # Specify distance between legend items
+            legend.spacing.y = unit(0.5, 'cm'), # Specify distance between legend rows
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            legend.title = element_text(face = "bold", hjust = 0.5)) +
+        labs(x = NULL,
+            y = NULL)
+
+    bar_plot <-
+        plot_grid(plot2 + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                plot3 + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                plot1 + theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+                             plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                ncol = 1,
+                rel_heights = c(0.5, 0.5, 6),
+                align = "v",
+                scale = 1) +
+        theme(plot.margin = margin(t = 1, r = 0, b = 0.5, l = 1.5, unit = "cm")) +
+        patchwork::plot_annotation(title = title_replacement[group][1],
+                                    theme = theme(plot.title = element_text(hjust = 0.5)))
+
+    # Adjust the legend title and labels
+    barplot_list[[group]] <- bar_plot
+
+    # Create a dimplot for the cancer cells
+    cancer_plot <-
+        DimPlot(object,
+                group.by = "plot_labels", # Use the plot_labels for better aesthetics
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = cols,
+                raster = F,
+                label.size = 5) +
+            coord_fixed() +
+            NoLegend() +
+            ggtitle(title_replacement[group][1]) +
+            theme(aspect.ratio=1)
+
+    cancer_plot_list[[group]] <- cancer_plot
+}
+
+cancer_panel_plot <-
+    patchwork::wrap_plots(cancer_plot_list$patient_prim_cancer_cells,
+                          cancer_plot_list$patient_mets_cancer_cells,
+                            cancer_plot_list$mm_prim_cancer_cells,
+                            cancer_plot_list$mm_mets_cancer_cells,
+                            cancer_plot_list$xeno_prim_human,
+                            cancer_plot_list$xeno_mets_human,
+                            cancer_plot_list$dogs_prim_cancer_cells,
+                            cancer_plot_list$dogs_mets_cancer_cells,
+                        ncol = 2) +
+    patchwork::plot_annotation(title = "Tumor subpopulations Ann Level3")
+
+# stash_plot(cancer_panel_plot, "tumor_panel_plot")
+ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.png",
+        plot = cancer_panel_plot,
+        width = 14,
+        height = 28,
+        limitsize = FALSE,
+        bg = "white")
+
+# Save the bar plot
+cancer_bar_plot_panel <-
+    patchwork::wrap_plots(barplot_list$patient_prim_cancer_cells,
+                        barplot_list$patient_mets_cancer_cells,
+                        barplot_list$mm_prim_cancer_cells,
+                        barplot_list$mm_mets_cancer_cells,
+                        barplot_list$xeno_prim_human,
+                        barplot_list$xeno_mets_human,
+                        barplot_list$dogs_prim_cancer_cells,
+                        barplot_list$dogs_mets_cancer_cells,
+                        ncol = 2) +
+        patchwork::plot_annotation(title = "Cell Count per Sample")
+
+ggsave(filename = "output/figures/Final_Annotations/cell_count_barplot.png",
+        plot = cancer_bar_plot_panel,
+        width = 14, # Adjust width for better visibility
+        height = 28,
+        limitsize = FALSE,
+        bg = "white")
+    
+# make a cancer dotplot
+tumor_features <- list(
+    Osteosarcoma = c("RUNX2", "COL1A1", "COL1A2"),
+    Tumor_Fibrogenic = c("COL6A3", "COL3A1", "PDGFRB", "COL6A1"),
+    Tumor_Progenitor = c("ROBO2", "CD36", "SATB2"),
+    Tumor_Interactive = c("CTSB", "CSF1R", "PTPRC", "PTPRJ"),
+    Tumor_Proliferative = c("CENPF", "ASPM", "BIRC5", "AURKB"),
+    Tumor_Apoptosis = c("BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104"),
+    Tumor_Synthetic = c("RPL37A", "RPS18", "RPL39", "RPL35")
+)
+
+#set the order of the cells for the dotplot
+order_Tumors <-
+    c("Tumor_Fibrogenic", "Tumor_Progenitor",
+      "Tumor_Interactive", "Tumor_Proliferative", 
+     "Tumor_Apoptosis", "Tumor_Synthetic")
+
+# Generate a feature dotplot for the macrophages from the different groups
+dotplot_list <- list()
+
+for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
+                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
+                "xeno_prim_human", "xeno_mets_human",
+                "dogs_prim_cancer_cells", "dogs_mets_cancer_cells")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    order_features <-
+        c("RUNX2", "COL1A1", "COL1A2",
+          "COL6A3", "COL3A1", "COL6A1", #"PDGFRB", 
+          "ROBO2", "CD36", "SATB2",
+          "CSF1R", "PTPRC", "PTPRJ", #"CTSB", 
+          "CENPF", "ASPM", "BIRC5", #"AURKB",
+          "BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104",
+          "RPL37A", "RPS18", "RPL35" # "RPL39",
+          )
+
+    unique_cells <-
+        unique(cancer_sobj_list[[group]]$Ann_Level3) 
+
+    # if (group %in% c("xeno_prim_human", "xeno_mets_human")) {
+    #     tumor_features_cells <- xeno_markers
+    # } else {
+    #     tumor_features_cells <- humanP_mice_markers
+    # }
+    dotplot_markers <-
+        tumor_features[unique_cells] %>%
+        unlist() %>%
+        as.vector()
+
+    species <- 
+        cancer_sobj_list[[group]]$organism[1]
+    
+    # Convert macrophage_features to mouse genes if species is mouse
+    if (species == "mouse") {
+        dotplot_markers <- 
+            nichenetr::convert_human_to_mouse_symbols(dotplot_markers) %>%
+            na.omit() %>%
+            as.character()
+        order_features <- 
+            nichenetr::convert_human_to_mouse_symbols(order_features) %>%
+            na.omit() %>%
+            unique()
+    }
+
+    # Filter for features present in the group
+    present_features <- 
+        intersect(dotplot_markers, rownames(cancer_sobj_list[[group]]))
+
+    # Filter for features present in the group
+    order_tumor_subset <-
+        intersect(order_Tumors, unique(cancer_sobj_list[[group]]$Ann_Level3))
+
+    dotplot <- 
+        DotPlot(cancer_sobj_list[[group]],
+                features = present_features,
+                group.by = "Ann_Level3",
+                cols = "RdBu",
+                dot.scale = 7,
+                col.max = 1.5) +
+                scale_y_discrete(limits = rev(order_tumor_subset), 
+                                labels = function(x) gsub("Tumor_", "", x)) +
+                scale_x_discrete(limits = intersect(order_features, present_features),
+                                    labels = function(x) gsub("ENSCAFG00805016104", "BNIP3", x)) +
+                ggtitle(title_replacement[group][1]) +
+                theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+                        legend.title = element_text(hjust = 0.5, size=10),
+                        legend.text = element_text(size = 9),
+                        title = element_text(hjust = 0.5, size = 10, face = "bold")) +
+                coord_fixed()
+    dotplot_list[[group]] <- dotplot
+}
+
+# Combine the dotplots into a single panel
+dotplot_panel <- 
+    patchwork::wrap_plots(plotlist = dotplot_list, 
+                        ncol = 1,
+                        heights = rep(1, length(dotplot_list))) +
+    patchwork::plot_annotation(title = "Tumor Cell Type Markers")
+
+# stash_plot(dotplot_panel, "tumor_marker_dotplot")
+
+ggsave(filename = "output/figures/Final_Annotations/tumor_marker_dotplot.pdf",
+        plot = dotplot_panel,
+        width = 14,
+        height = 35, # Adjust height for better visibility
+        limitsize = FALSE,
+        bg = "white")
+
+```
+
+## Result 2 figures
 ```{r figure_stroma_panel, echo = FALSE}
 #| cache.vars = 'title_replacement'
 #plots for stromal panel
@@ -55,32 +445,30 @@ title_replacement <-
 stromal_celltype_heatmap<-
     pheatmap::pheatmap(cell_count_percent,
                             cluster_rows = FALSE,
-                            cluster_cols = TRUE,
+                            cluster_cols = FALSE,
                             display_numbers = TRUE,
-                            fontsize_number = 7,
+                            fontsize_number = 13,
                             main = "Cell Count Percentage Heatmap",
                             scale = "none",
                             number_format = "%.1f",
                             silent = TRUE,
                             color = colorRampPalette(c("white", "red"))(100),
                             legend = FALSE,
-                            angle_col = 45,
+                            #angle_col = 90,
                             labels_col = gsub("_", " ", colnames(cell_count_percent)),
                             labels_row = title_replacement[rownames(cell_count_percent)] %>% unlist(),
                             gaps_row = NULL,
                             gaps_col = NULL,
                             border_color = "grey",
-                            fontsize_row = 10,
-                            fontsize_col = 10,
-                            cellwidth = 20, # Increase cell width
-                            cellheight = 20) # Increase cell height
+                            fontsize_row = 13,
+                            fontsize_col = 13)
 
 # stash_plot(stromal_celltype_heatmap[[4]], "stromal_celltype_heatmap")
 
 ggsave(filename = "output/figures/Final_Annotations/stromal_celltype_heatmap.pdf",
         plot = stromal_celltype_heatmap,
-        width = 8,
-        height = 4,
+        width = 10,
+        height = 5,
         limitsize = FALSE,
         bg = "white")
 
@@ -94,14 +482,28 @@ celltypes <-
     unique(sobj_list$xeno_mets_mouse$Ann_Level2),
     unique(sobj_list$dogs_prim_normal_cells$Ann_Level2),
     unique(sobj_list$dogs_mets_normal_cells$Ann_Level2)) %>%
-    unique()
+    unique() %>%
+    str_replace("_", " ") # for plotting
 
 cols <- c(plot_cols, sample(rainbow(length(celltypes))))
 
 names(cols) <- celltypes
 
 dimplot_list <- list()
+barplot_list <- list()
 
+# vector for data source colors
+data_source_unique <- 
+    c("GEO", "SJ", "NCH", "NCI_POB", "CSU", "TU", "UoM")
+data_source_colors <-
+    scales::brewer_pal(palette = "Dark2")(length(data_source_unique))
+names(data_source_colors) <- data_source_unique
+# vector for method colors
+method_unique <- 
+    c("single_cell", "single_nucleus")
+method_colors <-
+    scales::brewer_pal(palette = "Set1")(length(method_unique))
+names(method_colors) <- method_unique
 
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
@@ -111,24 +513,118 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
-    order <-
+    object$plot_labels <-
         object$Ann_Level2 %>%
-        table() %>%
+        as.character() %>%
+        gsub("_", " ", .) # for plotting, replace underscores with spaces
+
+    cells_present <- 
+        c(unique(object$plot_labels))
+
+     celltype_subset_cols <-
+        cols[sort(unique(object$plot_labels))] 
+    
+    cell_count_per_sample <-
+        table(object$plot_labels, object$sample_name) %>%
         as.data.frame() %>%
-        arrange(desc(Freq)) %>%
-        dplyr::rename(!!group := Freq,
-                      celltypes := ".") %>%
-        dplyr::pull(celltypes) %>%
-        as.vector()
-        
+        dplyr::rename(CellType = Var1, Sample = Var2, Count = Freq) %>%
+        group_by(Sample) %>%
+        mutate(Count = Count / sum(Count) * 100) %>%
+        ungroup() %>%
+        mutate(Method = object$method[match(Sample, object$sample_name)],
+                DataSource = object$data_source[match(Sample, object$sample_name)])
+    # Create a bar plot
+    plot1 <-
+        ggplot(cell_count_per_sample, aes(x = Sample, y = Count, fill = CellType)) +
+                geom_bar(stat = "identity", position = "stack") +
+                theme_minimal() +
+                scale_fill_manual(values = as.vector(celltype_subset_cols),
+                                labels = names(celltype_subset_cols)) +
+                labs(y = NULL, x = "Sample", fill = "Cell Type") +
+                            theme(x = NULL,
+                                    y = NULL,
+                                    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+                                axis.text.x = element_text(angle = 45, hjust = 1, face = "bold"),
+                                axis.title.x = element_text(face = "bold"),
+                                axis.title.y = element_text(face = "bold"),
+                                axis.text.y = element_blank(),
+                                legend.position = "right",
+                                legend.direction = "vertical",
+                                panel.grid.major = element_blank(),
+                                panel.grid.minor = element_blank(),
+                                legend.key.size = unit(0.4, 'cm'),
+                                legend.title = element_text(face = "bold", hjust = 0.5),
+                                plot.margin = margin(t = 0, r = 0.5, b = 0, l = 1.5, unit = "cm")) +
+                            scale_x_discrete(labels = function(x) gsub("_GEX_FL|Modiano_|_3GEX_FL", "", x))
+    plot2 <-
+        ggplot(cell_count_per_sample, 
+                aes(x = Sample, y = 1, fill = Method)) +
+        geom_bar(stat = "identity", position = "stack") +
+        theme_minimal() +
+            scale_fill_manual(values = method_colors,
+                    labels = gsub("_", " ", unique(cell_count_per_sample$Method))) +
+        theme(x = NULL, 
+                y = NULL,
+            axis.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank(),
+            legend.position = "right",
+            legend.direction = "vertical",
+            legend.key.size = unit(0.4, 'cm'),
+            legend.spacing.x = unit(0.5, 'cm'), # Specify distance between legend items
+            legend.spacing.y = unit(0.5, 'cm'), # Specify distance between legend rows
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            legend.title = element_text(face = "bold", hjust = 0.5)) +
+        labs(x = NULL,
+                y = NULL)
+
+    plot3 <-
+        ggplot(cell_count_per_sample,
+            aes(x = Sample, y = 1, fill = DataSource)) +
+        geom_bar(stat = "identity", position = "stack") +
+        theme_minimal() +
+        scale_fill_manual(values = data_source_colors,
+                          name = "Source") +
+        theme(x = NULL, 
+            y = NULL,
+            axis.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank(),
+            legend.position = "right",
+            legend.direction = "vertical",
+            legend.key.size = unit(0.4, 'cm'),
+            legend.spacing.x = unit(0.5, 'cm'), # Specify distance between legend items
+            legend.spacing.y = unit(0.5, 'cm'), # Specify distance between legend rows
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            legend.title = element_text(face = "bold", hjust = 0.5)) +
+        labs(x = NULL,
+            y = NULL)
+
+    bar_plot <-
+        plot_grid(plot2 + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                plot3 + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                plot1 + theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+                             plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                ncol = 1,
+                rel_heights = c(0.5, 0.5, 6),
+                align = "v",
+                scale = 1) +
+        theme(plot.margin = margin(t = 1, r = 0, b = 0.5, l = 1.5, unit = "cm")) +
+        patchwork::plot_annotation(title = title_replacement[group][1],
+                                    theme = theme(plot.title = element_text(hjust = 0.5)))
+
+    barplot_list[[group]] <- bar_plot
+
     dimplot <-
         DimPlot(object,
-                group.by = "Ann_Level2",
+                group.by = "plot_labels", # Use the plot_labels for better aesthetics
                 label.box = T,
                 label = T,
                 repel = T,
                 cols = cols,
-                label.size = 4,
+                label.size = 5,
                 raster = F) +
             coord_fixed() +
             #scale_color_manual(values = cols) +
@@ -137,8 +633,6 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
             theme(aspect.ratio=1)
 
     dimplot_list[[group]] <- dimplot
-
-
 }
 
 stromal_panel_plot <-
@@ -146,17 +640,31 @@ stromal_panel_plot <-
             ncol = 2) +
         patchwork::plot_annotation(title = "Stromal cell types Ann_Level2")
 
-ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.pdf",
+ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
         plot = stromal_panel_plot,
         width = 14,
         height = 28,
         limitsize = FALSE,
         bg = "white")
 
-qs::qsave(stromal_panel_plot,
-        str_c("output/figures/Final_Annotations/ryan_needs/stromal_panel_plot.qs"))
+stromal_cell_count_barplot <-
+    patchwork::wrap_plots(barplot_list$patient_prim_normal_cells,
+                        barplot_list$patient_mets_normal_cells,
+                        barplot_list$mm_prim_normal_cells,
+                        barplot_list$mm_mets_normal_cells,
+                        barplot_list$xeno_prim_mouse,
+                        barplot_list$xeno_mets_mouse,
+                        barplot_list$dogs_prim_normal_cells,
+                        barplot_list$dogs_mets_normal_cells,
+                        ncol = 2) +
+        patchwork::plot_annotation(title = "Cell Count per Sample for Stromal Cell Types")
 
-
+ggsave(filename = "output/figures/Final_Annotations/stromal_cell_count_barplot.png",
+        plot = stromal_cell_count_barplot,
+        width = 14, # Adjust width for better visibility
+        height = 28,
+        limitsize = FALSE,
+        bg = "white")
 
 # make a dotplot
 dotplot_list <- list()
@@ -285,7 +793,9 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
 # Combine the dotplots into a single panel
 
 dotplot_panel <- 
-    patchwork::wrap_plots(plotlist = dotplot_list, ncol = 1) +
+    patchwork::wrap_plots(plotlist = dotplot_list,
+                            ncol = 1,
+                            heights = rep(1, length(dotplot_list))) +
     patchwork::plot_annotation(title = "Stromal Cell Type Markers")
 
 # stash_plot(dotplot_panel, "stromal_marker_dotplot")
@@ -301,248 +811,3 @@ ggsave(filename = "output/figures/Final_Annotations/stromal_marker_dotplot.pdf",
 ```
 
 
-## Result 2 figures
-```{r, figure_cancer_panel, echo = FALSE}
-# load the cancer final object
-cancer_sobj_list <-  list()
-cell_count_table <- tibble::tibble(celltypes = character())
-
-for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
-                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
-                "xeno_prim_human", "xeno_mets_human",
-                "dogs_prim_cancer_cells", "dogs_mets_cancer_cells")) {
-    object <- 
-        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                        group,
-                        ".qs"))
-
-    cancer_sobj_list[[group]] <- object
-                
-    cell_count <-
-        object$Ann_Level3 %>%
-        table() %>%
-        as.data.frame() %>%
-        arrange(desc(Freq)) %>%
-        dplyr::rename(!!group := Freq,
-                      celltypes := ".")
-
-    cell_count_table <- cell_count_table %>%
-        dplyr::full_join(cell_count, by = "celltypes")
-}
-
-# Generate a heatmap of the cell count data
-cell_count_prep <- 
-    cell_count_table %>%
-    mutate_all(~replace_na(., 0)) %>%
-    column_to_rownames("celltypes") %>%
-    t()
-
-# Calculate the percentage for each cell type
-cell_count_percent <- sweep(cell_count_prep, 1, rowSums(cell_count_prep), FUN = "/") * 100
-
-cancer_cell_percent <-
-    pheatmap::pheatmap(cell_count_percent,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         display_numbers = TRUE,
-         fontsize_number = 10,
-         main = "Cell Count Percentage Heatmap",
-         scale = "none",
-         number_format = "%.1f",
-         color = colorRampPalette(c("white", "red"))(100))
-
-# stash_plot(cancer_cell_percent[[4]], "tumor_celltype_heatmap")
-
-ggsave(filename = "output/figures/Final_Annotations/tumor_celltype_heatmap.png",
-        plot = cancer_cell_percent,
-        width = 10,
-        height = 7,
-        limitsize = FALSE,
-        bg = "white")
-#prepare colors for the plot
-celltypes <-
-    c(unique(cancer_sobj_list$patient_prim_cancer_cells$Ann_Level3),
-    unique(cancer_sobj_list$patient_mets_cancer_cells$Ann_Level3),
-    unique(cancer_sobj_list$mm_prim_cancer_cells$Ann_Level3),
-    unique(cancer_sobj_list$mm_mets_cancer_cells$Ann_Level3),
-    unique(cancer_sobj_list$xeno_prim_human$Ann_Level3),
-    unique(cancer_sobj_list$xeno_mets_human$Ann_Level3),
-    unique(cancer_sobj_list$dogs_prim_cancer_cells$Ann_Level3),
-    unique(cancer_sobj_list$dogs_mets_cancer_cells$Ann_Level3)) %>%
-    unique()
-cols <- c(plot_cols, sample(rainbow(length(celltypes))))
-
-names(cols) <- celltypes
-
-#plots for cancer panel
-cancer_plot_list <- list()
-
-title_replacement <- 
-    list(patient_prim_cancer_cells = "Patient Primary Tumor",
-        patient_mets_cancer_cells = "Patient Metastatic Tumor",
-        mm_prim_cancer_cells = "Mouse Primary Tumor",
-        mm_mets_cancer_cells = "Mouse Metastatic Tumor",
-        xeno_prim_human = "Xenograft Primary Tumor",
-        xeno_mets_human = "Xenograft Metastatic Tumor",
-        dogs_prim_cancer_cells = "Dog Primary Tumor",
-        dogs_mets_cancer_cells = "Dog Metastatic Tumor")
-
-for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
-                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
-                "xeno_prim_human", "xeno_mets_human",
-                "dogs_prim_cancer_cells", "dogs_mets_cancer_cells")) {
-    object <- 
-        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                        group,
-                        ".qs"))
-
-    cancer_plot <-
-        DimPlot(object,
-                group.by = "Ann_Level3",
-                label.box = T,
-                label = T,
-                repel = T,
-                cols = cols,
-                raster = F,
-                pt.size = 0.5,
-                label.size = 2.5) +
-            coord_fixed() +
-            NoLegend() +
-            ggtitle(title_replacement[group][1]) +
-            theme(aspect.ratio=1)
-    
-    ggsave(plot = cancer_plot,
-            filename = str_c("output/figures/heather/",
-                group,
-                "_dimplot.svg"),
-            width = 6,
-            height = 6,
-            device = "svg")
-    # stash_plot(cancer_plot, str_c(group, "_dimplot"))
-
-    cancer_plot_list[[group]] <- cancer_plot
-}
-
-cancer_panel_plot <-
-    patchwork::wrap_plots(plotlist = cancer_plot_list,
-            ncol = 2) +
-        patchwork::plot_annotation(title = "Tumor subpopulations Ann_Level3")
-
-# stash_plot(cancer_panel_plot, "tumor_panel_plot")
-qs::qsave(cancer_panel_plot,
-        str_c("output/figures/Final_Annotations/ryan_needs/tumor_panel_plot.qs"))
-
-ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.png",
-        plot = cancer_panel_plot,
-        width = 20,
-        height = 30,
-        limitsize = FALSE,
-        bg = "white")
-
-
-    
-# make a cancer dotplot
-tumor_features <- list(
-    Osteosarcoma = c("RUNX2", "COL1A1", "COL1A2"),
-    Tumor_Fibrogenic = c("COL6A3", "COL3A1", "PDGFRB", "COL6A1"),
-    Tumor_Progenitor = c("ROBO2", "CD36", "SATB2"),
-    Tumor_Interactive = c("CTSB", "CSF1R", "PTPRC", "PTPRJ"),
-    Tumor_Proliferative = c("CENPF", "ASPM", "BIRC5", "AURKB"),
-    Tumor_Apoptosis = c("BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104"),
-    Tumor_Synthetic = c("RPL37A", "RPS18", "RPL39", "RPL35")
-)
-
-#set the order of the cells for the dotplot
-order_Tumors <-
-    c("Tumor_Fibrogenic", "Tumor_Progenitor",
-      "Tumor_Interactive", "Tumor_Proliferative", 
-     "Tumor_Apoptosis", "Tumor_Synthetic")
-
-# Generate a feature dotplot for the macrophages from the different groups
-dotplot_list <- list()
-
-for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
-                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
-                "xeno_prim_human", "xeno_mets_human",
-                "dogs_prim_cancer_cells", "dogs_mets_cancer_cells")) {
-    object <- 
-        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                        group,
-                        ".qs"))
-
-    order_features <-
-        c("RUNX2", "COL1A1", "COL1A2",
-          "COL6A3", "COL3A1", "PDGFRB", "COL6A1",
-          "ROBO2", "CD36", "SATB2",
-          "CTSB", "CSF1R", "PTPRC", "PTPRJ",
-          "CENPF", "ASPM", "BIRC5", "AURKB",
-          "BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104",
-          "RPL37A", "RPS18", "RPL39", "RPL35"
-          )
-
-    unique_cells <-
-        unique(cancer_sobj_list[[group]]$Ann_Level3) 
-
-    # if (group %in% c("xeno_prim_human", "xeno_mets_human")) {
-    #     tumor_features_cells <- xeno_markers
-    # } else {
-    #     tumor_features_cells <- humanP_mice_markers
-    # }
-    dotplot_markers <-
-        tumor_features[unique_cells] %>%
-        unlist() %>%
-        as.vector()
-
-    species <- 
-        cancer_sobj_list[[group]]$organism[1]
-    
-    # Convert macrophage_features to mouse genes if species is mouse
-    if (species == "mouse") {
-        dotplot_markers <- 
-            nichenetr::convert_human_to_mouse_symbols(dotplot_markers) %>%
-            na.omit() %>%
-            as.character()
-        order_features <- 
-            nichenetr::convert_human_to_mouse_symbols(order_features) %>%
-            na.omit() %>%
-            unique()
-    }
-
-    # Filter for features present in the group
-    present_features <- 
-        intersect(dotplot_markers, rownames(cancer_sobj_list[[group]]))
-
-    # Filter for features present in the group
-    order_tumor_subset <-
-        intersect(order_Tumors, unique(cancer_sobj_list[[group]]$Ann_Level3))
-
-    dotplot <- 
-        DotPlot(cancer_sobj_list[[group]],
-            features = present_features,
-            group.by = "Ann_Level3",
-            cols = "RdBu",
-            dot.scale = 10,
-            col.max = 1.5) +
-            scale_y_discrete(limits = rev(order_tumor_subset)) +
-            scale_x_discrete(limits = intersect(order_features, present_features)) +
-            ggtitle(title_replacement[group][1]) +
-            theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
-            coord_fixed()
-    dotplot_list[[group]] <- dotplot
-}
-
-# Combine the dotplots into a single panel
-dotplot_panel <- 
-    patchwork::wrap_plots(plotlist = dotplot_list, ncol = 2) +
-    patchwork::plot_annotation(title = "Tumor Cell Type Markers")
-
-# stash_plot(dotplot_panel, "tumor_marker_dotplot")
-
-ggsave(filename = "output/figures/Final_Annotations/tumor_marker_dotplot.png",
-        plot = dotplot_panel,
-        width = 30,
-        height = 20,
-        limitsize = FALSE,
-        bg = "white")
-
-```

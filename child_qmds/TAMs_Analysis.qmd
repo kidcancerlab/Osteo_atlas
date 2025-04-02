@@ -66,28 +66,27 @@ cell_count_percent <-
 TAMs_cell_percent <-
     pheatmap::pheatmap(cell_count_percent,
                         cluster_rows = FALSE,
-                        cluster_cols = TRUE,
+                        cluster_cols = FALSE,
                         display_numbers = TRUE,
-                        fontsize_number = 7,
+                        fontsize_number = 13,
                         main = "Cell Count Percentage Heatmap",
                         scale = "none",
                         number_format = "%.1f",
                         silent = TRUE,
                         color = colorRampPalette(c("white", "red"))(100),
                         legend = FALSE,
-                        angle_col = 45,
                         labels_col = gsub("_", " ", colnames(cell_count_percent)),
                         labels_row = title_replacement[rownames(cell_count_percent)] %>% unlist(),
                         gaps_row = NULL,
                         gaps_col = NULL,
                         border_color = "grey",
-                        fontsize_row = 10,
-                        fontsize_col = 10) 
+                        fontsize_row = 13,
+                        fontsize_col = 13) 
 # stash_plot(TAMs_cell_percent[[4]], "TAMs_celltype_heatmap")
 
 ggsave(filename = "output/figures/Final_Annotations/TAMs_celltype_heatmap.pdf",
         plot = TAMs_cell_percent,
-        width = 12,
+        width = 10,
         height = 5,
         limitsize = FALSE,
         bg = "white")
@@ -104,7 +103,9 @@ mac_celltypes <-
     unique(mac_obj_list$xeno_mets_mouse$Ann_Level3),
     unique(mac_obj_list$dogs_prim_normal_cells$Ann_Level3),
     unique(mac_obj_list$dogs_mets_normal_cells$Ann_Level3)) %>%
-    unique()
+    unique() %>%
+    str_replace("_", " ") # for plotting
+
 cols <- c(plot_cols, sample(rainbow(length(mac_celltypes))))
 
 names(cols) <- mac_celltypes
@@ -187,15 +188,22 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
         qs::qread(str_c("output/seurat_objects/TAMs_objects/",
                         group,
                         ".qs"))
+    
+    # make a new col for the plot labels
+    harm_mac_obj$plot_labels <-
+        harm_mac_obj$Ann_Level3 %>%
+        as.character() %>%
+        gsub("_", " ", .)
+
     # Plot the dimplot
     dimplot <-
         DimPlot(harm_mac_obj,
-                group.by = "Ann_Level3",
+                group.by = "plot_labels",
                 label.box = T,
                 label = T,
                 repel = T,
                 cols = cols,
-                label.size = 4) +
+                label.size = 5) +
             coord_fixed() +
             NoLegend() +
             ggtitle(title_replacement[group][1]) +
@@ -304,7 +312,7 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
             features = present_features,
             group.by = "plot_label",
             cols = "RdBu",
-            dot.scale = 6,
+            dot.scale = 7,
             col.max = 1.5) +
             scale_y_discrete(limits = rev(order_TAMs_subset)) +
             scale_x_discrete(limits = intersect(order_features, present_features)) +
@@ -318,8 +326,10 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
 
 # Combine the dotplots into a single panel
 dotplot_panel <- 
-    patchwork::wrap_plots(plotlist = dotplot_list, ncol = 1) +
-    patchwork::plot_annotation(title = "Macrophage Cell Type Markers")
+    patchwork::wrap_plots(plotlist = dotplot_list,
+                            ncol = 1,
+                            heights = rep(1, length(dotplot_list))) +
+    patchwork::plot_annotation(title = "TAMs Cell Type Markers")
 
 # stash_plot(dotplot_panel, "macrophage_dotplot_panel")
 
