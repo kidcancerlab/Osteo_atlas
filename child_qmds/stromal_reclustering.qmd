@@ -1803,3 +1803,255 @@ markers <-
          Epithelial_cells = c("PATJ", "EGFR", "CDH1"),
          Naive_NKT = c("TOX","ETS1", "IKZF1"))
 ```
+
+
+### describe the markers for Ann_Level3 other than TAMs
+```{r markers_for_Ann_Level3_compartments}
+
+# make and save the objects
+for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    
+    species <- object$organism[1]
+    Idents(object) <- object$Ann_Level1
+
+    for (compartemt in c("Immune_Lymphoid",
+                        "Epithelial_Endothelial",
+                        "Mesenchymal")) {
+        set.seed(199820)
+        sub_obj <-
+            subset(object, idents = compartemt) %>%
+            process_seurat() %>%
+            RunHarmony(group.by.vars = "sample_name",
+                        theta = 7) %>%
+            process_seurat(reduction = "harmony")
+        
+        qs::qsave(x = sub_obj,
+                file = str_c("output/seurat_objects/stromal_subtypes/",
+                            group, "/for_degs_",
+                            compartemt,
+                            ".qs"))
+    }
+}
+
+
+# find the degs for each of the compartments
+sobj_list <- list()
+
+CD4_T <- list()
+Naive_T <- list()
+CD8_T <- list()
+NK_cells <- list()
+Prolif_T <- list()
+T_Reg <- list()
+Lymphocytes <- list()
+Naive_NKT <- list()
+
+for (group in c(
+                "patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                # "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
+    
+    sub_obj <-
+        qs::qread(str_c("output/seurat_objects/stromal_subtypes/",
+                        group, "/for_degs_",
+                        "Immune_Lymphoid",
+                        ".qs"))
+    sobj_list[[group]] <- sub_obj
+    Idents(sub_obj) <- sub_obj$Ann_Level3
+    #dimplot_better(object, group_by = c("Ann_Level3", "seurat_clusters")) 
+    #FeaturePlot(object,features = c("BNIP3","RPL37A", "RPS18", "RPL39", "RPL35", "MRPL23", "MRPL9"), order = TRUE)
+    genes <-
+        FindAllMarkers(sub_obj,
+                        only.pos = TRUE,
+                        min.pct = 0.3,
+                        logfc.threshold = 0.2)
+    
+    species <- sub_obj$organism[1]
+    if (species == "mouse") {
+        genes$gene <- 
+            nichenetr::convert_mouse_to_human_symbols(genes$gene) %>%
+            as.character()
+    }
+    for (names in unique(sub_obj$Ann_Level3)) {
+        genes_per_group <-
+            genes %>%
+            filter(cluster == names) %>%
+            mutate(percent_diff = pct.1 - pct.2) %>%
+            arrange(desc(percent_diff)) %>%
+            slice_head(n=100) %>%
+            #arrange(desc(avg_log2FC)) %>%
+            pull(gene) %>%
+            unique() %>%
+            na.omit() %>%
+            as.character()
+        if (length(genes_per_group) > 0) {
+            if (names == "CD4_T") {
+                CD4_T[[group]] <- genes_per_group
+            } else if (names == "Naive_T") {
+                Naive_T[[group]] <- genes_per_group
+            } else if (names == "CD8_T") {
+                CD8_T[[group]] <- genes_per_group
+            } else if (names == "NK_cells") {
+                NK_cells[[group]] <- genes_per_group
+            } else if (names == "Prolif_T") {
+                Prolif_T[[group]] <- genes_per_group
+            } else if (names == "T_Reg") {
+                T_Reg[[group]] <- genes_per_group
+            } else if (names == "Lymphocytes") {
+                Lymphocytes[[group]] <- genes_per_group
+            } else if (names == "Naive_NKT") {
+                Naive_NKT[[group]] <- genes_per_group
+            }
+        }
+    }
+}
+
+# intersect
+CD4_T_intersect <- Reduce(intersect, CD4_T)
+Naive_T_intersect <- Reduce(intersect, Naive_T)
+CD8_T_intersect <- Reduce(intersect, CD8_T)
+NK_cells_intersect <- Reduce(intersect, NK_cells)
+Prolif_T_intersect <- Reduce(intersect, Prolif_T)
+T_Reg_intersect <- Reduce(intersect, T_Reg)
+Lymphocytes_intersect <- Reduce(intersect, Lymphocytes)
+Naive_NKT_intersect <- Reduce(intersect, Naive_NKT)
+
+# create a list of all the genes
+markers <-
+    list(CD4_T = c("IL7R", "CD3E", "CD2", "CD69", "CD4"),
+         Naive_T = c("TCF7 ", "FOXP1 ", "BACH2", "KLF2", "IKZF1"),
+         CD8_T = c("CD8A", "CD8B", "GZMA", "GZMK", "NKG7"),
+         NK_cells = c("NKG7", "CTSW", "KLRD1", "KLRK1"),
+         Prolif_T = c("PCLAF", "TYMS", "CENPF", "TYMS"),
+         T_Reg = c("IKZF2", "CTLA4", "ICOS"))
+
+## doing the same for the endothelial epithelial 
+
+sobj_list <- list()
+
+list_cell <-
+    c(unique(sobj_list$patient_prim_normal_cells$Ann_Level3),
+      unique(sobj_list$patient_mets_normal_cells$Ann_Level3),
+        unique(sobj_list$mm_prim_normal_cells$Ann_Level3),
+        unique(sobj_list$mm_mets_normal_cells$Ann_Level3),
+        unique(sobj_list$xeno_prim_mouse$Ann_Level3),
+        unique(sobj_list$xeno_mets_mouse$Ann_Level3),
+        unique(sobj_list$dogs_prim_normal_cells$Ann_Level3),
+        unique(sobj_list$dogs_mets_normal_cells$Ann_Level3)) %>%
+    unique() 
+
+list_cell <- c("Endothelial_Artery", "Endothelial_Vein",
+                "Endothelial_Lymphatic", "Endothelial_Capillary", 
+                "AT2", "AT1", "Ciliated_cells", "Tuft_cells")
+
+Endothelial_Artery <- list()
+Endothelial_Vein <- list()
+Endothelial_Lymphatic <- list()
+Endothelial_Capillary <- list()
+AT2 <- list()
+AT1 <- list()
+Ciliated_cells <- list()
+Tuft_cells <- list()
+
+for (group in c(
+                "patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
+    
+    sub_obj <-
+        qs::qread(str_c("output/seurat_objects/stromal_subtypes/",
+                        group, "/for_degs_",
+                        "Epithelial_Endothelial",
+                        ".qs"))
+    sobj_list[[group]] <- sub_obj
+    Idents(sub_obj) <- sub_obj$Ann_Level3
+    #dimplot_better(sub_obj, group_by = c("Ann_Level3"))
+
+    genes <-
+        FindAllMarkers(sub_obj,
+                        only.pos = TRUE,
+                        min.pct = 0.3,
+                        logfc.threshold = 0.2)
+    
+    species <- sub_obj$organism[1]
+    if (species == "mouse") {
+        genes$gene <- 
+            nichenetr::convert_mouse_to_human_symbols(genes$gene) %>%
+            as.character()
+    }
+
+    for (names in unique(sub_obj$Ann_Level3)) {
+        genes_per_group <-
+            genes %>%
+            filter(cluster == names) %>%
+            mutate(percent_diff = pct.1 - pct.2) %>%
+            arrange(desc(percent_diff)) %>%
+            slice_head(n=100) %>%
+            #arrange(desc(avg_log2FC)) %>%
+            pull(gene) %>%
+            unique() %>%
+            na.omit() %>%
+            as.character()
+        if (length(genes_per_group) > 0) {
+            if (names == "Endothelial_Artery") {
+                Endothelial_Artery[[group]] <- genes_per_group
+            } else if (names == "Endothelial_Vein") {
+                Endothelial_Vein[[group]] <- genes_per_group
+            } else if (names == "Endothelial_Lymphatic") {
+                Endothelial_Lymphatic[[group]] <- genes_per_group
+            } else if (names == "Endothelial_Capillary") {
+                Endothelial_Capillary[[group]] <- genes_per_group
+            } else if (names == "AT2") {
+                AT2[[group]] <- genes_per_group
+            } else if (names == "AT1") {
+                AT1[[group]] <- genes_per_group
+            } else if (names == "Ciliated_cells") {
+                Ciliated_cells[[group]] <- genes_per_group
+            } else if (names == "Tuft_cells") {
+                Tuft_cells[[group]] <- genes_per_group
+            }
+        }
+    }
+}
+
+# intersect
+Endothelial_Artery_intersect <- Reduce(intersect, Endothelial_Artery)
+Endothelial_Vein_intersect <- Reduce(intersect, Endothelial_Vein)
+Endothelial_Lymphatic_intersect <- Reduce(intersect, Endothelial_Lymphatic)
+Endothelial_Capillary_intersect <- Reduce(intersect, Endothelial_Capillary)
+AT2_intersect <- Reduce(intersect, AT2)
+AT1_intersect <- Reduce(intersect, AT1)
+Ciliated_cells_intersect <- Reduce(intersect, Ciliated_cells)
+Tuft_cells_intersect <- Reduce(intersect, Tuft_cells)
+# create a list of all the genes
+
+intersect(Endothelial_Capillary$patient_prim_normal_cells,
+         Endothelial_Capillary$patient_mets_normal_cells,
+         Endothelial_Artery$mm_prim_normal_cells,
+         Endothelial_Artery$mm_mets_normal_cells,
+         Endothelial_Artery$xeno_prim_mouse,
+         Endothelial_Artery$xeno_mets_mouse,
+         Endothelial_Artery$dogs_prim_normal_cells,
+         Endothelial_Artery$dogs_mets_normal_cells)
+
+
+markers <-
+    list(Endothelial_Artery = c("NOTCH4", "DLL4", "EFNB2", "FLT1"),
+         Endothelial_Vein = c("VWF", "TGFBR3", "PLXDC2"),
+         Endothelial_Lymphatic = c("CD36", "PROX1", "FLT4", "SH3PXD2B"),
+         Endothelial_Capillary = c("PECAM1", "VWF", "FLT1"),
+         AT2 = c("SFTPA1", "SFTPC", "ABCA3"),
+         AT1 = c("SFTPA1", "SFTPC", "ABCA3"),
+         Ciliated_cells = c("FOXJ1", "RFX3", "RFX2"),
+         Tuft_cells = c("TRPM5", "DCLK1", "CHGA"))
+
+```
