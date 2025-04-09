@@ -233,7 +233,8 @@ for (group in c(
             coord_fixed() +
             NoLegend() +
             ggtitle(title_replacement[group][1]) +
-            theme(aspect.ratio=1)
+            theme(aspect.ratio=1)+
+            theme_void()
 
     cancer_plot_list[[group]] <- cancer_plot
 }
@@ -257,6 +258,12 @@ ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.png",
         height = 28,
         limitsize = FALSE,
         bg = "white")
+ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.pdf",
+        plot = cancer_panel_plot,
+        width = 14,
+        height = 28,
+        limitsize = FALSE,
+        bg = "white")
 
 # Save the bar plot
 cancer_bar_plot_panel <-
@@ -271,7 +278,7 @@ cancer_bar_plot_panel <-
                         ncol = 2) +
         patchwork::plot_annotation(title = "Cell Count per Sample")
 
-ggsave(filename = "output/figures/Final_Annotations/cell_count_barplot.png",
+ggsave(filename = "output/figures/Final_Annotations/cell_count_barplot.pdf",
         plot = cancer_bar_plot_panel,
         width = 14, # Adjust width for better visibility
         height = 28,
@@ -297,6 +304,7 @@ order_Tumors <-
 
 # Generate a feature dotplot for the macrophages from the different groups
 dotplot_list <- list()
+dim_dot_plotlist <- list()
 
 for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 "mm_prim_cancer_cells", "mm_mets_cancer_cells",
@@ -306,6 +314,27 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
+    
+    object$plot_labels <-
+        object$Ann_Level3 %>%
+        as.character() %>%
+        gsub("_", " ", .) # for plotting
+
+    dimplot <-
+        DimPlot(object,
+                group.by = "plot_labels", # Use the plot_labels for better aesthetics
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = cols,
+                raster = F,
+                label.size = 5) +
+            coord_fixed() +
+            theme(aspect.ratio=1) +
+            theme_void() +
+            NoLegend() +
+            ggtitle(title_replacement[group][1])
+
 
     order_features <-
         c("RUNX2", "COL1A1", "COL1A2",
@@ -364,13 +393,26 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                                 labels = function(x) gsub("Tumor_", "", x)) +
                 scale_x_discrete(limits = intersect(order_features, present_features),
                                     labels = function(x) gsub("ENSCAFG00805016104", "BNIP3", x)) +
-                ggtitle(title_replacement[group][1]) +
+                #ggtitle(title_replacement[group][1]) +
                 theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
                         legend.title = element_text(hjust = 0.5, size=10),
                         legend.text = element_text(size = 9),
                         title = element_text(hjust = 0.5, size = 10, face = "bold")) +
                 coord_fixed()
     dotplot_list[[group]] <- dotplot
+
+    dim_dot_plot <-
+        plot_grid(dimplot + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                dotplot + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                ncol = 1,
+                rel_heights = c(2, 1),
+                align = "v",
+                scale = 1) +
+        theme(plot.margin = margin(t = 1, r = 0, b = 0.5, l = 1.5, unit = "cm")) +
+        patchwork::plot_annotation(title = title_replacement[group][1],
+                                    theme = theme(plot.title = element_text(hjust = 0.5)))
+    
+    dim_dot_plotlist[[group]] <- dim_dot_plot
 }
 
 # Combine the dotplots into a single panel
@@ -384,6 +426,27 @@ dotplot_panel <-
 
 ggsave(filename = "output/figures/Final_Annotations/tumor_marker_dotplot.pdf",
         plot = dotplot_panel,
+        width = 14,
+        height = 35, # Adjust height for better visibility
+        limitsize = FALSE,
+        bg = "white")
+
+#
+dim_dot_panel <-
+    patchwork::wrap_plots(plotlist = dim_dot_plotlist, 
+                        ncol = 2) +
+    patchwork::plot_annotation(title = "Tumor Cell Type Markers")
+
+# stash_plot(dim_dot_panel, "tumor_marker_dimplot")
+ggsave(filename = "output/figures/Final_Annotations/tumor_marker_dim_dot_plot.png",
+        plot = dim_dot_panel,
+        width = 14,
+        height = 35, # Adjust height for better visibility
+        limitsize = FALSE,
+        bg = "white")
+
+ggsave(filename = "output/figures/Final_Annotations/tumor_marker_dim_dot_plot.pdf",
+        plot = dim_dot_panel,
         width = 14,
         height = 35, # Adjust height for better visibility
         limitsize = FALSE,

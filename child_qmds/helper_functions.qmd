@@ -24,7 +24,8 @@ dimplot_better <- function(object,
             cols = c(plot_cols, sample(rainbow(50))),
             ...) +
         coord_fixed() +
-        theme(aspect.ratio=1)
+        theme(aspect.ratio=1) +
+        theme_void()
 }
 
 # cluster based annotation
@@ -1509,7 +1510,83 @@ mouse_to_human_setup <- function(object,
 
 ```
 
+## dotplot panel plot 
+```{r dotplot_panel_plot}
 
+# function to make dotplot_panel
+make_dotplot_panel <- function(object,
+                                cell_markers,
+                                group_by) {
+    
+    Idents(object) <- group_by
+
+    order_features <- 
+        cell_markers %>%
+        unlist() %>%
+        unique()
+
+    order_celltypes <-
+        cell_markers %>%
+        names() %>%
+        unique()
+
+    unique_cells <-
+        unique(object[[group_by]])[[1]]
+    
+
+    # if (group %in% c("xeno_prim_human", "xeno_mets_human")) {
+    #     tumor_features_cells <- xeno_markers
+    # } else {
+    #     tumor_features_cells <- humanP_mice_markers
+    # }
+    dotplot_markers <-
+        cell_markers[unique_cells] %>%
+        unlist() %>%
+        as.vector()
+
+    species <- 
+        object$organism[1]
+    
+    # Convert macrophage_features to mouse genes if species is mouse
+    if (species == "mouse") {
+        dotplot_markers <- 
+            nichenetr::convert_human_to_mouse_symbols(dotplot_markers) %>%
+            na.omit() %>%
+            as.character()
+        order_features <- 
+            nichenetr::convert_human_to_mouse_symbols(order_features) %>%
+            na.omit() %>%
+            unique()
+    }
+
+    # Filter for features present in the group
+    present_features <- 
+        intersect(dotplot_markers, rownames(object))
+
+    # Filter for features present in the group
+    order_cell_subset <-
+        intersect(order_celltypes, unique(object[[group_by]])[[1]])
+
+
+    dotplot <-
+        DotPlot(object,
+                features = present_features,
+                group.by = group_by,
+                cols = "RdBu",
+                dot.scale = 7,
+                col.max = 1.5)+
+        scale_y_discrete(limits = rev(order_cell_subset), 
+                        labels = function(x) gsub("_", " ", x)) +
+        scale_x_discrete(limits = intersect(order_features, present_features)) +
+        theme(axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = 0.5)) +
+        coord_fixed() + 
+        labs(x = NULL, y = NULL) +
+        ggtitle(title_replacement[group][1])
+    return(dotplot)
+}
+
+
+```
 
 ```{r helper_confirm_mclapply_worked}
 #| cache.vars: confirm_mclapply_worked

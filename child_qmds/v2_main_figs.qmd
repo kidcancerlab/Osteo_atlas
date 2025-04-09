@@ -1,0 +1,217 @@
+
+## Result 1 figures
+```{r, figure_cancer_panel, echo = FALSE}
+# load the cancer final object
+cancer_sobj_list <-  list()
+cell_count_table <- tibble::tibble(celltypes = character())
+
+for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
+                "mm_prim_cancer_cells", "mm_mets_cancer_cells",
+                "xeno_prim_human", "xeno_mets_human",
+                "dogs_prim_cancer_cells", "dogs_mets_cancer_cells")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    cancer_sobj_list[[group]] <- object
+                
+    cell_count <-
+        object$Ann_Level3 %>%
+        table() %>%
+        as.data.frame() %>%
+        arrange(desc(Freq)) %>%
+        dplyr::rename(!!group := Freq,
+                      celltypes := ".")
+
+    cell_count_table <- cell_count_table %>%
+        dplyr::full_join(cell_count, by = "celltypes")
+}
+
+#title replacement
+title_replacement <- 
+    c(patient_prim_cancer_cells = "Patient Primary",
+        patient_mets_cancer_cells = "Patient Metastatic",
+        mm_prim_cancer_cells = "Mouse Primary",
+        mm_mets_cancer_cells = "Mouse Metastatic",
+        xeno_prim_human = "Xenograft Primary",
+        xeno_mets_human = "Xenograft Metastatic",
+        dogs_prim_cancer_cells = "Dog Primary",
+        dogs_mets_cancer_cells = "Dog Metastatic")
+
+dimplot_better(cancer_sobj_list$patient_prim_cancer_cells,
+    group_by = "Ann_Level3") +
+    NoLegend()
+
+object_list <-
+    tribble(~group1,                         ~group2,                       ~group3,
+            "patient_prim_cancer_cells",    "patient_mets_cancer_cells",   "Human_Patients",
+            "mm_prim_cancer_cells",         "mm_mets_cancer_cells",         "Syngeneic_Mouse",
+            "dogs_prim_cancer_cells",       "dogs_mets_cancer_cells",       "Canine_Patients",
+            "xeno_prim_human",             "xeno_mets_human",             "Human Patient_Xenograft")
+
+# Create a list of groups
+for (i in seq_len(nrow(object_list))) {
+    group1 <- object_list$group1[i]
+    group2 <- object_list$group2[i]
+    group3 <- object_list$group3[i]
+
+    #subset the cell_count_table
+    cell_count_subset <-
+        cell_count_table %>%
+            select(celltypes, !!group1, !!group2) %>%
+            pivot_longer(cols = -celltypes,
+                    names_to = "group",
+                    values_to = "count") %>%
+            filter(count > 0) %>%
+            group_by(group) %>%
+            mutate(percent = count / sum(count) * 100) %>%
+            ungroup() %>%
+            mutate(group = str_replace_all(group, title_replacement))
+
+    ordered_groups <-
+        cell_count_subset$group %>%
+        unique() %>%
+        as.vector()
+
+    stacked_area_plot <-
+        ggplot(cell_count_subset,
+                aes(x = factor(group, levels = ordered_groups), 
+                    y = percent,
+                    group = celltypes,
+                    fill = celltypes)) +
+            geom_area() +
+            scale_fill_manual(values = plot_cols) +
+            theme_minimal() +
+            ggtitle("Percentage Stacked-Area Plot") +
+            theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                axis.title.x = element_blank(),
+                axis.title.y = element_blank(),
+                ylab = NULL,
+                legend.position = "none",
+                axis.text.y = element_blank(),
+                panel.grid = element_blank()) +
+            geom_bar(data = filter(cell_count_subset, group == ordered_groups[1]),
+                     aes(x = factor(group, levels = ordered_groups), 
+                         y = percent,
+                        group = celltypes,
+                        fill = celltypes),
+                    just = 0.99,
+                    width = 0.7,
+                    stat = "identity") +
+            geom_bar(data = filter(cell_count_subset, group == ordered_groups[2]),
+                aes(x = factor(group, levels = ordered_groups), 
+                    y = percent,
+                group = celltypes,
+                fill = celltypes),
+            just = 0.01,
+            width = 0.7,
+            stat = "identity")
+        
+    # Save the plots
+    ggsave(str_c("output/figures/Final_Annotations/ryan_needs/",
+                    group3,
+                "tumor_stacked_area_plot.pdf"),
+            plot = stacked_area_plot,
+            width = 2,
+            height = 7,
+            bg = "white")
+
+    stack_barplot <-
+        ggplot(cell_count_subset,
+            aes(x = factor(group, levels = ordered_groups), 
+                y = percent,
+                fill = celltypes)) +
+            geom_bar(stat = "identity", position = "fill", width = 0.98) + 
+            scale_fill_manual(values = plot_cols) +
+            theme_minimal() +
+            ggtitle("Percentage Stacked Bar Plot") +
+            theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+                axis.title.x = element_blank(),
+                axis.title.y = element_blank(),
+                ylab = NULL,
+                legend.position = "none")
+
+    ggsave(str_c("output/figures/Final_Annotations/ryan_needs/",
+                group3, "tumor_stacked_barplot.pdf"),
+            plot = stack_barplot,
+            width = 3,
+            height = 7,
+            dpi = 300,
+            bg = "white")
+}
+
+
+```
+
+
+```{r sanky_plot, echo = FALSE}
+title_replacement <-
+    c(patient_prim_cancer_cells = "Patient Primary",
+        patient_mets_cancer_cells = "Patient Metastatic",
+        mm_prim_cancer_cells = "Mouse Primary",
+        mm_mets_cancer_cells = "Mouse Metastatic",
+        xeno_prim_human = "Xenograft Primary",
+        xeno_mets_human = "Xenograft Metastatic",
+        dogs_prim_cancer_cells = "Dog Primary",
+        dogs_mets_cancer_cells = "Dog Metastatic")
+ 
+object_list <-
+    tribble(~group1,                         ~group2,                       ~group3,
+            "patient_prim_cancer_cells",    "patient_mets_cancer_cells",   "Human_Patients",
+            "mm_prim_cancer_cells",         "mm_mets_cancer_cells",         "Syngeneic_Mouse",
+            "dogs_prim_cancer_cells",       "dogs_mets_cancer_cells",       "Canine_Patients",
+            "xeno_prim_human",             "xeno_mets_human",             "Human Patient_Xenograft")
+ 
+# Create a list of groups
+for (i in seq_len(nrow(object_list))) {
+    group1 <- object_list$group1[i]
+    group2 <- object_list$group2[i]
+    group3 <- object_list$group3[i]
+ 
+    #subset the cell_count_table
+    cell_count_subset <-
+        cell_count_table %>%
+        select(celltypes, !!group1, !!group2) %>%
+        pivot_longer(cols = -celltypes,
+                    names_to = "group",
+                    values_to = "count") %>%
+        filter(count > 0)
+   
+    nodes <-
+        data.frame(name = unique(c(cell_count_subset$celltypes,
+                                   cell_count_subset$group)))
+   
+    cell_count_subset$source <-
+        match(cell_count_subset$group, nodes$name) - 1
+    cell_count_subset$target <-
+        match(cell_count_subset$celltypes, nodes$name) - 1
+    links <-        
+        cell_count_subset %>%
+        select(source, target, count, group, celltypes) %>%
+        rename(value = count) %>%
+        mutate(group = str_replace_all(group, title_replacement))
+ 
+    sankey_plot <-
+        networkD3::sankeyNetwork(Links = links,
+                                Nodes = nodes,
+                                Source = "source",
+                                Target = "target",
+                                Value = "value",
+                                NodeID = "name",
+                                units = "cells",
+                                fontSize = 15,
+                                nodeWidth = 20,
+                                LinkGroup = "celltypes",
+                                height = 1000,
+                                width = 1000)
+   
+    # Save the Sankey plot
+    networkD3::saveNetwork(sankey_plot,
+                          str_c("output/figures/Final_Annotations/",
+                                group3, "_sankey.html"))
+}
+
+
+
+```
