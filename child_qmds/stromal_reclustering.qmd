@@ -477,24 +477,40 @@ scores_celltypes_new <-
     arrange(seurat_clusters)
 
 
-CAF_all_markers <- list(
-  myCAFs = c("ACTA2", "TAGLN", "MYH11"),  # Myofibroblastic CAFs
-  iCAFs = c("CXCL12", "CXCL14", "IL6", "S100A4"),   # Inflammatory CAFs
-  apCAFs = c("HLA-DRA", "CD74", "SLPI", "HLA-DRB1", "CXCL9", "CXCL10"),  # Antigen-presenting CAFs
-  pCAFs = c("MKI67", "TOP2A", "CDK1", "AURKB"),    # Proliferating CAFs
-  Pericytes = c("RGS5", "ABCC9", "ENPEP", "PLXDC1", "PDGFRB"),  # Pericytes
-  Smooth_muscle = c("ACTA2", "MYH11", "CNN1", "CALD1"),  # Smooth muscle cells
-  alveolar_CAFs = c("MME", "CLIC5", "HSPB7", "TCF21"),  # Alveolar CAFs
-  subpleural_CAFs = c("CLDN11","MFAP4", "CTSK", "PRDX2"),  # Subpleural CAFs
-  peribronchial_CAFs = c("MFAP5", "SOX6", "CLMP"),  # Peribronchial CAFs
-  adventitial_CAFs = c("MCAM", "CD34", "ADAMTSL1")  # Adventitial CAFs
-) %>%
+cell_markers <- list(
+    Prolif_T = c("PCLAF", "TYMS", "CENPF"),
+    T_Reg = c("IKZF2", "CTLA4", "FOXP3", "IL2RA", "TIGIT"),
+    CD4_T = c("IL7R", "CD4", "CCR7", "CD3E"),
+    Naive_T = c("TCF7", "FOXP1", "BACH2", "KLF2", "S1PR1"),
+    CD8_T = c("CD8A", "CD8B", "GZMA", "GZMK"),
+    NK_cells = c("NKG7", "KLRD1", "KLRK1", "PRF1", "GZMB"),
+    #T_Memory = c("IL7R", "CD44", "CD62L", "CD27"),
+    #Memory_B = c("CD27", "CD80", "NT5E"),
+    Mature_B = c("MS4A1", "FCMR", "CD21", "CD27", "CD80"),
+    Plasma_B = c("CD38", "SDC1", "PRDM1", "XBP1")
+    ) %>%
 unlist() %>%
     as.character() %>%
     unique()
 
+CD4_T_cell_markers <- list(
+  general = c("CD4", "CD3"),
+  Th1 = c("CXCR3", "TBX21", "IFNG"),
+  Th2 = c("CCR4", "GATA3", "IL4"),
+  Th17 = c("CCR6", "RORC", "IL17A"),
+  Th22 = c("CCR10", "IL22"),
+  Tfh = c("CXCR5", "BCL6", "ICOS"),
+  activation = c("CD69", "HLA-DR", "CD154", "CD38"),
+  exhaustion_senescence = c("PD1", "TIM3", "LAG3", "CD57")
+)%>%
+unlist() %>%
+    as.character() %>%
+    unique()
+
+
+
 DotPlot(s_obj,
-    features = CAF_all_markers,
+    features = cell_markers,
     group.by = "seurat_clusters",
     cols = "RdBu",
     #scale=F,
@@ -502,17 +518,18 @@ DotPlot(s_obj,
     col.max = 1.5) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, size  = 10))
 
-                                             "^0$" = "Pericytes",
-                                                    "^1$" ="apCAFs",
-                                                    "^2$"= "subpleural_CAFs",
-                                                    "^3$" = "apCAFs",
-                                                    "^4$" = "iCAFs",
-                                                    "^5$" = "AT2",
-                                                    "^6$" = "Pericytes",
-                                                    "^7$" = "myCAFs",
-                                                    "^8$" = "Adv_CAFs",
-                                                    "^9$" = "Subplueral_CAFs",
-                                                    "^10$" = "myCAFs"
+                                            "^0$" = "CD8_T",
+                                                            "^1$" = "Naive_T",
+                                                            "^2$" = "CD4_T",
+                                                            "^3$" = "T_Reg",
+                                                            "^4$" = "NK_cells",
+                                                            "^5$" = "NK_cells",
+                                                            "^6$" = "CD4_T",
+                                                            "^7$" = "Naive_T",
+                                                            "^8$" = "Mature_B",
+                                                            "^9$" = "Plasma_B",
+                                                            "^10$" = "Prolif_T",
+                                                            "^11$" = "Mature_B"
 
 s_obj$SingleR_Ann3 <- 
     str_replace_all(s_obj$seurat_clusters, 
@@ -884,16 +901,16 @@ celltype_list <-
                                                                     "^9$" = "Endothelial_Artery")),
         patient_mets_normal_cells = list(Mesenchymal = c("^0$" = "Pericytes",
                                                         "^1$" = "Adv_CAFs",
-                                                        "^2$" = "peribronchial_CAFs",
-                                                        "^3$" = "subpleural_CAFs",
+                                                        "^2$" = "Peribronchial_CAFs",
+                                                        "^3$" = "Subpleural_CAFs",
                                                         "^4$" = "Alv_CAFs",
                                                         "^5$" = "apCAFs",
                                                         "^6$" = "myCAFs",
                                                         "^7$" = "Pericytes",
-                                                        "^8$" = "subpleural_CAFs",
+                                                        "^8$" = "Subpleural_CAFs",
                                                         "^9$" = "pCAFs",
-                                                        "^10$" = "subpleural_CAFs",
-                                                        "^11$" = "peribronchial_CAFs",
+                                                        "^10$" = "Subpleural_CAFs",
+                                                        "^11$" = "Peribronchial_CAFs",
                                                         "^12$" = "Pericytes"),
                                          Immune_Lymphoid = c("^0$" = "CD8_T",
                                                             "^1$" = "Naive_T",
@@ -963,7 +980,7 @@ celltype_list <-
                                                                 "^19$" = "Ciliated_cells",
                                                                 "^20$" = "AT2",
                                                                 "^21$" = "Endothelial_Capillary",
-                                                                "^22$" = "Tuft_cells",
+                                                                "^22$" = "Ciliated_cells",
                                                                 "^23$" = "AT2")),
         xeno_prim_mouse = list(Mesenchymal = c("^0$" = "iCAFs",
                                                 "^1$" = "iCAFs",
@@ -994,7 +1011,7 @@ celltype_list <-
                                                 "^1$" ="iCAFs",
                                                 "^2$"= "Pericytes"),
                             Immune_Lymphoid = c("^0$" = "NK_cells",
-                                                "^1$" = "CD4_T",
+                                                "^1$" = "Naive_T",
                                                 "^2$" = "Naive_T"),
                             Immune_Myeloid = c("^0$" = "Inflam_TAMs",
                                                 "^1$" = "Neutrophils",
@@ -1178,14 +1195,14 @@ celltype_list <-
                                                             "^7$" = "Endothelial_Vein")),
         dogs_mets_normal_cells = list(Mesenchymal = c("^0$" = "Pericytes",
                                                     "^1$" ="apCAFs",
-                                                    "^2$"= "subpleural_CAFs",
+                                                    "^2$"= "Subpleural_CAFs",
                                                     "^3$" = "apCAFs",
                                                     "^4$" = "iCAFs",
                                                     "^5$" = "AT2",
                                                     "^6$" = "Pericytes",
                                                     "^7$" = "myCAFs",
                                                     "^8$" = "Adv_CAFs",
-                                                    "^9$" = "Subplueral_CAFs",
+                                                    "^9$" = "Subpleural_CAFs",
                                                     "^10$" = "myCAFs"),
                             Immune_Lymphoid = c("^0$" = "CD4_T",
                                                 "^1$" = "CD8_T",
@@ -1448,7 +1465,6 @@ for (item in seq_len(nrow(object_list))) {
 
 }
 
-
 harmony_params <-
     list(patient_prim = list(group_by = c("sample_name",
                                           "method",
@@ -1531,6 +1547,7 @@ for (item in seq_len(nrow(object_list))) {
                           "^IFN_TAMs$" = "TAMs",
                           "^Inflam_TAMs$" = "TAMs",
                           "^Memory_B$" = "B_cells",
+                          "^Mature_B$" = "B_cells",
                           "^Naive_T$" = "T_cells",
                           "^Normal_Fibroblasts$" = "Fibroblasts",
                           "^Osteoblasts$" = "Osteoblasts",
@@ -1557,7 +1574,9 @@ for (item in seq_len(nrow(object_list))) {
                           "^EC_Capillary$" = "Endothelial_cells",
                           "^EC_Vein$" = "Endothelial_cells",
                           "^Plueral_CAFs$" = "CAFs",
-                          "^Subplueral_CAFs$" = "CAFs",
+                          "^Subpleural_CAFs$" = "CAFs",
+                          "^subpleural_CAFs$" = "CAFs",
+                          "^peribronchial_CAFs$" = "CAFs",
                           "^Myo_CAFs$" = "CAFs",
                           "^Alv_CAFs$" = "CAFs",
                           "^Peribronchial_CAFs$" = "CAFs",
@@ -1568,6 +1587,7 @@ for (item in seq_len(nrow(object_list))) {
                           "^Lymphocytes$" = "T_cells",
                           "^myCAFs$" = "CAFs",
                           "^apCAFs$" = "CAFs",
+                          "^pCAFs$" = "CAFs",
                           "^Adv_TAMs$" = "TAMs",
                           "^Adv_Macrophages$" = "TAMs",
                           "^Adv_CAFs$" = "Fibroblasts",
@@ -1591,7 +1611,7 @@ for (item in seq_len(nrow(object_list))) {
 
     stroma_obj$Ann_Level1 <- 
         str_replace_all(stroma_obj$Ann_Level2,
-                        c("^B_cells$" = "Immune_Myeloid",
+                        c("^B_cells$" = "Immune_Lymphoid",
                           "^CAFs$" = "Mesenchymal",
                           "^Ciliated_cells$" = "Epithelial_Endothelial",
                           "^Club_cells$" = "Epithelial_Endothelial",
@@ -1662,14 +1682,17 @@ for (item in seq_len(nrow(object_list))) {
 ## Finally clean up the annotation
 ```{r clean_up_annotation}
 
-for (group in c("patient_prim", "patient_mets", "mm_prim", "mm_mets",
+for (group in c(
+                "patient_prim", "patient_mets", "mm_prim", "mm_mets",
                 "xeno_prim_human", "xeno_mets_human", "xeno_prim_mouse",
                 "xeno_mets_mouse", "dogs_prim", "dogs_mets",
                 "patient_prim_normal_cells",    "patient_prim_cancer_cells",
                 "mm_prim_normal_cells",         "mm_prim_cancer_cells",
                 "dogs_prim_normal_cells",       "dogs_prim_cancer_cells",
+                "dogs_mets_normal_cells",       "dogs_mets_cancer_cells",
                 "patient_mets_normal_cells",    "patient_mets_cancer_cells",
-                "mm_mets_normal_cells",         "mm_mets_cancer_cells")) {
+                "mm_mets_normal_cells",         "mm_mets_cancer_cells"
+                )) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,

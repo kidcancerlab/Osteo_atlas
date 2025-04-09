@@ -327,8 +327,8 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 label = T,
                 repel = T,
                 cols = cols,
-                raster = F,
-                label.size = 5) +
+                label.size = 5,
+                raster=F) +
             coord_fixed() +
             theme(aspect.ratio=1) +
             theme_void() +
