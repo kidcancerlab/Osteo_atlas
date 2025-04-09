@@ -593,10 +593,9 @@ run_degs <- function(sobject,
                 )
             )
 
-        # add the batch variable to the design
-
+        # run DESeq2
         return(
-            x <- DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
+            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
                                            colData = batch_df_new2,
                                            design = design) %>%
             DESeq2::DESeq(quiet = TRUE) %>%
@@ -604,13 +603,13 @@ run_degs <- function(sobject,
             as.data.frame() %>%
             dplyr::arrange(dplyr::desc(log2FoldChange)) %>%
             tibble::rownames_to_column("gene") %>%
-            na.omit() %>%
-            left_join(
-                degs_cutoff_percent(sobject, cluster_no),
-                by = "gene"
-            ) %>%
-            filter(percent_target_degs > 0.1 |
-                  percent_non_target_degs > 0.1)
+            na.omit() #%>%
+            # left_join(
+            #     degs_cutoff_percent(sobject, cluster_no),
+            #     by = "gene"
+            # ) %>%
+            # filter(percent_target_degs > 0.05 |
+            #       percent_non_target_degs > 0.05)
         )
     })
     # subset and name the degs_output by the group_by variables
@@ -1387,6 +1386,8 @@ Run_GRA <- function(sobject,
 
 ## ----dog_human_orthologs_function-----------------------------------------------------------------
 # load the tsv for human_dog gene orthologs
+#| cache.vars: [orthologs, dog_to_human_setup, mouse_to_human_setup]
+
 orthologs <-
     read_tsv("input/downloads/dog_human_gene_orthologs.txt")
 
@@ -1429,7 +1430,9 @@ dog_to_human_setup <- function(object,
 
 
 #mouse to human orthologs object
-mouse_to_human_setup <- function(object) {
+mouse_to_human_setup <- function(object,
+                                 harm_vars,
+                                 theta) {
     raw_counts <-
         GetAssayData(object,
                      slot = "counts")
@@ -1460,10 +1463,8 @@ mouse_to_human_setup <- function(object) {
     
     object <-
         RunHarmony(object,
-                    group.by.vars = c("sample_name",
-                                    "model",
-                                    "location"),
-                    theta = c(7, 7, 7)) %>%
+                    group.by.vars = harm_vars,
+                    theta = theta) %>%
         process_seurat(reduction = "harmony")
 
     return(object)
