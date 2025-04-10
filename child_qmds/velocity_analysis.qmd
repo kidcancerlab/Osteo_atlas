@@ -140,7 +140,7 @@ import scvelo as scv
 import pandas as pd
 import numpy as np
 import matplotlib as plt
-matplotlib.use('Agg')
+plt.use('Agg')
 from matplotlib import pyplot
 from matplotlib.colors import ListedColormap
 import scanpy as sc
@@ -280,6 +280,7 @@ for ob in ob_names:
                                          show = False,
                                          sort_order = False)
         pyplot.savefig("figures/scvelo/yogesh_4_10_25/" + ob + "_fdl_annotations.svg")
+
 ```
 
 ### Get Top Velocity Genes for Each Cluster/Cell Type
