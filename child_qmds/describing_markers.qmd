@@ -671,13 +671,16 @@ cell_markers <- list(
   Adv_CAFs = c("MCAM", "CD34", "ADAMTSL1", "TNNT3")  # Adventitial CAFs
 )
 
+# make the cols
+celltypes <- 
+    as.vector(names(cell_markers))
 
-order_celltypes <-
-    c(names(cell_markers)) %>%
-    str_replace_all(., "_", " ")
+cols <- c(plot_cols, sample(rainbow(length(celltypes))))
 
+names(cols) <- celltypes
 
 dotplot_list <- list()
+
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
                 "xeno_prim_mouse", "xeno_mets_mouse",
@@ -687,37 +690,42 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                         group, "/for_degs_",
                         "Mesenchymal",
                         ".qs"))
-    
-    Idents(object) <- object$Ann_Level3
 
-    order_features <- 
-        c(cell_markers$iCAFs,
-          cell_markers$apCAFs,
-          cell_markers$pCAFs,
-          cell_markers$myCAFs,
-          cell_markers$Smooth_muscle,
-          cell_markers$Pericytes,
-          cell_markers$Alv_CAFs,
-          cell_markers$Subpleural_CAFs,
-          cell_markers$Peribronchial_CAFs,
-          cell_markers$Adv_CAFs) %>%
+    object$plot_labels <-
+        object$Ann_Level3 %>%
+        as.character() %>%
+        gsub("_", " ", .) # for plotting
+
+    dimplot <-
+        DimPlot(object,
+                group.by = "plot_labels", # Use the plot_labels for better aesthetics
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = cols,
+                label.size = 5,
+                raster=F) +
+            coord_fixed() +
+            theme(aspect.ratio=1) +
+            theme_void() +
+            NoLegend() +
+            ggtitle(title_replacement[group][1])
+
+    order_features <-
+        cell_markers %>%
+        unlist() %>%
         unique()
 
     unique_cells <-
-        unique(object$Ann_Level3) 
+        unique(object$plot_labels) 
 
-    # if (group %in% c("xeno_prim_human", "xeno_mets_human")) {
-    #     tumor_features_cells <- xeno_markers
-    # } else {
-    #     tumor_features_cells <- humanP_mice_markers
-    # }
     dotplot_markers <-
         cell_markers[unique_cells] %>%
         unlist() %>%
         as.vector()
 
     species <- 
-        object$organism[1]
+       object$organism[1]
     
     # Convert macrophage_features to mouse genes if species is mouse
     if (species == "mouse") {
@@ -736,29 +744,25 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
         intersect(dotplot_markers, rownames(object))
 
     # Filter for features present in the group
-
-    object$plot_labels <-
-        object$Ann_Level3 %>%
-        as.character() %>%
-        gsub("_", " ", .)
-
     order_cell_subset <-
-        intersect(order_celltypes, unique(object$plot_labels))
+        intersect(order_Tumors, unique(object$plot_labels))
     
-
-    dotplot <-
+    dotplot <- 
         DotPlot(object,
-            features = present_features,
-            group.by = "Ann_Level3",
-            cols = "RdBu",
-            dot.scale = 7,
-            col.max = 1.5) +
-            scale_y_discrete(limits = rev(order_cell_subset)) +
-            scale_x_discrete(limits = intersect(order_features, present_features)) +
-            ggtitle(title_replacement[group][1]) +
-            theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
-            coord_fixed() + 
-            labs(x = NULL, y = NULL)
+                features = present_features,
+                group.by = "plot_labels",
+                cols = "RdBu",
+                dot.scale = 7,
+                col.max = 1.5) +
+                scale_y_discrete(limits = rev(order_cell_subset)) +
+                scale_x_discrete(limits = intersect(order_features)) +
+                #ggtitle(title_replacement[group][1]) +
+                theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+                        legend.title = element_text(hjust = 0.5, size=10),
+                        legend.text = element_text(size = 9),
+                        title = element_text(hjust = 0.5, size = 10)) +
+                coord_fixed()
+
 
 
     dotplot_list[[group]] <- dotplot

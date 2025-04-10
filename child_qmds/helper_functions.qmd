@@ -1581,6 +1581,13 @@ make_dotplot_panel <- function(object,
         theme(axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = 0.5)) +
         coord_fixed() + 
         labs(x = NULL, y = NULL) +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            axis.text.y = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 25),
+            panel.grid = element_blank()) +
         ggtitle(title_replacement[group][1])
     return(dotplot)
 }
