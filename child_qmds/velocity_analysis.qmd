@@ -11,7 +11,7 @@ Input is a table with the following column names:
     -species
 
 ```{r}
-velo_input <- read.table("misc/allsample_details.txt",
+velo_input <- read.table("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/misc/allsample_details.txt",
                          header = TRUE) %>%
     dplyr::select(sample_id = sample_name,
                   species,
@@ -100,11 +100,13 @@ for (ob_name in obj_names) {
     obj_list[[ob_name]] <-
         qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/", ob_name, ".qs"))
 }
+
+
 #run fdl
 parallel::detectCores()
 obj_list_fdl <- parallel::mclapply(obj_list, FUN = run_fdl, mc.cores = parallel::detectCores())
 
-qs::qsave(obj_list_fdl, "output/seurat_objects/obj_list_03_03_2025.qs")
+qs::qsave(obj_list_fdl, "output/seurat_objects/obj_list_04_04_2025.qs")
 ```
 
 ```{r write-off-md}
@@ -137,7 +139,10 @@ import anndata
 import scvelo as scv
 import pandas as pd
 import numpy as np
+import matplotlib as plt
+matplotlib.use('Agg')
 from matplotlib import pyplot
+from matplotlib.colors import ListedColormap
 import scanpy as sc
 import os
 import re
@@ -146,6 +151,9 @@ import re
 ### Make Objects and Plots
 
 ```{python analyze-mm-mets-cancer-cells}
+pyplot.use('Agg')
+
+
 #get names of loom files
 ob_names = os.listdir("loom_output/metadata")
 ob_names = list(filter(lambda x:"dog" not in x, ob_names))
@@ -170,31 +178,108 @@ def write_ob_and_plots(ob):
                                      color = "seurat_clusters",
                                      show = False,
                                      sort_order = False)
-    pyplot.savefig("figures/scvelo/Ryan/" + ob + "_umap_clusters.svg")
+    pyplot.savefig("figures/scvelo/" + ob + "_umap_clusters.svg")
     #Ann_Level3 in umap space
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "umap",
                                      color = "Ann_Level3",
                                      show = False,
                                      sort_order = False)
-    pyplot.savefig("figures/scvelo/Ryan/" + ob + "_umap_annotations.svg")
+    pyplot.savefig("figures/scvelo/" + ob + "_umap_annotations.svg")
     #seurat_clusters in fdl
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "fdl",
                                      color = "seurat_clusters",
                                      show = False,
                                      sort_order = False)
-    pyplot.savefig("figures/scvelo/Ryan/" + ob + "_fdl_clusters.svg")
+    pyplot.savefig("figures/scvelo/" + ob + "_fdl_clusters.svg")
     #cell types in fdl
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "fdl",
                                      color = "Ann_Level3",
                                      show = False,
                                      sort_order = False)
-    pyplot.savefig("figures/scvelo/Ryan/" + ob + "_fdl_annotations.svg")
+    pyplot.savefig("figures/scvelo/" + ob + "_fdl_annotations.svg")
     return(ob + " is done")
 
 
+```
+
+#### Remaking Tumor Plots with Lab Colors
+
+I'm remaking the velocity stream plots for the tumor objects with 2 changes:
+    1. Removing "Tumor_" from the cell type annotations
+    2. Using the lab colors for coloring the clusters so we are consistent across Seurat and scv
+
+```{python}
+color_mapping = {"Synthetic": "#D43F3A",
+                 "Fibrogenic": "#EEA236",
+                 "Progenitor": "#357EBD",
+                 "Proliferative": "#5CB85C",
+                 "Interactive": "#B8B8B8",
+                 "Apoptosis": "#9632B8"}
+
+hex_codes = ["#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF", "#9632B8FF", "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF", "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF", "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF", "#00FF00", "#00FFFF", "#FF00FF", "#0000FF", "#FFFF00", "#FF0000"]
+all_cmap = ListedColormap(hex_codes)
+
+ob_names = os.listdir("loom_output/anndata")
+
+for ob in ob_names:
+    ad_ob = anndata.read("loom_output/anndata/" + ob)
+    #remove .ad from ob
+    ob = ob.strip(".ad")
+    scv.pl.velocity_embedding_stream(ad_ob,
+                                     basis = "umap",
+                                     color = "seurat_clusters",
+                                     show = False,
+                                     color_map = all_cmap,
+                                     sort_order = False)
+    pyplot.savefig("figures/scvelo/yogesh_4_10_25/" + ob + "_umap_clusters.svg")
+    #seurat_clusters in fdl
+    scv.pl.velocity_embedding_stream(ad_ob,
+                                     basis = "fdl",
+                                     color = "seurat_clusters",
+                                     color_map = all_cmap,
+                                     show = False,
+                                     sort_order = False)
+    pyplot.savefig("figures/scvelo/yogesh_4_10_25/" + ob + "_fdl_clusters.svg")
+    #Specify color dict for colors if cancer object
+    if ob.find("cancer") != -1 or ob.find("_human") != -1:
+        #Strip Tumor_ from ann level 3
+        ad_ob.obs["Ann_Level3"] = ad_ob.obs["Ann_Level3"].str.replace("Tumor_", "")
+        #Ann_Level3 in umap space
+        scv.pl.velocity_embedding_stream(ad_ob,
+                                         basis = "umap",
+                                         color = "Ann_Level3",
+                                         palette = color_mapping,
+                                         show = False,
+                                         sort_order = False)
+        pyplot.savefig("figures/scvelo/yogesh_4_10_25/" + ob + "_umap_annotations.svg")
+        #cell types in fdl
+        scv.pl.velocity_embedding_stream(ad_ob,
+                                         basis = "fdl",
+                                         color = "Ann_Level3",
+                                         palette = color_mapping,
+                                         show = False,
+                                         sort_order = False)
+        pyplot.savefig("figures/scvelo/yogesh_4_10_25/" + ob + "_fdl_annotations.svg")
+    else:
+        #Ann_Level3 in umap space
+        scv.pl.velocity_embedding_stream(ad_ob,
+                                         basis = "umap",
+                                         color = "Ann_Level3",
+                                         color_map = all_cmap,
+                                         show = False,
+                                         sort_order = False)
+        pyplot.savefig("figures/scvelo/yogesh_4_10_25/" + ob + "_umap_annotations.svg")
+        #cell types in fdl
+        scv.pl.velocity_embedding_stream(ad_ob,
+                                         basis = "fdl",
+                                         color = "Ann_Level3",
+                                         color_map = all_cmap,
+                                         show = False,
+                                         sort_order = False)
+        pyplot.savefig("figures/scvelo/yogesh_4_10_25/" + ob + "_fdl_annotations.svg")
 ```
 
 ### Get Top Velocity Genes for Each Cluster/Cell Type
@@ -202,6 +287,8 @@ def write_ob_and_plots(ob):
 I'll only be doing this for cancer objects
 
 ```{python}
+
+
 tmp = anndata.read("loom_output/anndata/patient_mets_cancer_cells.ad")
 scv.tl.rank_velocity_genes(tmp, groupby="Ann_Level3", min_corr = 0.3)
 df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
