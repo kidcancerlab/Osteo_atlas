@@ -110,6 +110,8 @@ results <-
                             ".qs"))
             ann_sobj$annotations <- object$annotations
             ann_sobj$new_annot_clust <- object$new_annot_clust
+            ann_sobj$re_cluster <- object$re_cluster
+            ann_sobj$cell_scores <- object$cell_scores
         }
 
         directory <- 

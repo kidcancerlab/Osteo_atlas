@@ -1,0 +1,116 @@
+sample_name	use_snvs_depth	z	datasets	y	top_level	Note
+F331	5	mousemodel	mouse	F331		
+S0067		mousemodel	mouse	S0067	top_lvl_group1	No groups were found to be tumor
+S0068		mousemodel	mouse	S0068	top_lvl_group0	No groups were found to be tumor
+S0075		mousemodel	mouse	S0075	top_level_group1	Basophils and neutrophils also labelled tumor
+S0104	5	mousemodel	mouse	S0104		looking good
+S0105	5	mousemodel	mouse	S0105		looks good
+S0122		mousemodel	mouse	S0122	top_lvl_group1	Same snp at all depth
+S0200		mousemodel	mouse	S0200		No snv because cell culture tumor
+S0201		mousemodel	mouse	S0201		No snv because cell culture tumor
+S0246	5	mousemodel	mouse	S0246		tumor call only at 5 depth
+S0282		mousemodel	mouse	S0282	top_lvl_group1	
+S0123	5	mousemodel	mouse	S0123		
+S0291	5	mousemodel	mouse	S0291		
+S0058	5	patient	human	S0058		Same snp at all depth
+S0059	5	patient	human	S0059		Same snp at all depth
+S0217	5	patient	human	S0217		Same snp at all depth
+S0218	5	patient	human	S0218		Same snp at all depth
+SC069	10	patient	human	SC069		
+SC072	10	patient	human	SC072		
+SC073	5	patient	human	SC073		Same snp at all depth
+SJOS001105_M1	5	patient	human	SJOS001105_M1		
+SJOS001107_M2	5	patient	human	SJOS001107_M2		
+SJOS001108_M1	5	patient	human	SJOS001108_M1		
+SJOS001112_M2		patient	human	SJOS001112_M2		could not find the snp plot
+SJOS001116_M2		patient	human	SJOS001116_M2		could not find the snp plot
+SJOS001127_M1		patient	human	SJOS001127_M1		could not find the snp plot
+SJOS001132_M1		patient	human	SJOS001132_M1		could not find the snp plot
+SJOS010929_D1		patient	human	SJOS010929_D1		could not find the snp plot
+SJOS010930_D1		patient	human	SJOS010930_D1		could not find the snp plot
+SJOS012409_D1	5	patient	human	SJOS012409_D1		
+SJOS013768_D1		patient	human	#N/A		could not find the snp plot
+SJOS013768_D1_repB		patient	human	SJOS013768_D1_repB		could not find the snp plot
+SJOS013768_M1		patient	human	SJOS013768_M1		could not find the snp plot
+SJOS013769_D1	5	patient	human	SJOS013769_D1		no so good result
+SJOS016015_D1	5	patient	human	SJOS016015_D1		
+SJOS016016_D1	5	patient	human	#N/A		
+SJOS030101_D1	5	patient	human	SJOS030101_D1		
+SJOS030272_D1	5	patient	human	SJOS030272_D1		
+SJOS030279_D1	5	patient	human	SJOS030279_D1		
+SJOS030441_D1	5	patient	human	#N/A		
+SJOS030597_D1	5	patient	human	SJOS030597_D1		
+SJOS030605_D2	5	patient	human	#N/A		
+SJOS030645_D2	5	patient	human	SJOS030645_D2		
+SJOS031478_D1	5	patient	human	SJOS031478_D1		
+SJOS063819_D2	10	patient	human	SJOS063819_D2		
+SJOS063822_A1	5	patient	human	SJOS063822_A1		
+SJOS063824_D1	5	patient	human	SJOS063824_D1		
+SJOS063833_D1	5	patient	human	SJOS063833_D1		
+SJOS063833_D2	5	patient	human	SJOS063833_D2		
+X00003	5	patient	human	X00003		no tumor called at any depth
+X00004	5	patient	human	X00004		
+X00005		patient	human	X00005		
+X00006		patient	human	X00006		
+X00007	5	patient	human	X00007		
+X00008	5	patient	human	X00008		
+X00009	5	patient	human	X00009		
+X00010	5	patient	human	X00010		
+X00011	5	patient	human	X00011		
+X00012	5	patient	human	X00012		
+X00013	5	patient	human	X00013		
+X00014	5	patient	human	X00014		
+X00015	5	patient	human	X00015		
+X00016	5	patient	human	X00016		
+X00017	5	patient	human	X00017		
+X00018	5	patient	human	X00018		
+X00019	5	patient	human	X00019		
+X00020	5	patient	human	X00020		
+X00021	5	patient	human	X00021		calls endothelial as tumor
+CCDI0101_16178b	5	patient	human	CCDI0101_16178b		
+CCDI0058_16183	5	patient	human	CCDI0058_16183		
+CCDI0097_8978	5	patient	human	CCDI0097_8978		
+CCDI0102_16183b	5	patient	human	CCDI0102_16183b		
+CCDI0057_16178	5	patient	human	CCDI0057_16178		
+CCDI0098_8951	5	patient	human	CCDI0098_8951		
+CCDI0096_8952	5	patient	human	CCDI0096_8952		
+CCDI0053_445	5	patient	human	CCDI0053_445		everything has been called tumor
+CCDI0100_12416	5	patient	human	CCDI0100_12416		osteoblasts not called as tumor
+CCDI0051_6547	5	patient	human	CCDI0051_6547		
+CCDI0050_5928	5	patient	human	CCDI0050_5928		endothelial called as tumor
+CCDI0092_3911	5	patient	human	CCDI0092_3911		everything has been called tumor
+CCDI0091_3666	5	patient	human	CCDI0091_3666		everything has been called tumor
+CCDI0094_7977	5	patient	human	CCDI0094_7977		
+CCDI0095_7978	5	patient	human	CCDI0095_7978		
+CCDI0093_6546	5	patient	human	CCDI0093_6546		
+CCDI0090_2318	5	patient	human	CCDI0090_2318		everything has been called tumor
+CCDI0048_5864	5	patient	human	CCDI0048_5864		
+CCDI0049_5899	5	patient	human	CCDI0049_5899		everything has been called tumor
+GSM8001766	5	canine	dog	GSM8001766		
+GSM8001767	5	canine	dog	GSM8001767		
+GSM8001768	5	canine	dog	GSM8001768		
+GSM8001769	5	canine	dog	GSM8001769		
+GSM8001770	5	canine	dog	GSM8001770		
+GSM8001771	5	canine	dog	GSM8001771		
+GSM8001773	5	canine	dog	GSM8001773		
+GSM8001772	20	canine	dog	GSM8001772		
+T_OS_0046_P1		canine	dog	T_OS_0046_P1	top_lvl_group0	
+T_OS_0054_P1		canine	dog	T_OS_0054_P1	top_lvl_group0	top_lvl_group0
+T_OS_0061_P1		canine	dog	T_OS_0061_P1	top_lvl_group0	top_lvl_group0
+S0032	5	canine	dog	S0032		
+S0231	5	canine	dog	S0231		
+T_OS_0046_M1		canine	dog	T_OS_0046_M1		
+T_OS_0050_M1_1		canine	dog	T_OS_0050_M1_1		
+T_OS_0050_M1_2		canine	dog	T_OS_0050_M1_2		
+T_OS_0059_M1_1n		canine	dog	T_OS_0059_M1_1n	top_lvl_group0	top_lvl_group0
+T_OS_0059_M1_2	5	canine	dog	T_OS_0059_M1_2		
+T_OS_0061_M1_1		canine	dog	T_OS_0061_M1_1	top_lvl_group0	top_lvl_group0
+T_OS_0061_M1_2		canine	dog	T_OS_0061_M1_2	top_lvl_group0	top_lvl_group0
+OSLM1	5	canine	dog	OSLM1		
+OSLM2		canine	dog	OSLM2		
+OSLM3	5	canine	dog	OSLM3		
+OSLM4		canine	dog	OSLM4		
+OSLM5		canine	dog	OSLM5		
+OSLM6		canine	dog	OSLM6		
+OSLM7	10	canine	dog	OSLM7		
+OSLM8	5	canine	dog	OSLM8		

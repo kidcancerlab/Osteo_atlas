@@ -4,22 +4,13 @@ We're only running on patient and mouse model samples that are primary tumors or
 #| cache.vars = 'samples_to_run'
 samples_to_run <-
     read_tsv("misc/allsample_details.txt",
-             show_col_types = FALSE) # Only running on dogs primary samples
-    # filter(species %in% c("patient", "mousemodel") &
-    #        location != "cc_alltumor" &
-    #        (tumor_type == "primary" |
-    #         (tumor_type == "metastatic" & location == "lung"))) %>% # No bam files for these samples
-    # filter(!sample_name %in% c("SJOS013768_D1", # drop samples with low reads
-    #                            "SJOS016016_D1",
-    #                            "SJOS030605_D1",
-    #                            "SJOS030411_D1",
-    #                            "SJOS030605_D2"))
+             show_col_types = FALSE)
 
 ```
 
 ## Run SNV calling on the pseudobulked clusters to try to ID tumor cells
-This portion requires https://github.com/kidcancerlab/rrrSnvs
-```{r run_rrrSnvs}
+This portion requires https://github.com/kidcancerlab/scanBit
+```{r run_scanBit}
 file_loc_key <-
     list("GEO"     = "/home/gdrobertslab/lab/Counts_2/",
          "NCH"     = "/home/gdrobertslab/lab/Counts_2/",
@@ -39,7 +30,11 @@ control_celltypes <-
       "Macrophage",
       "Macrophages",
       "NK_cells",
-      "T-cells")
+      "T_cells",
+      "Bronchial_Vessel1",
+      "Bronchial_Vessel2",
+      "AlvEpitheial_T1",
+      "AlvEpitheial_T2")
 
 genome_key_base <- "/home/gdrobertslab/lab/GenRef/"
 genome_key <-
@@ -237,65 +232,65 @@ output <-
                 )
             }
             message("Making snp tree")
-            # snp_tree <-
-            #     tryCatch({
-            #         rrrSnvs::get_snp_tree(
-            #             cellid_bam_table = c_b_t,
-            #             ploidy = ploidy,
-            #             ref_fasta = paste0(
-            #                 genome_key_base,
-            #                 genome_key[[samples_to_run$unique[i]]]
-            #             ),
-            #             min_depth = min_depths_to_use,
-            #             output_dir = paste0(
-            #                 "output/id_tumor/snvs/",
-            #                 species,
-            #                 "_",
-            #                 sample_id
-            #             ),
-            #             output_base_name = sample_id,
-            #             temp_dir = paste0(
-            #                 "output/id_tumor/snvs/",
-            #                 species,
-            #                 "_",
-            #                 sample_id
-            #             ),
-            #             sbatch_base = "shell/sbatch_",
-            #             slurm_base = "slurm/slurm",
-            #             min_snvs_per_cluster = 1000,
-            #             max_prop_missing_at_site = 0.9,
-            #             bootstrap_cutoff = 0.99,
-            #             cleanup = TRUE
-            #         )
-            #     }, error = function(e) {
-            #         message(paste0(
-            #                 "Error in snp_tree for ",
-            #                 sample_id,
-            #                 ": ",
-            #                 e
-            #         ))
+            snp_tree <-
+                tryCatch({
+                    scanBit::get_snp_tree(
+                        cellid_bam_table = c_b_t,
+                        ploidy = ploidy,
+                        ref_fasta = paste0(
+                            genome_key_base,
+                            genome_key[[samples_to_run$unique[i]]]
+                        ),
+                        min_depth = min_depths_to_use,
+                        output_dir = paste0(
+                            "output/id_tumor/snvs/",
+                            species,
+                            "_",
+                            sample_id
+                        ),
+                        output_base_name = sample_id,
+                        temp_dir = paste0(
+                            "output/id_tumor/snvs/",
+                            species,
+                            "_",
+                            sample_id
+                        ),
+                        sbatch_base = "shell/sbatch_",
+                        slurm_base = "slurm/slurm",
+                        min_snvs_per_cluster = 1000,
+                        max_prop_missing_at_site = 0.9,
+                        bootstrap_cutoff = 0.99,
+                        cleanup = TRUE
+                    )
+                }, error = function(e) {
+                    message(paste0(
+                            "Error in snp_tree for ",
+                            sample_id,
+                            ": ",
+                            e
+                    ))
 
-            #         return(
-            #             paste0(
-            #                 "Error in snp_tree for ",
-            #                 sample_id,
-            #                 ": ",
-            #                 e
-            #             )
-            #         )
-            #     })
+                    return(
+                        paste0(
+                            "Error in snp_tree for ",
+                            sample_id,
+                            ": ",
+                            e
+                        )
+                    )
+                })
 
-            # # if all the min_depths failed due to low coverage, then the value
-            # #  of snp_tree is an empty list of length 0. We change this to NULL for
-            # # downstream processing
-            # if (is.character(snp_tree)) {
-            #     return(snp_tree)
-            # }
+            # if all the min_depths failed due to low coverage, then the value
+            #  of snp_tree is an empty list of length 0. We change this to NULL for
+            # downstream processing
+            if (is.character(snp_tree)) {
+                return(snp_tree)
+            }
 
             message("Labeling tree groups")
             # Figure out which clusters are more than 50% control celltypes
             normal_clusters <-
-                rrrSnvs::match_celltype_clusters(
+                scanBit::match_celltype_clusters(
                     sobject = s_obj,
                     normal_celltypes = control_celltypes,
                     cluster_col = "cell_group",

@@ -4,7 +4,6 @@ volcano plots and GSEA plots for each of the samples. The results will be
 saved in the `output/degs` and `output/figures/gsea` directories.
 
 ## Find the optimal resolution for clustering for tumor cells
-
 ```{r clustree, echo = FALSE}
 all_groups <-
     c("patient_prim_cancer_cells",
@@ -30,16 +29,18 @@ clustrees <- list()
 for (i in seq_len(length(all_groups))) {
     group <- all_groups[i]
 
-    object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
-                              group,
-                              ".qs"))
+    object <- 
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    #dimplot_better(object, group_by = "new_annot_clust") + NoLegend()
     min_cell_silhouette <- 65000
     n_cells <- length(Cells(object))
     keep_n_cells <- min(min_cell_silhouette, n_cells)
     set.seed(63249528)
     res_score <-
         optimize_silhouette(sobject = object[, sample(1:n_cells, keep_n_cells)],
-                            test_res = seq(0.1, 0.9, by = 0.1),
+                            test_res = seq(0.05, 0.9, by = 0.05),
                             summary_plot = FALSE,
                             reduction = "harmony") %>%
         filter(!is.na(sil_vals)) %>%
@@ -72,6 +73,13 @@ for (i in seq_len(length(all_groups))) {
     qs::qsave(tree,
               str_c("output/figures/tumor_vs_stroma/clustree/", group, ".qs"))
 }
+
+sub <- object %>%
+    subset(new_annot_clust == "Neurons_Schwann_cell")
+x <- FindMarkers(sub)
+
+mean(sub$cell_scores)
+
 ```
 
 ##  Differential expression analysis for tumor cells and GSEA
@@ -120,25 +128,17 @@ panel_plots <- list()
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.15,
-            "mm_prim_cancer_cells",         0.3,
-            "mm_mets_cancer_cells",         0.15,
+            "patient_prim_cancer_cells",    0.2,
+            "patient_mets_cancer_cells",    0.1,
+            "mm_prim_cancer_cells",         0.2,
+            "mm_mets_cancer_cells",         0.1,
             "xeno_prim_human",              0.15,
-            "xeno_mets_human",              0.1,
-            "dogs_prim_cancer_cells",       0.2,
-            "dogs_mets_cancer_cells",       0.2,
-            "patient_prim_normal_cells",    0.15,
-            "patient_mets_normal_cells",    0.05,
-            "xeno_prim_mouse",              0.1,
-            "xeno_mets_mouse",              0.1,
-            "mm_prim_normal_cells",         0.25,
-            "mm_mets_normal_cells",         0.2,
-            "dogs_prim_normal_cells",       0.2,
-            "dogs_mets_normal_cells",       0.2)
+            "xeno_mets_human",              0.15,
+            "dogs_prim_cancer_cells",       0.25,
+            "dogs_mets_cancer_cells",       0.15)
+
 
 # run force directed layout
-
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
     res_value <- object_list$res_value[i]
@@ -146,18 +146,45 @@ for (i in seq_len(nrow(object_list))) {
         qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                         group,
                         ".qs"))
-    object <- 
+    object <-
         FindClusters(object,
                     resolution = res_value)
     
     force_directed_layout <- 
         run_fdl(sobject = object)
 
-    split_fdl_plot <- 
+    split_fdl_plot1 <- 
         dimplot_better(force_directed_layout,
                        group_by= "seurat_clusters",
                        reduction = "fdl") +
             NoLegend()
+    
+    split_fdl_plot2 <-
+        dimplot_better(force_directed_layout,
+                       group_by = "new_annot_clust",
+                       reduction = "fdl") +
+            NoLegend()
+    
+    split_fdl_plot3 <- 
+        dimplot_better(force_directed_layout,
+                       group_by = "sample_name",
+                       reduction = "fdl") +
+            NoLegend()
+    
+    split_fdl_plot4 <-
+        dimplot_better(force_directed_layout,
+                       group_by = "data_source",
+                       reduction = "fdl") +
+            NoLegend()
+
+    split_fdl_plots <-
+        patchwork::wrap_plots(
+            split_fdl_plot1,
+            split_fdl_plot2,
+            split_fdl_plot3,
+            split_fdl_plot4,
+            ncol = 2
+        )
     
     directory <-
         str_c("output/figures/tumor_vs_stroma/", group)
@@ -169,9 +196,9 @@ for (i in seq_len(nrow(object_list))) {
                 group,
                 "/",
                 "fdl_plot.png"),
-            plot = split_fdl_plot,
-            width = 10,
-            height = 10)
+            plot = split_fdl_plots,
+            width = 16,
+            height = 16)
     qs::qsave(force_directed_layout,
               str_c("output/seurat_objects/tumor_vs_stroma/",
                     group,
@@ -191,12 +218,7 @@ for (i in seq_len(nrow(object_list))) {
     object <- 
         FindClusters(object,
                     resolution = res_value)
-
-    #convert the dogs to human genes
-    if (object$organism[1] == "dog") {
-        object <-
-            dog_to_human_setup(object = object)
-    }
+    #dimplot_better(object, group_by = "seurat_clusters")
 
     make_panel_plot(sobj = object,
                     comparison_col = "seurat_clusters",
@@ -212,26 +234,26 @@ for (i in seq_len(nrow(object_list))) {
 
 
 ## Save the celltypes metadata 
-```{r celltypes_metadata, echo = FALSE}
+```{r celltypes_metadata, echo = FALSE, eval = FALSE, include = FALSE}
 # Save the celltypes excel out with seurat clusters and celltypes annotation info
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.15,
-            "mm_prim_cancer_cells",         0.3,
-            "mm_mets_cancer_cells",         0.15,
+            "patient_prim_cancer_cells",    0.2,
+            "patient_mets_cancer_cells",    0.1,
+            "mm_prim_cancer_cells",         0.2,
+            "mm_mets_cancer_cells",         0.1,
             "xeno_prim_human",              0.15,
-            "xeno_mets_human",              0.1,
-            "dogs_prim_cancer_cells",       0.2,
-            "dogs_mets_cancer_cells",       0.2,
+            "xeno_mets_human",              0.15,
+            "dogs_prim_cancer_cells",       0.25,
+            "dogs_mets_cancer_cells",       0.15,
             "patient_prim_normal_cells",    0.15,
             "patient_mets_normal_cells",    0.05,
             "xeno_prim_mouse",              0.1,
             "xeno_mets_mouse",              0.1,
             "mm_prim_normal_cells",         0.25,
             "mm_mets_normal_cells",         0.2,
-            "dogs_prim_normal_cells",       0.2,
-            "dogs_mets_normal_cells",       0.2)
+            "dogs_prim_normal_cells",       0.1,
+            "dogs_mets_normal_cells",       0.15)
 
 all_data_celltypes <- tibble()
 
@@ -307,12 +329,218 @@ directory <-
 if (!dir.exists(directory)) {
     dir.create(directory, recursive = TRUE)
 }
-filename <- str_c("output/cluster_and_celltype/all_data_celltypes_",
-                  timestamp,
-                  ".tsv")
+filename <- 
+    str_c("output/cluster_and_celltype/all_data_celltypes_",
+            timestamp,
+            ".tsv")
 write_tsv(x = all_data_celltypes, file = filename)
 
 ```
+
+
+### To compare the what degs match across the different groups
+```{r degs_comparison, echo = FALSE}
+# dog and human orthologs
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
+
+#object list
+object_list <-
+    tribble(~group,                         ~res_value,
+            "patient_prim_cancer_cells",    0.2,
+            "patient_mets_cancer_cells",    0.1,
+            "mm_prim_cancer_cells",         0.2,
+            "mm_mets_cancer_cells",         0.1,
+            "xeno_prim_human",              0.15,
+            "xeno_mets_human",              0.15,
+            "dogs_prim_cancer_cells",       0.25,
+            "dogs_mets_cancer_cells",       0.15)
+
+for (i in seq_len(nrow(object_list))) {
+    group1 <- object_list$group[i]
+    res_value1 <- object_list$res_value[i]
+
+    object1 <-
+        qs::qread(
+            str_c(
+                "output/seurat_objects/tumor_vs_stroma/",
+                group1,
+                ".qs"
+            )
+        ) %>%
+        FindClusters(resolution = res_value1)
+
+    dimplot1 <- 
+        dimplot_better(object1,
+                        group_by = "seurat_clusters")
+
+    #grab the pseudobulk degs_results, to account for the gene loss during conversion 150 are set
+    for (s_cluster in unique(object1$seurat_clusters)) {
+        genelist <-
+            read_tsv(str_c(
+                    "output/degs/",
+                    group1,
+                    "/seurat_clusters/",
+                    s_cluster,
+                    "_degs.tsv"
+                )) %>%
+            filter(log2FoldChange > 1 & padj < 0.01) %>% 
+            arrange(desc(log2FoldChange)) %>%
+            select(gene) %>%
+            slice_head(n = 100) %>%
+            as.list()
+
+        big_featureplot_list <- list()
+        big_Vlnplot_list <- list()
+
+        for (item in seq_len(nrow(object_list))) {
+            group2 <- object_list$group[item]
+            res_value2 <- object_list$res_value[item]
+
+            object2 <-
+                qs::qread(
+                    str_c(
+                        "output/seurat_objects/tumor_vs_stroma/",
+                        group2,
+                        ".qs"
+                    )
+                ) %>%
+                FindClusters(resolution = res_value2)
+
+            #dimplot_better(object2, group_by = "seurat_clusters")
+
+            new_gene_list <- genelist$gene
+
+            if (object1$organism[1] == "human" && object2$organism[1] == "mouse") {
+                new_gene_list <- 
+                    nichenetr::convert_human_to_mouse_symbols(genelist$gene) %>%
+                    na.omit() %>%
+                    unique()
+                }
+
+            if (object1$organism[1] == "human" && object2$organism[1] == "dog") {
+                new_gene_list <- 
+                    orthologs$dog_gene_name[match(genelist$gene, orthologs$human_gene_ortholog)] %>%
+                    na.omit() %>%
+                    unique()
+                }
+            
+            if (object1$organism[1] == "mouse" && object2$organism[1] == "human") {
+                new_gene_list <- 
+                    nichenetr::convert_mouse_to_human_symbols(genelist$gene) %>%
+                    na.omit() %>%
+                    unique()
+                }
+            
+            if (object1$organism[1] == "mouse" && object2$organism[1] == "dog") {
+                #first convert to human with nichenetr and then to dogs
+                new_gene_list <- 
+                    orthologs$dog_gene_name[match(nichenetr::convert_mouse_to_human_symbols(genelist$gene), orthologs$human_gene_ortholog)] %>%
+                    na.omit() %>%
+                    unique()
+                }
+
+            if (object1$organism[1] == "dog" && object2$organism[1] == "human") {
+                new_gene_list <- 
+                    orthologs$human_gene_ortholog[match(genelist$gene, orthologs$dog_gene_name)] %>%
+                    na.omit() %>%
+                    unique()
+                }
+            
+            if (object1$organism[1] == "dog" && object2$organism[1] == "mouse") {
+                new_gene_list <- 
+                    orthologs$human_gene_ortholog[match(genelist$gene, orthologs$dog_gene_name)] %>%
+                    nichenetr::convert_human_to_mouse_symbols() %>%
+                    as.character() %>%
+                    na.omit() %>%
+                    unique()
+                }
+
+            entire_matrix <- object2@assays$RNA$counts
+
+            genelist_present <- 
+                new_gene_list[new_gene_list %in% rownames(entire_matrix)]
+
+            # percent_cells <- 
+            #     (length(genelist_present) / length(genelist$gene)) * 100
+            # if (percent_cells < 20.1) {
+            #     next
+            # }
+            cell_ranks <-
+                AUCell::AUCell_run(exprMat = entire_matrix,
+                                geneSets = genelist_present)
+            
+            object2[[s_cluster]] <- AUCell::getAUC(cell_ranks)[1,]
+
+            feature_plot <-
+                    FeaturePlot(object2,
+                                s_cluster,
+                                cols = c("#EEEEEE", "#ae0600"),
+                                min.cutoff = 0.1,
+                                pt.size = 1,
+                                order = TRUE) +
+                        coord_fixed() +
+                        ggtitle(str_c(s_cluster, group2))
+            big_featureplot_list[[s_cluster]][[group2]] <- feature_plot
+
+            Vln_plot <- 
+                VlnPlot(object2,
+                        features = s_cluster,
+                        pt.size = 0,
+                        group.by = "seurat_clusters") +
+                    ggtitle(str_c(s_cluster, " on  ", group2))
+
+            big_Vlnplot_list[[s_cluster]][[group2]] <- Vln_plot
+        }
+        big_panel_plot1 <- 
+            cowplot::plot_grid(dimplot1,
+                                plotlist = big_featureplot_list[[s_cluster]],
+                                ncol = 2)
+        big_panel_plot2 <- 
+            cowplot::plot_grid(dimplot1,
+                                plotlist = big_Vlnplot_list[[s_cluster]],
+                                ncol = 2)
+            
+        length_var <- 
+            if (length(big_featureplot_list) %% 2 == 1) {
+                length(big_featureplot_list) + 1
+            } else {
+                length(big_featureplot_list)
+            }
+
+        height <- (length_var/2 * 7) + 14
+        directory <-
+            str_c("output/figures/tumor_vs_stroma/",
+                    group1,
+                    "/tumor_degs_comparison")
+
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
+        ggsave(str_c(directory,
+                    "/cluster_",
+                    s_cluster,
+                    "aucell.png"),
+                plot = big_panel_plot1,
+                width = 14,
+                height = height,
+                limitsize = FALSE,
+                bg = "white")
+        ggsave(str_c(directory,
+                    "/cluster_",
+                    s_cluster,
+                    "vln.png"),
+                plot = big_panel_plot2,
+                width = 14,
+                height = height,
+                limitsize = FALSE,
+                bg = "white")
+    }
+}
+
+hist(genelist$percent_target_degs)
+```
+
 
 
 ## Annotate the cancer clusters manually
@@ -321,7 +549,7 @@ labelling the clusters based on the cell types and the cell cycle phase
     Kegg_graft_vs_host_disease,
     Kegg_autoimmune_thyroid_disease,
     Kegg_graft_vs_host_disease,
-    Kegg_Allograft _rejection,
+    Kegg_Allograft_rejection,
     Kegg_ccomplement_and_coagulation_cascades
     Reactome_Defensis pathways.
     reactome_interferon_gamma_signaling,
@@ -390,22 +618,25 @@ labelling the clusters based on the cell types and the cell cycle phase
     Reacton_interferon_alpha_beta_signalling : regulate NK cells activation
 
 
-```{r annotate_cancer_clusters, echo = FALSE}
+## Heatmap fom previous annotations
 
+```{r previous_annotation_heatmap, echo = FALSE}
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.15,
-            "mm_prim_cancer_cells",         0.3,
-            "mm_mets_cancer_cells",         0.15,
+            "patient_prim_cancer_cells",    0.2,
+            "patient_mets_cancer_cells",    0.1,
+            "mm_prim_cancer_cells",         0.2,
+            "mm_mets_cancer_cells",         0.1,
             "xeno_prim_human",              0.15,
-            "xeno_mets_human",              0.15)
+            "xeno_mets_human",              0.15,
+            "dogs_prim_cancer_cells",       0.25,
+            "dogs_mets_cancer_cells",       0.15)
 
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
     res_value <- object_list$res_value[i]
 
-    object2 <-
+    object <-
         qs::qread(
             str_c(
                 "output/seurat_objects/tumor_vs_stroma/",
@@ -415,8 +646,135 @@ for (i in seq_len(nrow(object_list))) {
         ) %>%
         FindClusters(resolution = res_value)
 
-    object$Ann_Level0 <- "Tumor"
-    object$Ann_Level1 <- "Tumor"
+    filename <-
+        system(paste0(
+            "ls output/metadata/celltype_tumor/",
+            group,
+            "_* | tail -n 1"),
+            intern = TRUE)
+
+    old_meta <- 
+        read_tsv(filename,
+        guess_max = Inf,
+        show_col_types = FALSE) %>%
+    select(cell_name, Ann_Level3) %>%
+    column_to_rownames(var = "cell_name") %>%
+    dplyr::rename(old_ann_level3 = Ann_Level3)
+
+    object <-
+        AddMetaData(object, metadata = old_meta)
+
+    table_clusters <-
+            table(object$seurat_clusters, object$old_ann_level3)
+    height <-
+        length(unique(object$seurat_clusters))
+    
+    width <-
+        length(unique(object$old_ann_level3))
+
+    heatmap_previous_celltypes <-
+        pheatmap::pheatmap(table_clusters,
+                            cluster_rows = FALSE,
+                            cluster_cols = FALSE,
+                            display_numbers = TRUE,
+                            #breaks = c(10000, 3000, 1000, 100, 10, 0),
+                            silent = TRUE,
+                            fontsize = 8,
+                            fontsize_number = 8,
+                            scale = "row",
+                            fontsize_row = 8,
+                            fontsize_col = 8,
+                            color = RColorBrewer::brewer.pal(5, name = "Reds"))
+
+    ggsave(str_c("output/figures/reclustering_tumors/",
+                group, 
+                "_heatmap_pre_celltype.png"),
+        plot = heatmap_previous_celltypes,
+        width = width,
+        height = (height),
+        bg = "white")
+
+}
+
+
+```
+
+
+## Annotate the cancer clusters manually based on the degs gsea
+
+```{r annotate_cancer_clusters, echo = FALSE}
+
+object_list <-
+    tribble(~group,                         ~res_value,
+            "patient_prim_cancer_cells",    0.2,
+            "patient_mets_cancer_cells",    0.1,
+            "mm_prim_cancer_cells",         0.2,
+            "mm_mets_cancer_cells",         0.1,
+            "xeno_prim_human",              0.15,
+            "xeno_mets_human",              0.15,
+            "dogs_prim_cancer_cells",       0.25,
+            "dogs_mets_cancer_cells",       0.15)
+
+
+i=2
+group <- object_list$group[i]
+res_value <- object_list$res_value[i]
+object <-
+    qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                    "patient_mets_cancer_cells",
+                    ".qs"))
+object <-
+    FindClusters(object,
+                    resolution = 0.35)
+
+table(object$seurat_clusters, object$scATOMIC_pred) %>%
+    as.data.frame() %>%
+    group_by(Var1) %>%
+    arrange(desc(Freq)) %>%
+    slice_head(n = 3) %>%
+    as.data.frame()
+
+dimplot_better(object,
+              group_by = "seurat_clusters") +
+    ggtitle("seurat_clusters")
+
+dimplot_better(object,
+              group_by = "scATOMIC_pred") +
+              NoLegend()
+
+cells <-
+    object %>%
+    subset(seurat_clusters == "8") %>%
+    colnames()
+
+DimPlot(object,
+        cells.highlight = cells)
+
+DimPlot(big_object,
+        cells.highlight = cells, raster=F)
+dimplot_better(big_object,
+              group_by = "new_annot_clust") +
+              NoLegend()
+
+
+
+
+for (i in seq_len(nrow(object_list))) {
+    group <- object_list$group[i]
+    res_value <- object_list$res_value[i]
+
+    object <-
+        qs::qread(
+            str_c(
+                "output/seurat_objects/tumor_vs_stroma/",
+                group,
+                ".qs"
+            )
+        ) %>%
+        FindClusters(resolution = res_value)
+
+    # object$Ann_Level0 <- "Tumor"
+    # object$Ann_Level1 <- "Tumor"
 
     sc_dimplot <-
         dimplot_better(object,
@@ -431,7 +789,7 @@ for (i in seq_len(nrow(object_list))) {
     object <-
         kill_cc(object,
                 show_plot = FALSE)
-    
+
     cc_dimplot <-
         dimplot_better(object,
                       group_by = "Phase") +
@@ -440,28 +798,30 @@ for (i in seq_len(nrow(object_list))) {
     if (group == "patient_prim_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("0" = "Tumor_Metabolic",    #metabolic phenotype
-                            "1" = "Tumor_ECM_Producing",   #collagen and ECM phenotype
-                            "2" = "Tumor_Proliferative",   #actively dividing G2M phase
-                            "3" = "Tumor_Ground",   
-                            "4" = "Tumor_Interractive",   #IL signalling, interractions, Interferon gamma 
-                            "5" = "Tumor_Interractive",  #Immune regulatory interraction, IL10
-                            "6" = "Tumor_Interractive", # or low quality
-                            "7" = "Tumor_Metabolic",
-                            "8" = "Tumor_Metabolic"))
+                          c("^0$" = "Tumor_Hyperactive",    
+                            "^1$" = "Tumor_ECM_Producing",   
+                            "^2$" = "Tumor_Proliferative",  
+                            "^3$" = "Tumor_Metabolic",   
+                            "^4$" = "Tumor_Ground",   
+                            "^5$" = "CAF",  
+                            "^6$" = "Tumor_Interractive", 
+                            "^7$" = "Osteoclast_TAMs",
+                            "^8$" = "Osteoblasts",
+                            "^9$" = "Tumor_Hyperactive",   #by the degs and fdl
+                            "^10$" = "Tumor_ECM_Producing"))  #by the degs and fdl
     }
     if (group == "patient_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                            c("0" = "Tumor_ECM_Producing",
-                            "1" = "Tumor_Ground",
-                            "2" = "Tumor_Proliferative",
-                            "3" = "Tumor_Ground",
-                            "4" = "Tumor_Interractive",
-                            "5" = "Tumor_Interractive",
-                            "6" = "Tumor_Ground",
-                            "7" = "Tumor_Interractive",
-                            "8" = "Tumor_Metabolic"))
+                            c("^0$" = "Tumor_ECM_Producing",
+                            "^1$" = "Tumor_Ground_or_neuronal",  #neuronal and ecm and ground
+                            "^2$" = "Tumor_Proliferative",  
+                            "^3$" = "Tumor_Ground",
+                            "^4$" = "Tumor_Interractive",
+                            "^5$" = "Tumor_Interractive",
+                            "^6$" = "Tumor_Ground",
+                            "^7$" = "Tumor_ECM_Producing",
+                            "^8$" = "CAF"))
     }
     if (group == "mm_prim_cancer_cells") {       #KEGG pathways are good to differentiate the clusters
         object$Ann_Level3 <-
@@ -506,11 +866,48 @@ for (i in seq_len(nrow(object_list))) {
                             "6" = "Tumor_Interractive"))
     }
 
-    object$Ann_Level2<- object$Ann_Level3
+    object$Ann_Level2 <- 
+        str_replace_all(object$Ann_Level3,
+                        c("^Osteoclast_TAMs$" = "Macrophages"))
+    object$Ann_Level1 <- 
+        str_replace_all(object$Ann_Level2,
+                        c("^CAF$" = "Mesenchymal",
+                          "^Osteoblasts$" = "Mesenchymal",
+                          "^Macrophages$" = "Immune_Myeloid",
+                          "^Osteoclast_TAMs$" = "Immune_Myeloid",
+                          "^Tumor_Proliferative$" = "Tumor",
+                          "^Tumor_Ground$" = "Tumor",
+                          "^Tumor_Interractive$" = "Tumor",
+                          "^Tumor_Metabolic$" = "Tumor",
+                          "^Tumor_ECM_Producing$" = "Tumor",
+                          "^Tumor_Hyperactive$" = "Tumor",
+                          "^Tumor_Ground_or_neuronal$" = "Tumor"))
+    
+    object$Ann_Level0 <- 
+        str_replace_all(object$Ann_Level1,
+                        c("^Immune_Myeloid$" = "Host",
+                          "^Epithelial_Endothelial$" = "Host",
+                          "^Immune_Lymphoid$" = "Host",
+                          "^Mesenchymal$" = "Host"))
 
-    annotation_dimplot <-
+    annotation_dimplot1 <-
         dimplot_better(object,
                      group_by = "Ann_Level3") +
+            NoLegend()
+    
+    annotation_dimplot2 <-
+        dimplot_better(object,
+                     group_by = "Ann_Level2") +
+            NoLegend()
+    
+    annotation_dimplot3 <-
+        dimplot_better(object,
+                     group_by = "Ann_Level1") +
+            NoLegend()
+    
+    annotation_dimplot4 <-
+        dimplot_better(object,
+                     group_by = "Ann_Level0") +
             NoLegend()
 
     panel_plots <-
@@ -518,8 +915,11 @@ for (i in seq_len(nrow(object_list))) {
             sc_dimplot,
             sample_dimplot,
             cc_dimplot,
-            annotation_dimplot,
-            nrow = 2
+            annotation_dimplot1,
+            annotation_dimplot2,
+            annotation_dimplot3,
+            annotation_dimplot4,
+            ncol = 2
         )
 
     ggsave(str_c("output/figures/tumor_vs_stroma/",
@@ -528,7 +928,7 @@ for (i in seq_len(nrow(object_list))) {
                 "final_annotation_plot.png"),
             plot = panel_plots,
             width = 14,
-            height = 14)
+            height = 28)
     directory <-
         str_c("output/seurat_objects/final_tumor_vs_stroma/")
     if (!dir.exists(directory)) {
@@ -538,7 +938,90 @@ for (i in seq_len(nrow(object_list))) {
               str_c("output/seurat_objects/final_tumor_vs_stroma/",
                     group,
                     ".qs"))
+
+    directory <-
+        str_c("output/metadata/celltype_tumor/")
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+
+    timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+
+    filename <- str_c("output/metadata/celltype_tumor/",
+                        group,
+                        "_",
+                        timestamp,
+                        ".tsv")
+
+    object@meta.data %>%
+    rownames_to_column(var = "cell_name") %>%
+    write_tsv(file = filename)
+
+    print(str_c("Finished processing ", "for ", group))
+
 }
+
+```
+
+# {{< include childqmds/mislabelled.qmd >}}
+### mislabelled cleanups
+Has to be done manually
+```{r cleanupids_and_save, echo = FALSE, eval = FALSE}
+# date
+Patient_prim <-
+    qs::qread(
+        str_c(
+            "output/seurat_objects/final_tumor_vs_stroma/",
+            "patient_prim_cancer_cells",
+            ".qs"
+        ))
+
+ids1 <-
+    Patient_prim@meta.data %>%
+    filter(Ann_Level3 == "CAF") %>%
+    rownames_to_column("cell_ids") %>%
+    select(cell_ids)
+    
+
+DimPlot(Patient_prim,
+        cells.highlight = ids1$cell_ids) 
+
+write_tsv(ids1,
+          "misc/mislabelled_ids/patient_prim/Epithelial_Endothelial_1.tsv")
+
+
+ids2 <-
+    Patient_prim@meta.data %>%
+    filter(Ann_Level3 == "Osteoblasts") %>%
+    rownames_to_column("cell_ids") %>%
+    select(cell_ids)
+
+DimPlot(Patient_prim,
+        cells.highlight = ids2$cell_ids)    
+
+write_tsv(ids2,
+          "misc/mislabelled_ids/patient_prim/Mesenchymal_1.tsv")
+
+# Date
+Patient_prim <-
+    qs::qread(
+        str_c(
+            "output/seurat_objects/final_tumor_vs_stroma/",
+            "patient_prim_cancer_cells",
+            ".qs"
+        ))
+
+ids1 <-
+    Patient_prim@meta.data %>%
+    filter(Ann_Level3 == "fibro") %>%
+    rownames()
+
+DimPlot(Patient_prim,
+        cells.highlight = ids1)
+
+write_tsv(ids1,
+          "misc/mislabelled_ids/patient_prim/Epithelial_Endothelial_2.tsv")
+
 
 ```
 

@@ -7,25 +7,37 @@ This will annotate celltypes for tumor and normal call
 #| fig.align: center
 #| echo: FALSE
 #| dependson: [annot_celltypes, read_metadata, dog_human_gene]
-#| eval: FALSE
+
 
 cancer_celltypes <- list(patient_prim = c("MSC",
                                           "Chondrocytes",
                                           "Tissue_stem_cells",
-                                          "Neurons"),
+                                          "Neurons",
+                                          "Osteoblasts"),
                         patient_mets = c("MSC",
                                          "Chondrocytes",
                                          "Tissue_stem_cells",
                                          "Osteoblasts",
                                          "Neurons",
-                                         "iPS_cells"),
+                                         "iPS_cells",
+                                         "Myofibroblasts",
+                                         "Mesothelial",
+                                         "Smooth_muscle_cells",
+                                         "Fibromyocyte"),
                         xeno_prim_human = c(),
                         xeno_mets_human = c(),
                         xeno_prim_mouse = c(),
                         xeno_mets_mouse = c(),
                         normal_bone = c(),
-                        mm_prim = c("Tumor_cells"),
-                        mm_mets = c("Tumor_cells"),
+                        mm_prim = c("Tumor_cells",
+                                    "Fibroblasts"),
+                        mm_mets = c("Tumor_cells",
+                                    "Neurons",
+                                    "Fibroblasts",
+                                    "Adipocytes",
+                                    "Alveolar_Fibroblast",
+                                    "Myo_Fibroblasts",
+                                    "Adventitial_Fibroblast"),
                         dogs_prim = c("Smooth_muscle_cells",
                                       "Tissue_stem_cells",
                                       "MSC",
@@ -37,7 +49,8 @@ cancer_celltypes <- list(patient_prim = c("MSC",
                                       "Tissue_stem_cells",
                                       "Mesothelial",
                                       "Neurons",
-                                      "Smooth_muscle_cells"))
+                                      "Smooth_muscle_cells",
+                                      "Osteoblasts"))
 
 annotations_cell_list <-
     list(patient_prim = c("B_cells",
@@ -197,6 +210,23 @@ for (group in c("patient_prim", "patient_mets",
         object <-
             subset(object, celltype_tumor_call != "kick")
     }
+
+    # mislabelled_cell_ids_normal <-
+    #     read_tsv(list.files(path = str_c("misc/mislabelled_ids/", group),
+    #                         pattern = "Epithelial_Endothelial|Mesenchymal|Immune_Lymphoid|Immune_Myeloid",
+    #                         full.names = TRUE)) %>%
+    #     distinct()
+
+    # object$celltype_tumor_call[object$cell %in% mislabelled_cell_ids_normal$cell] <- "normal_cells"
+
+    # mislabelled_cell_ids_tumor <-
+    #     read_tsv(list.files(path = str_c("misc/mislabelled_ids/", group),
+    #                         pattern = "Tumor",
+    #                         full.names = TRUE)) %>%
+    #     distinct()
+
+    # object$celltype_tumor_call[object$cell %in% mislabelled_cell_ids_tumor$cell] <- "cancer_cells"
+
     set.seed(199820)
     object <-
         object %>%
@@ -256,11 +286,29 @@ fdl_results <-
     force_directed_layout <- 
         run_fdl(sobject = object)
 
-    combined_fdl_plot <- 
+    combined_fdl_plot1 <- 
         dimplot_better(force_directed_layout,
                        group_by= "new_annot_clust",
                        reduction = "fdl") +
             NoLegend()
+    
+    combined_fdl_plot2 <-
+        dimplot_better(force_directed_layout,
+                       group_by = "celltype_tumor_call",
+                       reduction = "fdl") +
+            NoLegend()
+    
+    combined_fdl_plot3 <-
+        dimplot_better(force_directed_layout,
+                       group_by = "seurat_clusters",
+                       reduction = "fdl") +
+            NoLegend()
+    
+    comb_fdl_plots <-
+        patchwork::wrap_plots(combined_fdl_plot1,
+                            combined_fdl_plot2,
+                            combined_fdl_plot3,
+                            ncol = 2)
 
     directory <-
         str_c("output/figures/combined_plots/",
@@ -273,16 +321,16 @@ fdl_results <-
                 group,
                 "/",
                 "combined_fdl_plot.png"),
-            plot = combined_fdl_plot,
-            width = 10,
-            height = 10)
+            plot = comb_fdl_plots,
+            width = 16,
+            height = 16)
 })
 
 ```
 
 ## Annotation cleanup
 Make a list that replaces the celltype labels with more general labels
-```{r}
+```{r annotation_cleanups_singleR}
 Annotation_cleanup <-
     list(SingleR_Ann3_label = 
             c("^DC__DC_$" = "Dendritic_cells",
@@ -396,7 +444,11 @@ Annotation_cleanup <-
             "^GMP$" = "Progenitors",
             "^Progenitor cells$" = "Progenitors",
             "^Classical monocytes$" = "Classical_monocytes",
-            "^Erythroblast$" = "Progenitors"),
+            "^Erythroblast$" = "Progenitors",
+            "^Macrophage_monocyte_derived_S._aureus$" = "Macrophages",
+            "^iPS_cells_CRL2097_foreskin$" = "Progenitors",
+            "^Monocyte_F._tularensis_novicida$" = "Monocytes",
+            "^iPS_cells_adipose_stem_cells$" = "Progenitors"),
     SingleR_Ann2_label =
         c("^Fibroblasts_activated$" = "Fibroblasts",
             "^Fibroblasts_senescent$" = "Fibroblasts",
@@ -507,7 +559,8 @@ Annotation_cleanup <-
             "^Epithelial_cells$" = "Epithelial_Endothelial",
             "^Endothelial_cells$" = "Epithelial_Endothelial",
             "^Myelocyte$" = "Immune_Myeloid",
-            "^Mesothelium$" = "Mesenchymal"))
+            "^Mesothelium$" = "Mesenchymal",
+            "^Vein" = "Epithelial_Endothelial"))
 
 if (!dir.exists("misc")) {
     dir.create("misc", recursive = TRUE)
