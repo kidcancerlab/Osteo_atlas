@@ -486,17 +486,17 @@ gene_cell_percent_calc <- function(sobj,
 
 
     # get the number of cells in the cluster that express each geneskept
-    num_cells_expressed <- 
+    num_cells_expressed <-
         rowSums(GetAssayData(sub_obj,
                             layer = "counts") > 0) %>%
         as.data.frame() %>%
-        rownames_to_column("gene") %>% 
+        rownames_to_column("gene") %>%
         dplyr::rename(value = ".") %>%
         arrange(desc(value)) %>%
         mutate(percent = value / num_cells) %>%
         select(gene, percent) %>%
         rename({{target_col_name}} := "percent")
-    
+
     return(num_cells_expressed)
 }
 
@@ -506,24 +506,24 @@ degs_cutoff_percent <- function(sobj,
     non_target_cluster_no <-
         unique(sobj$seurat_clusters) %>%
         setdiff(target_cluster_no)
-    
+
     # get the number of cells in the cluster
     output_target <-
         gene_cell_percent_calc(sobj,
          target_cluster_no,
          target_col_name = "percent_target_degs")
-    
+
     output_non_target <-
         gene_cell_percent_calc(sobj,
                                non_target_cluster_no,
                                target_col_name = "percent_non_target_degs")
-    
+
     # combine the two dataframes
-    output_merged <- 
+    output_merged <-
         merge(output_target,
             output_non_target,
             by = "gene")
-    
+
     # return the output
     return(output_merged)
 }
@@ -555,7 +555,7 @@ run_degs <- function(sobject,
                            mc.preschedule = FALSE,
                            function(cluster_no) {
 
-        batch_df <- 
+        batch_df <-
             data.frame(sample_name = colnames(pseudobulk))
 
         batch_df_new <-
@@ -568,7 +568,7 @@ run_degs <- function(sobject,
             mutate(organism = sobject@meta.data[[organism_col]][[1]]) %>%
             mutate(cluster_no = str_replace_all(cluster_no, "-", "_"))
         #add the datasource and method as batch in batch_df_new from all_samples_csv for each sample_name
-        new_all_samples_csv <- 
+        new_all_samples_csv <-
             all_samples_csv %>%
             filter(sample_name %in% unique(sobject$sample_name)) %>%
             select(sample_name, method, data_source, model, location, organism)
@@ -633,7 +633,7 @@ run_degs <- function(sobject,
 # y <-
 #     x %>%
 #     filter(percent_target_degs > 0.1) %>%
-#     filter(percent_non_target_degs > 0.1) 
+#     filter(percent_non_target_degs > 0.1)
 # ggplot(data = x,
 #         mapping = aes(x = log10(percent_target_degs),
 #                      y = log10(percent_non_target_degs))) +
@@ -641,18 +641,18 @@ run_degs <- function(sobject,
 
 
 # plot1 <-
-#     hist(log10(x$percent_target_degs), 
-#         main = "Histogram of Data", 
-#         xlab = "Values", 
-#         ylab = "Frequency", 
-#         col = "skyblue", 
+#     hist(log10(x$percent_target_degs),
+#         main = "Histogram of Data",
+#         xlab = "Values",
+#         ylab = "Frequency",
+#         col = "skyblue",
 #         border = "black")
 # plot2 <-
-#     hist(log10(x$percent_non_target_degs), 
-#         main = "Histogram of Data", 
-#         xlab = "Values", 
-#         ylab = "Frequency", 
-#         col = "skyblue", 
+#     hist(log10(x$percent_non_target_degs),
+#         main = "Histogram of Data",
+#         xlab = "Values",
+#         ylab = "Frequency",
+#         col = "skyblue",
 #         border = "black")
 
 # ggplot(data = x,
@@ -684,7 +684,7 @@ run_gsea <- function(degs_result,
                            function(item) {
             gsea_input <- as.vector(degs_result[[item]]$log2FoldChange)
             names(gsea_input) <- degs_result[[item]]$gene
-            
+
             set.seed(199820)
             output <- fgsea::fgseaMultilevel(gsea_ref,
                                             gsea_input,
@@ -701,7 +701,7 @@ run_gsea <- function(degs_result,
                 ungroup() %>%
                 na.omit()
         })
-    names(gsea_output) <- names(degs_result)  
+    names(gsea_output) <- names(degs_result)
 
     return(gsea_output)
 }
@@ -950,12 +950,12 @@ make_panel_plot <- function(sobj,
     dimplot <- dimplot_better(sobj, group_by = comparison_col)
 
     degs_result <-
-        run_degs(sobject = sobj, 
+        run_degs(sobject = sobj,
                 comparison_col = comparison_col,
                 aggregate_by = aggregate_by,
                 organism_col = organism_col,
                 subset = subset,
-                batch_var = batch_var) 
+                batch_var = batch_var)
 
     if (dir.exists(paste0("output/degs/", label))) {
         unlink(paste0("output/degs/", label), recursive = TRUE)
@@ -1058,13 +1058,13 @@ make_panel_plot <- function(sobj,
     #if dogs conver the genes for human orthologs for gsea
     if (sobj$organism[1] == "dog") {
         degs_result <- lapply(degs_result, function(cluster_result) {
-            cluster_result$gene <- 
+            cluster_result$gene <-
                 orthologs$human_gene_ortholog[match(cluster_result$gene, orthologs$dog_gene_name)]
-            cluster_result <- 
+            cluster_result <-
                 cluster_result[!is.na(cluster_result$gene), ]
             return(cluster_result)
         })
-    } 
+    }
 
     for (i in seq_len(nrow(cat_tib))){
         category <- cat_tib$category[i]
@@ -1100,7 +1100,7 @@ make_panel_plot <- function(sobj,
                     mutate(cluster = paste("Cluster", x),
                             pathway_group = cat_expl)
             })
-        
+
         directory <-
             paste0("output/gsea/", group, "/", label)
         if (!dir.exists(directory)) {
@@ -1122,7 +1122,7 @@ make_panel_plot <- function(sobj,
     # Drop in code to make heatmap here
         n_paths_per_cluster <- 20
 
-        use_pathways <- 
+        use_pathways <-
             gsea_result %>%
             bind_rows() %>%
             group_by(cluster) %>%
@@ -1197,7 +1197,7 @@ make_panel_plot <- function(sobj,
             ggplotify::as.ggplot(heatmap_plots$Reactome),
             ncol = 2) +
         patchwork::plot_annotation(title = label)
-    
+
     directory <-
         paste0("output/figures/gsea/", group)
     if (!dir.exists(directory)) {
@@ -1426,8 +1426,9 @@ orthologs <-
     read_tsv("input/downloads/dog_human_gene_orthologs.txt")
 
 #| cache.vars: dog_to_human_setup
-dog_to_human_setup <- function(object,      
-                                harm_vars = c("sample_name",
+dog_to_human_setup <- function(object,
+                               run_harmony = TRUE,
+                               harm_vars = c("sample_name",
                                               "data_source",
                                               "location"),
                                 theta = c(7, 7, 7)) {
@@ -1435,12 +1436,12 @@ dog_to_human_setup <- function(object,
         GetAssayData(object,
                      slot = "counts")
 
-    number_of_ENSEMBL_genes <- 
+    number_of_ENSEMBL_genes <-
         sum(str_detect(rownames(raw_counts), "^ENSCAFG"))
 
     raw_counts_new <-
         raw_counts[rownames(raw_counts) %in% orthologs$dog_gene_name, ]
-    rownames(raw_counts_new) <- 
+    rownames(raw_counts_new) <-
         orthologs$human_gene_ortholog[match(rownames(raw_counts_new), orthologs$dog_gene_name)]
     new_seurat_object <-
         CreateSeuratObject(counts = raw_counts_new) %>%
@@ -1448,9 +1449,9 @@ dog_to_human_setup <- function(object,
     object <-
         new_seurat_object %>%
         process_seurat()
-    
-    if (length(unique(object$sample_name)) > 1 && ncol(object) > 50) {
-        object <- 
+
+    if (length(unique(object$sample_name)) > 1 && ncol(object) > 50 && run_harmony) {
+        object <-
             RunHarmony(object,
                         group.by.vars = harm_vars,
                         theta = theta) %>%
@@ -1492,7 +1493,7 @@ mouse_to_human_setup <- function(object) {
     object <-
         new_seurat_object %>%
         process_seurat()
-    
+
     object <-
         RunHarmony(object,
                     group.by.vars = c("sample_name",
