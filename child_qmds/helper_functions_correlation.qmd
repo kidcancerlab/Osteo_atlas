@@ -10,7 +10,7 @@
 #'
 #' @param aggregation_column Character. The column name in the metadata used
 #'  for aggregation. Default is "Ann_Level3".
-#' @param mouse_sample_regex Character. Regular expression to identify mouse
+#' @param mouse_regex Character. Regular expression to identify mouse
 #'  samples. Default is "mouse|^mm".
 #' @param qs_list List. A named list of paths to qs files of Seurat objects to
 #'  be pseudobulked and analyzed.
@@ -32,7 +32,7 @@
 #' \dontrun{
 #' gsea_on_pseuobulked_sobjs(
 #'     aggregation_column = "Ann_Level3",
-#'     mouse_sample_regex = "mouse|^mm",
+#'     mouse_regex = "mouse|^mm",
 #'     qs_list = my_qs_list,
 #'     figure_dir = "output/figures/stromal_species_correlations/",
 #'     corr_figure_name_stub = "celltype_correlation_",
@@ -44,7 +44,8 @@
 gsea_on_pseuobulked_sobjs <-
     function(
         aggregation_column = "Ann_Level3",
-        mouse_sample_regex = "mouse|^mm",
+        mouse_regex = "mouse|^mm",
+        dog_regex = "dogs",
         qs_list,
         figure_dir = "output/figures/stromal_species_correlations/",
         corr_figure_name_stub = "celltype_correlation_",
@@ -56,7 +57,6 @@ gsea_on_pseuobulked_sobjs <-
         stop("gsea_categories and qs_list must be provided.")
     }
 
-
     all_groups <- names(qs_list)
 
     # Pseudobulk all the sobjs in target folder, grouping by aggregate_by column
@@ -64,7 +64,8 @@ gsea_on_pseuobulked_sobjs <-
     s_objs_list <-
         pseudobulk_sobjs_by_col(
             aggregation_column = aggregation_column,
-            mouse_sample_regex = mouse_sample_regex,
+            mouse_regex = mouse_regex,
+            dog_regex = dog_regex,
             qs_list = qs_list,
             parallel_threads = parallel_threads
         ) |>
@@ -133,7 +134,7 @@ gsea_on_pseuobulked_sobjs <-
 #'
 #' @param aggregation_column A character string specifying the column to
 #'  aggregate by. Default is "Ann_Level3".
-#' @param mouse_sample_regex A character string specifying the regex pattern to
+#' @param mouse_regex A character string specifying the regex pattern to
 #'  identify mouse samples. Default is "mouse|^mm".
 #' @param qs_list A named list of file paths to serialized Seurat objects
 #'  (in .qs format).
@@ -157,7 +158,7 @@ gsea_on_pseuobulked_sobjs <-
 #' )
 #' pseudobulk_sobjs <- pseudobulk_sobjs_by_col(
 #'     aggregation_column = "cell_type",
-#'     mouse_sample_regex = "mouse|^mm",
+#'     mouse_regex = "mouse|^mm",
 #'     qs_list = qs_list,
 #'     parallel_threads = 4
 #' )
@@ -165,7 +166,8 @@ gsea_on_pseuobulked_sobjs <-
 pseudobulk_sobjs_by_col <-
     function(
         aggregation_column = "Ann_Level3",
-        mouse_sample_regex = "mouse|^mm",
+        mouse_regex = "mouse|^mm",
+        dog_regex = "dogs",
         qs_list,
         parallel_threads = 4
     ) {
@@ -181,6 +183,7 @@ pseudobulk_sobjs_by_col <-
                         qs::qread(y)
                     }
                 )
+
             if (length(s_obj_list) > 0) {
                 s_obj <-
                     merge(s_obj_list[[1]], y = s_obj_list[-1]) |>
@@ -189,11 +192,18 @@ pseudobulk_sobjs_by_col <-
                 Seurat::Idents(s_obj) <- aggregation_column
 
                 # Convert the gene names to human if mouse data
-                if (grepl(mouse_sample_regex, x)) {
+                if (grepl(mouse_regex, x)) {
                     s_obj <-
                         convert_sobj_gene_name_species(
                             s_obj,
                             from = "mouse",
+                            to = "human"
+                        )
+                } else if (grepl(dog_regex, x)) {
+                    s_obj <-
+                        convert_sobj_gene_name_species(
+                            s_obj,
+                            from = "dog",
                             to = "human"
                         )
                 }
@@ -255,43 +265,36 @@ pseudobulk_sobjs_by_col <-
 convert_sobj_gene_name_species <- function(s_obj,
                                            from = "mouse",
                                            to = "human") {
-    # Pull the raw counts out
-    # raw_counts <-
-    #     Seurat::GetAssayData(s_obj, layer = "counts")
-
-    keep_key_df <- data.frame(gene = rownames(s_obj))
     if (from == "mouse" && to == "human") {
-        keep_key_df <-
-            keep_key_df |>
-            dplyr::mutate(
-                gene = (nichenetr::convert_mouse_to_human_symbols(gene))
-            ) |>
-            dplyr::group_by(gene) |>
-            mutate(n = dplyr::n()) |>
-            mutate(keep = dplyr::if_else(!is.na(gene) & n == 1, TRUE, FALSE))
-
-    } else if (from == "human" && to == "mouse") {
-        keep_key_df <-
-            keep_key_df |>
-            dplyr::mutate(
-                gene = nichenetr::convert_human_to_mouse_symbols(gene)
-            ) |>
-            dplyr::group_by(gene) |>
-            mutate(n = dplyr::n()) |>
-            mutate(keep = dplyr::if_else(!is.na(gene) & n == 1, TRUE, FALSE))
+        homologs <-
+            qs::qread("output/human_homologs_mm10.qs") %>%
+            dplyr::select(
+                external_gene_name,
+                hsapiens_homolog_associated_gene_name
+            )
+    } else if (from == "dog" && to == "human") {
+        homologs <-
+            qs::qread("output/human_homologs_dog.qs") %>%
+            dplyr::select(
+                external_gene_name,
+                hsapiens_homolog_associated_gene_name
+            )
     } else {
         stop("Invalid from/to conversion. Only mouse and human are supported.")
     }
 
-    s_obj <- s_obj[keep_key_df$keep, ]
-    rownames(s_obj) <-
-        keep_key_df |>
-        dplyr::filter(keep == TRUE) |>
-        dplyr::pull(gene)
+    counts <-
+        Seurat::GetAssayData(s_obj, layer = "counts") |>
+        as.data.frame() |>
+        tibble::rownames_to_column(var = "external_gene_name") |>
+        dplyr::left_join(homologs, by = "external_gene_name") |>
+        dplyr::select(-external_gene_name) |>
+        dplyr::filter(!is.na(hsapiens_homolog_associated_gene_name)) |>
+        tibble::column_to_rownames(var = "hsapiens_homolog_associated_gene_name")
 
     s_obj_new <-
         Seurat::CreateSeuratObject(
-            counts = Seurat::GetAssayData(s_obj, layer = "counts"),
+            counts = counts,
             meta.data = s_obj@meta.data
         )
 
@@ -564,4 +567,56 @@ save_fc_and_pairs_plot <-
     }
     return(fold_changes)
 }
+```
+
+## Get homologs
+```{r helper_corr_get_homologs}
+
+get_human_homologs <- function(species) {
+    gene_datasets <-
+        list(
+            "mm10" = "mmusculus_gene_ensembl",
+            #"hg38" = "hsapiens_gene_ensembl",
+            "dog" = "clfamiliaris_gene_ensembl"
+        )
+
+    database <-
+        biomaRt::useDataset(
+            dataset = gene_datasets[species],
+            mart = biomaRt::useEnsembl(biomart = "genes")
+        )
+
+    genes <-
+        biomaRt::getBM(
+            attributes = c(
+                "external_gene_name",
+                "hsapiens_homolog_associated_gene_name"
+            ),
+            mart = database
+        ) |>
+        tibble::as_tibble() |>
+        dplyr::filter(hsapiens_homolog_associated_gene_name != "" &
+                       external_gene_name != "") |>
+        dplyr::group_by(hsapiens_homolog_associated_gene_name) |>
+        dplyr::mutate(
+            n_hum = dplyr::n(),
+            keep_hum = ifelse(n_hum > 1, FALSE, TRUE)
+        ) |>
+        dplyr::group_by(external_gene_name) |>
+        dplyr::mutate(
+            n_base = dplyr::n(),
+            keep_base = ifelse(n_base > 1, FALSE, TRUE)
+        ) |>
+        dplyr::ungroup()
+
+    return(genes)
+}
+
+get_human_homologs("mm10") %>%
+    filter(keep_hum & keep_base) %>%
+    qs::qsave("output/human_homologs_mm10.qs")
+
+get_human_homologs("dog") %>%
+    filter(keep_hum & keep_base) %>%
+    qs::qsave("output/human_homologs_dog.qs")
 ```
