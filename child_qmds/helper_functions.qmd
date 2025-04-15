@@ -1495,7 +1495,6 @@ mouse_to_human_setup <- function(object) {
                                     "location"),
                     theta = c(7, 7, 7)) %>%
         process_seurat(reduction = "harmony")
-    }
 
     return(object)
 }
