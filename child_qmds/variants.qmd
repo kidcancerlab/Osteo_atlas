@@ -306,7 +306,7 @@ output <-
                         depth, "_dist.txt"
                     ))) {
                     s_obj <-
-                        add_snv_group_to_sobj(
+                        scanBit::add_snv_group_to_sobj(
                             s_obj,
                             snv_group_file = paste0(
                                 "output/id_tumor/snvs/",
@@ -324,7 +324,7 @@ output <-
 
                     if (length(normal_clusters) > 0) {
                         s_obj <-
-                            label_tumor_cells(
+                            scanBit::label_tumor_cells(
                                 s_obj,
                                 cell_group = "cell_group",
                                 snv_group_col = paste0(
@@ -382,7 +382,7 @@ output <-
                 NoLegend()
 
             tree_plots <-
-                assemble_tree_plots(
+                scanBit::assemble_tree_plots(
                     fig_folder = paste0(
                         "output/id_tumor/snvs/",
                         species, "_",
