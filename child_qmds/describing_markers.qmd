@@ -294,7 +294,7 @@ cell_markers <- list(
   Plasma_B = c("CD38", "SDC1", "PRDM1", "XBP1")    # Plasma B cells (retained canonical markers)
 )
 
-dotplot_list <- list()
+sobj_list <- list()
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
                 "xeno_prim_mouse", "xeno_mets_mouse",
@@ -307,42 +307,11 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                         "Immune_Lymphoid",
                         ".qs"))
 
-    dotplot <-
-        make_dotplot_panel(object = object,
-                            cell_markers = cell_markers,
-                            group_by = "Ann_Level3") 
-
-    dotplot_list[[group]] <- dotplot
+    sobj_list[[group]] <- object
 }
 
 # save the plots
 # combine the plots
-combined_plot <-
-    patchwork::wrap_plots(dotplot_list$patient_prim_normal_cells,
-                    dotplot_list$patient_mets_normal_cells,
-                    dotplot_list$mm_prim_normal_cells,
-                    dotplot_list$mm_mets_normal_cells,
-                    dotplot_list$xeno_prim_mouse,
-                    dotplot_list$xeno_mets_mouse,
-                    dotplot_list$dogs_prim_normal_cells,
-                    dotplot_list$dogs_mets_normal_cells,
-                    ncol = 1) +
-        patchwork::plot_annotation(title = "Lymphoid Compartment")
-ggsave(filename = str_c("output/figures/Final_Annotations/",
-                            "Lymphoid_Compartment_dotplots.png"),
-            plot = combined_plot,
-            width = 16,
-            height = 28,
-            limitsize = FALSE,
-            bg = "white")
-
-```
-
-
-## doing the same for the endothelial epithelial 
-```{r endo_epi_markers}
-sobj_list <- list()
-
 list_cell <-
     c(unique(sobj_list$patient_prim_normal_cells$Ann_Level3),
       unique(sobj_list$patient_mets_normal_cells$Ann_Level3),
@@ -352,7 +321,167 @@ list_cell <-
         unique(sobj_list$xeno_mets_mouse$Ann_Level3),
         unique(sobj_list$dogs_prim_normal_cells$Ann_Level3),
         unique(sobj_list$dogs_mets_normal_cells$Ann_Level3)) %>%
-    unique() 
+    unique()
+
+# make the cols
+celltypes <-
+    list_cell %>%
+    unlist() %>%
+    unique() %>%
+    str_replace("_", " ")
+
+cols <- 
+    as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
+
+cols <-
+    cols[1: length(celltypes)]
+
+names(cols) <- celltypes
+
+# the made cols are here
+cols <- list(
+    `CD4 T` = "#D43F3AFF",
+    `Naive T` = "#EEA236FF",
+    `CD8 T` = "#357EBDFF",
+    `NK cells` = "#5CB85CFF",
+    `Prolif T` = "#B8B8B8FF",
+    `T Reg` = "#9632B8FF",
+    `Mature B` = "#46B8DAFF",
+    `Plasma B` = "#90302DFF",
+    `Memory B` = "#A66D04FF"
+)
+
+cell_markers <- list(
+    `Prolif T` = c("PCLAF", "TYMS", "CENPF"),          # Proliferative T cells (cell cycle genes)
+    `T Reg` = c("IKZF2", "CTLA4", "FOXP3", "IL2RA"),   # Tregs (excluded TIGIT as non-exclusive)
+    `CD4 T` = c("CD44", "CD4", "CD69"),                # Activated CD4+ T cells (excluded CD3E/IL7R)
+    `CD8 T` = c("CD8A", "CD8B", "GZMA", "GZMK"),       # CD8+ T cells (cytotoxic markers)
+    `NK cells` = c("NKG7", "KLRD1", "KLRK1"),          # NK cells (excluded PRF1/GZMB for surface focus)
+    `Naive T` = c("TCF7", "FOXP1", "BACH2", "KLF2", "S1PR1"), # Naive T cells (excluded CD3E)
+    `Mature B` = c("MS4A1", "FCMR", "CD21"),           # Mature B cells (excluded CD27/CD80)
+    `Plasma B` = c("CD38", "SDC1", "PRDM1", "XBP1")    # Plasma B cells (retained canonical markers)
+)
+
+for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
+    
+    # get the sobj
+    object <-
+        qs::qread(str_c("output/seurat_objects/stromal_subtypes/",
+                        group, "/for_degs_",
+                        "Immune_Lymphoid",
+                        ".qs"))
+
+    object$plot_labels <-
+        object$Ann_Level3 %>%
+        as.character() %>%
+        gsub("_", " ", .)
+    
+    dimplot <-
+        DimPlot(object,
+                group.by = "plot_labels", # Use the plot_labels for better aesthetics
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = unlist(cols),
+                label.size = 5,
+                raster = F) +
+            coord_fixed() +
+            #scale_color_manual(values = cols) +
+            NoLegend() +
+            ggtitle(title_replacement[group][1]) +
+            theme(aspect.ratio=1)
+
+    unique_cells <-
+        unique(object$plot_labels) 
+
+    order_celtypes <-
+        cell_markers %>%
+        names()
+
+    order_features <- 
+        cell_markers %>%
+        unlist() %>%
+        as.character()
+
+    dotplot_markers <-
+        cell_markers[unique_cells] %>%
+        unlist() %>%
+        as.vector()
+
+    species <- 
+        object$organism[1]
+    
+    # Convert macrophage_features to mouse genes if species is mouse
+    if (species == "mouse") {
+        dotplot_markers <- 
+            nichenetr::convert_human_to_mouse_symbols(dotplot_markers) %>%
+            na.omit() %>%
+            as.character()
+        order_features <- 
+            nichenetr::convert_human_to_mouse_symbols(order_features) %>%
+            na.omit() %>%
+            unique()
+    }
+
+    # Filter for features present in the group
+    present_features <- 
+        intersect(dotplot_markers, rownames(object))
+
+    # Filter for features present in the group
+
+    order_stroma_subset <-
+        intersect(order_celtypes, unique(object$plot_labels))
+    
+
+    dotplot <-
+        DotPlot(object,
+            features = present_features,
+            group.by = "plot_labels",
+            cols = "RdBu",
+            dot.scale = 7,
+            col.max = 1.5) +
+            scale_y_discrete(limits = rev(order_stroma_subset)) +
+            scale_x_discrete(limits = intersect(order_features, present_features)) +
+            ggtitle(title_replacement[group][1]) +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+            coord_fixed() + 
+            labs(x = NULL, y = NULL)
+
+    dim_dot_plot <-
+        plot_grid(dimplot + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                dotplot + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                ncol = 1,
+                rel_heights = c(2, 1),
+                align = "v",
+                scale = 1) +
+        theme(plot.margin = margin(t = 1, r = 0, b = 0.5, l = 1.5, unit = "cm")) +
+        patchwork::plot_annotation(title = title_replacement[group][1],
+                                    theme = theme(plot.title = element_text(hjust = 0.5)))
+    
+    # save the plot
+    if (!dir.exists("output/figures/Final_Annotations/results2/supplementary/")) {
+        dir.create("output/figures/Final_Annotations/results2/supplementary/", recursive = TRUE)
+    }
+
+    ggsave(str_c("output/figures/Final_Annotations/results2/supplementary/",
+                group, "_dim_dot_plot.pdf"),
+            plot = dim_dot_plot,
+            width = 10,
+            height = 10,
+            bg = "white")
+}
+
+
+```
+
+
+## doing the same for the endothelial epithelial 
+```{r endo_epi_markers}
+
+sobj_list <- list()
 
 list_cell <- c("Endothelial_Artery", "Endothelial_Vein",
                 "Endothelial_Lymphatic", "Endothelial_Capillary", 
@@ -462,6 +591,54 @@ markers <- list(
     Tuft_cells = c("TRPM5", "POU2F3", "DCLK1", "AVIL")
 )
 
+
+
+cancer_celltype_list <- list()
+for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
+    
+    # get the sobj
+    object <-
+        qs::qread(str_c("output/seurat_objects/stromal_subtypes/",
+                        group, "/for_degs_",
+                        "Epithelial_Endothelial",
+                        ".qs"))
+
+     cancer_celltype_list[[group]] <- 
+        unique(object$Ann_Level3)
+}
+
+
+celltypes <-
+    cancer_celltype_list %>%
+    unlist() %>%
+    unique() %>%
+    str_replace("_", " ")
+
+cols <- 
+    as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
+
+cols <-
+    cols[1: length(celltypes)]
+
+
+names(cols) <- celltypes
+
+
+# the made cols are here
+cols <- list(
+    `Endothelial Artery` = "#D43F3AFF",
+    `Endothelial Capillary` = "#EEA236FF",
+    `Endothelial Vein` = "#357EBDFF",
+    `Endothelial Lymphatic` = "#5CB85CFF",
+    AT2 = "#B8B8B8FF",
+    AT1 = "#9632B8FF",
+    `Ciliated cells` = "#46B8DAFF",
+    `Tuft cells` = "#90302DFF"
+)
+
 #title replace
 title_replacement <- 
     list(patient_prim_normal_cells = "Patient Primary",
@@ -475,17 +652,16 @@ title_replacement <-
 
 #markers from dotplot examinations
 cell_markers <- list(
-    Endothelial_Artery = c("NOTCH4", "DLL4", "EFNB2", "SEMA3G"), #"SOX17", "HEY1"
-    Endothelial_Vein = c("NR2F2", "VCAM1", "ACKR1", "SELP"),  
-    Endothelial_Lymphatic = c("LYVE1", "PROX1", "FLT4", "PDPN"),  
-    Endothelial_Capillary = c("SPARC", "SGK1", "CLDN5", "PECAM1"),  #"RGCC",
+    `Endothelial Artery` = c("NOTCH4", "DLL4", "EFNB2", "SEMA3G"), #"SOX17", "HEY1"
+    `Endothelial Vein` = c("NR2F2", "VCAM1", "ACKR1", "SELP"),  
+    `Endothelial Lymphatic` = c("LYVE1", "PROX1", "FLT4", "PDPN"),  
+    `Endothelial Capillary` = c("SPARC", "SGK1", "CLDN5", "PECAM1"),  #"RGCC",
     AT1 = c("AQP5", "AGER", "CLDN18", "EMP2"),  #"HOPX", 
     AT2 = c("SFTPB", "SFTPC", "ABCA3", "NAPSA"),  
-    Ciliated_cells = c("DNAH9", "DNAH7", "FOXJ1", "CCDC39"),
-    Tuft_cells = c("GNG13", "DCLK1", "ALOX5")
+    `Ciliated cells` = c("DNAH9", "DNAH7", "FOXJ1", "CCDC39"),
+    `Tuft cells` = c("GNG13", "DCLK1", "ALOX5")
 )
 
-dotplot_list <- list()
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
                 "xeno_prim_mouse", "xeno_mets_mouse",
@@ -497,40 +673,104 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                         group, "/for_degs_",
                         "Epithelial_Endothelial",
                         ".qs"))
+    object$plot_labels <-
+        object$Ann_Level3 %>%
+        as.character() %>%
+        gsub("_", " ", .)
+    
+    dimplot <-
+        DimPlot(object,
+                group.by = "plot_labels", # Use the plot_labels for better aesthetics
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = unlist(cols),
+                label.size = 5,
+                raster = F) +
+            coord_fixed() +
+            #scale_color_manual(values = cols) +
+            NoLegend() +
+            ggtitle(title_replacement[group][1]) +
+            theme(aspect.ratio=1)
+        
+    unique_cells <-
+        unique(object$plot_labels) 
+
+    order_celtypes <-
+        cell_markers %>%
+        names()
+
+    order_features <- 
+        cell_markers %>%
+        unlist() %>%
+        as.character()
+
+    dotplot_markers <-
+        cell_markers[unique_cells] %>%
+        unlist() %>%
+        as.vector()
+
+    species <- 
+        object$organism[1]
+    
+    # Convert macrophage_features to mouse genes if species is mouse
+    if (species == "mouse") {
+        dotplot_markers <- 
+            nichenetr::convert_human_to_mouse_symbols(dotplot_markers) %>%
+            na.omit() %>%
+            as.character()
+        order_features <- 
+            nichenetr::convert_human_to_mouse_symbols(order_features) %>%
+            na.omit() %>%
+            unique()
+    }
+
+    # Filter for features present in the group
+    present_features <- 
+        intersect(dotplot_markers, rownames(object))
+
+    # Filter for features present in the group
+
+    order_stroma_subset <-
+        intersect(order_celtypes, unique(object$plot_labels))
+    
 
     dotplot <-
-        make_dotplot_panel(object = object,
-                            cell_markers = cell_markers,
-                            group_by = "Ann_Level3") 
+        DotPlot(object,
+            features = present_features,
+            group.by = "plot_labels",
+            cols = "RdBu",
+            dot.scale = 7,
+            col.max = 1.5) +
+            scale_y_discrete(limits = rev(order_stroma_subset)) +
+            scale_x_discrete(limits = intersect(order_features, present_features)) +
+            ggtitle(title_replacement[group][1]) +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+            coord_fixed() + 
+            labs(x = NULL, y = NULL)
 
-    dotplot_list[[group]] <- dotplot
-}
+    dim_dot_plot <-
+        plot_grid(dimplot + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                dotplot + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                ncol = 1,
+                rel_heights = c(2, 1),
+                align = "v",
+                scale = 1) +
+        theme(plot.margin = margin(t = 1, r = 0, b = 0.5, l = 1.5, unit = "cm")) +
+        patchwork::plot_annotation(title = title_replacement[group][1],
+                                    theme = theme(plot.title = element_text(hjust = 0.5)))
 
-# save the plots
-# combine the plots
-combined_plot <-
-    patchwork::wrap_plots(dotplot_list$patient_prim_normal_cells,
-                    dotplot_list$patient_mets_normal_cells,
-                    dotplot_list$mm_prim_normal_cells,
-                    dotplot_list$mm_mets_normal_cells,
-                    dotplot_list$xeno_prim_mouse,
-                    dotplot_list$xeno_mets_mouse,
-                    dotplot_list$dogs_prim_normal_cells,
-                    dotplot_list$dogs_mets_normal_cells,
-                    ncol = 1) +
-        patchwork::plot_annotation(title = "Lymphoid Compartment")
-ggsave(filename = str_c("output/figures/Final_Annotations/",
-                            "Epi_Endo_Compartment_dotplots.png"),
-            plot = combined_plot,
-            width = 16,
-            height = 28,
-            limitsize = FALSE,
+    if (!dir.exists("output/figures/Final_Annotations/results2/supplementary/")) {
+        dir.create("output/figures/Final_Annotations/results2/supplementary/", recursive = TRUE)
+    }
+    ggsave(str_c("output/figures/Final_Annotations/results2/supplementary/",
+                group, "_dim_dot_plot.pdf"),
+            plot = dim_dot_plot,
+            width = 10,
+            height = 10,
             bg = "white")
 
-DotPlot(object, features = "DCLK1", group.by = "new_annot_clust")
 ```
-
-
 
 
 
@@ -671,16 +911,18 @@ cell_markers <- list(
   Adv_CAFs = c("MCAM", "CD34", "ADAMTSL1", "TNNT3")  # Adventitial CAFs
 )
 
-# make the cols
-celltypes <- 
-    as.vector(names(cell_markers))
+# the made cols are here
+celltypes <-
+    names(cell_markers) %>%
+    str_replace("_", " ")
 
-cols <- c(plot_cols, sample(rainbow(length(celltypes))))
+cols <-
+    as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
 
 names(cols) <- celltypes
 
-dotplot_list <- list()
 
+#title replace  
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
                 "xeno_prim_mouse", "xeno_mets_mouse",
@@ -702,7 +944,7 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 label.box = T,
                 label = T,
                 repel = T,
-                cols = cols,
+                cols = unlist(cols),
                 label.size = 5,
                 raster=F) +
             coord_fixed() +
@@ -745,7 +987,7 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
 
     # Filter for features present in the group
     order_cell_subset <-
-        intersect(order_Tumors, unique(object$plot_labels))
+        intersect(celltypes, unique(object$plot_labels))
     
     dotplot <- 
         DotPlot(object,

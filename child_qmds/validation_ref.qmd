@@ -1111,7 +1111,7 @@ split_tumor_vs_stroma <- function(obj,
                             species = "human",
                             aggr_ref = TRUE,
                             with_tumor = TRUE,
-                            tissue_location) {
+                            tissue_location = tissue_location) {
     obj <- 
         AddModuleScore(obj,
                         features = list(markers),

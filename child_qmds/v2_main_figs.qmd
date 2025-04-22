@@ -2,7 +2,7 @@
 ## Result 1 figures
 ```{r prep_list_obj, echo = FALSE}
 # load the cancer final object
-cancer_sobj_list <-  list()
+cancer_celltype_list <-  list()
 cell_count_table <- tibble::tibble(celltypes = character())
 
 for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
@@ -14,7 +14,8 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                         group,
                         ".qs"))
 
-    cancer_sobj_list[[group]] <- object
+    cancer_celltype_list[[group]] <- 
+        unique(object$Ann_Level2)
                 
     cell_count <-
         object$Ann_Level3 %>%
@@ -42,17 +43,17 @@ title_replacement <-
         dogs_mets_cancer_cells = "Metastatic")
 
 celltypes <-
-    c(unique(cancer_sobj_list$patient_prim_cancer_cells$Ann_Level2),
-    unique(cancer_sobj_list$patient_mets_cancer_cells$Ann_Level2),
-    unique(cancer_sobj_list$mm_prim_cancer_cells$Ann_Level2),
-    unique(cancer_sobj_list$mm_mets_cancer_cells$Ann_Level2),
-    unique(cancer_sobj_list$xeno_prim_human$Ann_Level2),
-    unique(cancer_sobj_list$xeno_mets_human$Ann_Level2),
-    unique(cancer_sobj_list$dogs_prim_cancer_cells$Ann_Level2),
-    unique(cancer_sobj_list$dogs_mets_cancer_cells$Ann_Level2)) %>%
+    cancer_celltype_list %>%
+    unlist() %>%
     unique() %>%
     str_replace("Tumor_", "")
-cols <- c(plot_cols, sample(rainbow(length(celltypes))))
+
+cols <- 
+    as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
+
+cols <-
+    cols[1: length(celltypes)]
+
 
 names(cols) <- celltypes
 ```
@@ -106,7 +107,7 @@ for (i in seq_len(nrow(object_list))) {
                         color = "white") +
         geom_col(width = 1/2,
             color = "white") +
-        scale_fill_manual(values = cols) +
+        scale_fill_manual(values = unlist(cols)) +
         scale_y_continuous(expand = c(0, 0)) +
         scale_x_discrete(expand = c(0, 0)) +
         theme_minimal() +
@@ -122,7 +123,7 @@ for (i in seq_len(nrow(object_list))) {
     }
     # Save the Sankey plot
     ggsave(str_c("output/figures/Final_Annotations/results1/",
-                group3, "_sankey.png"),
+                group3, "_sankey.pdf"),
             plot = sanky_plot_ryan,
             width = 5,
             height = 7,
@@ -146,6 +147,15 @@ tumor_features <- list(
 )
 
 #set the order of the cells for the dotplot
+cols <- list(
+    Synthetic = "#D43F3AFF",
+    Fibrogenic = "#EEA236FF",
+    Progenitor = "#357EBDFF",
+    Proliferative = "#5CB85CFF",
+    Interactive = "#B8B8B8FF",
+    Apoptosis = "#9632B8FF"
+)
+
 order_Tumors <-
     c("Apoptosis", "Fibrogenic",
       "Interactive", "Progenitor", 
@@ -163,11 +173,12 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
-    
+
+    # Set the order of the tumors
     object$plot_labels <-
         object$Ann_Level3 %>%
-        as.character() %>%
-        gsub("Tumor_", "", .) # for plotting
+        gsub("Tumor_", "", .) %>%
+        factor(levels = order_Tumors) 
 
     dimplot <-
         DimPlot(object,
@@ -175,7 +186,7 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 label.box = T,
                 label = T,
                 repel = T,
-                cols = cols,
+                cols = unlist(cols),
                 label.size = 5,
                 raster=F) +
             coord_fixed() +
@@ -254,7 +265,7 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                                     theme = theme(plot.title = element_text(hjust = 0.5)))
 
     ggsave(str_c("output/figures/Final_Annotations/results1/",
-                group, "_dim_dot_plot.png"),
+                group, "_dim_dot_plot.pdf"),
             plot = dim_dot_plot,
             width = 9,
             height = 9,
@@ -268,3 +279,189 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
 ## Result 2
 ### UMAP and dotplot
 Need to decide on what to do for this
+
+```{r result2_main_figs, echo = FALSE}
+
+#plots for stromal panel
+cols <- list(
+    `B cells` = "#D43F3AFF",
+    CAFs = "#EEA236FF",
+    DC = "#357EBDFF",
+    `Endothelial cells` = "#5CB85CFF",
+    `Epithelial cells` = "#B8B8B8FF",
+    Mast = "#9632B8FF",
+    Monocytes = "#46B8DAFF",
+    Neutrophils = "#90302DFF",
+    `NK cells` = "#A66D04FF",
+    Pericytes = "#2D577FFF",
+    `Smooth muscle` = "#3E7E3EFF",
+    `T cells` = "#7D7D7DFF",
+    TAMs = "#6D1D87FF"
+)
+
+# make a dotplot
+dotplot_list <- list()
+dimplot_list <- list()
+dim_dot_plotlist <- list()
+
+#plots for stromal panel
+cell_markers <- 
+    list(CAFs = c("COL3A1", "COL5A2", "FBN1"),
+         `Smooth muscle` = c("ACTA2", "TAGLN", "MYH11"),
+         Pericytes = c("RGS5", "PDGFRB", "ACTA2"),
+         `T cells` = c("CD3D", "CD3E", "CD2"),
+         `NK cells` = c("NKG7", "KLRK1", "KLRD1"),
+         `Naive NKT` = c("TOX","ETS1", "IKZF1"),
+         DC = c("CD1C", "CD86", "CD83"),
+         TAMs = c("CSF1R", "CYBB", "MRC1"),
+         Monocytes = c("CD14", "LYZ", "S100A9"),
+         Neutrophils = c("S100A8", "FCGR3B", "NGAL"),
+         `B cells` = c("CD79B", "CD79A", "BLNK"),
+         Mast = c("TPSAB1", "TPSB2", "KIT"),
+         `Endothelial cells` = c("PECAM1", "VWF", "FLT1"),
+         `Epithelial cells`= c("PATJ", "EGFR", "CDH1"))
+
+celltypes <-
+    names(cell_markers)
+
+# Set the order of the cell types for the dotplot
+title_replacement <- 
+    list(patient_prim_normal_cells = "Patient Primary",
+        patient_mets_normal_cells = "Patient Metatatic",
+        mm_prim_normal_cells = "Mouse Primary",
+        mm_mets_normal_cells = "Mouse Metatatic",
+        xeno_prim_mouse = "Xenograft Primary",
+        xeno_mets_mouse = "Xenograft Metastatic",
+        dogs_prim_normal_cells = "Dog Primary",
+        dogs_mets_normal_cells = "Dog Metastatic")
+
+for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs")) 
+                        
+    object$plot_labels <-
+        object$Ann_Level2 %>%
+        as.character() %>%
+        gsub("_", " ", .)
+    
+    dimplot <-
+        DimPlot(object,
+                group.by = "plot_labels", # Use the plot_labels for better aesthetics
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = unlist(cols),
+                label.size = 5,
+                raster = F) +
+            coord_fixed() +
+            #scale_color_manual(values = cols) +
+            NoLegend() +
+            ggtitle(title_replacement[group][1]) +
+            theme(aspect.ratio=1)
+
+    dimplot_list[[group]] <- dimplot
+        
+    unique_cells <-
+        unique(object$plot_labels) 
+
+    order_celtypes <-
+        cell_markers %>%
+        names() %>%
+        str_remove_all("_")
+
+    order_features <- 
+        cell_markers %>%
+        unlist() %>%
+        as.character()
+
+    dotplot_markers <-
+        cell_markers[unique_cells] %>%
+        unlist() %>%
+        as.vector()
+
+    species <- 
+        object$organism[1]
+    
+    # Convert macrophage_features to mouse genes if species is mouse
+    if (species == "mouse") {
+        dotplot_markers <- 
+            nichenetr::convert_human_to_mouse_symbols(dotplot_markers) %>%
+            na.omit() %>%
+            as.character()
+        order_features <- 
+            nichenetr::convert_human_to_mouse_symbols(order_features) %>%
+            na.omit() %>%
+            unique()
+    }
+
+    # Filter for features present in the group
+    present_features <- 
+        intersect(dotplot_markers, rownames(object))
+
+    # Filter for features present in the group
+
+    order_stroma_subset <-
+        intersect(order_celtypes, unique(object$plot_labels))
+    
+
+    dotplot <-
+        DotPlot(object,
+            features = present_features,
+            group.by = "plot_labels",
+            cols = "RdBu",
+            dot.scale = 7,
+            col.max = 1.5) +
+            scale_y_discrete(limits = rev(order_stroma_subset)) +
+            scale_x_discrete(limits = intersect(order_features, present_features)) +
+            ggtitle(title_replacement[group][1]) +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+            coord_fixed() + 
+            labs(x = NULL, y = NULL)
+
+    dotplot_list[[group]] <- dotplot
+
+    dim_dot_plot <-
+        plot_grid(dimplot + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                dotplot + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                ncol = 1,
+                rel_heights = c(2, 1),
+                align = "v",
+                scale = 1) +
+        theme(plot.margin = margin(t = 1, r = 0, b = 0.5, l = 1.5, unit = "cm")) +
+        patchwork::plot_annotation(title = title_replacement[group][1],
+                                    theme = theme(plot.title = element_text(hjust = 0.5)))
+
+    if (!dir.exists("output/figures/Final_Annotations/results2/")) {
+        dir.create("output/figures/Final_Annotations/results2/")
+    }
+    ggsave(str_c("output/figures/Final_Annotations/results2/",
+                group, "_dim_dot_plot.png"),
+            plot = dim_dot_plot,
+            width = 10,
+            height = 10,
+            bg = "white")
+}
+
+# Combine the dotplots into a single panel
+
+dotplot_panel <- 
+    patchwork::wrap_plots(plotlist = dotplot_list,
+                            ncol = 1,
+                            heights = rep(1, length(dotplot_list))) +
+    patchwork::plot_annotation(title = "Stromal Cell Type Markers")
+
+# stash_plot(dotplot_panel, "stromal_marker_dotplot")
+
+ggsave(filename = "output/figures/Final_Annotations/stromal_marker_dotplot.pdf",
+        plot = dotplot_panel,
+        width = 14,
+        height = 35,
+        limitsize = FALSE,
+        bg = "white")
+
+```

@@ -1514,16 +1514,21 @@ mouse_to_human_setup <- function(object,
 ```{r dotplot_panel_plot}
 
 # function to make dotplot_panel
-make_dotplot_panel <- function(object,
+dotplot_better <- function(object,
                                 cell_markers,
                                 group_by) {
-    
+
     Idents(object) <- group_by
 
-    order_features <- 
-        cell_markers %>%
-        unlist() %>%
-        unique()
+    object[[group_by]] <- 
+        as.character(object[[group_by]]) %>%
+        as.character() %>%
+        gsub("_", " ", .)
+
+    # order_features <- 
+    #     cell_markers %>%
+    #     unlist() %>%
+    #     unique()
 
     order_celltypes <-
         cell_markers %>%
@@ -1532,7 +1537,7 @@ make_dotplot_panel <- function(object,
 
     unique_cells <-
         unique(object[[group_by]])[[1]]
-    
+
 
     # if (group %in% c("xeno_prim_human", "xeno_mets_human")) {
     #     tumor_features_cells <- xeno_markers

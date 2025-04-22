@@ -800,6 +800,49 @@ obj1 <-
 
 dimplot_better(obj1,
             group_by = c("seurat_clusters"))
+
+patient_prim <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim_cancer_cells.qs")
+
+
+
+snv_tumor_call <-
+    dimplot_better(patient_prim, group_by = "final_snv_call") + 
+    ggtitle("Single Nucleotide Variation")
+ggsave(filename = "output/figures/heather/snv_tumor_call.svg",
+    plot = snv_tumor_call,
+    width = 6,
+    height = 6,
+    limitsize = FALSE)
+
+scatomic_tumor_call <-
+    dimplot_better(patient_prim, group_by = "scatomic_tumor_call") +
+    ggtitle("scATOMIC")
+
+ggsave(filename = "output/figures/heather/scatomic_tumor_call.svg",
+    plot = scatomic_tumor_call,
+    width = 6,
+    height = 6,
+    limitsize = FALSE)
+
+scevan_tumor_call <-
+    dimplot_better(patient_prim, group_by = "scevan_tumor_call")  +
+    ggtitle("SCEVAN")
+ggsave(filename = "output/figures/heather/scevan_tumor_call.svg",
+    plot = scevan_tumor_call,
+    width = 6,
+    height = 6,
+    limitsize = FALSE)
+
+using_cellculture_tumorcell_in_singler<-
+    dimplot_better(patient_prim, group_by = "celltype_tumor_call") +
+    ggtitle("Cell Culture")
+ggsave(filename = "output/figures/heather/cell_culture_tumor_call.svg",
+    plot = using_cellculture_tumorcell_in_singler,
+    width = 6,
+    height = 6,
+    limitsize = FALSE)
+
 dimplot_better(obj1,
             group_by = c("scatomic_tumor_call",
                             "final_snv_call",

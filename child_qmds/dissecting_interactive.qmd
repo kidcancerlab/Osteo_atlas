@@ -114,7 +114,8 @@ for (group in c("patient_prim", "patient_mets")) {
                 group.by = "Ann_Level3",
                 cols = "RdBu",
                 scale = F,
-                features = c("CD74", "CD14", "CD68", "COL1A1", "COL1A2", "RUNX2")) +
+                features = c("CD74", "CD14", "CD68", "MSR1", "MRC1",
+                            "CD163", "COL1A1", "COL1A2", "RUNX2")) +
             theme(axis.text.x = element_text(angle = 90, hjust = 1))
     ggsave(str_c("output/figures/interactive_dissecting/",
                 group, "_cancer_cells",
@@ -185,7 +186,8 @@ for (group in c("patient_prim", "patient_mets")) {
             group.by = "Ann_Level3",
             cols = "RdBu",
             scale = F,
-            features = c("CD74", "CD14", "CD68", "COL1A1", "COL1A2", "RUNX2")) +
+            features = c("CD74", "CD14", "CD68", "MSR1", "MRC1",
+                            "CD163", "COL1A1", "COL1A2", "RUNX2")) +
         theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
     ggsave(str_c("output/figures/interactive_dissecting/",
