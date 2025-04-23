@@ -220,7 +220,6 @@ color_mapping = {"Synthetic": "#D43F3A",
                  "Apoptosis": "#9632B8"}
 
 hex_codes = ["#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF", "#9632B8FF", "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF", "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF", "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF", "#00FF00", "#00FFFF", "#FF00FF", "#0000FF", "#FFFF00", "#FF0000"]
-all_cmap = ListedColormap(hex_codes)
 
 ob_names = os.listdir("loom_output/anndata")
 
@@ -232,17 +231,17 @@ for ob in ob_names:
                                      basis = "umap",
                                      color = "seurat_clusters",
                                      show = False,
-                                     color_map = all_cmap,
+                                     palette = hex_codes,
                                      sort_order = False)
-    pyplot.savefig("figures/scvelo/yogesh_4_10_25/" + ob + "_umap_clusters.svg")
+    pyplot.savefig("figures/scvelo/yogesh_4_15_25/" + ob + "_umap_clusters.svg")
     #seurat_clusters in fdl
     scv.pl.velocity_embedding_stream(ad_ob,
                                      basis = "fdl",
                                      color = "seurat_clusters",
-                                     color_map = all_cmap,
+                                     palette = hex_codes,
                                      show = False,
                                      sort_order = False)
-    pyplot.savefig("figures/scvelo/yogesh_4_10_25/" + ob + "_fdl_clusters.svg")
+    pyplot.savefig("figures/scvelo/yogesh_4_15_25/" + ob + "_fdl_clusters.svg")
     #Specify color dict for colors if cancer object
     if ob.find("cancer") != -1 or ob.find("_human") != -1:
         #Strip Tumor_ from ann level 3
@@ -254,7 +253,7 @@ for ob in ob_names:
                                          palette = color_mapping,
                                          show = False,
                                          sort_order = False)
-        pyplot.savefig("figures/scvelo/yogesh_4_10_25/" + ob + "_umap_annotations.svg")
+        pyplot.savefig("figures/scvelo/yogesh_4_15_25/" + ob + "_umap_annotations.svg")
         #cell types in fdl
         scv.pl.velocity_embedding_stream(ad_ob,
                                          basis = "fdl",
@@ -262,24 +261,24 @@ for ob in ob_names:
                                          palette = color_mapping,
                                          show = False,
                                          sort_order = False)
-        pyplot.savefig("figures/scvelo/yogesh_4_10_25/" + ob + "_fdl_annotations.svg")
+        pyplot.savefig("figures/scvelo/yogesh_4_15_25/" + ob + "_fdl_annotations.svg")
     else:
         #Ann_Level3 in umap space
         scv.pl.velocity_embedding_stream(ad_ob,
                                          basis = "umap",
                                          color = "Ann_Level3",
-                                         color_map = all_cmap,
+                                         palette = hex_codes,
                                          show = False,
                                          sort_order = False)
-        pyplot.savefig("figures/scvelo/yogesh_4_10_25/" + ob + "_umap_annotations.svg")
+        pyplot.savefig("figures/scvelo/yogesh_4_15_25/" + ob + "_umap_annotations.svg")
         #cell types in fdl
         scv.pl.velocity_embedding_stream(ad_ob,
                                          basis = "fdl",
                                          color = "Ann_Level3",
-                                         color_map = all_cmap,
+                                         palette = hex_codes,
                                          show = False,
                                          sort_order = False)
-        pyplot.savefig("figures/scvelo/yogesh_4_10_25/" + ob + "_fdl_annotations.svg")
+        pyplot.savefig("figures/scvelo/yogesh_4_15_25/" + ob + "_fdl_annotations.svg")
 
 ```
 
