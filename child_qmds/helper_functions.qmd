@@ -1059,7 +1059,6 @@ make_panel_plot <- function(sobj, cluster_column, label, group) {
 }
 ```
 
-## Velocity Analysis Functions
 
 ### get_plot_list
 
@@ -1084,6 +1083,8 @@ get_plot_list <- function(ob_name) {
     return(plts)
 }
 ```
+
+## Velocity Analysis Functions
 
 ### Python Functions
 

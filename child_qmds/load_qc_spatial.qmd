@@ -115,10 +115,10 @@ for (ob in names(spatial_list)) {
     tmp <- spatial_list[[ob]]
     tmp$Tumor_Cumulative <- tmp$Tumor_Fibrogenic +
                              tmp$Tumor_Apoptosis +
-                             tmp$Tumor_HyperMetabolic +
                              tmp$Tumor_Interactive +
                              tmp$Tumor_Progenitor +
-                             tmp$Tumor_Proliferative
+                             tmp$Tumor_Proliferative +
+                             tmp$Tumor_Synthetic
     plot_list <- list("H&E" = SpatialDimPlot(tmp,
                                              pt.size.factor = 0) + NoLegend())
     tumor_feats <- grep("Tumor", colnames(tmp@meta.data), value = TRUE)
