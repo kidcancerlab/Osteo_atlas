@@ -60,6 +60,21 @@ for (i in seq_len(nrow(object_list))) {
         t() %>%
         scale(center = FALSE, scale = TRUE) %>%
         t()
+
+    #save the regulon activity
+    if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
+        dir.create(str_c("output/figures/regulon_analysis/", group))
+    }
+    #save the regulon activity
+    qs::qsave(regulon_activity_scaled,
+              str_c("output/figures/regulon_analysis/",
+                    group,
+                    "/regulon_activity_scaled.qs"))
+    #save the regulon activity
+    write_tsv(as.data.frame(regulon_activity_scaled),
+               str_c("output/figures/regulon_analysis/",
+                     group,
+                     "/regulon_activity_scaled.tsv"))
     
     #save the heatmap
     if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {

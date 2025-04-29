@@ -653,14 +653,14 @@ title_replacement <-
 #markers from dotplot examinations
 cell_markers <- list(
     `Endothelial Artery` = c("NOTCH4", "DLL4", "EFNB2", "SEMA3G"), #"SOX17", "HEY1"
-    `Endothelial Vein` = c("NR2F2", "VCAM1", "ACKR1", "SELP"),  
+    `Endothelial Vein` = c("NR2F2", "VCAM1", "ACKR1", "SELP", "EPHB4"),  
     `Endothelial Lymphatic` = c("LYVE1", "PROX1", "FLT4", "PDPN"),  
-    `Endothelial Capillary` = c("SPARC", "SGK1", "CLDN5", "PECAM1"),  #"RGCC",
+    `Endothelial Capillary` = c("CA4", "PRX", "SGK1", "CLDN5"),  #"RGCC",
     AT1 = c("AQP5", "AGER", "CLDN18", "EMP2"),  #"HOPX", 
     AT2 = c("SFTPB", "SFTPC", "ABCA3", "NAPSA"),  
-    `Ciliated cells` = c("DNAH9", "DNAH7", "FOXJ1", "CCDC39"),
-    `Tuft cells` = c("GNG13", "DCLK1", "ALOX5")
-)
+    `Ciliated cells` = c("DNAH9", "DNAH7", "FOXJ1", "CCDC39")
+) 
+
 
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
@@ -921,6 +921,7 @@ cols <-
 
 names(cols) <- celltypes
 
+dotplot_list <- list()
 
 #title replace  
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
@@ -997,7 +998,7 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 dot.scale = 7,
                 col.max = 1.5) +
                 scale_y_discrete(limits = rev(order_cell_subset)) +
-                scale_x_discrete(limits = intersect(order_features)) +
+                scale_x_discrete(limits = intersect(order_features, present_features)) +
                 #ggtitle(title_replacement[group][1]) +
                 theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
                         legend.title = element_text(hjust = 0.5, size=10),
