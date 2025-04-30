@@ -610,7 +610,6 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
         unique(object$Ann_Level3)
 }
 
-
 celltypes <-
     cancer_celltype_list %>%
     unlist() %>%
@@ -623,9 +622,7 @@ cols <-
 cols <-
     cols[1: length(celltypes)]
 
-
 names(cols) <- celltypes
-
 
 # the made cols are here
 cols <- list(
@@ -769,7 +766,7 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
             width = 10,
             height = 10,
             bg = "white")
-
+}
 ```
 
 
@@ -910,6 +907,23 @@ cell_markers <- list(
   Peribronchial_CAFs = c("MFAP5", "SOX6", "CLMP"),  # Peribronchial CAFs
   Adv_CAFs = c("MCAM", "CD34", "ADAMTSL1", "TNNT3")  # Adventitial CAFs
 )
+
+# finalized markers
+cell_markers <- list(
+    #activation_markers = c("FAP", "THY1", "PDGFRB", "S100A4"),
+    iCAFs = c("CXCL12", "CXCL14", "IL6", "CXCL1", "CXCL2"),   # Inflammatory CAFs
+    mCAFs = c("SPARC", "THBS2", "FN1", "POSTN"),  # Myofibroblastic CAFs
+    apCAFs = c("HLA-DRA", "CD74", "HLA-DRB1", "SLPI"),  # Antigen-presenting CAFs
+    pCAFs = c("MKI67", "TOP2A", "CDK1", "AURKB"),    # Proliferating CAFs
+    myCAFs = c("TAGLN", "ACTA2", "MYLK", "MYL9"),  # Myofibroblastic CAFs
+    Smooth_muscle = c("MYH11", "CNN1", "CNN1"),  # Smooth muscle cells
+    Pericytes = c("RGS5", "ABCC9", "ENPEP", "PLXDC1", "PDGFRB"),  # Pericytes
+    Alv_CAFs = c("NPNT", "CLIC5", "GPC3"),  # Alveolar CAFs
+    Subpleural_CAFs = c("CLDN11","MFAP4", "CTSK", "PRDX2"),  # Subpleural CAFs
+    Peribronchial_CAFs = c("SOX6", "CLMP", "ASPN", "HHIP"),  # Peribronchial CAFs
+    Adv_CAFs = c("MCAM", "CD34", "ADAMTSL1")  # Adventitial CAFs
+)
+ 
 
 # the made cols are here
 celltypes <-

@@ -433,21 +433,6 @@ object_list <-
             "dogs_prim_normal_cells",       0.2,
             "dogs_mets_normal_cells",       0.2)
 
-
-cell_markers <- list(
-    `Endothelial Artery` = c("NOTCH4", "DLL4", "EFNB2", "SEMA3G"), #"SOX17", "HEY1"
-    `Endothelial Vein` = c("NR2F2", "VCAM1", "ACKR1", "SELP", "EPHB4"),  
-    `Endothelial Lymphatic` = c("LYVE1", "PROX1", "FLT4", "PDPN"),  
-    `Endothelial Capillary` = c("CA4", "PRX", "SGK1", "CLDN5"),  #"RGCC",
-    AT1 = c("AQP5", "AGER", "CLDN18", "EMP2"),  #"HOPX", 
-    AT2 = c("SFTPB", "SFTPC", "ABCA3", "NAPSA"),  
-    `Ciliated cells` = c("DNAH9", "DNAH7", "FOXJ1", "CCDC39")
-) %>%
-    unlist() %>%
-    unique() %>%
-    as.character()
-
-
 for (item in seq_len(nrow(object_list))) {
     group <- object_list$group[item]
     res_value <- object_list$res_value[item]
@@ -735,7 +720,37 @@ for (item in seq_len(nrow(object_list))) {
     }
 }
 
-           
+cell_markers <- list(
+    #activation_markers = c("FAP", "THY1", "PDGFRB", "S100A4"),
+    iCAFs = c("CXCL12", "CXCL14", "IL6", "CXCL1", "CXCL2"),   # Inflammatory CAFs
+    mCAFs = c("SPARC", "THBS2", "FN1", "POSTN"),  # Myofibroblastic CAFs
+    apCAFs = c("HLA-DRA", "CD74", "HLA-DRB1", "SLPI"),  # Antigen-presenting CAFs
+    pCAFs = c("MKI67", "TOP2A", "CDK1", "AURKB"),    # Proliferating CAFs
+    myCAFs = c("TAGLN", "ACTA2", "MYLK", "MYL9"),  # Myofibroblastic CAFs
+    Smooth_muscle = c("MYH11", "CNN1", "CNN1"),  # Smooth muscle cells
+    Pericytes = c("RGS5", "ABCC9", "ENPEP", "PLXDC1", "PDGFRB"),  # Pericytes
+    Alv_CAFs = c("NPNT", "CLIC5", "GPC3"),  # Alveolar CAFs
+    Subpleural_CAFs = c("CLDN11","MFAP4", "CTSK", "PRDX2"),  # Subpleural CAFs
+    Peribronchial_CAFs = c("SOX6", "CLMP", "ASPN", "HHIP"),  # Peribronchial CAFs
+    Adv_CAFs = c("MCAM", "CD34", "ADAMTSL1")  # Adventitial CAFs
+) %>%
+    unlist() %>%
+    unique()
+
+
+DotPlot(s_obj,
+        features = cell_markers,
+        group.by = "seurat_clusters",
+        cols = c("RdBu"),
+        scale = F,
+        dot.scale = 6) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+    ggtitle("Cell type markers") +
+    NoLegend()
+
+
+
+
 ```
 
 
@@ -767,7 +782,7 @@ celltype_list <-
                                                             "^2$" = "Inflam_TAMs",
                                                             "^3$" = "TAMs",
                                                             "^4$" = "Inflam_TAMs",
-                                                            "^5$" = "myCAFs",
+                                                            "^5$" = "apCAFs",
                                                             "^6$" = "Prolif_TAMs",
                                                             "^7$" = "Prolif_TAMs",
                                                             "^8$" = "Monocytes",
@@ -826,7 +841,7 @@ celltype_list <-
                                                             "^4$" = "Inflam_TAMs",
                                                             "^5$" = "TAMs",
                                                             "^6$" = "TAMs",
-                                                            "^7$" = "myCAFs",
+                                                            "^7$" = "apCAFs",
                                                             "^8$" = "Scar_TAMs",
                                                             "^9$" = "Prolif_TAMs",
                                                             "^10$" = "Osteoclast_TAMs",
@@ -1065,7 +1080,7 @@ celltype_list <-
                                                     "^2$" = "Inflam_TAMs",
                                                     "^3$" = "Osteoclast_TAMs",
                                                     "^4$" = "TAMs",
-                                                    "^5$" = "mCAFs",
+                                                    "^5$" = "apCAFs",
                                                     "^6$" = "IFN_TAMs",
                                                     "^7$" = "DC2",
                                                     "^8$" = "Prolif_TAMs",
@@ -1109,7 +1124,7 @@ celltype_list <-
                                                 "^7$" = "Prolif_T",
                                                 "^8$" = "NK_cells",
                                                 "^9$" = "Osteoclast_TAMs",
-                                                "^10$" = "mCAFs",
+                                                "^10$" = "apCAFs",
                                                 "^11$" = "CD4_T",
                                                 "^12$" = "Prolif_T",
                                                 "^13$" = "DC1",
@@ -1359,6 +1374,7 @@ for (item in seq_len(nrow(object_list))) {
                             group,".qs"))
 
 }
+
 
 harmony_params <-
     list(patient_prim = list(group_by = c("sample_name",
