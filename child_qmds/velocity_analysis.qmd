@@ -61,7 +61,7 @@ velo_input$h5_path[!file.exists(velo_input$h5_path)] <-
           velo_input$sample_id,
           "/",
           velo_input$sample_id,
-          "_possorted_genome_bam.bam")[!file.exists(velo_input$h5_path)]
+          "_filtered_feature_bc_matrix.h5")[!file.exists(velo_input$h5_path)]
 velo_input$bam_path[!file.exists(velo_input$bam_path)] <-
     paste0(velo_input$data_path,
            velo_input$sample_id,
@@ -85,7 +85,7 @@ r_make_loom_files(input_table = velo_input,
 
 In order to analyze the data, we need to save a table of cell-level metadata, including barcodes, seurat clusters, and annotations.
 
-First we need to read in our objects for this. The most up to date object seems to change frequently, but as of 2/19 at 3:15 pm i'm using the ojbects in tumor_vs_stroma.
+First we need to read in our objects for this. I'm using the objects from final_tumor_vs_stroma
 
 ```{r}
 yogi_prefix <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/"
@@ -104,7 +104,7 @@ for (ob_name in obj_names) {
 
 #run fdl
 parallel::detectCores()
-obj_list_fdl <- parallel::mclapply(obj_list, FUN = run_fdl, mc.cores = parallel::detectCores())
+obj_list_fdl <- parallel::mclapply(obj_list, FUN = run_fdl, mc.cores = (parallel::detectCores() - 8))
 
 qs::qsave(obj_list_fdl, "output/seurat_objects/obj_list_04_04_2025.qs")
 ```
@@ -151,9 +151,6 @@ import re
 ### Make Objects and Plots
 
 ```{python analyze-mm-mets-cancer-cells}
-pyplot.use('Agg')
-
-
 #get names of loom files
 ob_names = os.listdir("loom_output/metadata")
 ob_names = list(filter(lambda x:"dog" not in x, ob_names))
@@ -170,37 +167,37 @@ def write_ob_and_plots(ob):
     calc_velo(merged_ad)
     merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
     print("calculated velocity and saved off " + ob)
-    merged_ad = anndata.read("loom_output/anndata/" + ob + ".ad")
-    #make the plots and save them off
-    #seurat clusters in umap space
-    scv.pl.velocity_embedding_stream(merged_ad,
-                                     basis = "umap",
-                                     color = "seurat_clusters",
-                                     show = False,
-                                     sort_order = False)
-    pyplot.savefig("figures/scvelo/" + ob + "_umap_clusters.svg")
-    #Ann_Level3 in umap space
-    scv.pl.velocity_embedding_stream(merged_ad,
-                                     basis = "umap",
-                                     color = "Ann_Level3",
-                                     show = False,
-                                     sort_order = False)
-    pyplot.savefig("figures/scvelo/" + ob + "_umap_annotations.svg")
-    #seurat_clusters in fdl
-    scv.pl.velocity_embedding_stream(merged_ad,
-                                     basis = "fdl",
-                                     color = "seurat_clusters",
-                                     show = False,
-                                     sort_order = False)
-    pyplot.savefig("figures/scvelo/" + ob + "_fdl_clusters.svg")
-    #cell types in fdl
-    scv.pl.velocity_embedding_stream(merged_ad,
-                                     basis = "fdl",
-                                     color = "Ann_Level3",
-                                     show = False,
-                                     sort_order = False)
-    pyplot.savefig("figures/scvelo/" + ob + "_fdl_annotations.svg")
-    return(ob + " is done")
+    # merged_ad = anndata.read("loom_output/anndata/" + ob + ".ad")
+    # #make the plots and save them off
+    # #seurat clusters in umap space
+    # scv.pl.velocity_embedding_stream(merged_ad,
+    #                                  basis = "umap",
+    #                                  color = "seurat_clusters",
+    #                                  show = False,
+    #                                  sort_order = False)
+    # pyplot.savefig("figures/scvelo/" + ob + "_umap_clusters.pdf")
+    # #Ann_Level3 in umap space
+    # scv.pl.velocity_embedding_stream(merged_ad,
+    #                                  basis = "umap",
+    #                                  color = "Ann_Level3",
+    #                                  show = False,
+    #                                  sort_order = False)
+    # pyplot.savefig("figures/scvelo/" + ob + "_umap_annotations.pdf")
+    # #seurat_clusters in fdl
+    # scv.pl.velocity_embedding_stream(merged_ad,
+    #                                  basis = "fdl",
+    #                                  color = "seurat_clusters",
+    #                                  show = False,
+    #                                  sort_order = False)
+    # pyplot.savefig("figures/scvelo/" + ob + "_fdl_clusters.pdf")
+    # #cell types in fdl
+    # scv.pl.velocity_embedding_stream(merged_ad,
+    #                                  basis = "fdl",
+    #                                  color = "Ann_Level3",
+    #                                  show = False,
+    #                                  sort_order = False)
+    # pyplot.savefig("figures/scvelo/" + ob + "_fdl_annotations.pdf")
+    # return(ob + " is done")
 
 
 ```
@@ -232,16 +229,20 @@ for ob in ob_names:
                                      color = "seurat_clusters",
                                      show = False,
                                      palette = hex_codes,
-                                     sort_order = False)
-    pyplot.savefig("figures/scvelo/yogesh_4_15_25/" + ob + "_umap_clusters.svg")
+                                     sort_order = False,
+                                     figsize = (7, 7),
+                                     legend_loc = "none")
+    pyplot.savefig("figures/scvelo/yogesh_04_29_25/" + ob + "_umap_clusters.svg")
     #seurat_clusters in fdl
     scv.pl.velocity_embedding_stream(ad_ob,
                                      basis = "fdl",
                                      color = "seurat_clusters",
                                      palette = hex_codes,
                                      show = False,
-                                     sort_order = False)
-    pyplot.savefig("figures/scvelo/yogesh_4_15_25/" + ob + "_fdl_clusters.svg")
+                                     sort_order = False,
+                                     figsize = (7, 7),
+                                     legend_loc = "none")
+    pyplot.savefig("figures/scvelo/yogesh_04_29_25/" + ob + "_fdl_clusters.svg")
     #Specify color dict for colors if cancer object
     if ob.find("cancer") != -1 or ob.find("_human") != -1:
         #Strip Tumor_ from ann level 3
@@ -252,16 +253,20 @@ for ob in ob_names:
                                          color = "Ann_Level3",
                                          palette = color_mapping,
                                          show = False,
-                                         sort_order = False)
-        pyplot.savefig("figures/scvelo/yogesh_4_15_25/" + ob + "_umap_annotations.svg")
+                                         sort_order = False,
+                                         figsize = (7, 7),
+                                         legend_loc = "none")
+        pyplot.savefig("figures/scvelo/yogesh_04_29_25/" + ob + "_umap_annotations.svg")
         #cell types in fdl
         scv.pl.velocity_embedding_stream(ad_ob,
                                          basis = "fdl",
                                          color = "Ann_Level3",
                                          palette = color_mapping,
                                          show = False,
-                                         sort_order = False)
-        pyplot.savefig("figures/scvelo/yogesh_4_15_25/" + ob + "_fdl_annotations.svg")
+                                         sort_order = False,
+                                         figsize = (7, 7),
+                                         legend_loc = "none")
+        pyplot.savefig("figures/scvelo/yogesh_04_29_25/" + ob + "_fdl_annotations.svg")
     else:
         #Ann_Level3 in umap space
         scv.pl.velocity_embedding_stream(ad_ob,
@@ -269,16 +274,20 @@ for ob in ob_names:
                                          color = "Ann_Level3",
                                          palette = hex_codes,
                                          show = False,
-                                         sort_order = False)
-        pyplot.savefig("figures/scvelo/yogesh_4_15_25/" + ob + "_umap_annotations.svg")
+                                         sort_order = False,
+                                         figsize = (7, 7),
+                                         legend_loc = "none")
+        pyplot.savefig("figures/scvelo/yogesh_04_29_25/" + ob + "_umap_annotations.svg")
         #cell types in fdl
         scv.pl.velocity_embedding_stream(ad_ob,
                                          basis = "fdl",
                                          color = "Ann_Level3",
                                          palette = hex_codes,
                                          show = False,
-                                         sort_order = False)
-        pyplot.savefig("figures/scvelo/yogesh_4_15_25/" + ob + "_fdl_annotations.svg")
+                                         sort_order = False,
+                                         figsize = (7, 7),
+                                         legend_loc = "none")
+        pyplot.savefig("figures/scvelo/yogesh_04_29_25/" + ob + "_fdl_annotations.svg")
 
 ```
 
