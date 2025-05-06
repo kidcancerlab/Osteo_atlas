@@ -363,6 +363,7 @@ for ob in ob_names:
 
 ```{python}
 sc_obs = os.listdir("loom_output/split_metadata/sc/")
+sc_obs = list(filter(lambda x:"dogs_mets" not in x, sc_obs))
 sn_obs = os.listdir("loom_output/split_metadata/sn/")
 os.makedirs("loom_output/split_ad/sc")
 os.makedirs("loom_output/split_ad/sn")
@@ -371,6 +372,7 @@ os.makedirs("figures/scvelo/split_methods/sn")
 
 for snob in sn_obs:
     write_ob_and_plots(ob = snob, method = "sn")
+
 
 for scob in sc_obs:
     write_ob_and_plots(ob = scob, method = "sc")
@@ -385,6 +387,8 @@ def write_ob_and_plots(ob, method):
     calc_velo(merged_ad)
     merged_ad.write(filename = "loom_output/split_ad/" + method + "/" + ob + ".ad")
     print("calculated velocity and saved off " + ob + " for " + method)
+    #remove "Tumor_" from ann_level 3
+    merged_ad.obs["Ann_Level3"] = merged_ad.obs["Ann_Level3"].str.replace("Tumor_", "")
     #Now start making plots
     scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "umap",
@@ -406,7 +410,7 @@ def write_ob_and_plots(ob, method):
                                      legend_loc = "none")
     pyplot.savefig("figures/scvelo/split_methods/" + method + "/" + ob + "_fdl_clusters.svg")
     #Now plot cell types
-    scv.pl.velocity_embedding_stream(ad_ob,
+    scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "umap",
                                      color = "Ann_Level3",
                                      palette = color_mapping,
@@ -416,7 +420,7 @@ def write_ob_and_plots(ob, method):
                                      legend_loc = "none")
     pyplot.savefig("figures/scvelo/split_methods/" + method + "/" + ob + "_umap_annotations.svg")
     #cell types in fdl
-    scv.pl.velocity_embedding_stream(ad_ob,
+    scv.pl.velocity_embedding_stream(merged_ad,
                                      basis = "fdl",
                                      color = "Ann_Level3",
                                      palette = color_mapping,
@@ -433,26 +437,28 @@ def write_ob_and_plots(ob, method):
 
 I'll only be doing this for cancer objects
 
-```{python}
-ob_names = list(filter(lambda x:"cancer" in x, ob_names))
-ob_names = list(filter(lambda x:"dogs_mets_cancer_cells" != x, ob_names))
+#### For Single Nucleus Data
 
-velo_gene_list = dict()
-ob_list = dict()
-for ob in ob_names:
-    tmp = anndata.read("loom_output/anndata/" + ob + ".ad")
-    ob_list[ob] = tmp
+```{python}
+sn_velo_genes = dict()
+sn_ob_dict = dict()
+# get velocity-driving genes
+for ob in sn_obs:
+    tmp = anndata.read("loom_output/split_ad/" + ob + ".ad")
+    sn_ob_dict[ob] = tmp
     scv.tl.rank_velocity_genes(tmp, groupby = "Ann_Level3", min_corr = 0.3)
     rank_genes = tmp.uns["rank_velocity_genes"]
     df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
-    velo_gene_list[ob] = df
-    df.to_csv("loom_output/velocity_genes/" + ob + ".csv", index = False)
+    sn_velo_genes[ob] = df
 
-#evaluate speed and confidence of velocity estimates
-for ob in ob_names:
-    tmp = ob_list[ob]
+
+# evaluate speed and confidence of velocity estimates
+for ob in sn_obs:
+    tmp = sn_ob_dict[ob]
     scv.tl.velocity_confidence(tmp)
     ob_list[ob] = tmp
+
+
 
 keys = "velocity_length", "velocity_confidence"
 scv.pl.scatter(ob_list["patient_mets_cancer_cells"], c = keys, perc = [5, 95], basis = "umap", cmap = "coolwarm")
@@ -482,24 +488,4 @@ df.style.background_gradient(cmap='Blues').format('{:.2g}')
 scv.pl.paga(tmp, basis='fdl', size=50, alpha=.1,
             min_edge_width=2, node_size_scale=1.5)
 pyplot.savefig("tmp.png")
-```
-
-Let's look at these genes as modules in our single cell data.
-
-```{r}
-tmp <- obj_list_fdl[["patient_mets_cancer_cells"]]
-tmp_velo_genes <-
-    read.table("loom_output/velocity_genes/patient_mets_cancer_cells_clusters.csv",
-               sep = ",",
-               header = TRUE)
-
-tmp <- AddModuleScore(tmp,
-                      features = as.list(tmp_velo_genes),
-                      name = colnames(tmp_velo_genes))
-
-FeaturePlot(tmp,
-            features = paste0(colnames(tmp_velo_genes), 1:12),
-            raster = FALSE,
-            cols = rev(brewer.pal(n = 11, name = "RdBu")),
-            ncol = 6) / r_dim_plot(tmp, group.by = "seurat_clusters", raster = FALSE)
 ```
