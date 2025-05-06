@@ -140,6 +140,7 @@ import scvelo as scv
 import pandas as pd
 import numpy as np
 import matplotlib as plt
+import igraph
 plt.use('Agg')
 from matplotlib import pyplot
 from matplotlib.colors import ListedColormap
@@ -296,16 +297,54 @@ for ob in ob_names:
 I'll only be doing this for cancer objects
 
 ```{python}
-tmp = anndata.read("loom_output/anndata/patient_mets_cancer_cells.ad")
-scv.tl.rank_velocity_genes(tmp, groupby="Ann_Level3", min_corr = 0.3)
-df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
-df.to_csv("loom_output/velocity_genes/patient_mets_cancer_cells.csv", index = False)
+ob_names = list(filter(lambda x:"cancer" in x, ob_names))
+ob_names = list(filter(lambda x:"dogs_mets_cancer_cells" != x, ob_names))
 
-#save it off now grouped by seurat clusters
-scv.tl.rank_velocity_genes(tmp, groupby="seurat_clusters", min_corr = 0.3)
-df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
-df.to_csv("loom_output/velocity_genes/patient_mets_cancer_cells_clusters.csv", index = False)
+velo_gene_list = dict()
+ob_list = dict()
+for ob in ob_names:
+    tmp = anndata.read("loom_output/anndata/" + ob + ".ad")
+    ob_list[ob] = tmp
+    scv.tl.rank_velocity_genes(tmp, groupby = "Ann_Level3", min_corr = 0.3)
+    rank_genes = tmp.uns["rank_velocity_genes"]
+    df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
+    velo_gene_list[ob] = df
+    df.to_csv("loom_output/velocity_genes/" + ob + ".csv", index = False)
 
+#evaluate speed and confidence of velocity estimates
+for ob in ob_names:
+    tmp = ob_list[ob]
+    scv.tl.velocity_confidence(tmp)
+    ob_list[ob] = tmp
+
+keys = "velocity_length", "velocity_confidence"
+scv.pl.scatter(ob_list["patient_mets_cancer_cells"], c = keys, perc = [5, 95], basis = "umap", cmap = "coolwarm")
+
+#we'll use paga to investigate the velocity trajectories
+for ob in ob_names:
+    tmp = ob_list[ob]
+    tmp.uns['neighbors']['distances'] = tmp.obsp['distances']
+    tmp.uns['neighbors']['connectivities'] = tmp.obsp['connectivities']
+    scv.tl.paga(tmp, groups='Ann_Level3')
+    ob_list[ob] = tmp
+
+#save object dict
+with open("output/python_objects/cancer_ad_list.pkl", "wb") as file:
+    pickle.dump(ob_list, file)
+
+tmp = ob_list["patient_mets_cancer_cells"]
+
+keys = ['velocity_length', 'velocity_confidence']
+df = tmp.obs.groupby('Ann_Level3')[keys].mean().T
+df.style.background_gradient(cmap='coolwarm', axis=1)
+
+
+df = scv.get_df(tmp, 'paga/transitions_confidence', precision=2).T
+df.style.background_gradient(cmap='Blues').format('{:.2g}')
+
+scv.pl.paga(tmp, basis='fdl', size=50, alpha=.1,
+            min_edge_width=2, node_size_scale=1.5)
+pyplot.savefig("tmp.png")
 ```
 
 Let's look at these genes as modules in our single cell data.

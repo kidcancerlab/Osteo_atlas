@@ -1170,7 +1170,7 @@ def save_velo_plots(ad_ob, ob_name):
 
 ## Scenic plus regulon analysis function
 ```{r scenic_function}
-"#| cache.vars = 'Run_GRA'
+#| cache.vars = 'Run_GRA'
 Run_GRA <- function(sobject,
                     idents,
                     org,      #organism "mgi" for mouse, "hgnc" for human
