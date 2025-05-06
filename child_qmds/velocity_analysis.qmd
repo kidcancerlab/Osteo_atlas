@@ -124,6 +124,73 @@ lapply(names(obj_list_fdl), function(obj_name) {
 })
 ```
 
+### Write off Metadata for snRNA vs scRNA
+
+I need to do this in order to check how consistent the single nuclei data's velocity estimates are with the single cell data's, since the tool was developed initially for single-cell. In order to not let this get out of hand, I'm going to write off this metadata into a directory in `loom_output/metadata/sn_vs_sc`. Similarly, I'm only going to do this for the objects strictly cancer objects.
+
+```{r}
+ob_names <- c(
+    "patient_mets_cancer_cells",
+    "patient_prim_cancer_cells",
+    "mm_mets_cancer_cells",
+    "mm_prim_cancer_cells",
+    "dogs_mets_cancer_cells",
+    "dogs_prim_cancer_cells"
+)
+
+split_ob_list <- list()
+for (ob in ob_names) {
+    split_ob_list[[ob]] <- qs::qread(
+        paste0(
+            yogi_prefix,
+            "output/seurat_objects/final_tumor_vs_stroma/",
+            ob,
+            ".qs"
+        )
+    )
+}
+
+# make metadata dir
+dir.create("loom_output/split_metadata/sn/", recursive = TRUE)
+dir.create("loom_output/split_metadata/sc/", recursive = TRUE)
+# now split objects and write metadata
+for (ob in ob_names) {
+    num_sn <- sum(split_ob_list[[ob]]$method == "single_nucleus")
+    num_sc <- sum(split_ob_list[[ob]]$method == "single_cell")
+
+    if (num_sn > 0) {
+        subset(split_ob_list[[ob]],
+            method == "single_nucleus") %>%
+            write_off_md(id_col = "sample_name",
+                    output_dir = paste0("loom_output/split_metadata/sn/",
+                                        ob),
+                    vars_to_keep = c("sample_name",
+                                    "seurat_clusters",
+                                    "Ann_Level1",
+                                    "Ann_Level2",
+                                    "Ann_Level3",
+                                    "method"),
+                    handle_n_of_1 = FALSE)
+    }
+    
+    if (num_sc > 0) {
+        subset(split_ob_list[[ob]],
+           method == "single_cell") %>%
+        write_off_md(
+            id_col = "sample_name",
+            output_dir = paste0("loom_output/split_metadata/sc/", ob),
+            vars_to_keep = c("sample_name",
+                            "seurat_clusters",
+                            "Ann_Level1",
+                            "Ann_Level2",
+                            "Ann_Level3",
+                            "method"),
+            handle_n_of_1 = FALSE
+        )
+    }
+}
+```
+
 ## Analyze .loom Files
 
 First I need to activate my conda environment. I set `eval = FALSE` because the environment path will change based on who is rendering this file.
@@ -289,6 +356,76 @@ for ob in ob_names:
                                          figsize = (7, 7),
                                          legend_loc = "none")
         pyplot.savefig("figures/scvelo/yogesh_04_29_25/" + ob + "_fdl_annotations.svg")
+
+```
+
+### Make Objects and Plots for Single Cell and Single Nucleus
+
+```{python}
+sc_obs = os.listdir("loom_output/split_metadata/sc/")
+sn_obs = os.listdir("loom_output/split_metadata/sn/")
+os.makedirs("loom_output/split_ad/sc")
+os.makedirs("loom_output/split_ad/sn")
+os.makedirs("figures/scvelo/split_methods/sc")
+os.makedirs("figures/scvelo/split_methods/sn")
+
+for snob in sn_obs:
+    write_ob_and_plots(ob = snob, method = "sn")
+
+for scob in sc_obs:
+    write_ob_and_plots(ob = scob, method = "sc")
+
+
+def write_ob_and_plots(ob, method):
+    print("starting on " + ob)
+    merged_ad=loom_to_an(obj_name = ob,
+                     loom_dir = "loom_output/samples",
+                     metadata_dir = "loom_output/split_metadata/" + method)
+    print("made " + ob + " , now calculating velocity")
+    calc_velo(merged_ad)
+    merged_ad.write(filename = "loom_output/split_ad/" + method + "/" + ob + ".ad")
+    print("calculated velocity and saved off " + ob + " for " + method)
+    #Now start making plots
+    scv.pl.velocity_embedding_stream(merged_ad,
+                                     basis = "umap",
+                                     color = "seurat_clusters",
+                                     show = False,
+                                     palette = hex_codes,
+                                     sort_order = False,
+                                     figsize = (7, 7),
+                                     legend_loc = "none")
+    pyplot.savefig("figures/scvelo/split_methods/" + method + "/" + ob + "_umap_clusters.svg")
+    #seurat_clusters in fdl
+    scv.pl.velocity_embedding_stream(merged_ad,
+                                     basis = "fdl",
+                                     color = "seurat_clusters",
+                                     palette = hex_codes,
+                                     show = False,
+                                     sort_order = False,
+                                     figsize = (7, 7),
+                                     legend_loc = "none")
+    pyplot.savefig("figures/scvelo/split_methods/" + method + "/" + ob + "_fdl_clusters.svg")
+    #Now plot cell types
+    scv.pl.velocity_embedding_stream(ad_ob,
+                                     basis = "umap",
+                                     color = "Ann_Level3",
+                                     palette = color_mapping,
+                                     show = False,
+                                     sort_order = False,
+                                     figsize = (7, 7),
+                                     legend_loc = "none")
+    pyplot.savefig("figures/scvelo/split_methods/" + method + "/" + ob + "_umap_annotations.svg")
+    #cell types in fdl
+    scv.pl.velocity_embedding_stream(ad_ob,
+                                     basis = "fdl",
+                                     color = "Ann_Level3",
+                                     palette = color_mapping,
+                                     show = False,
+                                     sort_order = False,
+                                     figsize = (7, 7),
+                                     legend_loc = "none")
+    pyplot.savefig("figures/scvelo/split_methods/" + method + "/" + ob + "_fdl_annotations.svg")
+
 
 ```
 
