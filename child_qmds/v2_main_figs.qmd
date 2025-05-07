@@ -465,3 +465,84 @@ ggsave(filename = "output/figures/Final_Annotations/stromal_marker_dotplot.pdf",
         bg = "white")
 
 ```
+
+## Result 3
+```{r TAMs_analysis_result, echo = FALSE}
+
+#plots for cancer panel
+cancer_plot_list <- list()
+barplot_list <- list()
+
+object_list <-
+    tribble(~group1,                         ~group2,                       ~group3,
+            "patient_prim_normal_cells",    "patient_mets_normal_cells",   "Human_Patients",
+            "mm_prim_normal_cells",         "mm_mets_normal_cells",         "Syngeneic_Mouse",
+            "dogs_prim_normal_cells",       "dogs_mets_normal_cells",       "Canine_Patients",
+            "xeno_prim_mouse",             "xeno_mets_mouse",             "Human Patient_Xenograft")
+
+
+    harm_mac_obj <-
+        qs::qread(str_c("output/seurat_objects/TAMs_objects/",
+                        group,
+                        ".qs"))
+
+
+# Create a list of groups
+for (i in seq_len(nrow(object_list))) {
+    group1 <- object_list$group1[i]
+    group2 <- object_list$group2[i]
+    group3 <- object_list$group3[i]
+
+    #subset the cell_count_table
+    cell_count_subset <-
+        cell_count_table %>%
+            select(celltypes, !!group1, !!group2) %>%
+            pivot_longer(cols = -celltypes,
+                    names_to = "group",
+                    values_to = "count") %>%
+            filter(count > 0) %>%
+            group_by(group) %>%
+            mutate(percent = count / sum(count) * 100) %>%
+            ungroup() %>%
+            mutate(group = str_replace_all(group, title_replacement),
+                    celltypes = str_remove_all(celltypes, "Tumor_"))
+
+    # Create a color palette
+    sanky_plot_ryan <-
+        ggplot(data = cell_count_subset %>% 
+               mutate(group = factor(group, 
+                                    levels = c("Primary", "Metastatic"))), 
+               aes(fill = celltypes,
+               x = group,
+               y = percent)) +
+        ggalluvial::geom_alluvium(aes(alluvium = celltypes),
+                        width = 1/2, 
+                        color = "white") +
+        geom_col(width = 1/2,
+            color = "white") +
+        scale_fill_manual(values = unlist(cols)) +
+        scale_y_continuous(expand = c(0, 0)) +
+        scale_x_discrete(expand = c(0, 0)) +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            axis.text.y = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 25),
+            panel.grid = element_blank())
+    # Add the title
+    if (!dir.exists("output/figures/Final_Annotations/results1/")) {
+        dir.create("output/figures/Final_Annotations/results1/", recursive = TRUE)
+    }
+    # Save the Sankey plot
+    ggsave(str_c("output/figures/Final_Annotations/results1/",
+                group3, "_sankey.pdf"),
+            plot = sanky_plot_ryan,
+            width = 5,
+            height = 7,
+            bg = "white")
+}
+
+
+
+```
