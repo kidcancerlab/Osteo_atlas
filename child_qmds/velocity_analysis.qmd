@@ -444,22 +444,34 @@ sn_velo_genes = dict()
 sn_ob_dict = dict()
 # get velocity-driving genes
 for ob in sn_obs:
-    tmp = anndata.read("loom_output/split_ad/" + ob + ".ad")
+    tmp = anndata.read("loom_output/split_ad/sn/" + ob + ".ad")
     sn_ob_dict[ob] = tmp
     scv.tl.rank_velocity_genes(tmp, groupby = "Ann_Level3", min_corr = 0.3)
     rank_genes = tmp.uns["rank_velocity_genes"]
     df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
     sn_velo_genes[ob] = df
+```
 
+#### For Single Cell Data
+```{python}
+sc_velo_genes = dict()
+sc_ob_dict = dict()
+# get velocity-driving genes
+for ob in sc_obs:
+    tmp = anndata.read("loom_output/split_ad/sc/" + ob + ".ad")
+    sc_ob_dict[ob] = tmp
+    scv.tl.rank_velocity_genes(tmp, groupby = "Ann_Level3", min_corr = 0.3)
+    rank_genes = tmp.uns["rank_velocity_genes"]
+    df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
+    sc_velo_genes[ob] = df
+```
 
+```{python}
 # evaluate speed and confidence of velocity estimates
 for ob in sn_obs:
     tmp = sn_ob_dict[ob]
     scv.tl.velocity_confidence(tmp)
     ob_list[ob] = tmp
-
-
-
 keys = "velocity_length", "velocity_confidence"
 scv.pl.scatter(ob_list["patient_mets_cancer_cells"], c = keys, perc = [5, 95], basis = "umap", cmap = "coolwarm")
 
