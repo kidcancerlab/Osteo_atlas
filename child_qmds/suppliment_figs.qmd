@@ -164,6 +164,83 @@ for (group in c("patient_prim", "patient_mets",
             height = 21)
 }
 
+
+# another way to show that there was descrepancy in tumor cell calling is using sanky plots
+cols <-
+    list("Tumor" = "#D43F3AFF",
+        "Normal" = "#EEA236FF",
+        "unknown" = "#357EBDFF")
+# make a sankey plot to show the tumor calling
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    metadata <- 
+        object@meta.data %>%
+        as.data.frame() %>%
+        rownames_to_column("cell_id") %>%
+        select(cell_id,
+               scatomic_tumor_call,
+               scevan_tumor_call,
+               final_snv_call) %>%
+        mutate(cell_id_number = row_number())
+
+    matadata_mimic <-
+        metadata %>%
+        pivot_longer(cols = -c(cell_id, cell_id_number),
+                names_to = "method",
+                values_to = "call") %>%
+        mutate(method = str_replace_all(method, c("scatomic_tumor_call" = "scATOMIC",
+                                                   "final_snv_call" = "SNV",
+                                                   "scevan_tumor_call" = "SCEVAN")),
+               call = str_replace_all(call, c("normal_cells" = "Normal",
+                                              "cancer_cells" = "Tumor"))) %>%
+        replace_na(list(call = "unknown"))
+
+    # make a sankey plot to show the tumor calling
+    sankey_plot <-
+        ggplot(matadata_mimic %>% 
+                mutate(method = factor(method, 
+                                        levels = c("scATOMIC", "SCEVAN", "SNV"))),
+                aes(x = method, stratum = call, alluvium = cell_id,
+                    y = cell_id_number,
+                    fill = call, label = call)) +
+        geom_flow() +
+        scale_fill_manual(values = unlist(cols)) +
+        geom_stratum(alpha = 1) +
+        scale_y_continuous(expand = c(0, 0)) +
+        scale_x_discrete(expand = c(0, 0)) +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            axis.text.y = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
+            panel.grid = element_blank()) +
+        ggtitle(str_c(group, " Tumor ID by methods"))
+    
+    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
+                    group, "/",
+                    "tumor_id_sankey.pdf"),
+            plot = sankey_plot,
+            bg = "white",
+            width = 5,
+            height = 7)
+    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
+                    group, "/",
+                    "tumor_id_sankey.png"),
+            plot = sankey_plot,
+            bg = "white",
+            width = 5,
+            height = 7)
+
+}
+
+
+
 ```
 
 # regulon combined plots heatmap
