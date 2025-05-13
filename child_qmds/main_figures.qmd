@@ -242,12 +242,12 @@ for (group in c(
 cancer_panel_plot <-
     patchwork::wrap_plots(cancer_plot_list$patient_prim_cancer_cells,
                           cancer_plot_list$patient_mets_cancer_cells,
-                            cancer_plot_list$mm_prim_cancer_cells,
-                            cancer_plot_list$mm_mets_cancer_cells,
-                            cancer_plot_list$xeno_prim_human,
-                            cancer_plot_list$xeno_mets_human,
-                            cancer_plot_list$dogs_prim_cancer_cells,
-                            cancer_plot_list$dogs_mets_cancer_cells,
+                        cancer_plot_list$dogs_prim_cancer_cells,
+                        cancer_plot_list$dogs_mets_cancer_cells,
+                        cancer_plot_list$xeno_prim_human,
+                        cancer_plot_list$xeno_mets_human,
+                        cancer_plot_list$mm_prim_cancer_cells,
+                        cancer_plot_list$mm_mets_cancer_cells,
                         ncol = 2) +
     patchwork::plot_annotation(title = "Tumor subpopulations Ann Level3")
 
@@ -269,16 +269,22 @@ ggsave(filename = "output/figures/Final_Annotations/tumor_panel_plots.pdf",
 cancer_bar_plot_panel <-
     patchwork::wrap_plots(barplot_list$patient_prim_cancer_cells,
                         barplot_list$patient_mets_cancer_cells,
-                        barplot_list$mm_prim_cancer_cells,
-                        barplot_list$mm_mets_cancer_cells,
-                        barplot_list$xeno_prim_human,
-                        barplot_list$xeno_mets_human,
                         barplot_list$dogs_prim_cancer_cells,
                         barplot_list$dogs_mets_cancer_cells,
+                        barplot_list$xeno_prim_human,
+                        barplot_list$xeno_mets_human,
+                        barplot_list$mm_prim_cancer_cells,
+                        barplot_list$mm_mets_cancer_cells,
                         ncol = 2) +
         patchwork::plot_annotation(title = "Cell Count per Sample")
 
-ggsave(filename = "output/figures/Final_Annotations/cell_count_barplot.pdf",
+ggsave(filename = "output/figures/Final_Annotations/tumor_cell_count_barplot.pdf",
+        plot = cancer_bar_plot_panel,
+        width = 14, # Adjust width for better visibility
+        height = 28,
+        limitsize = FALSE,
+        bg = "white")
+ggsave(filename = "output/figures/Final_Annotations/tumor_cell_count_barplot.png",
         plot = cancer_bar_plot_panel,
         width = 14, # Adjust width for better visibility
         height = 28,
