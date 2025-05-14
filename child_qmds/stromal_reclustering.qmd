@@ -738,18 +738,6 @@ cell_markers <- list(
     unique()
 
 
-DotPlot(s_obj,
-        features = cell_markers,
-        group.by = "seurat_clusters",
-        cols = c("RdBu"),
-        scale = F,
-        dot.scale = 6) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-    ggtitle("Cell type markers") +
-    NoLegend()
-
-
-
 
 ```
 
@@ -989,7 +977,7 @@ celltype_list <-
                                                                 "^2$" = "Endothelial_Artery")),
         mm_mets_normal_cells = list(Mesenchymal = c("^0$" = "Alv_CAFs",
                                                     "^1$" = "Alv_CAFs",
-                                                    "^2$" = "myCAFs",
+                                                    "^2$" = "Pericytes",
                                                     "^3$" = "Alv_CAFs",
                                                     "^4$" = "Adv_CAFs",
                                                     "^5$" = "Alv_CAFs",
@@ -1556,7 +1544,7 @@ for (item in seq_len(nrow(object_list))) {
                           "^Epithelial_Endothelial$" = "Host",
                           "^Immune_Lymphoid$" = "Host",
                           "^Mesenchymal$" = "Host"))
-    #dimplot_better(stroma_obj, group_by = "Ann_Level3") + NoLegend()
+    #dimplot_better(stroma_obj, group_by = "Ann_Level0") + NoLegend()
 
     qs::qsave(x = stroma_obj,
               file = str_c("output/seurat_objects/final_tumor_vs_stroma/",
