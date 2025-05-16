@@ -306,7 +306,6 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
 }
 
 
-
 #title replacement
 title_replacement <- 
     c(patient_prim_normal_cells = "Primary",
@@ -332,6 +331,8 @@ cols <-
 
 
 names(cols) <- celltypes
+
+
 ```
 
 

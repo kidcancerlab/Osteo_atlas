@@ -401,19 +401,29 @@ for (group in c("patient_prim", "patient_mets",
             pick_depth <- 
                 snv_depth %>%
                 filter(sample_name == samples) %>%
-                pull(use_snvs_depth) 
+                pull(use_snv_column) 
+
+            tumor_label <- 
+                snv_depth %>%
+                filter(sample_name == samples) %>%
+                pull(tumor_groups) %>%
+                str_split(",") %>%
+                unlist()
+
             if (!is.na(pick_depth)) {
                 snv_metadata <-
                     readr::read_tsv(tsv_file) %>%
-                    mutate(barcode = paste(samples, cell, sep = "_")) %>%
-                    select(barcode, paste0("snv_top_lvl_tumor_call_",pick_depth)) %>%
-                    filter(unique(barcode) %in% colnames(sobj)) %>%
-                    dplyr::rename(final_snv_call = paste0("snv_top_lvl_tumor_call_",pick_depth),
-                                cell = barcode) %>%
-                    mutate(final_snv_call = if_else(final_snv_call == "tumor",
-                                                    "cancer_cells",
-                                                    "normal_cells") %>%
-                        tidyr::replace_na(replace = "unknown"))
+                    select(cell, all_of(pick_depth))
+                snv_metadata$final_snv_call <-
+                    ifelse(snv_metadata[[pick_depth]] %in% tumor_label,
+                            "cancer_cells",
+                            "normal_cells")
+                snv_metadata <-
+                    snv_metadata %>%
+                    mutate(cell = paste(samples, cell, sep = "_")) %>%
+                    # column_to_rownames(var = "cell") %>%
+                    select(cell, final_snv_call) %>%
+                    mutate(final_snv_call = tidyr::replace_na(final_snv_call, replace = "unknown"))
             } else {
                 snv_metadata <-
                     sobj@meta.data %>%

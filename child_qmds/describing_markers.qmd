@@ -908,6 +908,377 @@ cell_markers <- list(
   Adv_CAFs = c("MCAM", "CD34", "ADAMTSL1", "TNNT3")  # Adventitial CAFs
 )
 
+
+# count the cells 
+# load the cancer final object
+stroma_celltype_list <-  list()
+cell_count_table <- tibble::tibble(celltypes = character())
+
+#title replace  
+for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/stromal_subtypes/",
+                        group, "/for_degs_",
+                        "Mesenchymal",
+                        ".qs"))
+        
+    stroma_celltype_list[[group]] <- 
+        unique(object$Ann_Level3)
+                
+    cell_count <-
+        object$Ann_Level3 %>%
+        table() %>%
+        as.data.frame() %>%
+        arrange(desc(Freq)) %>%
+        dplyr::rename(!!group := Freq,
+                      celltypes := ".")
+
+    cell_count_table <- cell_count_table %>%
+        dplyr::full_join(cell_count, by = "celltypes")
+}
+
+#title replacement
+title_replacement <- 
+    c(patient_prim_normal_cells = "Primary",
+        patient_mets_normal_cells = "Metastatic",
+        mm_prim_normal_cells = "Primary",
+        mm_mets_normal_cells = "Metastatic",
+        xeno_prim_mouse = "Primary",
+        xeno_mets_mouse = "Metastatic",
+        dogs_prim_normal_cells = "Primary",
+        dogs_mets_normal_cells = "Metastatic")
+
+celltypes <-
+    stroma_celltype_list %>%
+    unlist() %>%
+    unique() %>%
+    str_replace_all(c("Tumor_" =  "",
+                      "_" = " "))
+
+cols <- 
+    as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
+
+cols <-
+    cols[1: length(celltypes)]
+
+names(cols) <- celltypes
+
+# shanky plots
+object_list <-
+    tribble(~group1,                         ~group2,                       ~group3,
+            "patient_prim_normal_cells",    "patient_mets_normal_cells",   "Human_Patients",
+            "mm_prim_normal_cells",         "mm_mets_normal_cells",         "Syngeneic_Mouse",
+            "dogs_prim_normal_cells",       "dogs_mets_normal_cells",       "Canine_Patients",
+            "xeno_prim_mouse",             "xeno_mets_mouse",             "Patient_Xenograft")
+
+
+for (i in seq_len(nrow(object_list))) {
+    group1 <- object_list$group1[i]
+    group2 <- object_list$group2[i]
+    group3 <- object_list$group3[i]
+
+    # Create the Sankey plot
+    sankey_plot <- 
+        make_cellcount_sankey(cell_count_table,
+                               group1 = group1,
+                               group2 = group2) + ggtitle(group3)
+
+    # Save the plot
+    if (!dir.exists("output/figures/Final_Annotations/results2/supplementary/mesenchymal")) {
+        dir.create("output/figures/Final_Annotations/results2/supplementary/mesenchymal", recursive = TRUE)
+    }
+    
+    ggsave(str_c("output/figures/Final_Annotations/results2/supplementary/mesenchymal/",
+                group3, "_sankey_plot.pdf"),
+            plot = sankey_plot,
+            width = 7,
+            height = 7,
+            bg = "white")
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+make_cellcount_sankey <- function(cell_count_table,
+                                   group1,
+                                   group2) {    
+    #subset the cell_count_table
+    cell_count_subset <-
+        cell_count_table %>%
+            select(celltypes, !!group1, !!group2) %>%
+            pivot_longer(cols = -celltypes,
+                    names_to = "group",
+                    values_to = "count") %>%
+            filter(count > 0) %>%
+            group_by(group) %>%
+            mutate(percent = count / sum(count) * 100) %>%
+            ungroup() %>%
+            mutate(group = str_replace_all(group, title_replacement),
+                    celltypes = str_remove_all(celltypes, "Tumor_"),
+                    celltypes = str_replace_all(celltypes, c("_" = " ")))
+
+     # Create a color palette
+    sankey_plot <-
+        ggplot(data = cell_count_subset %>% 
+               mutate(group = factor(group, 
+                                    levels = c("Primary", "Metastatic"))), 
+               aes(fill = celltypes,
+               x = group,
+               y = percent)) +
+        ggalluvial::geom_alluvium(aes(alluvium = celltypes),
+                        width = 1/2, 
+                        color = "white") +
+        geom_col(width = 1/2,
+            color = "white") +
+        scale_fill_manual(values = unlist(cols)) +
+        scale_y_continuous(expand = c(0, 0)) +
+        scale_x_discrete(expand = c(0, 0)) +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            axis.text.y = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 25),
+            panel.grid = element_blank())
+    
+    return(sankey_plot)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
+                "mm_prim_normal_cells", "mm_mets_normal_cells",
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/stromal_subtypes/",
+                        group, "/for_degs_",
+                        "Mesenchymal",
+                        ".qs"))
+
+    dim_dot_plot <- 
+        make_dim_dot_plot(object, 
+                          title = title_replacement[group][1],
+                          group_by = "Ann_Level3")
+
+    # Save the plot
+    if (!dir.exists("output/figures/Final_Annotations/results2/supplementary/mesenchymal")) {
+        dir.create("output/figures/Final_Annotations/results2/supplementary/mesenchymal", recursive = TRUE)
+    }
+
+    ggsave(str_c("output/figures/Final_Annotations/results2/supplementary/mesenchymal/",
+                 group, "_dim_dot_plot.pdf"),
+            plot = dim_dot_plot,
+            width = 10,
+            height = 10,
+            bg = "white")
+}
+
+
+
+make_dim_dot_plot <- function(object,
+                              group_by,
+                              title) {
+    # Set the order of the cell types
+    object$plot_labels <- 
+        object[[group_by]][, 1] %>%
+        gsub("_", " ", .) %>%
+        str_replace_all("Endothelial cells", "Endothelial") %>%
+        str_replace_all("Epithelial cells", "Epithelial")
+
+    dimplot <-
+        DimPlot(object,
+                group.by = "plot_labels", # Use the plot_labels for better aesthetics
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = unlist(cols),
+                label.size = 5,
+                raster=F) +
+            coord_fixed() +
+            theme(aspect.ratio=1) +
+            theme_void() +
+            NoLegend() +
+            ggtitle(title)
+    
+    unique_cells <-
+        unique(object$plot_labels) 
+
+    order_celtypes <-
+        cell_markers %>%
+        names() %>%
+        str_remove_all("_")
+
+    order_features <- 
+        cell_markers %>%
+        unlist() %>%
+        as.character()
+
+    dotplot_markers <-
+        cell_markers[unique_cells] %>%
+        unlist() %>%
+        as.vector()
+
+    species <- 
+        object$organism[1]
+    
+    # Convert macrophage_features to mouse genes if species is mouse
+    if (species == "mouse") {
+        dotplot_markers <- 
+            nichenetr::convert_human_to_mouse_symbols(dotplot_markers) %>%
+            na.omit() %>%
+            as.character()
+        order_features <- 
+            nichenetr::convert_human_to_mouse_symbols(order_features) %>%
+            na.omit() %>%
+            unique()
+    }
+
+    # Filter for features present in the group
+    present_features <- 
+        intersect(dotplot_markers, rownames(object))
+
+    # Filter for features present in the group
+
+    order_stroma_subset <-
+        intersect(order_celtypes, unique(object$plot_labels))
+    
+
+    dotplot <-
+        DotPlot(object,
+            features = present_features,
+            group.by = "plot_labels",
+            cols = "RdBu",
+            dot.scale = 7,
+            col.max = 1.5) +
+            scale_y_discrete(limits = rev(order_stroma_subset)) +
+            scale_x_discrete(limits = intersect(order_features, present_features)) +
+            ggtitle(title) +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+            coord_fixed() + 
+            labs(x = NULL, y = NULL)
+
+    dim_dot_plot <-
+        plot_grid(dimplot + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                dotplot + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                ncol = 1,
+                rel_heights = c(2, 1),
+                align = "v",
+                scale = 1) +
+        theme(plot.margin = margin(t = 1, r = 0, b = 0.5, l = 1.5, unit = "cm")) +
+        patchwork::plot_annotation(title = title,
+                                    theme = theme(plot.title = element_text(hjust = 0.5)))
+    return(dim_dot_plot)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Create a list of groups
+for (i in seq_len(nrow(object_list))) {
+    group1 <- object_list$group1[i]
+    group2 <- object_list$group2[i]
+    group3 <- object_list$group3[i]
+
+    #subset the cell_count_table
+    cell_count_subset <-
+        cell_count_table %>%
+            select(celltypes, !!group1, !!group2) %>%
+            pivot_longer(cols = -celltypes,
+                    names_to = "group",
+                    values_to = "count") %>%
+            filter(count > 0) %>%
+            group_by(group) %>%
+            mutate(percent = count / sum(count) * 100) %>%
+            ungroup() %>%
+            mutate(group = str_replace_all(group, title_replacement),
+                    celltypes = str_remove_all(celltypes, "Tumor_"))
+
+    # Create a color palette
+    sanky_plot_ryan <-
+        ggplot(data = cell_count_subset %>% 
+               mutate(group = factor(group, 
+                                    levels = c("Primary", "Metastatic"))), 
+               aes(fill = celltypes,
+               x = group,
+               y = percent)) +
+        ggalluvial::geom_alluvium(aes(alluvium = celltypes),
+                        width = 1/2, 
+                        color = "white") +
+        geom_col(width = 1/2,
+            color = "white") +
+        scale_fill_manual(values = unlist(cols)) +
+        scale_y_continuous(expand = c(0, 0)) +
+        scale_x_discrete(expand = c(0, 0)) +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            axis.text.y = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 25),
+            panel.grid = element_blank())
+    # Add the title
+    if (!dir.exists("output/figures/Final_Annotations/results2/")) {
+        dir.create("output/figures/Final_Annotations/results2/", recursive = TRUE)
+    }
+    # Save the Sankey plot
+    ggsave(str_c("output/figures/Final_Annotations/results2/",
+                group3, "_sankey.pdf"),
+            plot = sanky_plot_ryan,
+            width = 5,
+            height = 7,
+            bg = "white")
+}
+
+
+
+
+
+
+
+
+
 # finalized markers
 cell_markers <- list(
     #activation_markers = c("FAP", "THY1", "PDGFRB", "S100A4"),
@@ -923,19 +1294,7 @@ cell_markers <- list(
     Peribronchial_CAFs = c("SOX6", "CLMP", "ASPN", "HHIP"),  # Peribronchial CAFs
     Adv_CAFs = c("MCAM", "CD34", "ADAMTSL1")  # Adventitial CAFs
 )
- 
 
-# the made cols are here
-celltypes <-
-    names(cell_markers) %>%
-    str_replace("_", " ")
-
-cols <-
-    as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
-
-names(cols) <- celltypes
-
-dotplot_list <- list()
 
 #title replace  
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
@@ -1025,23 +1384,5 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
     dotplot_list[[group]] <- dotplot
 }
 
-# combine the plots
-combined_plot <-
-    patchwork::wrap_plots(dotplot_list$patient_prim_normal_cells,
-                dotplot_list$patient_mets_normal_cells,
-                dotplot_list$mm_prim_normal_cells,
-                dotplot_list$mm_mets_normal_cells,
-                dotplot_list$xeno_prim_mouse,
-                dotplot_list$xeno_mets_mouse,
-                dotplot_list$dogs_prim_normal_cells,
-                dotplot_list$dogs_mets_normal_cells,
-                ncol = 1) +
-        patchwork::plot_annotation(title = "Mesenchymal Compartment")
-ggsave(filename = str_c("output/figures/Final_Annotations/",
-                            "Mesenchymal_Compartment_dotplots.png"),
-            plot = combined_plot,
-            width = 16,
-            height = 28,
-            limitsize = FALSE,
-            bg = "white")
+
 ```

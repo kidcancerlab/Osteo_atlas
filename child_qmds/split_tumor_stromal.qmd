@@ -136,11 +136,13 @@ for (group in c("patient_prim", "patient_mets",
            width = 21,
            height = 14)
     # save the plot as qs object
-    qs::qsave(combined_plots,
-              str_c("output/figures/combined_plots/",
-                    group,
-                    "/",
-                    "combined_plots.qs"))
+     ggsave(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "combined_plots.pdf"),
+           plot = combined_plots,
+           width = 21,
+           height = 14)
 }
 
 #make feature plots for all the groups
@@ -187,11 +189,13 @@ for (group in c("patient_prim", "patient_mets",
            width = 21,
            height = 14)
 
-    qs::qsave(featureplot1_tumor,
-              str_c("output/figures/combined_plots/",
-                    group,
-                    "/",
-                    "tumor_featureplots.qs"))
+    ggsave(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "tumor_featureplots.pdf"),
+           plot = featureplot1_tumor,
+           width = 21,
+           height = 14)
 
     ggsave(str_c("output/figures/combined_plots/",
                  group,
@@ -201,11 +205,13 @@ for (group in c("patient_prim", "patient_mets",
            width = 21,
            height = 14)
 
-    qs::qsave(featureplot2_immune,
-              str_c("output/figures/combined_plots/",
-                    group,
-                    "/",
-                    "immune_featureplots.qs"))
+    ggsave(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "immune_featureplots.pdf"),
+           plot = featureplot2_immune,
+           width = 21,
+           height = 14)
 }
 ```
 
@@ -266,63 +272,61 @@ harmony_params <-
                            theta = c(7)))
 
 count <- list()
-for (group in c("patient_prim", "patient_mets",
-                "mm_prim", "mm_mets",
-                "dogs_prim", "dogs_mets"
-                )) {
-    object <-
-        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
-                        group,
-                        ".qs"))
-    #dimplot_better(object, group_by = "celltype_tumor_call") + NoLegend()
-    if (any(c("S0200", "S0201") %in% object$sample_name)) {
-        object <- 
-            subset(object,
-                   sample_name != "S0200" & sample_name != "S0201")
-    }
+parallel::mclapply(
+    c("patient_prim", "patient_mets", "mm_prim", "mm_mets", "dogs_prim", "dogs_mets"),
+    function(group) {
+        object <-
+            qs::qread(str_c("output/seurat_objects/final_combined_sobjs/", group, ".qs"))
+        #dimplot_better(object, group_by = "celltype_tumor_call") + NoLegend()
+        if (any(c("S0200", "S0201") %in% object$sample_name)) {
+            object <- subset(object, sample_name != "S0200" & sample_name != "S0201")
+        }
 
-    for (cell_group_name in c("cancer_cells", "normal_cells")) {
-        sub_group <- str_c(group, "_", cell_group_name)
+        for (cell_group_name in c("cancer_cells", "normal_cells")) {
+            sub_group <- str_c(group, "_", cell_group_name)
 
-        s_obj <-
-            subset(x = object,
-                    celltype_tumor_call == cell_group_name) %>%
-            process_seurat()
-        # add the filter genes that are present in less than 1% of cells
-        min_prop_cells_expressing <- 0.01
-        n_cells_in_data <- length(Cells(s_obj))
-        cells_expressing_genes <-
-            rowSums(
-                GetAssayData(s_obj, layer = "counts") > 0
-            ) > min_prop_cells_expressing * n_cells_in_data
-
-        set.seed(199820)
-        if (cell_group_name == "normal_cells") {
             s_obj <-
-                s_obj[cells_expressing_genes, ] %>%
-                process_seurat() %>%
-                RunHarmony(group.by.vars = harmony_params[[group]]$group_by) %>%
-                process_seurat(reduction = "harmony")
-        } else {
-            s_obj <- 
-                s_obj[cells_expressing_genes, ] %>%
-                process_seurat() %>%
-                RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
-                            theta = harmony_params[[group]]$theta,
-                            lambda = harmony_params[[group]]$lambda) %>%
-                process_seurat(reduction = "harmony")
+                subset(x = object, celltype_tumor_call == cell_group_name) %>%
+                process_seurat()
+            # add the filter genes that are present in less than 1% of cells
+            min_prop_cells_expressing <- 0.01
+            n_cells_in_data <- length(Cells(s_obj))
+            cells_expressing_genes <-
+                rowSums(
+                    GetAssayData(s_obj, layer = "counts") > 0
+                ) > min_prop_cells_expressing * n_cells_in_data
+
+            set.seed(199820)
+            if (cell_group_name == "normal_cells") {
+                s_obj <-
+                    s_obj[cells_expressing_genes, ] %>%
+                    process_seurat() %>%
+                    RunHarmony(group.by.vars = harmony_params[[group]]$group_by) %>%
+                    process_seurat(reduction = "harmony")
+            } else {
+                s_obj <-
+                    s_obj[cells_expressing_genes, ] %>%
+                    process_seurat() %>%
+                    RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
+                                         theta = harmony_params[[group]]$theta,
+                                         lambda = harmony_params[[group]]$lambda) %>%
+                    process_seurat(reduction = "harmony")
+            }
+            directory <-
+                str_c("output/seurat_objects/pre_clean_tumor_vs_stroma/")
+            if (!dir.exists(directory)) {
+                dir.create(directory, recursive = TRUE)
+            }
+            #save the seurat object size
+            qs::qsave(s_obj, str_c("output/seurat_objects/pre_clean_tumor_vs_stroma/",
+                                                         group, "_", cell_group_name,
+                                                         ".qs"))
         }
-        directory <-
-            str_c("output/seurat_objects/pre_clean_tumor_vs_stroma/")
-        if (!dir.exists(directory)) {
-            dir.create(directory, recursive = TRUE)
-        }
-        #save the seurat object size
-        qs::qsave(s_obj, str_c("output/seurat_objects/pre_clean_tumor_vs_stroma/",
-                                group, "_", cell_group_name,
-                                ".qs"))
-    }
-}
+        NULL
+    },
+    mc.cores = parallelly::availableCores(),
+    mc.preschedule = FALSE
+)
 #dimplot_better(s_obj, group_by = "annotations") + NoLegend()
 ```
 
