@@ -70,17 +70,12 @@ for (i in seq_len(length(all_groups))) {
             plot = tree)
 
     #save as qs
-    qs::qsave(tree,
-              str_c("output/figures/tumor_vs_stroma/clustree/", group, ".qs"))
+    ggsave(str_c("output/figures/tumor_vs_stroma/clustree/", group, ".pdf"),
+            width = 10,
+            height = 10,
+            plot = tree)
 }
 
-cellss <-
-    subset(object1, seurat_clusters == "0") %>%
-    colnames()
-
-DimPlot(object,
-        cells.highlight = cellss,
-        label = TRUE)
 ```
 
 ##  Differential expression analysis for tumor cells and GSEA
@@ -1460,133 +1455,3 @@ for (i in seq_len(nrow(object_list))) {
 
 ```
 
-### Annotate other datasets using patient data
-```{r annotate_using_patient_data}
-harmony_params <-
-    list(patient_prim = list(group_by = c("sample_name",
-                                          "method",
-                                          "data_source"),
-                             theta = c(1, 5, 5),
-                             lambda = c(0.5, 0.5, 0.5)),
-        patient_mets = list(group_by = c("sample_name",
-                                         "method",
-                                         "data_source"),
-                            theta = c(1, 7, 7),
-                            lambda = c(0.5, 0.5, 0.5)),
-        xeno_prim_human = list(group_by = c("sample_name",
-                                            "location",
-                                            "data_source"),
-                               theta = c(2, 7, 15),
-                               lambda = c(0.1, 0.1, 0.1)),
-        xeno_mets_human = list(group_by = c("sample_name",
-                                            "method",
-                                            "data_source"),
-                               theta = c(2, 7, 15),
-                               lambda = c(0.7, 0.1, 0.1)),
-        xeno_prim_mouse = list(group_by = c("sample_name",
-                                            "data_source"),
-                                theta = c(7, 7),
-                                lambda = c(0.5, 0.5)),
-        xeno_mets_mouse = list(group_by = c("sample_name",
-                                            "method",
-                                            "data_source"),
-                               theta = c(7, 7, 7),
-                               lambda = c(0.5, 0.5, 0.5)),
-        mm_prim = list(group_by = c("sample_name",
-                                    "model"),
-                       theta = c(12, 12),
-                       lambda = c(0.1, 0.1)),
-        mm_mets = list(group_by = c("sample_name",
-                                    "model"),
-                       theta = c(12, 12),
-                       lambda = c(0.1, 0.1)),
-        dogs_prim = list(group_by = c("sample_name",
-                                       "data_source",
-                                       "location"),
-                          theta = c(7, 7, 7),
-                          lambda = c(0.5, 0.5, 0.5)),
-        dogs_mets = list(group_by = c("sample_name",
-                                    "location",
-                                    "data_source"),
-                          theta = c(7, 12, 12),
-                          lambda = c(0.1, 0.1, 0.1)),
-        normal_bone = list(group_by = c("sample_name"),
-                           theta = c(7)))
-
-patient_prim <-
-    qs::qread(
-        str_c(
-            "output/seurat_objects/final_tumor_vs_stroma/",
-            "patient_prim_cancer_cells",
-            ".qs"
-        ))
-
-patient_mets <-
-    qs::qread(
-        str_c(
-            "output/seurat_objects/final_tumor_vs_stroma/",
-            "patient_mets_cancer_cells",
-            ".qs"
-        ))
-
-object_list <-
-    tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.15,
-            "patient_mets_cancer_cells",    0.2,
-            "mm_prim_cancer_cells",         0.4,
-            "mm_mets_cancer_cells",         0.25,
-            "xeno_prim_human",              0.15,
-            "xeno_mets_human",              0.15,
-            "dogs_prim_cancer_cells",       0.1,
-            "dogs_mets_cancer_cells",       0.1)
-
-
-
-for (i in seq_len(nrow(object_list))) {
-    group <- object_list$group[i]
-    res_value <- object_list$res_value[i]
-
-    object <-
-        qs::qread(
-            str_c(
-                "output/seurat_objects/final_tumor_vs_stroma/",
-                group,
-                ".qs"
-            )
-        ) %>%
-        FindClusters(resolution = res_value)
-    
-    species <- object$organism[1]
-
-    if (species == "mouse") {
-        object1 <-
-            mouse_to_human_setup(object,
-                                harmony_params = )
-    }
-    else if (species == "dogs") {
-        object1 <-
-            dog_to_human_setup(object)
-    } else {
-        object1 <- object
-    }
-
-    if (group == "mm_prim_cancer_cells" || group == "xeno_prim_human"
-        || group == "dogs_prim_cancer_cells") {
-        ref_lung <- 
-            SingleR::SingleR(test = as.SingleCellExperiment(object1),
-                            ref = GetAssayData(patient_prim),
-                            labels = patient_prim$Ann_Level3,
-                            aggr.ref = TRUE)
-    } else {
-        ref_lung <- 
-            SingleR::SingleR(test = as.SingleCellExperiment(object1),
-                            ref = GetAssayData(patient_mets),
-                            labels = patient_mets$Ann_Level3,
-                            aggr.ref = TRUE)
-    }
-    object$Ann_Level3 <- ref_lung$labels
-
-
-}
-
-```

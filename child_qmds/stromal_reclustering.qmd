@@ -1648,29 +1648,16 @@ for (group in c(
             height = 16,
             limitsize = FALSE,
             bg = "white")
+    ggsave(filename = str_c("output/figures/Final_Annotations/",
+                            group,
+                            "/final_combo_plots.pdf"),
+            plot = all_plots,
+            width = 16,
+            height = 16,
+            limitsize = FALSE,
+            bg = "white")
 
-    # for (names in c("cancer_cells", "normal_cells")) {
-    #     if (file.exists(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-    #                         group,
-    #                         "_", names, ".qs"))) {
-    #         sub_obj <-
-    #             qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-    #                             group,
-    #                             "_", names, ".qs"))
-    #         sub_plot <- 
-    #             dimplot_better(sub_obj, group_by = "Ann_Level3") + NoLegend()
-    #         ggsave(filename = str_c("output/figures/Final_Annotations/",
-    #                                 group,
-    #                                 "/",
-    #                                 names,
-    #                                 "_AnnL3_plots.png"),
-    #                 plot = sub_plot,
-    #                 width = 8,
-    #                 height = 8,
-    #                 limitsize = FALSE,
-    #                 bg = "white")
-    #      }
-    # }
+
 }
 
 

@@ -343,43 +343,80 @@ object_list <-
             "dogs_prim_cancer_cells",         0.3,
             "dogs_mets_cancer_cells",         0.3)
 
-for (i in seq_len(nrow(object_list))) {
-    group <- object_list$group[i]
-    res_value <- object_list$res_value[i]
-    stromal_metadata <- list()
-    tumor_metadata <- list()
+parallel::mclapply(
+    seq_len(nrow(object_list)),
+    function(i) {
+        group <- object_list$group[i]
+        res_value <- object_list$res_value[i]
+        stromal_metadata <- list()
+        tumor_metadata <- list()
 
-    sobj <-
-        qs::qread(
-            str_c(
-                "output/seurat_objects/pre_clean_tumor_vs_stroma/",
-                group,
-                ".qs"
-            )
-        ) %>%
-        FindClusters(resolution = res_value)
-    #dimplot_better(sobj, group_by = "new_annot_clust") + NoLegend()
-    sobj$prev_annotations <- sobj$annotations
-    sobj$prev_new_annot_clust <- sobj$new_annot_clust
-    sobj$prev_re_cluster <- sobj$re_cluster
-    sobj$prev_cell_scores <- sobj$cell_scores
+        sobj <-
+            qs::qread(
+                str_c(
+                    "output/seurat_objects/pre_clean_tumor_vs_stroma/",
+                    group,
+                    ".qs"
+                )
+            ) %>%
+            FindClusters(resolution = res_value)
+        #dimplot_better(sobj, group_by = "new_annot_clust") + NoLegend()
+        sobj$prev_annotations <- sobj$annotations
+        sobj$prev_new_annot_clust <- sobj$new_annot_clust
+        sobj$prev_re_cluster <- sobj$re_cluster
+        sobj$prev_cell_scores <- sobj$cell_scores
 
-    for (clusters in unique(sobj$seurat_clusters)) {
-        sub_obj <- 
-            subset(sobj,
-                    subset = seurat_clusters == clusters)
-
-        species <-
-            sub_obj$organism[1]
-        #dimplot_better(sub_obj, group_by = "seurat_clusters") + NoLegend()
-        if (species == "dog") {
+        for (clusters in unique(sobj$seurat_clusters)) {
             sub_obj <- 
-                dog_to_human_setup(object = sub_obj,
-                                    harm_vars = c("sample_name"),
-                                    theta = c(7))
-            if (length(unique(sub_obj$sample_name)) > 1 && ncol(sub_obj) > 50) {
+                subset(sobj,
+                        subset = seurat_clusters == clusters)
+
+            species <-
+                sub_obj$organism[1]
+            #dimplot_better(sub_obj, group_by = "seurat_clusters") + NoLegend()
+            if (species == "dog") {
+                sub_obj <- 
+                    dog_to_human_setup(object = sub_obj,
+                                        harm_vars = c("sample_name"),
+                                        theta = c(7))
+                if (length(unique(sub_obj$sample_name)) > 1 && ncol(sub_obj) > 50) {
+                    res_score <-
+                        optimize_silhouette(sobject = sub_obj,
+                                            test_res = seq(0.05, 0.9, by = 0.05),
+                                            summary_plot = FALSE,
+                                            reduction = "harmony") %>%
+                        filter(!is.na(sil_vals)) %>%
+                        filter(sil_vals == max(sil_vals)) %>%
+                        slice_head(n = 1) %>%
+                        dplyr::pull(res_vals)
+                    sub_obj <-
+                        FindClusters(sub_obj,
+                                    resolution = res_score)
+                } else {
+                   sub_obj <- sub_obj
+                }
+                species <- "human"
+            }
+            
+            ann_obj <-
+                annotate_celltypes(sobject = sub_obj,
+                                    species = species,
+                                    with_tumor = TRUE,
+                                    aggr_ref = TRUE)
+            ann_obj <-
+                clusterbased_annot(s_obj = ann_obj)
+            #dimplot_better(ann_obj, group_by = "new_annot_clust") + NoLegend()
+            if (length(unique(ann_obj$sample_name)) > 1 && ncol(ann_obj) > 50) {
+                ann_obj <- 
+                    ann_obj %>%
+                    process_seurat(resolution=0.05) %>%
+                    RunHarmony(group.by.vars = "sample_name",
+                                theta = 7) %>%
+                    process_seurat(reduction = "harmony",
+                                    resolution = 0.1)
+            
                 res_score <-
-                    optimize_silhouette(sobject = sub_obj,
+                    optimize_silhouette(sobject = ann_obj,
                                         test_res = seq(0.05, 0.9, by = 0.05),
                                         summary_plot = FALSE,
                                         reduction = "harmony") %>%
@@ -387,181 +424,150 @@ for (i in seq_len(nrow(object_list))) {
                     filter(sil_vals == max(sil_vals)) %>%
                     slice_head(n = 1) %>%
                     dplyr::pull(res_vals)
-                sub_obj <-
-                    FindClusters(sub_obj,
+
+                ann_obj <-
+                    FindClusters(ann_obj,
                                 resolution = res_score)
+                # dimplot_better(ann_obj, group_by = "seurat_clusters") + NoLegend()
             } else {
-               sub_obj <- sub_obj
+                ann_obj <- ann_obj
             }
-            species <- "human"
-        }
-        
-        ann_obj <-
-            annotate_celltypes(sobject = sub_obj,
-                                species = species,
-                                with_tumor = TRUE,
-                                aggr_ref = TRUE)
-        ann_obj <-
-            clusterbased_annot(s_obj = ann_obj)
-        #dimplot_better(ann_obj, group_by = "new_annot_clust") + NoLegend()
-        if (length(unique(ann_obj$sample_name)) > 1 && ncol(ann_obj) > 50) {
-            ann_obj <- 
-                ann_obj %>%
-                process_seurat(resolution=0.05) %>%
-                RunHarmony(group.by.vars = "sample_name",
-                            theta = 7) %>%
-                process_seurat(reduction = "harmony",
-                                resolution = 0.1)
-        
-            res_score <-
-                optimize_silhouette(sobject = ann_obj,
-                                    test_res = seq(0.05, 0.9, by = 0.05),
-                                    summary_plot = FALSE,
-                                    reduction = "harmony") %>%
-                filter(!is.na(sil_vals)) %>%
-                filter(sil_vals == max(sil_vals)) %>%
-                slice_head(n = 1) %>%
-                dplyr::pull(res_vals)
 
-            ann_obj <-
-                FindClusters(ann_obj,
-                            resolution = res_score)
-            # dimplot_better(ann_obj, group_by = "seurat_clusters") + NoLegend()
-        } else {
-            ann_obj <- ann_obj
-        }
-
-        if (sub_obj$organism[1] == "dog") {
-            sub_obj <- 
-                subset(sobj,
-                       subset = seurat_clusters == clusters)
-            if (length(unique(sub_obj$sample_name)) > 1 && ncol(sub_obj) > 50) {
+            if (sub_obj$organism[1] == "dog") {
                 sub_obj <- 
-                    sub_obj %>%
-                    process_seurat(resolution=0.05) %>%
-                    RunHarmony(group.by.vars = "sample_name",
-                                theta = 7) %>%
-                    process_seurat(reduction = "harmony",
-                                    resolution = 0.05)
-            } else {
-                sub_obj <- sub_obj
+                    subset(sobj,
+                           subset = seurat_clusters == clusters)
+                if (length(unique(sub_obj$sample_name)) > 1 && ncol(sub_obj) > 50) {
+                    sub_obj <- 
+                        sub_obj %>%
+                        process_seurat(resolution=0.05) %>%
+                        RunHarmony(group.by.vars = "sample_name",
+                                    theta = 7) %>%
+                        process_seurat(reduction = "harmony",
+                                        resolution = 0.05)
+                } else {
+                    sub_obj <- sub_obj
+                }
+                obj_i_want <- ann_obj
+                sub_obj$annotations <- obj_i_want$annotations
+                sub_obj$cell_scores <- obj_i_want$cell_scores
+                sub_obj$new_annot_clust <- obj_i_want$new_annot_clust
+                ann_obj <- sub_obj
             }
-            obj_i_want <- ann_obj
-            sub_obj$annotations <- obj_i_want$annotations
-            sub_obj$cell_scores <- obj_i_want$cell_scores
-            sub_obj$new_annot_clust <- obj_i_want$new_annot_clust
-            ann_obj <- sub_obj
+
+            dimplot1 <-
+                dimplot_better(ann_obj,
+                        group_by = "seurat_clusters") + 
+                    NoLegend() +
+                    ggtitle(str_c("res=", res_score," for ", clusters))
+
+            dimplot2 <-
+                dimplot_better(ann_obj,
+                        group_by = "annotations") + 
+                    NoLegend() +
+                    ggtitle(str_c("annotations ", clusters))
+
+            dimplot3 <-
+                dimplot_better(ann_obj,
+                        group_by = "sample_name") + 
+                    NoLegend() +
+                    ggtitle(str_c("sample_name ", clusters))
+
+            dimplot4 <-
+                dimplot_better(ann_obj,
+                        group_by = "new_annot_clust") + 
+                    NoLegend() +
+                    ggtitle(str_c("new_annot_clust ", clusters))
+
+            dimplot5 <-
+                dimplot_better(ann_obj,
+                        group_by = "scATOMIC_pred") + 
+                    NoLegend() +
+                    ggtitle(str_c("scATOMIC_pred ", clusters))
+
+            dimplot6 <-
+                dimplot_better(ann_obj,
+                        group_by = "CNV_status") + 
+                    NoLegend() +
+                    ggtitle(str_c("CNV_status ", clusters))
+            
+            dimplot7 <-
+                dimplot_better(ann_obj,
+                        group_by = "scatomic_tumor_call") + 
+                    NoLegend() +
+                    ggtitle(str_c("scatomic_tumor_call ", clusters))
+
+            dimplot8 <-
+                dimplot_better(ann_obj,
+                        group_by = "class") + 
+                    NoLegend() +
+                    ggtitle(str_c("class ", clusters))
+
+            plot_c <-
+                patchwork::wrap_plots(dimplot1, dimplot2, dimplot3,
+                                    dimplot4, dimplot5, dimplot6,
+                                    dimplot7, dimplot8,
+                                    ncol = 2) +
+                patchwork::plot_annotation(title = str_c("Cluster ", clusters))
+
+            if (!dir.exists(str_c("output/figures/reclustering_tumors/", group))) {
+                dir.create(str_c("output/figures/reclustering_tumors/", group),
+                            recursive = TRUE)
+            }
+
+            ggsave(filename = str_c("output/figures/reclustering_tumors/", group, "/cluster_",
+                                clusters,
+                                ".png"),
+                    plot = plot_c,
+                    width = 14,
+                    height = 28,
+                    limitsize = FALSE,
+                    bg = "white")
+
+            # save the ids
+            normal_ids <-
+                ann_obj@meta.data %>%
+                filter(annotations != "Tumor_cells") %>%
+                rownames_to_column("cell_ids") %>%
+                select(cell_ids)
+
+            tumor_ids <-
+                ann_obj@meta.data %>%
+                filter(annotations == "Tumor_cells") %>%
+                rownames_to_column("cell_ids") %>%
+                select(cell_ids)
+
+            # save the metadata
+            if (length(normal_ids$cell_ids) > 0) {
+                stromal_metadata[[as.character(clusters)]] <- normal_ids
+            }
+            if (length(tumor_ids$cell_ids) > 0) {
+                tumor_metadata[[as.character(clusters)]] <- tumor_ids
+            }
         }
-
-        dimplot1 <-
-            dimplot_better(ann_obj,
-                    group_by = "seurat_clusters") + 
-                NoLegend() +
-                ggtitle(str_c("res=", res_score," for ", clusters))
-
-        dimplot2 <-
-            dimplot_better(ann_obj,
-                    group_by = "annotations") + 
-                NoLegend() +
-                ggtitle(str_c("annotations ", clusters))
-
-        dimplot3 <-
-            dimplot_better(ann_obj,
-                    group_by = "sample_name") + 
-                NoLegend() +
-                ggtitle(str_c("sample_name ", clusters))
-
-        dimplot4 <-
-            dimplot_better(ann_obj,
-                    group_by = "new_annot_clust") + 
-                NoLegend() +
-                ggtitle(str_c("new_annot_clust ", clusters))
-
-        dimplot5 <-
-            dimplot_better(ann_obj,
-                    group_by = "scATOMIC_pred") + 
-                NoLegend() +
-                ggtitle(str_c("scATOMIC_pred ", clusters))
-
-        dimplot6 <-
-            dimplot_better(ann_obj,
-                    group_by = "CNV_status") + 
-                NoLegend() +
-                ggtitle(str_c("CNV_status ", clusters))
-        
-        dimplot7 <-
-            dimplot_better(ann_obj,
-                    group_by = "scatomic_tumor_call") + 
-                NoLegend() +
-                ggtitle(str_c("scatomic_tumor_call ", clusters))
-
-        dimplot8 <-
-            dimplot_better(ann_obj,
-                    group_by = "class") + 
-                NoLegend() +
-                ggtitle(str_c("class ", clusters))
-
-        plot_c <-
-            patchwork::wrap_plots(dimplot1, dimplot2, dimplot3,
-                                dimplot4, dimplot5, dimplot6,
-                                dimplot7, dimplot8,
-                                ncol = 2) +
-            patchwork::plot_annotation(title = str_c("Cluster ", clusters))
-
-        if (!dir.exists(str_c("output/figures/reclustering_tumors/", group))) {
-            dir.create(str_c("output/figures/reclustering_tumors/", group),
-                        recursive = TRUE)
-        }
-
-        ggsave(filename = str_c("output/figures/reclustering_tumors/", group, "/cluster_",
-                            clusters,
-                            ".png"),
-                plot = plot_c,
-                width = 14,
-                height = 28,
-                limitsize = FALSE,
-                bg = "white")
-
-        # save the ids
-        normal_ids <-
-            ann_obj@meta.data %>%
-            filter(annotations != "Tumor_cells") %>%
-            rownames_to_column("cell_ids") %>%
-            select(cell_ids)
-
-        tumor_ids <-
-            ann_obj@meta.data %>%
-            filter(annotations == "Tumor_cells") %>%
-            rownames_to_column("cell_ids") %>%
-            select(cell_ids)
-
         # save the metadata
-        if (length(normal_ids$cell_ids) > 0) {
-            stromal_metadata[[clusters]] <- normal_ids
+        directory <-
+            str_c("output/metadata/reclustering_tumors/", group)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
         }
-        if (length(tumor_ids$cell_ids) > 0) {
-            tumor_metadata[[clusters]] <- tumor_ids
-        }
-    }
-    # save the metadata
-    directory <-
-        str_c("output/metadata/reclustering_tumors/", group)
-    if (!dir.exists(directory)) {
-        dir.create(directory, recursive = TRUE)
-    }
-    timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+        timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
 
-    bind_rows(stromal_metadata) %>%
-        write_tsv(str_c(directory,
-                        "/normal_ids_",
-                        timestamp,
-                        ".tsv"))
-    bind_rows(tumor_metadata) %>%
-        write_tsv(str_c(directory,
-                        "/tumor_ids_",
-                        timestamp,
-                        ".tsv"))
-}
+        bind_rows(stromal_metadata) %>%
+            write_tsv(str_c(directory,
+                            "/normal_ids_",
+                            timestamp,
+                            ".tsv"))
+        bind_rows(tumor_metadata) %>%
+            write_tsv(str_c(directory,
+                            "/tumor_ids_",
+                            timestamp,
+                            ".tsv"))
+        NULL
+    },
+    mc.cores = parallelly::availableCores(),
+    mc.preschedule = FALSE
+)
 
 #dimplot_better(ann_obj, group_by = "annotations") + NoLegend()
 
@@ -881,12 +887,14 @@ for (group in c("patient_prim", "patient_mets",
                 height = 14)
 
         #save as qs
-        qs::qsave(all_dimplots,
-                  str_c("output/figures/tumor_vs_stroma/",
-                        group,
-                        "/",
-                        cell_group_name,
-                        "_dimplot.qs"))
+        ggsave(str_c("output/figures/tumor_vs_stroma/",
+                    group,
+                    "/",
+                    cell_group_name,
+                    "_dimplot.pdf"),
+                plot = all_dimplots,
+                width = 14,
+                height = 14)
 
         if (object$organism[1] == "human" | object$organism[1] == "dog") {
             tumor_featureplot <- 
@@ -921,12 +929,15 @@ for (group in c("patient_prim", "patient_mets",
                 height = 21)
 
         #save as qs
-        qs::qsave(tumor_featureplot,
-                  str_c("output/figures/tumor_vs_stroma/",
-                        group,
-                        "/",
-                        cell_group_name,
-                        "_tumor_featureplot.qs"))
+        ggsave(str_c("output/figures/tumor_vs_stroma/",
+                    group,
+                    "/",
+                    cell_group_name,
+                    "_tumor_featureplot.pdf"),
+                plot = tumor_featureplot,
+                width = 21,
+                height = 21)
+
 
         ggsave(str_c("output/figures/tumor_vs_stroma/",
                     group,
@@ -938,12 +949,14 @@ for (group in c("patient_prim", "patient_mets",
                 height = 21)
         
         #save as qs
-        qs::qsave(immune_featureplot,
-                  str_c("output/figures/tumor_vs_stroma/",
-                        group,
-                        "/",
-                        cell_group_name,
-                        "_immune_featureplot.qs"))
+        ggsave(str_c("output/figures/tumor_vs_stroma/",
+                    group,
+                    "/",
+                    cell_group_name,
+                    "_immune_featureplot.pdf"),
+                plot = immune_featureplot,
+                width = 21,
+                height = 21)
 
         directory <-
             str_c("output/seurat_objects/tumor_vs_stroma/")
@@ -1140,241 +1153,4 @@ for (group in c("xeno_prim_human",
 
 ```
 
-
-## Checking for the clusters where they map
-```{r map_the _clusters, echo = FALSE, eval = FALSE, include = FALSE}
-object <-
-        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
-                        "dogs_prim",
-                        ".qs"))
-
-
-object1 <- 
-    qs::qread("output/seurat_objects/tumor_vs_stroma/dogs_prim_cancer_cells.qs")
-object1 <-
-    object1 %>%
-    FindClusters(resolution = 0.2)
-dimplot_better(object1,
-            group_by = "new_annot_clust") +NoLegend()
-
-object2 <- 
-    qs::qread("output/seurat_objects/tumor_vs_stroma/dogs_prim_normal_cells.qs")
-dimplot_better(object2,
-            group_by = "new_annot_clust") +NoLegend()
-
-neuron_markers <- c("MAP2", "NEFL", "RBFOX3", "SYP", "TUBB3", "DCX", "GRIN1", "GAP43", "CHAT", "TH")
-FeaturePlot(object2,
-            features = neuron_markers,
-            ncol = 3) +
-    NoLegend()
-object21 <-
-    qs::qread("output/seurat_objects/tumor_vs_stroma/patient_prim_normal_cells.qs")
-
-
-
-object2 <- 
-    object2 %>%
-    subset(seurat_clusters %in% clusters) %>%   
-    process_seurat() %>%
-    RunHarmony(group.by.vars = c("sample_name"),
-                theta = 7) %>%
-    process_seurat(reduction = "harmony")
-object2_SUB <-
-    object2 %>%
-    subset(seurat_clusters == "1") %>%
-    colnames()
-    
-cells <- colnames(object2)
-
-
-dimplot_better(object2,
-            group_by = "seurat_clusters") +NoLegend()
-
-DimPlot(sobj,
-        cells.highlight = object2_SUB,
-        cols.highlight = "red",
-        cols = "grey") +
-    NoLegend()
-
-
-FeaturePlot(object2, features = "POSTN")
-
-dimplot_better(object21,
-            group_by = "new_annot_clust")  + NoLegend()
-
-s_obj <- 
-    qs::qread("output/seurat_objects/tumor_vs_stroma/dogs_prim_normal_cells.qs")
-
-s_obj$SingleR_Ann3 <-
-            stringr::str_replace_all(s_obj$new_annot_clust,
-                                    Annotation_cleanup$SingleR_Ann3_label)
-
-s_obj$SingleR_Ann2 <-
-    stringr::str_replace_all(s_obj$SingleR_Ann3,
-                            Annotation_cleanup$SingleR_Ann2_label)
-
-s_obj$SingleR_Ann1 <-
-    stringr::str_replace_all(s_obj$SingleR_Ann2,
-                            Annotation_cleanup$SingleR_Ann1_label)  
-
-dimplot_better(s_obj,
-            group_by = "SingleR_Ann1") +
-NoLegend()
-
-object <- 
-    qs::qread("output/seurat_objects/tumor_vs_stroma/xeno_mets_human.qs")
-
-VlnPlot(object,
-        features = "cell_scores",
-        group = "annotations",
-        pt.size = 0.1)
-
-
-
-obj <-
-    obj %>%
-    FindClusters(resolution = 0.1)
-
-plot <-
-    dimplot_better(object,
-               group_by = "annotations") +
-    NoLegend()
-
-ggsave("output/figures/presentation_biweekly/cccr_present/xenom_annotationsa.png",
-       plot = plot,
-       width = 8,
-       height = 8)
-
-seurat_clusters_I_want <-
-    c("0", "1", "2", "3", "4", "7", "8")
-
-obj_sub <-
-    obj %>%
-    subset(seurat_clusters %in% seurat_clusters_I_want)
-
-obj_sub <- obj_sub %>%
-    process_seurat() %>%
-    RunHarmony(group.by.vars = c("sample_name",
-                                 "method",
-                                 "data_source"),
-                theta = c(1, 5, 5),
-                lambda = c(0.5, 0.5, 0.5)) %>%
-    process_seurat(reduction = "harmony")
-
-obj_sub <-
-    obj_sub %>%
-    FindClusters(resolution = 0.1)
-
-dimplot_better(obj_sub,
-               group_by = "seurat_clusters")
-
-
-dimplot_better(obj,
-               group_by = "annotations") +
-    NoLegend() 
-
-cells <-
-    obj %>%
-    #subset(seurat_clusters == "6") %>%
-    colnames()
-
-DimPlot(big_obj,
-        cells.highlight = cells)
-
-
-big_obj <-
-    qs::qread("output/seurat_objects/final_combined_sobjs/patient_prim.qs")
-
-DimPlot(big_obj,
-        cells.highlight = cells)
-
-DimPlot(big_obj,
-        cells.highlight = WhichCells(big_obj, idents = "2")) +
-    NoLegend()
-
-dimplot_better(big_obj,
-               group_by = "seurat_clusters")
-
-
-obj1 <- 
-    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim.qs")
-
-dimplot_better(obj1,
-                group_by = "Ann_Level3") +
-    NoLegend()
-
-```
-
-
-
-## Checking for the clusters where they map
-```{r map_the _clusters_pmets, echo = FALSE, eval = FALSE, include = FALSE}
-()
-obj_tumor <- 
-    qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs")
-
-obj_tumor <-
-    obj_tumor %>%
-    FindClusters(resolution = 0.15)
-
-dimplot_better(obj_tumor,
-               group_by = "seurat_clusters")
-
-cells <-
-    obj_tumor %>%
-    subset(seurat_clusters == "8") %>%
-    colnames()
-
-DimPlot(big_obj_pmets,
-        cells.highlight = cells,
-        raster = FALSE)
-
-big_obj_pmets <-
-    qs::qread("output/seurat_objects/final_combined_sobjs/patient_mets.qs")
-
-
-
-obj1 <- 
-    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs")
-
-dimplot_better(obj1,
-                group_by = "Ann_Level3",
-                raster = FALSE) +
-    NoLegend()
-
-```
-
-
-
-
-
-## Redoing some of the clustering for the patient_mets_cancer_cells
-```{r redo1_clustering_patient_mets_cancer_cells, echo = FALSE, eval = FALSE, include = FALSE}
-# patient_mets_cancer <-
-#     qs::qread("output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs")
-
-# Idents(patient_mets_cancer) <- patient_mets_cancer$sample_name
-
-# #clean some of the samples that do not harmonize well. 
-# # Reason being that they are all just quiescent cells and do not have any real signal
-# sample_names_iwant <-
-#     unique(patient_mets_cancer$sample_name) %>%
-#     .[!. %in% c("CCDI0095_7978", "CCDI0097_8978", "CCDI0053_445", "SJOS001105_M1")]
-
-# new_subset <-
-#     patient_mets_cancer %>%
-#     subset(sample_name %in% sample_names_iwant) %>%
-#     process_seurat() %>%
-#     RunHarmony(group.by.vars = c("sample_name",
-#                                          "method",
-#                                          "data_source"),
-#                 theta = c(7, 7, 7),
-#                 lambda = c(0.5, 0.5, 0.5)) %>%
-#     process_seurat(reduction = "harmony") %>%
-#     FindClusters(resolution = 0.15)
-
-# qs::qsave(new_subset,
-#         file = "output/seurat_objects/tumor_vs_stroma/patient_mets_cancer_cells.qs")
-
-```
 

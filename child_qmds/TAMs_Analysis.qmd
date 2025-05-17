@@ -166,17 +166,6 @@ for (i in seq_len(nrow(object_list))) {
 
 ## DimDotPlot for the TAMs
 ```{r, dimdotplot_macrophages, echo = FALSE}
-#set the order of the cells for the dotplot
-cols <- list(
-    `Osteoclast TAMs` = "#D43F3AFF",
-    TAMs = "#EEA236FF",
-    `Scar TAMs` = "#357EBDFF",
-    `Inflam TAMs` = "#5CB85CFF",
-    `Prolif TAMs` = "#B8B8B8FF",
-    `IFN TAMs` = "#9632B8FF",
-    `Monocytes` = "#46B8DAFF",
-    `Alv TAMs` = "90302DFF",
-)
 
 ## Dotplot for the macrophages
 macrophage_features_cells <- list(
@@ -189,6 +178,13 @@ macrophage_features_cells <- list(
     Alv_TAMs = c("MARCO", "TNFAIP2", "OLR1"),
     TAMs = c("MERTK","SELENOP", "MS4A7")
 )
+
+
+
+
+
+
+
 
 #set the order of the cells for the dotplot
 order_TAMs <-
