@@ -1,5 +1,3 @@
-## Write off Metadata for Velocity Analysis
-
 In order to analyze the data, we need to save a table of cell-level metadata, including barcodes, seurat clusters, and annotations. We also need to subset to just TAMs in order to analyze them individually.
 
 First we need to read in our objects for this. I'm using the objects from final_tumor_vs_stroma, and I'm only reading in the stromal objects.
@@ -21,7 +19,7 @@ for (ob_name in obj_names) {
 }
 ```
 
-### Subset to TAMs
+## Subset to TAMs
 
 ```{r}
 tam_list <- lapply(obj_list, function(ob) {
@@ -37,6 +35,8 @@ tam_dimplots <- lapply(names(tam_list), function(x) {
 
 grid.arrange(grobs = tam_dimplots)
 ```
+
+### Re-Run Harmony
 
 Re-processing has introduced batch effects, so I'm going to have to re-run harmony.
 
@@ -58,12 +58,10 @@ harmony_params <-
                                              "data_source"),
                                 theta = c(7, 7, 7)),
          mm_prim = list(group_by = c("sample_name",
-                                     "model",
-                                     "location"),
+                                     "model"),
                         theta = c(7, 7, 7)),
          mm_mets = list(group_by = c("sample_name",
-                                     "model",
-                                     "location"),
+                                     "model"),
                         theta = c(7, 7, 7)),
          dogs_prim = list(group_by = c("sample_name",
                                        "data_source",
@@ -77,7 +75,7 @@ harmony_params <-
 names(tam_list) <- str_remove_all(names(tam_list), "_normal_cells")
 
 
-tam_list_harmony <- parallel::mclapply(
+tam_list <- parallel::mclapply(
     names(tam_list),
     function(ob) {
         RunHarmony(
@@ -88,15 +86,47 @@ tam_list_harmony <- parallel::mclapply(
     },
     mc.cores = (parallel::detectCores() - 8)
 )
+names(tam_list) <- names(tam_list)
+
+# assess harmony
+harmony_dimplots <- lapply(
+    names(tam_list),
+    function(x) {
+        dimplot_better(
+            tam_list[[x]],
+            group = "sample_name",
+            order = FALSE
+        ) +
+            ggtitle(label = x) +
+            NoLegend()
+    }
+)
+grid.arrange(grobs = harmony_dimplots)
+
+harmony_dimplots <- lapply(
+    names(tam_list),
+    function(x) {
+        dimplot_better(
+            tam_list[[x]],
+            group = "Ann_Level3",
+            order = FALSE
+        ) +
+            ggtitle(label = x) +
+            NoLegend()
+    }
+)
+
+grid.arrange(grobs = harmony_dimplots)
 ```
 
+Harmony seemd to do a sufficient job of removing batch effects in our datasets. We're going to proceed to calculate the fdl reduction, which we will use for visualization later on.
 
 ```{r}
 #run fdl
 parallel::detectCores()
-obj_list_fdl <- parallel::mclapply(obj_list, FUN = run_fdl, mc.cores = (parallel::detectCores() - 8))
+tam_list <- parallel::mclapply(tam_list, FUN = run_fdl, mc.cores = (parallel::detectCores() - 8))
 
-qs::qsave(obj_list_fdl, "output/seurat_objects/obj_list_04_04_2025.qs")
+qs::qsave(obj_list_fdl, "output/seurat_objects/tam_list_05_21.qs")
 ```
 
 ```{r write-off-md}
