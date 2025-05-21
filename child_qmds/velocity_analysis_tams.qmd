@@ -1,0 +1,114 @@
+## Write off Metadata for Velocity Analysis
+
+In order to analyze the data, we need to save a table of cell-level metadata, including barcodes, seurat clusters, and annotations. We also need to subset to just TAMs in order to analyze them individually.
+
+First we need to read in our objects for this. I'm using the objects from final_tumor_vs_stroma, and I'm only reading in the stromal objects.
+
+```{r}
+yogi_prefix <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/"
+obj_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/final_tumor_vs_stroma"))
+obj_names <- grep(c("normal|mouse"), obj_names, value = TRUE)
+
+#get only fdl files
+obj_names <- str_replace_all(obj_names,
+                             ".qs",
+                             "")
+
+obj_list <- list()
+for (ob_name in obj_names) {
+    obj_list[[ob_name]] <-
+        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/", ob_name, ".qs"))
+}
+```
+
+### Subset to TAMs
+
+```{r}
+tam_list <- lapply(obj_list, function(ob) {
+    subset(ob, Ann_Level2 == "TAMs") %>%
+        process_seurat()
+})
+
+tam_dimplots <- lapply(names(tam_list), function(x) {
+    r_dim_plot(tam_list[[x]], group.by = "sample_name") +
+        NoLegend() +
+        ggtitle(label = x)
+})
+
+grid.arrange(grobs = tam_dimplots)
+```
+
+Re-processing has introduced batch effects, so I'm going to have to re-run harmony.
+
+```{r tam-harmony}
+harmony_params <-
+    list(patient_prim = list(group_by = c("sample_name",
+                                          "method",
+                                          "data_source"),
+                             theta = c(7, 7, 7)),
+         patient_mets = list(group_by = c("sample_name",
+                                          "method",
+                                          "data_source"),
+                             theta = c(7, 7, 7)),
+         xeno_prim_mouse = list(group_by = c("sample_name",
+                                             "data_source"),
+                                 theta = c(7, 7)),
+         xeno_mets_mouse = list(group_by = c("sample_name",
+                                             "method",
+                                             "data_source"),
+                                theta = c(7, 7, 7)),
+         mm_prim = list(group_by = c("sample_name",
+                                     "model",
+                                     "location"),
+                        theta = c(7, 7, 7)),
+         mm_mets = list(group_by = c("sample_name",
+                                     "model",
+                                     "location"),
+                        theta = c(7, 7, 7)),
+         dogs_prim = list(group_by = c("sample_name",
+                                       "data_source",
+                                       "location"),
+                          theta = c(7, 7, 7)),
+         dogs_mets = list(group_by = c("sample_name",
+                                       "data_source",
+                                       "location"),
+                          theta = c(7, 7, 7)))
+
+names(tam_list) <- str_remove_all(names(tam_list), "_normal_cells")
+
+
+tam_list_harmony <- parallel::mclapply(
+    names(tam_list),
+    function(ob) {
+        RunHarmony(
+            tam_list[[ob]],
+            group.by.vars = harmony_params[[ob]]$group_by
+        ) %>%
+        process_seurat(reduction = "harmony")
+    },
+    mc.cores = (parallel::detectCores() - 8)
+)
+```
+
+
+```{r}
+#run fdl
+parallel::detectCores()
+obj_list_fdl <- parallel::mclapply(obj_list, FUN = run_fdl, mc.cores = (parallel::detectCores() - 8))
+
+qs::qsave(obj_list_fdl, "output/seurat_objects/obj_list_04_04_2025.qs")
+```
+
+```{r write-off-md}
+lapply(names(obj_list_fdl), function(obj_name) {
+    write_off_md(sobj = obj_list_fdl[[obj_name]],
+                 id_col = "sample_name",
+                 output_dir = paste0("loom_output/metadata/",
+                                     obj_name),
+                 vars_to_keep = c("sample_name",
+                                  "seurat_clusters",
+                                  "Ann_Level1",
+                                  "Ann_Level2",
+                                  "Ann_Level3"),
+                 handle_n_of_1 = FALSE)
+})
