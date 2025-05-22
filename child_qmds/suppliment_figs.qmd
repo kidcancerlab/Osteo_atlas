@@ -221,7 +221,7 @@ for (group in c("patient_prim", "patient_mets",
             plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
             panel.grid = element_blank()) +
         ggtitle(str_c(group, " Tumor ID by methods"))
-    
+
     ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
                     group, "/",
                     "tumor_id_sankey.pdf"),
@@ -237,9 +237,55 @@ for (group in c("patient_prim", "patient_mets",
             width = 5,
             height = 7)
 
+    # Create a heatmap showing agreement between tumor calling methods
+    metadata_for_heatmap <-
+        metadata %>%
+        mutate(scatomic_tumor_call = str_replace_all(scatomic_tumor_call, c("normal_cells" = "0",
+                                                                            "cancer_cells" = "1",
+                                                                            "unknown" = NA)),
+               scevan_tumor_call = str_replace_all(scevan_tumor_call, c("normal_cells" = "0",
+                                                                        "cancer_cells" = "1",
+                                                                        "unknown" = NA)),
+               final_snv_call = str_replace_all(final_snv_call, c("normal_cells" = "0",
+                                                                  "cancer_cells" = "1",
+                                                                  "unknown" = NA))) %>%
+        select(scatomic_tumor_call,
+               scevan_tumor_call,
+               final_snv_call,
+               cell_id) %>%
+        mutate(scatomic_tumor_call = as.numeric(scatomic_tumor_call),
+               scevan_tumor_call = as.numeric(scevan_tumor_call),
+               final_snv_call = as.numeric(final_snv_call)) %>%
+        rename(scATOMIC = scatomic_tumor_call,
+                SCEVAN = scevan_tumor_call,
+                SNV = final_snv_call) %>%
+        column_to_rownames("cell_id") %>%
+        as.matrix() 
+    
+    # make a heatmap to show the agreement between the methods
+    heatmap <-
+        pheatmap::pheatmap(
+            metadata_for_heatmap, 
+            show_rownames = FALSE,
+            color = c("0" = "#EEA236FF", "1" = "#D43F3AFF"),
+            cluster_cols = TRUE,
+            cluster_rows = FALSE,
+            angle = 0)
+    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
+                    group, "/",
+                    "tumor_id_heatmap.pdf"),
+            plot = heatmap,
+            bg = "white",
+            width = 3,
+            height = 7)
+    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
+                    group, "/",
+                    "tumor_id_heatmap.png"),
+            plot = heatmap,
+            bg = "white",
+            width = 3,
+            height = 7)
 }
-
-
 
 ```
 

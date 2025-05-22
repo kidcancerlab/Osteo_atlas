@@ -185,9 +185,11 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
     }
 }
 
-dimplot_better(object, group_by = c("Ann_Level1")) +
-    NoLegend()
+```
 
+
+
+```{r immune_lymphoid_markers_find}
 # find the degs for each of the compartments
 sobj_list <- list()
 
@@ -271,86 +273,7 @@ T_Reg_intersect <- Reduce(intersect, T_Reg)
 Lymphocytes_intersect <- Reduce(intersect, Lymphocytes)
 Naive_NKT_intersect <- Reduce(intersect, Naive_NKT)
 
-
-#title replace
-title_replacement <- 
-    list(patient_prim_normal_cells = "Patient Primary",
-        patient_mets_normal_cells = "Patient Metatatic",
-        mm_prim_normal_cells = "Mouse Primary",
-        mm_mets_normal_cells = "Mouse Metatatic",
-        xeno_prim_mouse = "Xenograft Primary",
-        xeno_mets_mouse = "Xenograft Metastatic",
-        dogs_prim_normal_cells = "Dog Primary",
-        dogs_mets_normal_cells = "Dog Metastatic")
-
-cell_markers <- list(
-  Prolif_T = c("PCLAF", "TYMS", "CENPF"),          # Proliferative T cells (cell cycle genes)
-  T_Reg = c("IKZF2", "CTLA4", "FOXP3", "IL2RA"),   # Tregs (excluded TIGIT as non-exclusive)
-  CD4_T = c("CD44", "CD4", "CD69"),                # Activated CD4+ T cells (excluded CD3E/IL7R)
-  CD8_T = c("CD8A", "CD8B", "GZMA", "GZMK"),       # CD8+ T cells (cytotoxic markers)
-  NK_cells = c("NKG7", "KLRD1", "KLRK1"),          # NK cells (excluded PRF1/GZMB for surface focus)
-  Naive_T = c("TCF7", "FOXP1", "BACH2", "KLF2", "S1PR1"), # Naive T cells (excluded CD3E)
-  Mature_B = c("MS4A1", "FCMR", "CD21"),           # Mature B cells (excluded CD27/CD80)
-  Plasma_B = c("CD38", "SDC1", "PRDM1", "XBP1")    # Plasma B cells (retained canonical markers)
-)
-
-sobj_list <- list()
-for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
-                "mm_prim_normal_cells", "mm_mets_normal_cells",
-                "xeno_prim_mouse", "xeno_mets_mouse",
-                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
-    
-    # get the sobj
-    object <-
-        qs::qread(str_c("output/seurat_objects/stromal_subtypes/",
-                        group, "/for_degs_",
-                        "Immune_Lymphoid",
-                        ".qs"))
-
-    sobj_list[[group]] <- object
-}
-
-# save the plots
-# combine the plots
-list_cell <-
-    c(unique(sobj_list$patient_prim_normal_cells$Ann_Level3),
-      unique(sobj_list$patient_mets_normal_cells$Ann_Level3),
-        unique(sobj_list$mm_prim_normal_cells$Ann_Level3),
-        unique(sobj_list$mm_mets_normal_cells$Ann_Level3),
-        unique(sobj_list$xeno_prim_mouse$Ann_Level3),
-        unique(sobj_list$xeno_mets_mouse$Ann_Level3),
-        unique(sobj_list$dogs_prim_normal_cells$Ann_Level3),
-        unique(sobj_list$dogs_mets_normal_cells$Ann_Level3)) %>%
-    unique()
-
-# make the cols
-celltypes <-
-    list_cell %>%
-    unlist() %>%
-    unique() %>%
-    str_replace("_", " ")
-
-cols <- 
-    as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
-
-cols <-
-    cols[1: length(celltypes)]
-
-names(cols) <- celltypes
-
-# the made cols are here
-cols <- list(
-    `CD4 T` = "#D43F3AFF",
-    `Naive T` = "#EEA236FF",
-    `CD8 T` = "#357EBDFF",
-    `NK cells` = "#5CB85CFF",
-    `Prolif T` = "#B8B8B8FF",
-    `T Reg` = "#9632B8FF",
-    `Mature B` = "#46B8DAFF",
-    `Plasma B` = "#90302DFF",
-    `Memory B` = "#A66D04FF"
-)
-
+# create a list of all the genes
 cell_markers <- list(
     `Prolif T` = c("PCLAF", "TYMS", "CENPF"),          # Proliferative T cells (cell cycle genes)
     `T Reg` = c("IKZF2", "CTLA4", "FOXP3", "IL2RA"),   # Tregs (excluded TIGIT as non-exclusive)
@@ -616,7 +539,7 @@ markers <- list(
 ## make the plots sankey and dimdot plot for the endothelial epithelial
 ```{r make_plots_endothelial_epi}
 # markers 
-markers <- list(
+cell_markers <- list(
     # Endothelial Subtypes
     `Endothelial Artery` = c("NOTCH4", "DLL4", "EFNB2", "SOX17", "SEMA3G", "HEY1"),
     `Endothelial Vein` = c("NR2F2", "VCAM1", "ACKR1", "SELP"),  

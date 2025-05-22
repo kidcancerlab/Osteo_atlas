@@ -179,13 +179,6 @@ macrophage_features_cells <- list(
     TAMs = c("MERTK","SELENOP", "MS4A7")
 )
 
-
-
-
-
-
-
-
 #set the order of the cells for the dotplot
 order_TAMs <-
     c("Osteoclast TAMs", "Prolif TAMs", "Monocytes", "IFN TAMs", 

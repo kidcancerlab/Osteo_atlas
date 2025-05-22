@@ -1746,7 +1746,6 @@ make_dim_dot_plot <- function(object,
 
     order_stroma_subset <-
         intersect(order_celtypes, unique(object$plot_labels))
-    
 
     dotplot <-
         DotPlot(object,

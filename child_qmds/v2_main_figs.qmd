@@ -267,7 +267,6 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
             width = 9,
             height = 9,
             bg = "white")
-
 }
 
 
@@ -572,9 +571,6 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
 
 
 ```
-
-
-
 
 
 

@@ -7,8 +7,92 @@ This will annotate celltypes for tumor and normal call
 #| fig.align: center
 #| echo: FALSE
 #| dependson: [annot_celltypes, read_metadata, dog_human_gene]
+osteosarcoma_markers <- c("COL1A1", "COL1A2", "SATB2", "RUNX2",
+             "TNC", "CTHRC1", "MRC2", "IBSP", "PDGFD")
+
+osteosarcoma_markers <-
+    c("RUNX2",
+      "COL1A1",
+      "COL1A2",
+      "SATB2")
 
 
+potential_tumor_cells_list <- list()
+
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        group,
+                        ".qs"))
+    # species and markers
+    species <- object$organism[[1]]
+    genelist <- osteosarcoma_markers
+
+    if (species == "mouse") {
+        genelist <- 
+            nichenetr::convert_human_to_mouse_symbols(genelist) %>%
+            na.omit() %>%
+            unique()
+    }
+    # if (species == "dog") {
+    #     genelist <- 
+    #         orthologs$dog_gene_name[match(genelist, orthologs$human_gene_ortholog)] %>%
+    #         na.omit() %>%
+    #         unique()
+    # }
+    # matrix
+    entire_matrix <-
+        object@assays$RNA$counts
+
+    genelist_present <- 
+        genelist[genelist %in% rownames(entire_matrix)]
+
+    percent_cells <- 
+        (length(genelist_present)/length(genelist)) * 100
+    if (percent_cells < 20.1) {
+        next
+    }
+    cell_ranks <-
+        AUCell::AUCell_run(exprMat = entire_matrix,
+                        geneSets = genelist)
+
+    object$AUC_OsteoMarkers <- AUCell::getAUC(cell_ranks)[1,]
+    
+    bulk_score_per_cluster <- 
+        object@meta.data %>%
+        dplyr::select(AUC_OsteoMarkers, new_annot_clust) %>%
+        dplyr::group_by(new_annot_clust) %>%
+        dplyr::summarise(median = median(AUC_OsteoMarkers, na.rm = TRUE)) %>%
+        dplyr::arrange(desc(median))
+
+    if (dir.exists("output/id_tumor/potential_tumor_celltypes/")) {
+        dir.create("output/id_tumor/potential_tumor_celltypes/",
+                   recursive = TRUE)
+    }
+    write_tsv(bulk_score_per_cluster,
+              str_c("output/id_tumor/potential_tumor_celltypes/",
+                    group,
+                    "_celltype_bulk.tsv"))
+
+    potential_tumor_cells <-
+        bulk_score_per_cluster %>%
+        dplyr::filter(median > 0.3) %>%
+        dplyr::pull(new_annot_clust)
+    
+    potential_tumor_cells_list[[group]] <-
+        potential_tumor_cells
+
+    stroma_clusters <-
+        bulk_score_per_cluster %>%
+        dplyr::filter(median <= 0.3) %>%
+        dplyr::pull(new_annot_clust)
+}
+
+
+
+# Use the potential tumor cells
 cancer_celltypes <- list(patient_prim = c("MSC",
                                           "Chondrocytes",
                                           "Tissue_stem_cells",
@@ -58,87 +142,6 @@ cancer_celltypes <- list(patient_prim = c("MSC",
                                       "Smooth_muscle_cells",
                                       "Osteoblasts"))
 
-annotations_cell_list <-
-    list(patient_prim = c("B_cells",
-                          "Basophil_Mast",
-                          "CD34_plusB_cells",
-                          "CD4T_cells",
-                          "CD8T_cells",
-                          "Dendritic_cells",
-                          "Endothelial_cells",
-                          "Epithelial_cells",
-                          "Macrophages",
-                          "Monocytes",
-                          "Neutrophils",
-                          "T_cells"),
-        patient_mets = c("Adventitial_Fibroblasts",
-                         "Airway_SMC",
-                         "Alveolar_Fibroblasts",
-                         "AlvEpithelial_T1",
-                         "AlvEpithelial_T2",
-                         "Artery_cells",
-                         "B_cells",
-                         "Basal",
-                         "Basophil_Mast1",
-                         "Basophil_Mast2",
-                         "Bronchial_Vessel1",
-                         "Capillary_Aerocytes",
-                         "Capillary_cells",
-                         "Capillary_Intermediate1",
-                         "CD4_plus_MemoryT",
-                         "CD4_plus_NaiveT",
-                         "CD4T_cells",
-                         "CD8_plus_MemoryT",
-                         "Ciliated_cells",
-                         "Classical_Monocytes",
-                         "Club_cells",
-                         "Dendritic_cells",
-                         "Differentiating_Basal",
-                         "Endothelial_cells",
-                         "EREG_plus Dendritic",
-                         "Fibroblasts",
-                         "Fibromyocyte",
-                         "IGSF21_plus_Dendritic_cells",
-                         "Ionocyte",
-                         "Intermediate_Monocytes",
-                         "Lipofibroblast",
-                         "Lymphatic_cells",
-                         "Mesothelial",
-                         "Macrophages",
-                         "Monocytes",
-                         "Myeloid_Dendritic1",
-                         "Myeloid_Dendritic2",
-                         "Myofibroblasts",
-                         "Neutrophils",
-                         "NK_cells",
-                         "NonClassical_Monocytes",
-                         "OLR1_plus Classical Monocyte",
-                         "Plasma_Bcells",
-                         "Plasmacytoid_Dendritic_cells",
-                         "Pericyte",
-                         "Platelet_Megakaryocyte",
-                         "Prolif_Basal",
-                         "Prolif_NKT",
-                         "Proximal Basal",
-                         "Serous",
-                         "Signalling_AlvEpithelial",
-                         "Prolif_Macrophages",
-                         "Proximal_Ciliated",
-                         "T_cells",
-                         "TREM2_plus_Dendritic_cells",
-                         "Vascular_SMC",
-                         "Vein_cells"),
-        xeno_prim_human = c(),
-        xeno_mets_human = c(),
-        xeno_prim_mouse = c(),
-        xeno_mets_mouse = c(),
-        normal_bone = c(),
-        mm_prim = c("Fibroblasts",
-                    "Macrophages"),
-        mm_mets = c("Fibroblasts",
-                    "Int_Macrophages"),
-        dogs_prim = c(),
-        dogs_mets = c())
 
 harmony_params <-
     list(patient_prim = list(group_by = c("sample_name",

@@ -540,6 +540,88 @@ for (item in seq_len(nrow(object_list))) {
                             resolution = 1.5)
         }
 
+        # make a heatmap of top 5 markers per cluster
+        Idents(s_obj) <- "seurat_clusters"
+        markers <- 
+            FindAllMarkers(object = s_obj,
+                            min.pct = 0.25,
+                            logfc.threshold = 0.25,
+                            only.pos = T)
+        # reduce data
+        top_markers <- 
+            markers %>%
+            as.data.frame() %>%
+            group_by(cluster) %>% # group by cluster
+            slice_min(order_by = p_val_adj, 
+                        n = 5,
+                        with_ties = F)
+
+        # get list of top marker genes; including each gene only once
+        genes <- 
+            top_markers$gene %>%
+            unique()
+
+        # change to RNA assay
+        DefaultAssay(s_obj) <- "RNA"
+
+        # scale data for visualization
+        data <-
+            ScaleData(object = s_obj,
+                        assay = "RNA")
+        data <-
+            subset(x = data,
+               downsample = min(100, ncol(s_obj)))
+
+        heatmap_degs <-
+            DoHeatmap(object = data,
+                    features = genes,
+                    group.by = "seurat_clusters")
+        
+        # dotplot
+        top_markers <- 
+            markers %>%
+            as.data.frame() %>%
+            group_by(cluster) %>% # group by cluster (cell type)
+            slice_max(order_by = avg_log2FC, 
+                        n = 4,
+                        with_ties = F) # sort by log2FC and get top 2
+
+        # get genes
+        genes <-
+            top_markers$gene %>%
+            unique()
+        
+        # Create a named list: each cluster as a name, each value is a vector of its four genes
+        genes_Iwant <- 
+            top_markers %>%
+            group_by(cluster) %>%
+            summarise(genes = list(gene)) %>%
+            deframe()
+        
+
+        # make dot plot
+        dotplot_degs <-
+            DotPlot(object = s_obj,
+                    features = genes) +
+            RotatedAxis() 
+
+        # save the dotplot
+        width <- length(unique(s_obj$seurat_clusters)) * 1.5
+        height <- length(unique(s_obj$seurat_clusters)) * 2
+
+        combine <-
+            cowplot::plot_grid(heatmap_degs,
+                            dotplot_degs,
+                            ncol = 1)
+
+        ggsave(str_c("output/figures/relustering_normals/",
+                        group, "/", cell_type,
+                        "_degs_per_cluster.png"),
+                plot = combine,
+                width = width,
+                height = height,
+                bg = "white")
+
         # read inn old metadata for annotations 
         # note: have to run first without this section 
         filename <-
@@ -719,23 +801,6 @@ for (item in seq_len(nrow(object_list))) {
                 bg = "white")
     }
 }
-
-cell_markers <- list(
-    #activation_markers = c("FAP", "THY1", "PDGFRB", "S100A4"),
-    iCAFs = c("CXCL12", "CXCL14", "IL6", "CXCL1", "CXCL2"),   # Inflammatory CAFs
-    mCAFs = c("SPARC", "THBS2", "FN1", "POSTN"),  # Myofibroblastic CAFs
-    apCAFs = c("HLA-DRA", "CD74", "HLA-DRB1", "SLPI"),  # Antigen-presenting CAFs
-    pCAFs = c("MKI67", "TOP2A", "CDK1", "AURKB"),    # Proliferating CAFs
-    myCAFs = c("TAGLN", "ACTA2", "MYLK", "MYL9"),  # Myofibroblastic CAFs
-    Smooth_muscle = c("MYH11", "CNN1", "CNN1"),  # Smooth muscle cells
-    Pericytes = c("RGS5", "ABCC9", "ENPEP", "PLXDC1", "PDGFRB"),  # Pericytes
-    Alv_CAFs = c("NPNT", "CLIC5", "GPC3"),  # Alveolar CAFs
-    Subpleural_CAFs = c("CLDN11","MFAP4", "CTSK", "PRDX2"),  # Subpleural CAFs
-    Peribronchial_CAFs = c("SOX6", "CLMP", "ASPN", "HHIP"),  # Peribronchial CAFs
-    Adv_CAFs = c("MCAM", "CD34", "ADAMTSL1")  # Adventitial CAFs
-) %>%
-    unlist() %>%
-    unique()
 
 
 
