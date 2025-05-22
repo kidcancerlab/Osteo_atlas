@@ -63,7 +63,7 @@ import pandas as pd
 import numpy as np
 import matplotlib as plt
 import igraph
-# plt.use('Agg')
+plt.use('Agg')
 from matplotlib import pyplot
 from matplotlib.colors import ListedColormap
 import scanpy as sc
@@ -93,39 +93,35 @@ for ob in ob_names:
 ### Make Velocity Plots
 
 ```{python}
-color_mapping = {"Synthetic": "#D43F3A",
-                 "Fibrogenic": "#EEA236",
-                 "Progenitor": "#357EBD",
-                 "Proliferative": "#5CB85C",
-                 "Interactive": "#B8B8B8",
-                 "Apoptosis": "#9632B8"}
-
-
-`Osteoclast TAMs`
-"#D43F3AFF"
- 
-TAMs
-"#EEA236FF"
- 
-`Scar TAMs`
-"#357EBDFF"
- 
-Inflam TAMs`
-"#5CB85CFF"
- 
-Prolif TAMs`
-"#B8B8B8FF"
- 
-IFN TAMs`
-"#9632B8FF"
- 
-Monocytes
-"#46B8DAFF"
- 
-`Alv TAMs`
-"#90302DFF"
+color_mapping = {"Osteoclast_TAMs": "#D43F3AFF",
+                 "TAMs": "#EEA236FF",
+                 "Scar_TAMs": "#357EBDFF",
+                 "Inflam_TAMs": "#5CB85CFF",
+                 "Prolif_TAMs": "#B8B8B8FF",
+                 "IFN_TAMs": "#9632B8FF",
+                 "Monocytes": "#46B8DAFF",
+                 "Alv_TAMs": "#90302DFF"}
 
 
 for ob in ob_names:
     ad_ob = anndata.read("loom_output/tam_anndata/" + ob + ".ad")
+    scv.pl.velocity_embedding_stream(
+        ad_ob,
+        basis = "umap",
+        color = "Ann_Level3",
+        show = False,
+        palette = color_mapping,
+        sort_order = False)
+    pyplot.savefig("figures/scvelo/tams/" + ob + "_umap.png")
+    scv.pl.velocity_embedding_stream(
+        ad_ob,
+        basis = "fdl",
+        color = "Ann_Level3",
+        show = False,
+        palette = color_mapping,
+        sort_order = False)
+    pyplot.savefig("figures/scvelo/tams/" + ob + "_fdl.png")
+
+
+
 ```
