@@ -36,6 +36,21 @@ for (group in c("patient_prim", "patient_mets",
             na.omit() %>%
             unique()
     }
+    # try add module scre
+    # object <- 
+    #     AddModuleScore(object,
+    #                     features = list(genelist),
+    #                     name = "osteo_markers_module_score",)
+    # object[["osteo_markers_module_score"]] <- object[[str_c("osteo_markers_module_score", "1")]]
+    # object[[str_c("osteo_markers_module_score", "1")]] <- NULL
+
+    #  bulk_ms_score_per_celltype <- 
+    #     object@meta.data %>%
+    #     dplyr::select(osteo_markers_module_score, new_annot_clust) %>%
+    #     dplyr::group_by(new_annot_clust) %>%
+    #     dplyr::summarise(median = median(osteo_markers_module_score, na.rm = TRUE)) %>%
+    #     dplyr::arrange(desc(median))
+
     # if (species == "dog") {
     #     genelist <- 
     #         orthologs$dog_gene_name[match(genelist, orthologs$human_gene_ortholog)] %>%

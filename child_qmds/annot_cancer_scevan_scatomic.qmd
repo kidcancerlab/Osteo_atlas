@@ -447,3 +447,355 @@ for (group in c("patient_prim", "patient_mets",
 
 
 ```
+
+
+## test that the PDX and cell culture tumor cell can be used to annotate the tumor
+will use the reference we used to annoate the tumor cells in human, mice, and dog data
+to annotate a curated dataset where we know what cells are tumor and what are not
+the mouse These samples were injected with barcoded F420 cells. I'll be getting the barcode information from the bams and writing it off as a metadata table.
+Barcoded samples that aren't PDXs:
+    S0260
+    S0261
+
+For human part # reference has "S0170", "S0042" for xenograft hence we will use
+"SJOS013769_X1_human", "X00018_human",
+"S0034_human",          "X00020_human"
+
+```{r test_tumor_anno_with_curated_data}
+
+# make mouse object for validation
+### S0260 and S0261
+bc_calling <- list()
+for (ob in c("S0260", "S0261")) {
+    if (file.exists(paste0("output/metadata/barcode_", ob, ".tsv"))) {
+        bc_calling[[ob]] <- read.table(
+            paste0("output/metadata/barcode_", ob, ".tsv"),
+            header = TRUE
+        )
+    } else {
+        bc_calling[[ob]] <- gen_cellecta_bc_data(
+            file = paste0(
+                "/home/gdrobertslab/lab/Counts_2/",
+                ob,
+                "/possorted_genome_bam.bam"
+                    ),
+            verbose = TRUE,
+            output = paste0("output/metadata/barcode_", ob, ".tsv"),
+            samtools_module = "GCC/9.3.0 SAMtools/1.15"
+        )
+    }
+}
+
+ob_list <- list()
+for (ob in c("S0260", "S0261")) {
+    ob_list[[ob]] <- tenx_load_qc(
+        paste0(
+            "/home/gdrobertslab/lab/Counts_2/",
+            ob,
+            "/filtered_feature_bc_matrix"
+        ),
+        violin_plot = FALSE
+    )
+    ob_list[[ob]]$sample_id <- ob
+}
+
+qc_plts <- lapply(ob_list, feature_hist, features = c("nCount_RNA", "percent.mt"))
+grid.arrange(grobs = qc_plts)
+
+ob_list <- lapply(ob_list, function(x) {
+    subset(
+        x,
+        nCount_RNA %in% c(1000:60000) &
+        percent.mt < 10
+    ) %>%
+    process_seurat()
+})
+
+# add barcode info to objects and 
+for (ob in names(ob_list)) {
+    ob_list[[ob]]$barcoded <-
+        colnames(ob_list[[ob]]) %in% paste0(bc_calling[[ob]]$cid, "-1")
+}
+
+# merge
+mouse_sobj <- merge(ob_list[[1]], ob_list[[2]]) %>%
+    process_seurat()
+mouse_sobj$organism <- "mouse"
+mouse_sobj$sample_name <- mouse_sobj$sample_id
+mouse_sobj$truth_metadata <-
+    ifelse(mouse_sobj$is_tumor == "TRUE",
+           "tumor",
+           "stroma")
+S0260 <- 
+    mouse_sobj %>%
+    subset(sample_name == "S0260") %>%
+    process_seurat()
+qs::qsave(S0260,
+            str_c("output/seurat_objects/validation/tumor_annotation/",
+                "S0260_mouse.qs"))
+S0261 <- 
+    mouse_sobj %>%
+    subset(sample_name == "S0261") %>%
+    process_seurat()
+qs::qsave(S0261,
+            str_c("output/seurat_objects/validation/tumor_annotation/",
+                "S0261_mouse.qs"))
+
+
+# combination of samples for human tumor annotation and reference validation
+samples_to_combine <- 
+    tribble(~tumor_name, ~stroma_name,
+            "SJOS013769_X1_human", "X00018_human",
+            "S0034_human",          "X00020_human")
+
+for (i in seq_len(nrow(samples_to_combine))) {
+    stroma_name <- samples_to_combine$stroma_name[i]
+    tumor_name <- samples_to_combine$tumor_name[i]
+    stromal_metadata <- list()
+    tumor_metadata <- list()
+
+    # check if the object already exists
+    dir <- str_c("output/seurat_objects/sobj_preprocess")
+    stroma <-
+        qs::qread(str_c(dir, "/", stroma_name, ".qs"))
+    stroma$truth_metadata <- "stroma"
+    tumor <-
+        qs::qread(str_c(dir, "/", tumor_name, ".qs"))
+    tumor$truth_metadata <- "tumor"
+
+    combine_sobject <- 
+        merge(stroma, tumor,
+              add.cell.ids = c("stroma", "tumor")) %>%
+        JoinLayers() %>%
+        process_seurat()
+     if (!dir.exists("output/seurat_objects/validation/tumor_annotation/")) {
+        dir.create("output/seurat_objects/validation/tumor_annotation/", recursive = TRUE)
+    }
+    qs::qsave(combine_sobject,
+            str_c("output/seurat_objects/validation/tumor_annotation/",
+                tumor_name, "_", stroma_name,
+                "_combined.qs"))
+
+}
+
+# actual validation parent
+samples_for_validation <- 
+    c("S0260_mouse.qs",
+      "S0261_mouse.qs",
+      "SJOS013769_X1_human_X00018_human_combined.qs",
+      "S0034_human_X00020_human_combined.qs")
+
+for (names in samples_for_validation) {
+    combine_sobject <-
+        qs::qread(str_c("output/seurat_objects/validation/tumor_annotation/",
+                        names))
+    dimplot1 <-
+        dimplot_better(combine_sobject,
+                    group_by = "truth_metadata") +
+        NoLegend() + ggtitle("object with known tumor/stroma")
+    # Annotation
+    species <- combine_sobject$organism[[1]]
+
+    #use tumor before subsetting tumor
+    big_obj_with_tumor <-
+        annotate_celltypes(sobject = combine_sobject,
+                            species = species,
+                            with_tumor = TRUE,
+                            aggr_ref = TRUE)
+
+    # this is my method
+    ann_obj <-
+        annotate_celltypes(sobject = combine_sobject,
+                            species = species,
+                            with_tumor = FALSE,
+                            aggr_ref = TRUE)
+    ann_obj <-
+        clusterbased_annot(s_obj = ann_obj)
+
+    ann_obj$just_stroma_annot <- ann_obj$new_annot_clust
+    dimplot2 <-
+        dimplot_better(ann_obj,
+                    group_by = "just_stroma_annot") +
+        NoLegend() + ggtitle("Annotation with stroma referece")
+
+    # identify the potential tumor cells using the aucell with osteosarcoma markers
+    osteosarcoma_markers <- c("RUNX2", "COL1A1", "COL1A2", "SATB2")
+    potential_tumor_cells_list <- list()
+    species <- ann_obj$organism[[1]]
+    genelist <- osteosarcoma_markers
+    if (species == "mouse") {
+        genelist <- 
+            nichenetr::convert_human_to_mouse_symbols(genelist) %>%
+            na.omit() %>%
+            unique()
+    }
+    entire_matrix <-
+        ann_obj@assays$RNA$counts
+
+    genelist_present <- 
+        genelist[genelist %in% rownames(entire_matrix)]
+
+    cell_ranks <-
+        AUCell::AUCell_run(exprMat = entire_matrix,
+                           geneSets = genelist)
+
+    ann_obj$AUC_OsteoMarkers <- AUCell::getAUC(cell_ranks)[1,]
+    
+    bulk_score_per_cluster <- 
+        ann_obj@meta.data %>%
+        dplyr::select(AUC_OsteoMarkers, just_stroma_annot) %>%
+        dplyr::group_by(just_stroma_annot) %>%
+        dplyr::summarise(median = median(AUC_OsteoMarkers, na.rm = TRUE)) %>%
+        dplyr::arrange(desc(median))
+    tumor_cells <- 
+        bulk_score_per_cluster %>%
+        dplyr::filter(median > 0.3) %>%
+        dplyr::pull(just_stroma_annot)
+
+    stroma_cells <- 
+        bulk_score_per_cluster %>%
+        dplyr::filter(median <= 0.3) %>%
+        dplyr::pull(just_stroma_annot)
+    # subset the object
+    stroma_cells_sobj <-
+        subset(ann_obj,
+                just_stroma_annot %in% stroma_cells)
+    tumor_cells_sobj <-
+        subset(ann_obj,
+                just_stroma_annot %in% tumor_cells) %>%
+        process_seurat(resolution = 0.1)
+
+    dimplot3 <-
+        dimplot_better(tumor_cells_sobj,
+                    group_by = "just_stroma_annot") +
+        NoLegend() + ggtitle("Potential tumor cells")
+    
+    dimplot4 <-
+        dimplot_better(tumor_cells_sobj,
+                    group_by = "seurat_clusters") +
+        NoLegend() + ggtitle("Potential tumor cells")
+    
+    Idents(tumor_cells_sobj) <- tumor_cells_sobj$seurat_clusters
+    for (clusters in unique(tumor_cells_sobj$seurat_clusters)) {
+        sub_obj <- 
+            subset(tumor_cells_sobj,
+                   seurat_clusters == clusters) %>%
+            process_seurat(resolution = 0.1)
+        sub_obj <-
+            annotate_celltypes(sobject = sub_obj,
+                                species = species,
+                                with_tumor = TRUE,
+                                aggr_ref = TRUE)
+        sub_obj <-
+            clusterbased_annot(s_obj = sub_obj)
+
+        sub_obj$annot_with_tumor <- sub_obj$annotations
+
+    # save the ids
+        normal_ids <-
+            sub_obj@meta.data %>%
+            filter(annot_with_tumor != "Tumor_cells") %>%
+            rownames_to_column("cell_ids") %>%
+            select(cell_ids)
+
+        tumor_ids <-
+            sub_obj@meta.data %>%
+            filter(annot_with_tumor == "Tumor_cells") %>%
+            rownames_to_column("cell_ids") %>%
+            select(cell_ids)
+
+        # save the metadata
+        if (length(normal_ids$cell_ids) > 0) {
+            stromal_metadata[[clusters]] <- normal_ids
+        }
+        if (length(tumor_ids$cell_ids) > 0) {
+            tumor_metadata[[clusters]] <- tumor_ids
+        }
+    }
+    # save the metadata
+    stromal_cells_id <- bind_rows(stromal_metadata)
+    tumor_cells_id <- bind_rows(tumor_metadata)
+
+    combine_sobject$final_tumor_call <-
+        ifelse(colnames(combine_sobject) %in% tumor_cells_id$cell_ids,
+                "tumor",
+                "stroma")
+    dimplot5 <-
+        DimPlot(combine_sobject,
+            group.by = "final_tumor_call",
+            label = T,
+            cols = c("stroma" = "#EEA236FF", "tumor" = "#D43F3AFF"),
+            label.box = T) +
+        NoLegend() + 
+        ggtitle("Final tumor call")
+    dimplot6 <- 
+        DimPlot(combine_sobject,
+                group.by = "truth_metadata",
+                label = T,
+                cols = c("stroma" = "#EEA236FF", "tumor" = "#D43F3AFF"),
+                label.box = T) +
+        NoLegend() + 
+        ggtitle("truth metadata")
+
+    big_obj_with_tumor$annot_with_tumor_as_whole <-
+        ifelse(big_obj_with_tumor$annotations == "Tumor_cells",
+                "tumor",
+                "stroma")
+    dimplot7 <-
+        DimPlot(big_obj_with_tumor,
+                group.by = "annot_with_tumor_as_whole",
+                label = T,
+                cols = c("stroma" = "#EEA236FF", "tumor" = "#D43F3AFF"),
+                label.box = T) +
+        NoLegend() + 
+        ggtitle("annotation with tumor in whole object")
+    
+    # give me some kind of metric to see how well do the two annotations match
+
+    # Calculate confusion matrix and metrics to compare final_tumor_call vs truth_metadata
+
+    # Calculate precision for each predicted class (using columns as reference)
+    precision_table <- table_ann
+    for (pred_class in rownames(table_ann)) {
+        for (ref_class in colnames(table_ann)) {
+            TP <- table_ann[pred_class, ref_class]
+            FP <- sum(table_ann[pred_class, ]) - TP
+            precision <- if ((TP + FP) > 0) TP / (TP + FP) else NA
+            precision_table[pred_class, ref_class] <- round(precision, 3)
+        }
+    }
+    print("Precision table (rows: predicted, columns: reference):")
+    print(precision_table)
+    table_ann <- 
+        table(combine_sobject$truth_metadata,
+                combine_sobject$final_tumor_call)
+    table_ann <-
+        table(combine_sobject$truth_metadata,
+                big_obj_with_tumor$annot_with_tumor_as_whole)
+
+    # Calculate sensitivity (recall) and specificity for "tumor" label
+    if (all(c("tumor", "stroma") %in% rownames(table_ann)) && all(c("tumor", "stroma") %in% colnames(table_ann))) {
+        TP <- table_ann["tumor", "tumor"]
+        TN <- table_ann["stroma", "stroma"]
+        FP <- table_ann["tumor", "stroma"]
+        FN <- table_ann["stroma", "tumor"]
+        sensitivity <- TP / (TP + FN)
+        specificity <- TN / (TN + FP)
+        print(str_c("Sensitivity (tumor): ", round(sensitivity, 3)))
+        print(str_c("Specificity (stroma): ", round(specificity, 3)))
+    }
+
+    if (!dir.exists("output/seurat_objects/validation/tumor_annotation/")) {
+        dir.create("output/seurat_objects/validation/tumor_annotation/", recursive = TRUE)
+    }
+    qs::qsave(combine_sobject,
+            str_c("output/seurat_objects/validation/tumor_annotation/anno_",
+                names))
+}
+
+
+
+
+
+
+```

@@ -5,8 +5,7 @@
 
 all_samples_csv <- 
     readr::read_tsv("misc/allsample_details.txt",
-                    show_col_types = FALSE) %>%
-    filter(unique == "dogs_cc")
+                    show_col_types = FALSE)
 
 
 all_samples_csv$sp_pattern <-
