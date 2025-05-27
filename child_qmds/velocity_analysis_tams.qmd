@@ -122,6 +122,54 @@ for ob in ob_names:
         sort_order = False)
     pyplot.savefig("figures/scvelo/tams/" + ob + "_fdl.png")
 
+```
+
+## Get Velocity Driving Genes
+
+```{python}
+tam_velo_genes = dict()
+tam_ob_dict = dict()
+for ob in ob_names:
+    tmp = anndata.read("loom_output/tam_anndata/" + ob + ".ad")
+    tam_ob_dict[ob] = tmp
+    scv.tl.rank_velocity_genes(tmp, groupby = "Ann_Level3", min_corr = 0.3, min_counts = 10)
+    rank_genes = tmp.uns["rank_velocity_genes"]
+    df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
+    tam_velo_genes[ob] = df
+
+#also going to store genes by cell type
+tam_genes = dict()
+#initialize num_rows
+num_rows = 1000
+for ob in ob_names:
+    tam_genes[ob] = pd.DataFrame()
+    tmp_df = tam_velo_genes[ob]
+    #get smallest number of rows for any one df so we're not coercing NAs
+    tmp_n = len(tmp_df)
+    if tmp_n < num_rows:
+        num_rows = tmp_n
+    
+    col_names = tmp_df.columns
+    for cell_type in col_names:
+        tam_genes[ob] = tam_genes[ob].iloc[0:num_rows]
+        tam_genes[ob][cell_type] = tmp_df.iloc[0:num_rows][cell_type]
+        # scar_tam_genes[ob] = tam_velo_genes[ob].iloc[0:50][cell_type]
+
+
+tam_genes = dict()
+col_names = color_mapping.keys()
+for cell_type in col_names:
+    num_rows = 1000
+    tam_genes[cell_type] = pd.DataFrame()
+    for ob in ob_names:
+        tmp_df = tam_velo_genes[ob]
+        if len(tmp_df) < num_rows:
+            num_rows = len(df)
+        if cell_type in tmp_df.columns:
+            tam_genes[cell_type][ob] = tmp_df.iloc[0:num_rows][cell_type]
 
 
 ```
+
+Weirdly, even with increasing the minimum number of gene counts required for a gene to be included in the rank_genes results, there are still a significant amount of human genes in our results...
+
