@@ -248,8 +248,8 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
     plot_list <- list()
 
     list <-
-        c("CD74", "CD14", "CD68", "PTPRC",
-          "PTPRJ", "CSF1R", "nCount_RNA", "nFeature_RNA")
+        c("CD74", "CD14", "CD68","nCount_RNA",
+        "CTSB", "PTPRC", "PTPRJ", "CSF1R")
         
     for (gene in list) {
         plot_list[[gene]] <-

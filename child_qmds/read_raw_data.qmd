@@ -454,6 +454,79 @@ results <-
     return(harmony_obj)
 })
 
+# plot the dimplot of the harmony object
+for (groups in c("patient_prim",
+                 "patient_mets",
+                 "xeno_prim_human",
+                 "xeno_mets_human",
+                 "xeno_prim_mouse",
+                 "xeno_mets_mouse",
+                 "mm_prim",
+                 "mm_mets",
+                 "dogs_prim",
+                 "dogs_mets",
+                 "normal_bone",
+                 "dogs_cc")) {
+    harmony_obj <- 
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                        groups,
+                        ".qs"))
+    dimplot1 <- 
+        dimplot_better(harmony_obj,
+                    group_by = "seurat_clusters") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
+
+    dimplot2 <- 
+        dimplot_better(harmony_obj,
+                group_by = "model") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
+
+    dimplot3 <- 
+        dimplot_better(harmony_obj,
+                    group_by = "sample_name") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
+    
+    dimplot4 <- 
+        dimplot_better(harmony_obj,
+                    group_by = "data_source") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
+
+    harmony_dimplots <- 
+        patchwork::wrap_plots(dimplot1,
+                                dimplot2,
+                                dimplot3,
+                                dimplot4,
+                                ncol = 2,
+                                widths = 14,
+                                heights = 14) +
+        patchwork::plot_annotation(title = str_c(groups, " post harmony dimplots")) +
+        theme(plot.title = element_text(size = 10))
+
+    directory <- 
+        str_c("output/figures/combined_plots/", groups)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+    #save the combined plots
+    ggsave(str_c("output/figures/combined_plots/",
+                 groups,
+                 "/",
+                 "postHarmony_combined_plots.png"),
+           plot = harmony_dimplots,
+           width = 14,
+           height = 14)
+
+    #save as a qs image
+    qs::qsave(harmony_dimplots,
+              str_c("output/figures/combined_plots/",
+                 groups,
+                 "/",
+                 "postHarmony_combined_plots.pdf"))
+}
 
 ```
 

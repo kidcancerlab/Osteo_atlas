@@ -372,6 +372,7 @@ snv_result_path <-
     #"/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/id_tumor/snvs/"
     #"/gpfs0/home2/gdrobertslab/lab/Analysis/Matt/24_Osteo_atlas/output/id_tumor/snvs/"
     "/gpfs0/home2/gdrobertslab/lab/Analysis/Matt/24_Osteo_atlas/output/id_tumor/snvs/"
+
 snv_depth <-
     read_tsv("misc/use_snv_tumor_calls.txt")
 
@@ -542,6 +543,7 @@ qs::qsave(S0261,
                 "S0261_mouse.qs"))
 
 
+
 # combination of samples for human tumor annotation and reference validation
 samples_to_combine <- 
     tribble(~tumor_name, ~stroma_name,
@@ -578,6 +580,7 @@ for (i in seq_len(nrow(samples_to_combine))) {
 
 }
 
+
 # actual validation parent
 samples_for_validation <- 
     c("S0260_mouse.qs",
@@ -609,6 +612,7 @@ for (names in samples_for_validation) {
                             species = species,
                             with_tumor = FALSE,
                             aggr_ref = TRUE)
+
     ann_obj <-
         clusterbased_annot(s_obj = ann_obj)
 
@@ -676,6 +680,8 @@ for (names in samples_for_validation) {
         NoLegend() + ggtitle("Potential tumor cells")
     
     Idents(tumor_cells_sobj) <- tumor_cells_sobj$seurat_clusters
+    stromal_metadata <- list()
+    tumor_metadata <- list()
     for (clusters in unique(tumor_cells_sobj$seurat_clusters)) {
         sub_obj <- 
             subset(tumor_cells_sobj,
@@ -727,6 +733,7 @@ for (names in samples_for_validation) {
             cols = c("stroma" = "#EEA236FF", "tumor" = "#D43F3AFF"),
             label.box = T) +
         NoLegend() + 
+        theme_void() +
         ggtitle("Final tumor call")
     dimplot6 <- 
         DimPlot(combine_sobject,
@@ -735,55 +742,177 @@ for (names in samples_for_validation) {
                 cols = c("stroma" = "#EEA236FF", "tumor" = "#D43F3AFF"),
                 label.box = T) +
         NoLegend() + 
+        theme_void() +
         ggtitle("truth metadata")
 
     big_obj_with_tumor$annot_with_tumor_as_whole <-
         ifelse(big_obj_with_tumor$annotations == "Tumor_cells",
                 "tumor",
                 "stroma")
+
+    # add metadata of the big_obj_with_tumor column annot_with_tumor_as_whole to combine_sobject
+    combine_sobject$annot_with_tumor_as_whole <-
+        big_obj_with_tumor$annot_with_tumor_as_whole[
+            match(colnames(combine_sobject),
+                colnames(big_obj_with_tumor))]
+    
     dimplot7 <-
-        DimPlot(big_obj_with_tumor,
+        DimPlot(combine_sobject,
                 group.by = "annot_with_tumor_as_whole",
                 label = T,
                 cols = c("stroma" = "#EEA236FF", "tumor" = "#D43F3AFF"),
                 label.box = T) +
         NoLegend() + 
         ggtitle("annotation with tumor in whole object")
-    
+
+    # patchwork the plots
+    dimplot_combined <- 
+        patchwork::wrap_plots(dimplot5,
+                            dimplot6,
+                            dimplot7,
+                            ncol = 2) +
+            patchwork::plot_annotation(title = names)
+    directory <-
+        str_c("output/figures/validation/tumor_annotation_method/", names)
+
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+    ggsave(str_c(directory, "/",
+                names, "_dimplot.png"),
+            plot = dimplot_combined,
+            width = 14,
+            height = 14)
     # give me some kind of metric to see how well do the two annotations match
+    metadata <-
+        combine_sobject@meta.data %>%
+        select(annot_with_tumor_as_whole, final_tumor_call, truth_metadata) %>%
+        rownames_to_column("cell_id") %>%
+        arrange(truth_metadata,
+                final_tumor_call,
+                annot_with_tumor_as_whole) %>%
+        mutate(cell_id_number = row_number()) %>%
+        rename(Truth = truth_metadata,
+                FinalCall = final_tumor_call,
+                CallAsWhole = annot_with_tumor_as_whole)
+    
+    # make tile plot of the metadata
+    prepared_metadata <-
+        metadata %>%
+        pivot_longer(cols = -c(cell_id, cell_id_number),
+                names_to = "method",
+                values_to = "call") 
+        # Set factor levels for method and call to control order in plot
+    prepared_metadata$method <- 
+        factor(prepared_metadata$method, 
+                levels = c("Truth", "FinalCall", "CallAsWhole"))
+    prepared_metadata$call <- 
+        factor(prepared_metadata$call, 
+              levels = c("tumor", "stroma"))
+    tile_plot <-
+        ggplot(prepared_metadata, aes(x = method, y = cell_id_number, fill = call)) +
+            geom_tile() +
+            scale_fill_manual(values = c("stroma" = "#EEA236FF", "tumor" = "#D43F3AFF")) +
+            theme_minimal() +
+            labs(title = "Tumor annotation comparison",
+             x = "Annotation Method",
+             y = "Cell Index") +
+            theme(
+            axis.text.x = element_text(angle = 0, hjust = 0.5, face = "bold"),
+            axis.text.y = element_blank(),
+            axis.ticks.y = element_blank(),
+            panel.grid = element_blank(),
+            plot.margin = margin(0, 0, 0, 0), # Remove extra space around plot
+            plot.background = element_rect(fill = NA, color = NA),
+            panel.spacing = unit(0, "pt"),
+            panel.border = element_blank()
+            ) +
+            scale_y_reverse(expand = c(0, 0)) +
+            scale_x_discrete(expand = c(0, 0)) +
+            geom_vline(xintercept = seq(1.5, length(unique(prepared_metadata$method)) - 0.5, by = 1), 
+                   color = "black", linetype = "dotted", size = 0.2) +
+            coord_cartesian(clip = "on")
+    
+    # Confusion matrices and accuracy
+    confusion_matrix_final <- table(metadata$Truth, metadata$FinalCall)
+    confusion_matrix_whole <- table(metadata$Truth, metadata$CallAsWhole)
+    accuracy_final <- sum(diag(confusion_matrix_final)) / sum(confusion_matrix_final)
+    accuracy_whole <- sum(diag(confusion_matrix_whole)) / sum(confusion_matrix_whole)
 
-    # Calculate confusion matrix and metrics to compare final_tumor_call vs truth_metadata
+    # Accuracy barplot
+    accuracy_df <- data.frame(
+        Method = factor(c("Truth", "FinalCall", "CallAsWhole"),
+                        levels = c("Truth", "FinalCall", "CallAsWhole")),
+        Accuracy = c(1, accuracy_final, accuracy_whole)
+    )
+    accuracy_barplot <-
+        ggplot(accuracy_df, aes(x = Method, y = Accuracy, fill = Method)) +
+            geom_bar(stat = "identity", width = 0.7, show.legend = FALSE) +
+            geom_text(aes(label = round(Accuracy, 3), y = Accuracy/2), color = "white", size = 4) +
+            labs(title = "Accuracy of Tumor Calls", x = "Methods", y = "Accuracy") +
+            theme_minimal() +
+            theme(axis.text.x = element_text(angle = 0, hjust = 0.5, face = "bold"),
+              axis.text.y = element_text(face = "bold"),
+              panel.grid = element_blank(),
+              panel.border = element_blank()) +
+            scale_fill_manual(values = c("Truth" = "#A0522D", "FinalCall" = "#D43F3AFF", "CallAsWhole" = "#0072B2FF")) +
+            ylim(0, 1.05) +
+            scale_y_continuous(expand = c(0, 0)) +
+            scale_x_discrete(expand = c(0, 0))
 
-    # Calculate precision for each predicted class (using columns as reference)
-    precision_table <- table_ann
-    for (pred_class in rownames(table_ann)) {
-        for (ref_class in colnames(table_ann)) {
-            TP <- table_ann[pred_class, ref_class]
-            FP <- sum(table_ann[pred_class, ]) - TP
-            precision <- if ((TP + FP) > 0) TP / (TP + FP) else NA
-            precision_table[pred_class, ref_class] <- round(precision, 3)
-        }
+    # Confusion matrix plots
+    confusion_list <- list(
+        FinalCall = list(tbl = confusion_matrix_final, acc = accuracy_final),
+        CallAsWhole = list(tbl = confusion_matrix_whole, acc = accuracy_whole)
+    )
+    confusion_plots <- 
+        lapply(names(confusion_list), function(method) {
+            tbl <- confusion_list[[method]]$tbl
+            acc <- confusion_list[[method]]$acc
+            df_tbl <- as.data.frame(as.table(tbl))
+            colnames(df_tbl) <- c("Truth", "Prediction", "Freq")
+            ggplot(df_tbl, aes(x = Prediction, y = Truth, fill = Freq)) +
+                geom_tile(color = "white") +
+                geom_text(aes(label = Freq), size = 3) +
+                scale_fill_gradient(low = "#F0F0F0", high = "#D43F3AFF") +
+                theme_minimal() +
+                labs(title = paste0("Confusion Matrix: ", method,
+                                   "\nAccuracy: ", round(acc, 3)),
+                     x = "Predicted", y = "Truth") +
+                theme(panel.grid = element_blank(),
+                      plot.title = element_text(hjust = 0.5, size = 8, face = "bold"),
+                      legend.position = "none",
+                      axis.title.y = element_text(angle = 90),
+                      axis.text.y = element_text(angle = 90, vjust = 0.5, hjust = 0.5))
+        })
+    confusion_combined <- 
+        patchwork::wrap_plots(confusion_plots, nrow = 1)
+    
+    # save the plot_grid
+    all_plot <- 
+        cowplot::plot_grid(tile_plot, 
+                            accuracy_barplot,
+                            confusion_combined,
+                            ncol = 1,
+                            rel_heights = c(1, 0.5, 0.4),
+                            align = "v") +
+            patchwork::plot_annotation(title = str_c(names, " Tumor ID by methods")) &
+            theme(plot.title = element_text(size = 10))
+    
+    # save the confusion matrix plot
+    if (!dir.exists("output/figures/validation/tumor_annotation_method/")) {
+        dir.create("output/figures/validation/tumor_annotation_method/", recursive = TRUE)
     }
-    print("Precision table (rows: predicted, columns: reference):")
-    print(precision_table)
-    table_ann <- 
-        table(combine_sobject$truth_metadata,
-                combine_sobject$final_tumor_call)
-    table_ann <-
-        table(combine_sobject$truth_metadata,
-                big_obj_with_tumor$annot_with_tumor_as_whole)
-
-    # Calculate sensitivity (recall) and specificity for "tumor" label
-    if (all(c("tumor", "stroma") %in% rownames(table_ann)) && all(c("tumor", "stroma") %in% colnames(table_ann))) {
-        TP <- table_ann["tumor", "tumor"]
-        TN <- table_ann["stroma", "stroma"]
-        FP <- table_ann["tumor", "stroma"]
-        FN <- table_ann["stroma", "tumor"]
-        sensitivity <- TP / (TP + FN)
-        specificity <- TN / (TN + FP)
-        print(str_c("Sensitivity (tumor): ", round(sensitivity, 3)))
-        print(str_c("Specificity (stroma): ", round(specificity, 3)))
-    }
+    ggsave(str_c("output/figures/validation/tumor_annotation_method/",
+                names, "_tumor_annotation_method.png"),
+            plot = all_plot,
+            width = 5,
+            height = 10)
+    ggsave(str_c("output/figures/validation/tumor_annotation_method/",
+                names, "_tumor_annotation_method.pdf"),
+            plot = all_plot,
+            width = 5,
+            height = 10)
 
     if (!dir.exists("output/seurat_objects/validation/tumor_annotation/")) {
         dir.create("output/seurat_objects/validation/tumor_annotation/", recursive = TRUE)
@@ -792,10 +921,5 @@ for (names in samples_for_validation) {
             str_c("output/seurat_objects/validation/tumor_annotation/anno_",
                 names))
 }
-
-
-
-
-
 
 ```

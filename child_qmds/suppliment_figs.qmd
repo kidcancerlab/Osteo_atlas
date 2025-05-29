@@ -165,11 +165,12 @@ for (group in c("patient_prim", "patient_mets",
 }
 
 
-# another way to show that there was descrepancy in tumor cell calling is using sanky plots
+# another way to show that there was descrepancy in tumor cell calling is using sanky plots and heatmaps
 cols <-
     list("Tumor" = "#D43F3AFF",
         "Normal" = "#EEA236FF",
-        "unknown" = "#357EBDFF")
+        "unknown" = "#357EBDFF",
+        "Host" = "#EEA236FF")
 # make a sankey plot to show the tumor calling
 for (group in c("patient_prim", "patient_mets",
                 "mm_prim", "mm_mets",
@@ -178,6 +179,7 @@ for (group in c("patient_prim", "patient_mets",
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
+
     metadata <- 
         object@meta.data %>%
         as.data.frame() %>%
@@ -185,107 +187,185 @@ for (group in c("patient_prim", "patient_mets",
         select(cell_id,
                scatomic_tumor_call,
                scevan_tumor_call,
-               final_snv_call) %>%
-        mutate(cell_id_number = row_number())
+               final_snv_call,
+               Ann_Level0) %>%
+               arrange(Ann_Level0,
+                       final_snv_call,
+                       scatomic_tumor_call,
+                       scevan_tumor_call) %>%
+        mutate(cell_id_number = row_number()) %>%
+        mutate(scATOMIC = str_replace_all(scatomic_tumor_call, 
+                                        c("normal_cells" = "Normal",
+                                        "cancer_cells" = "Tumor",
+                                        "Host" = "Normal")),
+               SCEVAN = str_replace_all(scevan_tumor_call, 
+                                        c("normal_cells" = "Normal",
+                                        "cancer_cells" = "Tumor",
+                                        "Host" = "Normal")),
+               SCANBIT = str_replace_all(final_snv_call,
+                                        c("normal_cells" = "Normal",
+                                        "cancer_cells" = "Tumor",
+                                        "Host" = "Normal")),
+               FinalCall = str_replace_all(Ann_Level0,
+                                        c("Host" = "Normal"))) %>%
+        mutate(across(c(scATOMIC, SCEVAN, SCANBIT, FinalCall), ~replace_na(., "unknown"))) %>%
+        select(cell_id, cell_id_number, scATOMIC, SCEVAN, SCANBIT, FinalCall)
+    # do some statistics to see how different the tumor calling is compared to truth set Ann_Level0
+    # Calculate confusion matrices and agreement statistics for each method vs Ann_Level0
+    comparison <- list()
+    for (method in c("scATOMIC", "SCEVAN", "SCANBIT", "FinalCall")) {
+        tbl <- 
+            table(Truth = metadata$FinalCall,
+                  Prediction = metadata[[method]])
+        # Cohen's kappa (skip for Ann_Level0 vs itself)
+        if (method == "FinalCall") {
+            kappa <- NA
+        } else {
+            kappa <- suppressWarnings(irr::kappa2(data.frame(metadata$FinalCall,
+                                                             metadata[[method]]))$value)
+        }
+        # Accuracy
+        acc <- sum(diag(tbl)) / sum(tbl)
+        comparison[[method]] <- 
+            list(confusion_matrix = tbl,
+                 kappa = kappa,
+                 accuracy = acc)
+    }
+    # Prepare accuracy data frame
+    comparison_df <- 
+        tibble(Method = names(comparison),
+               Accuracy = sapply(comparison, function(x) x$accuracy))
+    comparison_df$Method <- 
+        factor(comparison_df$Method,
+               levels = c("FinalCall", "SCANBIT", "scATOMIC", "SCEVAN"))
+    # Accuracy barplot
+    accuracy_plot <- 
+        ggplot(comparison_df, aes(x = Method, y = Accuracy, fill = Method)) +
+            geom_col(width = 0.7) +
+            geom_text(aes(label = round(Accuracy, 3), y = Accuracy / 2), size = 4, color = "white") +
+            theme_minimal() +
+            scale_fill_manual(values = c("scATOMIC" = "#5CB85CFF",
+                                         "SCEVAN" = "#46B8DAFF",
+                                         "SCANBIT" = "#9632B8FF",
+                                         "FinalCall" = "#D43F3AFF")) +
+            theme(legend.position = "none",
+                  panel.grid = element_blank(),
+                  axis.title.x = element_text(),
+                  axis.title.y = element_text(),
+                  axis.text.y = element_text(face = "bold"),
+                  axis.text.x = element_text(angle = 0, hjust = 0.5, face = "bold")) +
+            labs(x = "Methods", y = "Accuracy")+
+            scale_y_continuous(expand = c(0, 0)) +
+            scale_x_discrete(expand = c(0, 0))
 
+    # Plot confusion matrices for each method vs FinalCall
+    confusion_plots <- list()
+    for (method in c("SCANBIT", "scATOMIC", "SCEVAN")) {
+        tbl <- comparison[[method]]$confusion_matrix
+        acc <- comparison[[method]]$accuracy
+        df_tbl <- as.data.frame(as.table(tbl))
+        confusion_plot <- 
+            ggplot(df_tbl, aes(x = Prediction, y = Truth, fill = Freq)) +
+            geom_tile(color = "white") +
+            geom_text(aes(label = Freq), size = 3) +
+            scale_fill_gradient(low = "#F0F0F0", high = "#D43F3AFF") +
+            theme_minimal() +
+            labs(title = paste0("Confusion Matrix: ", method, "\nAccuracy: ", round(acc, 2)),
+                x = "Predicted", 
+                y = "Truth") +
+            theme(panel.grid = element_blank(),
+                plot.title = element_text(hjust = 0.5, size = 8, face = "bold"),
+                legend.position = "none",
+                axis.title.y = element_text(angle = 90),
+                axis.text.y = element_text(angle = 90, vjust = 0.5, hjust = 0.5))
+
+        confusion_plots[[method]] <- confusion_plot
+    }
+    # Combine confusion plots into one figure
+    confusion_combined <- 
+        patchwork::wrap_plots(confusion_plots,
+                                nrow = 1) 
+            
     matadata_mimic <-
         metadata %>%
         pivot_longer(cols = -c(cell_id, cell_id_number),
                 names_to = "method",
                 values_to = "call") %>%
         mutate(method = str_replace_all(method, c("scatomic_tumor_call" = "scATOMIC",
-                                                   "final_snv_call" = "SNV",
-                                                   "scevan_tumor_call" = "SCEVAN")),
+                                                   "final_snv_call" = "SCANBIT",
+                                                   "scevan_tumor_call" = "SCEVAN",
+                                                   "Ann_Level0" = "FinalCall")),
                call = str_replace_all(call, c("normal_cells" = "Normal",
-                                              "cancer_cells" = "Tumor"))) %>%
+                                              "cancer_cells" = "Tumor",
+                                              "Host" = "Normal"))) %>%
         replace_na(list(call = "unknown"))
-
-    # make a sankey plot to show the tumor calling
-    sankey_plot <-
-        ggplot(matadata_mimic %>% 
-                mutate(method = factor(method, 
-                                        levels = c("scATOMIC", "SCEVAN", "SNV"))),
-                aes(x = method, stratum = call, alluvium = cell_id,
-                    y = cell_id_number,
-                    fill = call, label = call)) +
-        geom_flow() +
+    
+    # make a tile plot to show the tumor calling by methods
+    tile_plot <-
+        ggplot(matadata_mimic %>%
+            mutate(method = factor(method,
+                                  levels = c("FinalCall", "SCANBIT", "scATOMIC", "SCEVAN"))),
+            aes(x = method, y = -cell_id_number, fill = call)) +
+        geom_tile() +
         scale_fill_manual(values = unlist(cols)) +
-        geom_stratum(alpha = 1) +
-        scale_y_continuous(expand = c(0, 0)) +
-        scale_x_discrete(expand = c(0, 0)) +
         theme_minimal() +
         theme(axis.title.x = element_blank(),
             axis.title.y = element_blank(),
             axis.text.x = element_text(size = 10, face = "bold"),
             axis.text.y = element_blank(),
             plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
-            panel.grid = element_blank()) +
-        ggtitle(str_c(group, " Tumor ID by methods"))
+            panel.grid = element_blank())
+    # put tile and final_plot together
+    combined_tile_plot <-
+        cowplot::plot_grid(tile_plot, accuracy_plot, confusion_combined,
+                            ncol = 1,
+                            rel_heights = c(1, 0.5, 0.4),
+                            align = "v") +
+        patchwork::plot_annotation(title = str_c(group, " Tumor ID by methods")) &
+        theme(plot.title = element_text(size = 20))
 
     ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
-                    group, "/",
-                    "tumor_id_sankey.pdf"),
-            plot = sankey_plot,
-            bg = "white",
-            width = 5,
-            height = 7)
+                 group, "/",
+                 "tumor_id_tileplot.pdf"),
+           plot = combined_tile_plot,
+           bg = "white",
+           width = 7,
+           height = 10)
     ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
-                    group, "/",
-                    "tumor_id_sankey.png"),
-            plot = sankey_plot,
-            bg = "white",
-            width = 5,
-            height = 7)
+                 group, "/",
+                 "tumor_id_tileplot",
+                 ".png"),
+           plot = combined_tile_plot,
+           bg = "white",
+           width = 7,
+           height = 10,
+           dpi = 300,           # Higher resolution
+           type = "cairo")      # Better color rendering for PNG
 
-    # Create a heatmap showing agreement between tumor calling methods
-    metadata_for_heatmap <-
-        metadata %>%
-        mutate(scatomic_tumor_call = str_replace_all(scatomic_tumor_call, c("normal_cells" = "0",
-                                                                            "cancer_cells" = "1",
-                                                                            "unknown" = NA)),
-               scevan_tumor_call = str_replace_all(scevan_tumor_call, c("normal_cells" = "0",
-                                                                        "cancer_cells" = "1",
-                                                                        "unknown" = NA)),
-               final_snv_call = str_replace_all(final_snv_call, c("normal_cells" = "0",
-                                                                  "cancer_cells" = "1",
-                                                                  "unknown" = NA))) %>%
-        select(scatomic_tumor_call,
-               scevan_tumor_call,
-               final_snv_call,
-               cell_id) %>%
-        mutate(scatomic_tumor_call = as.numeric(scatomic_tumor_call),
-               scevan_tumor_call = as.numeric(scevan_tumor_call),
-               final_snv_call = as.numeric(final_snv_call)) %>%
-        rename(scATOMIC = scatomic_tumor_call,
-                SCEVAN = scevan_tumor_call,
-                SNV = final_snv_call) %>%
-        column_to_rownames("cell_id") %>%
-        as.matrix() 
-    
-    # make a heatmap to show the agreement between the methods
-    heatmap <-
-        pheatmap::pheatmap(
-            metadata_for_heatmap, 
-            show_rownames = FALSE,
-            color = c("0" = "#EEA236FF", "1" = "#D43F3AFF"),
-            cluster_cols = TRUE,
-            cluster_rows = FALSE,
-            angle = 0)
-    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
-                    group, "/",
-                    "tumor_id_heatmap.pdf"),
-            plot = heatmap,
-            bg = "white",
-            width = 3,
-            height = 7)
-    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
-                    group, "/",
-                    "tumor_id_heatmap.png"),
-            plot = heatmap,
-            bg = "white",
-            width = 3,
-            height = 7)
+    # make a sankey plot to show the tumor calling
+    # sankey_plot <-
+    #     ggplot(matadata_mimic %>% 
+    #             mutate(method = factor(method, 
+    #                                     levels = c("scATOMIC", "SCEVAN", "SNV"))),
+    #             aes(x = method, stratum = call, alluvium = cell_id,
+    #                 y = cell_id_number,
+    #                 fill = call, label = call)) +
+    #     geom_flow() +
+    #     scale_fill_manual(values = unlist(cols)) +
+    #     geom_stratum(alpha = 1) +
+    #     scale_y_continuous(expand = c(0, 0)) +
+    #     scale_x_discrete(expand = c(0, 0)) +
+    #     theme_minimal() +
+    #     theme(axis.title.x = element_blank(),
+    #         axis.title.y = element_blank(),
+    #         axis.text.x = element_text(size = 10, face = "bold"),
+    #         axis.text.y = element_blank(),
+    #         plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
+    #         panel.grid = element_blank()) +
+    #     ggtitle(str_c(group, " Tumor ID by methods"))
+
 }
+
 
 ```
 

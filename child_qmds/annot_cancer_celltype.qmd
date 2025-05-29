@@ -7,15 +7,15 @@ This will annotate celltypes for tumor and normal call
 #| fig.align: center
 #| echo: FALSE
 #| dependson: [annot_celltypes, read_metadata, dog_human_gene]
-osteosarcoma_markers <- c("COL1A1", "COL1A2", "SATB2", "RUNX2",
-             "TNC", "CTHRC1", "MRC2", "IBSP", "PDGFD")
+osteosarcoma_markers <- 
+    c("COL1A1", "COL1A2", "SATB2", "RUNX2",
+      "TNC", "CTHRC1", "MRC2", "IBSP", "PDGFD")
 
 osteosarcoma_markers <-
     c("RUNX2",
       "COL1A1",
       "COL1A2",
       "SATB2")
-
 
 potential_tumor_cells_list <- list()
 
