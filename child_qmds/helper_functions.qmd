@@ -87,6 +87,103 @@ clusterbased_annot <- function(s_obj) {
 
 ```
 
+## making the mouse and human tumor cell references
+```{r make_human_and_mouse_tumor_cell_refs}
+
+# # make the mouse
+# # make a reference for all tumor cells, using cell culture data documantation
+# mouse_tumor_cell <-
+#     qs::qread("output/seurat_objects/comb_sobjs/mm_prim.qs") %>%
+#     subset(sample_name %in% c("S0200", "S0201"))
+
+# #create a column with the cell type
+# mouse_tumor_cell$CellType <- "Tumor_cells"
+
+# if (!dir.exists("input/downloads")) {
+#     dir.create("input/downloads", recursive = TRUE)
+# }
+# #save the object
+# qs::qsave(mouse_tumor_cell,
+#           file = "input/downloads/mm_tumor_cellculture.qs")
+
+
+# #make human tumor cell reference except for the 
+# # randomily select the samples for later validation, two for primary and two for metastasis
+# xeno_prim_human <-
+#     qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs")
+# random_two_prim_over_500_cells <-
+#     table(xeno_prim_human$sample_name) %>%
+#     as.data.frame() %>%
+#     filter(Freq > 5000) %>%
+#     pull(Var1)
+# set.seed(199820)
+# randomly_select_samples_prim <-
+#     sample(random_two_prim_over_500_cells, 2) %>%
+#     as.vector()
+# #samples selected: 1) S0042 2)SJOS016015_X1
+# # make the reference without the randomly selected samples
+# xeno_prim_human_ref <-
+#     xeno_prim_human %>%
+#     subset(sample_name %in% setdiff(unique(xeno_prim_human$sample_name), randomly_select_samples_prim))
+
+# # Randomly sample 500 cells from the remaining object
+# set.seed(199822)
+# xeno_prim_human_ref_ds <-
+#     xeno_prim_human_ref %>%
+#     subset(cells = unlist(
+#         split(Cells(.), .$sample_name) %>%
+#             lapply(function(cells) sample(cells, min(500, length(cells)))) %>%
+#             unname()))
+
+# # do same for xeno_mets_human
+# xeno_mets_human <-
+#     qs::qread("output/seurat_objects/comb_sobjs/xeno_mets_human.qs")
+
+# random_two_mets_over_5000_cells <-
+#     table(xeno_mets_human$sample_name) %>%
+#     as.data.frame() %>%
+#     filter(Freq > 5000) %>%
+#     pull(Var1)
+# set.seed(199821)
+# randomly_select_samples_mets <-
+#     sample(random_two_mets_over_5000_cells, 2) %>%
+#     as.vector()
+# # selected samples: 1) S0055  2)SJOS001112_X1
+
+# # remove the randomly selected samples from the metastasis object
+# xeno_mets_human_ref <-
+#     xeno_mets_human %>%
+#     subset(sample_name %in% setdiff(unique(xeno_mets_human$sample_name), randomly_select_samples_mets))
+
+# # Randomly sample 500 cells from the remaining object
+# set.seed(199823)
+# xeno_mets_human_ref_ds <-
+#     xeno_mets_human_ref %>%
+#     subset(cells = unlist(
+#         split(Cells(.), .$sample_name) %>%
+#             lapply(function(cells) sample(cells, min(500, length(cells)))) %>%
+#             unname()))
+
+# # comebine the two and make a reference
+# xeno_human_tumor_ref <-
+#     merge(xeno_prim_human_ref_ds,
+#           xeno_mets_human_ref_ds,
+#           add.cell.ids = c("xeno_prim", "xeno_mets"),
+#           project = "tumor_ref") %>%
+#     JoinLayers() %>%
+#     process_seurat() %>%
+#     RunHarmony(group.by.vars = c("sample_name", "data_source"),
+#                 theta = c(7, 7)) %>%
+#     process_seurat(reduction = "harmony")
+
+# #dimplot_better(xeno_human_tumor_ref, group_by = "sample_name")
+
+# qs::qsave(xeno_human_tumor_ref,
+#           file = "input/downloads/tumor_ref_from_xenograft.qs")
+```
+
+
+
 ## Cell type annotaton data compilation
 Human normal lung reference data downloaded from
 Mouse lung reference data is from
@@ -96,93 +193,28 @@ https://www.synapse.org/Synapse:syn21560554
 We kept only the normoxic samples for the analysis
 ```{r celltype_annotation_data}
 #| cache.vars: [human_lung_ref, mouse_lung_ref, human_tumor_cell, mouse_tumor_cell]
+
+#reference for annotating mets
 human_lung_ref <-
-    qs::qread("input/downloads/human_lung.qs")
+    qs::qread("input/downloads/ds_human_lung_atlas.qs")
+human_lung_ref$free_annotation <-
+    human_lung_ref$free_annotation %>%
+    str_replace_all(c("Lymphatic_EC_differentiating" = "Lymphatic_EC",
+                     "Lymphatic_EC_mature" = "Lymphatic_EC"))
 
 human_lung_ref$free_annotation <-
     str_replace_all(human_lung_ref$free_annotation, c("/" = "_",
                                                   "\\+" = "_plus"))
 
 human_lung_ref$free_annotation <-
-    stringr::str_replace_all(
-        human_lung_ref$free_annotation,
-        c("^Alveolar Epithelial Type 1$" = "AlvEpithelial_T1",
-          "^Alveolar Epithelial Type 2$" = "AlvEpithelial_T2",
-          "^Signaling Alveolar Epithelial Type 2$" = "Signalling_AlvEpithelial",
-          "^Basophil_Mast 1$" = "Basophil_Mast1",
-          "^Basophil_Mast 2$" = "Basophil_Mast2",
-          "^Bronchial Vessel 1$" = "Bronchial_Vessel1",
-          "^Bronchial Vessel 2$" = "Bronchial_Vessel2",
-          "^IGSF21_plus Dendritic$" = "IGSF21_plus_Dendritic_cells",
-          "^Myeloid Dendritic Type 1$" = "Myeloid_Dendritic1",
-          "^Myeloid Dendritic Type 2$" = "Myeloid_Dendritic2",
-          "^Natural Killer$" = "NK_cells",
-          "^Natural Killer T$" = "NKT_cells",
-          "^NK cells T$" = "NKT_cells",
-          "^CD4_plus Memory/Effector T$" = "CD4_plus_MemoryT",
-          "^CD4_plus Naive T$" = "CD4_plus_NaiveT",
-          "^CD8_plus Memory_Effector T$" = "CD8_plus_MemoryT",
-          "^CD4_plus Memory_Effector T$" = "CD4_plus_MemoryT",
-          "^CD8_plus Naive T$" = "CD8_plus_NaiveT",
-          "^Proliferating NK_T$" = "Prolif_NKT",
-          "^TREM2_plus Dendritic$" = "TREM2_plus_Dendritic_cells",
-          "^Proliferating Macrophage$" = "Prolif_Macrophages",
-          "^Proliferating Basal$" = "Prolif_Basal",
-          "^Nonclassical Monocyte$" = "NonClassical_Monocytes",
-          "^Classical Monocyte$" = "Classical_Monocytes",
-          "^B$" = "B_cells",
-          "^Plasma$" = "Plasma_Bcells",
-          "^Vascular Smooth Muscle$" = "Vascular_SMC",
-          "^Alveolar Fibroblast$" = "Alveolar_Fibroblasts",
-          "^Capillary Aerocyte$" = "Capillary_Aerocytes",
-          "^Plasmacytoid Dendritic$" = "Plasmacytoid_Dendritic_cells",
-          "^Signalling Alveolar Epithelial$" = "Signalling_AlvEpithelial_cells",
-          "^Adventitial Fibroblast$" = "Adventitial_Fibroblasts",
-          "^Signaling Alveolar_Epithelial$" = "Signalling_AlvEpithelial",
-          "^Macrophage$" = "Macrophages",
-          "^Differentiating Basal$" = "Differentiating_Basal",
-          "^Airway Smooth Muscle$" = "Airway_SMC",
-          "^Proximal Ciliated$" = "Proximal_Ciliated",
-          "^Myofibroblast$" = "Myofibroblasts",
-          "^Club$" = "Club_cells",
-          "^Ionocyte$" = "Ionocyte",
-          "^Ciliated$" = "Ciliated_cells",
-          "^Pericyte$" = "Pericyte",
-          "^Artery$" = "Artery_cells",
-          "^Vein$" = "Vein_cells",
-          "^Lymphatic$" = "Lymphatic_cells",
-          "^Mucous$" = "Mucous_cells",
-          "^Tcells$" = "T_cells",
-          "^Capillary$" = "Capillary_cells",
-          "^Capillary Intermediate 1$" = "Capillary_Intermediate1",
-          "^Capillary Intermediate 2$" = "Capillary_Intermediate2",
-          "^Intermediate Monocyte$" = "Intermediate_Monocytes",
-          "^EREG_plus Dendritic$" = "EREG_plus_Dendritic_cells",
-          "^OLR1_plus Classical Monocyte$" = "OLR1_plus_Classical_Monocytes"))
-
-human_lung_ref$free_annotation <-
     str_replace_all(human_lung_ref$free_annotation, c(" " = "_"))
 
-# #load in the human tumor cell from xenograft primary fro documentation
-# sobj <- qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs") %>%
-#     subset(sample_name %in% c("S0170", "S0042"))
-
-# #add a column with the cell type
-# sobj$CellType <- "Tumor_cells"
-
-# if (!dir.exists("input/downloads")) {
-#     dir.create("input/downloads", recursive = TRUE)
-# }
-# #save the object
-# qs::qsave(sobj,
-#           file = "input/downloads/human_tumor_fromxenograft.qs")
-
 #load the object
-human_tumor_cell <- qs::qread("input/downloads/human_tumor_fromxenograft.qs")
+human_tumor_cell <- 
+    qs::qread("input/downloads/tumor_ref_from_xenograft.qs")
+human_tumor_cell$CellType <- "Tumor_cells"
 
 #mouse lung normal cells reference
-# mouse_lung_ref <- qs::qread("input/downloads/mouse_lung.qs")
-
 mouse_lung_ref <- qs::qread("input/downloads/normal_mouselung.qs")
 
 mouse_lung_ref$CellType <-
@@ -239,23 +271,10 @@ mouse_lung_ref$CellType <-
                     "^CD8_plus_T$" = "CD8T_cells",
                     "^CD4_plus_T$" = "CD4T_cells"))
 
-#make a reference for all tumor cells, using cell culture data documantation
-# mouse_tumor_cell <-
-#     qs::qread("output/seurat_objects/comb_sobjs/mm_prim.qs") %>%
-#     subset(sample_name %in% c("S0200", "S0201"))
-
-# #create a column with the cell type
-# mouse_tumor_cell$CellType <- "Tumor_cells"
-
-# if (!dir.exists("input/downloads")) {
-#     dir.create("input/downloads", recursive = TRUE)
-# }
-# #save the object
-# qs::qsave(mouse_tumor_cell,
-#           file = "input/downloads/mm_tumor_cellculture.qs")
 
 #load the object S0200 and S0201 combined cell culture mouse tumor cells
-mouse_tumor_cell <- qs::qread("input/downloads/mm_tumor_cellculture.qs")
+mouse_tumor_cell <- 
+    qs::qread("input/downloads/mm_tumor_cellculture.qs")
 
 ```
 
@@ -266,7 +285,7 @@ mouse_tumor_cell <- qs::qread("input/downloads/mm_tumor_cellculture.qs")
 hpca <- celldex::HumanPrimaryCellAtlasData()
 huim <- celldex::MonacoImmuneData()
 ref4 <- SeuratObject::GetAssayData(human_tumor_cell)
-
+#dimplot_better(human_tumor_cell, group_by = "free_annotation") + NoLegend()
 hpca$label.main <-
             str_replace_all(hpca$label.main,
                             c("/" = "_",

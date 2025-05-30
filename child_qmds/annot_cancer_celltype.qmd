@@ -18,6 +18,7 @@ osteosarcoma_markers <-
       "SATB2")
 
 potential_tumor_cells_list <- list()
+potentil_tumor_by_annotations <- list()
 
 for (group in c("patient_prim", "patient_mets",
                 "mm_prim", "mm_mets",
@@ -26,6 +27,7 @@ for (group in c("patient_prim", "patient_mets",
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
+    #dimplot_better(object, group_by = c("annotations")) + NoLegend()
     # species and markers
     species <- object$organism[[1]]
     genelist <- osteosarcoma_markers
@@ -81,11 +83,21 @@ for (group in c("patient_prim", "patient_mets",
         dplyr::group_by(new_annot_clust) %>%
         dplyr::summarise(median = median(AUC_OsteoMarkers, na.rm = TRUE)) %>%
         dplyr::arrange(desc(median))
+    
+    bulk_score_per_cluster_by_annotation <- 
+        object@meta.data %>%
+        dplyr::select(AUC_OsteoMarkers, annotations) %>%
+        dplyr::group_by(annotations) %>%
+        dplyr::summarise(median = median(AUC_OsteoMarkers, na.rm = TRUE)) %>%
+        dplyr::arrange(desc(median))
 
-    if (dir.exists("output/id_tumor/potential_tumor_celltypes/")) {
-        dir.create("output/id_tumor/potential_tumor_celltypes/",
-                   recursive = TRUE)
+    if (!dir.exists("output/id_tumor/potential_tumor_celltypes/")) {
+        dir.create("output/id_tumor/potential_tumor_celltypes/", recursive = TRUE)
     }
+    write_tsv(bulk_score_per_cluster_by_annotation,
+              str_c("output/id_tumor/potential_tumor_celltypes/",
+                    group,
+                    "_celltype_bulk_by_annotation.tsv"))
     write_tsv(bulk_score_per_cluster,
               str_c("output/id_tumor/potential_tumor_celltypes/",
                     group,
@@ -105,7 +117,18 @@ for (group in c("patient_prim", "patient_mets",
         dplyr::pull(new_annot_clust)
 }
 
-
+threshold <-
+    list(patient_prim = c(0.4, 0.2), #maybe 0.3 for the clusterbased annot
+         patient_mets = c(0.5, 0.48),
+         xeno_prim_human = 0.3,
+         xeno_mets_human = 0.3,
+         xeno_prim_mouse = 0.3,
+         xeno_mets_mouse = 0.3,
+         mm_prim = 0.3,
+         mm_mets = 0.3,
+         dogs_prim = 0.3,
+         dogs_mets = 0.3,
+         normal_bone = 0.3)
 
 # Use the potential tumor cells
 cancer_celltypes <- list(patient_prim = c("MSC",
