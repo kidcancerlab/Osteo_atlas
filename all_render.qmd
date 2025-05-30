@@ -468,8 +468,9 @@ VlnPlot(harmony_sobj,
 
 ### charles pseudobulk by patient
 ```{r}
-pseudobulk <- harmony_sobj %>%
-        Seurat::AggregateExpression(
+pseudobulk <-
+    harmony_sobj %>%
+    Seurat::AggregateExpression(
             group.by = c("unique"),
             slot = "counts",
             assay = "RNA")
@@ -555,7 +556,7 @@ FeaturePlot(object,
 dimplot_better(harm_obj2,
             group_by = c("tumor_type", "new_annot_clust", "data_source", "method", "sample_name"),
             ncol=3) + NoLegend()
- 
+
 #get assay data
 runx2_subset <-
     subset(harm_obj2,
@@ -1074,6 +1075,8 @@ stash_plot(
 )
 
 
+library(magick)
 
+convert output/figures/for_ryan/yogesh_velo_figs_04_29/patient_mets_cancer_cells_umap_annotations.svg output/figures/for_ryan/yogesh_velo_figs_04_29/patient_mets_cancer_cells_umap_annotations.pdf
 ```
 

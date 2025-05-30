@@ -42,6 +42,7 @@ library(scATOMIC)
 library(copykat)
 library(SCENIC)
 library(stashPlot)
+library(ggalluvial)
 
 knitr::purl("child_qmds/helper_functions.qmd", "helpers.R")
 source("helpers.R")
