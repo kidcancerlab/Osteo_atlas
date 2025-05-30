@@ -79,6 +79,19 @@ anchor
 *.gz
 *.h5
 *.hdf5
+*.loom
+*.loom.gz
+*.loom.h5
+*.loom.hdf5
+*.csv
+*.tsv
+*_sobj
+*NA
+*.rds
+*.RDataTmp
+*_cutoff
+*.Rhistory
+
 
 
 #velocity analysis files

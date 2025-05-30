@@ -1,5 +1,5 @@
 
-## Regulons analysis
+## Regulons analysis tumor
 
 Perform the regulon analysis using the SCENIC package. The regulon analysis is 
 performed on the following groups:
@@ -14,32 +14,33 @@ motifAnnotations_mgi <- motifAnnotations
 
 object_list <-
     tribble(~group,                         ~res_value, ~org,
-            "patient_prim_cancer_cells",    0.1,        "hgnc",
-            "patient_mets_cancer_cells",    0.1,        "hgnc",
-            "mm_prim_cancer_cells",         0.3,        "mgi",
-            "mm_mets_cancer_cells",         0.1,        "mgi",
-            "xeno_prim_human",              0.15,        "hgnc",
-            "xeno_mets_human",              0.1,        "hgnc")
+            "patient_prim_cancer_cells",    0.15,        "hgnc",
+            "patient_mets_cancer_cells",    0.15,        "hgnc",
+            "mm_prim_cancer_cells",         0.4,        "mgi",
+            "mm_mets_cancer_cells",         0.25,        "mgi",
+            "xeno_prim_human",              0.3,        "hgnc",
+            "xeno_mets_human",              0.15,        "hgnc",
+            "dogs_prim_cancer_cells",       0.2,        "hgnc",
+            "dogs_mets_cancer_cells",       0.1,        "hgnc")
 
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
     res_value <- object_list$res_value[i]
     org <- object_list$org[i]
 
-    object <- qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
-                              group,
-                              ".qs")) %>%
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs")) %>%
         FindClusters(resolution = res_value)
 
-    # dimplot <- 
-    #     dimplot_better(object,
-    #                   group_by = "seurat_clusters")
+    # dimplot <- dimplot_better(object, group_by = "Ann_Level3")
     GRA_output <-
         Run_GRA(sobject = object,
-                idents = "seurat_clusters",
+                idents = "Ann_Level3",
                 org = org,
                 subset = "yes",
-                subset_cell_number = 5000)
+                subset_cell_number = min(10000, ncol(object)))
 
     exprMat_log <- GRA_output$exprMat_log
     colVars <- GRA_output$colVars
@@ -60,6 +61,25 @@ for (i in seq_len(nrow(object_list))) {
         scale(center = FALSE, scale = TRUE) %>%
         t()
 
+    #save the regulon activity
+    if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
+        dir.create(str_c("output/figures/regulon_analysis/", group))
+    }
+    #save the regulon activity
+    qs::qsave(regulon_activity_scaled,
+              str_c("output/figures/regulon_analysis/",
+                    group,
+                    "/regulon_activity_scaled.qs"))
+    #save the regulon activity
+    write_tsv(as.data.frame(regulon_activity_scaled),
+               str_c("output/figures/regulon_analysis/",
+                     group,
+                     "/regulon_activity_scaled.tsv"))
+    
+    #save the heatmap
+    if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
+        dir.create(str_c("output/figures/regulon_analysis/", group))
+    }
     #make heatmap to show average regulon activity per cell type or cluster
     average_reg_heatmap <- 
         pheatmap::pheatmap(regulon_activity_scaled,
@@ -74,10 +94,6 @@ for (i in seq_len(nrow(object_list))) {
     plot_width <- 
         ceiling(ncol(regulon_activity_scaled)/1.3)
 
-    #save the heatmap
-    if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
-        dir.create(str_c("output/figures/regulon_analysis/", group))
-    }
     ggsave(str_c(filename = "output/figures/regulon_analysis/",
                             group,
                             "/average_reg_heatmap.png"),
@@ -127,6 +143,9 @@ for (i in seq_len(nrow(object_list))) {
         ceiling(ncol(binary_activity_perc_subset)/1.2)
 
     #save the heatmap
+    if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
+        dir.create(str_c("output/figures/regulon_analysis/", group))
+    }
     ggsave(str_c("output/figures/regulon_analysis/",
                  group,
                  "/binarized_heatmap.png"),
@@ -143,25 +162,168 @@ for (i in seq_len(nrow(object_list))) {
 
 ```
 
-```{r spatial, eval = TRUE}
-macrophage_features_cells <- list(
-    Osteoclast_TAMs = c("MMP9", "CTSK", "NFATC1"),
-    Prolif_TAMs = c("MKI67", "CDK1", "TOP2A"),
-    Monocytes = c("S100A8", "S100A9", "SELL"),
-    IFN_TAMs = c("IFIT2", "CXCL10", "IFIT1"),
-    Inflam_TAMs = c("CCL3", "CXCL2", "IL1B"),
-    Scar_TAMs = c("SPP1", "TREM2", "FABP5"),
-    Alv_Macrophages = c("MARCO", "TNFAIP2", "OLR1"),
-    TAMs = c("MERTK","SELENOP", "MS4A7")
-)
-obj <-
-    readRDS("/gpfs0/home2/gdrobertslab/lab/ExternalData/McEachron_lab/spatial_data/rdata/OS7_Seurat.rds")
+# regulons analysis TAMs
 
-SpatialDimPlot(obj,
-               group.by = "seurat_clusters",
-               pt.size.factor = 1)
+```{r regulon_analysis, eval = FALSE}
+#load the motif annotations
+data(list="motifAnnotations_hgnc", package="RcisTarget")
+motifAnnotations_hgnc <- motifAnnotations
 
-SpatialFeaturePlot(obj,
-                    features = macrophage_features_cells$Monocytes)
+data(list="motifAnnotations_mgi", package="RcisTarget")
+motifAnnotations_mgi <- motifAnnotations
+
+object_list <-
+    tribble(~group,                         ~res_value, ~org,
+            "patient_prim_normal_cells",    0.15,        "hgnc",
+            "patient_mets_normal_cells",    0.15,        "hgnc",
+            "mm_prim_normal_cells",         0.4,        "mgi",
+            "mm_mets_normal_cells",         0.25,        "mgi",
+            "xeno_prim_mouse",              0.3,        "mgi",
+            "xeno_mets_mouse",              0.15,        "mgi",
+            "dogs_prim_normal_cells",       0.2,        "hgnc",
+            "dogs_mets_normal_cells",       0.1,        "hgnc")
+
+
+for (i in seq_len(nrow(object_list))) {
+    group <- object_list$group[i]
+    res_value <- object_list$res_value[i]
+    org <- object_list$org[i]
+
+    object <-
+        qs::qread(str_c("output/seurat_objects/TAMs_objects/",
+                        group,
+                        ".qs"))
+
+    # dimplot <- dimplot_better(object, group_by = "Ann_Level3")
+    GRA_output <-
+        Run_GRA(sobject = object,
+                idents = "Ann_Level3",
+                org = org,
+                subset = "yes",
+                subset_cell_number = min(10000, ncol(object)))
+
+    exprMat_log <- GRA_output$exprMat_log
+    colVars <- GRA_output$colVars
+    cellInfo <- GRA_output$cellInfo
+    scenicOptions <- GRA_output$scenicOptions
+
+    perplexity <- c(5, 15, 50)
+    num_pcs <- 30
+
+    regulon_auc <- loadInt(scenicOptions, "aucell_regulonAUC")
+    regulon_auc <- regulon_auc[onlyNonDuplicatedExtended(rownames(regulon_auc)),]
+    regulon_activity_scaled <-
+        sapply(split(rownames(cellInfo), cellInfo$CellType),
+                function(cells) {
+                    rowMeans(AUCell::getAUC(regulon_auc)[ , cells, drop = FALSE])
+                }) %>%
+        t() %>%
+        scale(center = FALSE, scale = TRUE) %>%
+        t()
+
+    #save the regulon activity
+    if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
+        dir.create(str_c("output/figures/regulon_analysis/", group))
+    }
+    #save the regulon activity
+    qs::qsave(regulon_activity_scaled,
+              str_c("output/figures/regulon_analysis/",
+                    group,
+                    "/regulon_activity_scaled.qs"))
+    #save the regulon activity
+    write_tsv(as.data.frame(regulon_activity_scaled),
+               str_c("output/figures/regulon_analysis/",
+                     group,
+                     "/regulon_activity_scaled.tsv"))
+    
+    #save the heatmap
+    if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
+        dir.create(str_c("output/figures/regulon_analysis/", group))
+    }
+    #make heatmap to show average regulon activity per cell type or cluster
+    average_reg_heatmap <- 
+        pheatmap::pheatmap(regulon_activity_scaled,
+                        name = "Regulon activity",
+                        scale = "none",
+                        cluster_cols = TRUE,
+                        show_row_dend = FALSE,
+                        silent = TRUE)
+    plot_height <- 
+        ceiling(nrow(regulon_activity_scaled)/4)
+
+    plot_width <- 
+        ceiling(ncol(regulon_activity_scaled)/1.3)
+
+    ggsave(str_c(filename = "output/figures/regulon_analysis/",
+                            group,
+                            "/average_reg_heatmap.png"),
+            plot = average_reg_heatmap,
+            width = plot_width,
+            height = plot_height)
+    #save qs object
+    ggsave(str_c(filename = "output/figures/regulon_analysis/",
+                            group,
+                            "/average_reg_heatmap.pdf"),
+            plot = average_reg_heatmap,
+            width = plot_width,
+            height = plot_height)
+
+    # Binarize the regulon activity
+    min_prop <- .4
+    binary_regulon_activity <-
+        loadInt(scenicOptions, "aucell_binary_nonDupl")
+
+    cell_info_binarized_cells <-
+        cellInfo[which(rownames(cellInfo) %in%
+                   colnames(binary_regulon_activity)), ,
+                 drop = FALSE]
+
+    regulon_activity_by_cell_type_binarized <-
+        sapply(split(rownames(cell_info_binarized_cells),
+                     cell_info_binarized_cells$CellType),
+               function(cells) {
+                    rowMeans(binary_regulon_activity[, cells, drop = FALSE])
+                })
+
+    binary_activity_perc_subset <-
+        regulon_activity_by_cell_type_binarized[which(
+            rowSums(regulon_activity_by_cell_type_binarized > min_prop) > 0),]
+
+    # Percentage of cells per each cluster that have the regulon activity
+    binarized_heatmap <-
+        pheatmap::pheatmap(binary_activity_perc_subset,
+                            name = "Regulon activity",
+                            col = c("white", "pink", "red"),
+                            display_numbers = T,
+                            cluster_cols = FALSE,
+                            silent = TRUE,
+                            legend_title = "Percent Cells")
+
+    plot_height <-
+        ceiling(nrow(binary_activity_perc_subset)/3)
+    plot_width <-
+        ceiling(ncol(binary_activity_perc_subset)/1.2)
+
+    #save the heatmap
+    if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
+        dir.create(str_c("output/figures/regulon_analysis/", group))
+    }
+    ggsave(str_c("output/figures/regulon_analysis/",
+                 group,
+                 "/binarized_heatmap.png"),
+           plot = binarized_heatmap,
+           width = plot_width,
+           height = plot_height)
+
+    #save qs object
+    ggsave(str_c("output/figures/regulon_analysis/",
+                 group,
+                 "/binarized_heatmap.pdf"),
+           plot = binarized_heatmap,
+           width = plot_width,
+           height = plot_height)
+}
 
 ```
+
+

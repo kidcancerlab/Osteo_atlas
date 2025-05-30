@@ -6,8 +6,8 @@ sample.
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.1)
+            "patient_prim_cancer_cells",    0.15,
+            "patient_mets_cancer_cells",    0.25)
 
 for (i in seq_len(nrow(object_list))) {
     all_sample <- 
@@ -19,7 +19,7 @@ for (i in seq_len(nrow(object_list))) {
     all_sample <- all_sample %>%
         FindVariableFeatures(nfeatures = 5000) %>%
         ScaleData()
-    
+
     dimplot_main <-
         dimplot_better(all_sample,
                       group_by = c("seurat_clusters")) +
@@ -112,18 +112,17 @@ for (i in seq_len(nrow(object_list))) {
                                 breaks = c(-1, -0.5, -0.1, 0.1, 0.5, 1),
                                 silent = TRUE,
                                 color = rev(RColorBrewer::brewer.pal(5, name = "RdBu")))
-        ggsave("output/figures/presentation_biweekly/cccr_present/correlation_heatmap.png",
-            plot = correlation,
-            width = 10,
-            height = 3,
-            bg = "white")
-        
+
         combine_plot <-
             cowplot::plot_grid(dimplot_main,
                                 dimplot_subset,
                                 ggplotify::as.ggplot(correlation),
                                 ncol = 1)
-
+        if (!dir.exists(str_c("output/figures/validation/integration_validation/",
+                    object_list$group[i]))) {
+            dir.create(str_c("output/figures/validation/integration_validation/",
+                            object_list$group[i]), recursive = TRUE)
+        }
         ggsave(str_c("output/figures/validation/integration_validation/",
                     object_list$group[i],
                     "/",

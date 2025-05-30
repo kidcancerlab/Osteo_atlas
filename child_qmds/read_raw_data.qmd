@@ -5,8 +5,7 @@
 
 all_samples_csv <- 
     readr::read_tsv("misc/allsample_details.txt",
-                    show_col_types = FALSE) %>%
-    filter(unique == "dogs_cc")
+                    show_col_types = FALSE)
 
 
 all_samples_csv$sp_pattern <-
@@ -250,10 +249,11 @@ max_n_cells <- 5000
 
 #run QC and merge seurat objects
 #for (group in unique(all_samples_csv$unique)) {
-results <-
-    parallel::mclapply(unique(all_samples_csv$unique),
-                       mc.cores = parallelly::availableCores(),
-                       function(group) {
+for (group in c("patient_prim", "patient_mets",
+                 "xeno_prim_human","xeno_mets_human",
+                 "xeno_prim_mouse", "xeno_mets_mouse",
+                 "mm_prim", "mm_mets",
+                 "dogs_prim", "dogs_mets")) {
     single_sobjs <- list.files(path = "output/seurat_objects/sobj_preprocess/",
                                full.names = FALSE)
     tmp_df <- subset(all_samples_csv, subset = (unique == group))
@@ -355,13 +355,6 @@ results <-
            plot = pre_harmony_dimplots,
            width = 14,
            height = 14)
-    
-    #save as a qs image
-    qs::qsave(pre_harmony_dimplots,
-              str_c("output/figures/combined_plots/",
-                 group,
-                 "/",
-                 "preHarmony_combined_plots.qs"))
 
 
     # make feaureplots
@@ -406,13 +399,6 @@ results <-
            width = 21,
            height = 14)
     
-    #save as a qs image
-    qs::qsave(featureplot1_tumor,
-              str_c("output/figures/combined_plots/",
-                 group,
-                 "/",
-                 "preharmony_tumor_featureplots.qs"))
-    
     ggsave(str_c("output/figures/combined_plots/",
                  group,
                  "/",
@@ -420,12 +406,6 @@ results <-
            plot = featureplot2_immune,
            width = 21,
            height = 14)
-    #qs object
-    qs::qsave(featureplot2_immune,
-              str_c("output/figures/combined_plots/",
-                 group,
-                 "/",
-                 "preharmony_immune_featureplots.qs"))
 
     #run the harmony
     set.seed(199820)
@@ -433,6 +413,19 @@ results <-
         qs::qread(str_c("output/seurat_objects/comb_sobjs/",
                         group,
                         ".qs"))
+
+}
+
+for (group in c("patient_prim", "patient_mets",
+                 "xeno_prim_human","xeno_mets_human",
+                 "xeno_prim_mouse", "xeno_mets_mouse",
+                 "mm_prim", "mm_mets",
+                 "dogs_prim", "dogs_mets")) {
+    merged_sobj <-
+        qs::qread(str_c("output/seurat_objects/comb_sobjs/",
+                        group,
+                        ".qs"))
+    #run harmony
     harmony_obj <-
         RunHarmony(object = merged_sobj,
                    group.by.vars = harmony_params[[group]]$group_by,
@@ -451,10 +444,81 @@ results <-
               str_c("output/seurat_objects/harmony_sobjs/",
                     group,
                     ".qs"))
+}
 
-    return(harmony_obj)
-})
+# plot the dimplot of the harmony object
+for (groups in c("patient_prim",
+                 "patient_mets",
+                 "xeno_prim_human",
+                 "xeno_mets_human",
+                 "xeno_prim_mouse",
+                 "xeno_mets_mouse",
+                 "mm_prim",
+                 "mm_mets",
+                 "dogs_prim",
+                 "dogs_mets",
+                 "normal_bone",
+                 "dogs_cc")) {
+    harmony_obj <- 
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                        groups,
+                        ".qs"))
+    dimplot1 <- 
+        dimplot_better(harmony_obj,
+                    group_by = "seurat_clusters") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
 
+    dimplot2 <- 
+        dimplot_better(harmony_obj,
+                group_by = "model") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
+
+    dimplot3 <- 
+        dimplot_better(harmony_obj,
+                    group_by = "sample_name") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
+    
+    dimplot4 <- 
+        dimplot_better(harmony_obj,
+                    group_by = "data_source") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
+
+    harmony_dimplots <- 
+        patchwork::wrap_plots(dimplot1,
+                                dimplot2,
+                                dimplot3,
+                                dimplot4,
+                                ncol = 2,
+                                widths = 14,
+                                heights = 14) +
+        patchwork::plot_annotation(title = str_c(groups, " post harmony dimplots")) +
+        theme(plot.title = element_text(size = 10))
+
+    directory <- 
+        str_c("output/figures/combined_plots/", groups)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+    #save the combined plots
+    ggsave(str_c("output/figures/combined_plots/",
+                 groups,
+                 "/",
+                 "postHarmony_combined_plots.png"),
+           plot = harmony_dimplots,
+           width = 14,
+           height = 14)
+
+    #save as a qs image
+    qs::qsave(harmony_dimplots,
+              str_c("output/figures/combined_plots/",
+                 groups,
+                 "/",
+                 "postHarmony_combined_plots.pdf"))
+}
 
 ```
 
@@ -508,9 +572,19 @@ as 5000 max cells per sample for similar dataset representation
 all_samples_csv <- 
     readr::read_tsv("misc/allsample_details.txt",
                     show_col_types = FALSE) %>%
-    filter(unique != "normal_bone")
+    filter(unique != "normal_bone",
+           unique != "dogs_cc") 
 
 counts_afterQC <- tibble()
+
+#run the QC and merge seurat objects
+# number <- list()
+# number_of_samples <- all_samples_csv %>%
+#     group_by(unique, data_source) %>%
+#     summarise(number_of_samples = n(), .groups = "drop")
+
+# print(number_of_samples)
+
 
 for (group in unique(all_samples_csv$unique)) {
     object <- 
@@ -533,6 +607,13 @@ for (group in unique(all_samples_csv$unique)) {
         rbind(counts_afterQC) %>%
         arrange(unique)
 }
+write_tsv(counts_afterQC, "output/counts/cell_counts_afterQC.txt")
+
+sum_per_group <-
+    counts_afterQC %>%
+    group_by(unique) %>%
+    summarise(total_cells = sum(N_cells_after),
+              .groups = "drop")
 
 combined_table <- 
     dplyr::full_join(counts, counts_afterQC, by = c("sample_name", "unique")) %>%

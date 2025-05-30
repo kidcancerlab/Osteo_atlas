@@ -1,0 +1,518 @@
+## Result 1
+Suppliment 1A
+```{r r1_suppliment_figs, eval = FALSE}
+
+metadata_col <-
+    list("CNV_status",
+        "class",
+      "scatomic_tumor_call",
+      "scevan_tumor_call",
+      "final_snv_call",
+      "celltype_tumor_call")
+
+cols <- list(
+    tumor = "#D43F3AFF",
+    Tumor = "#D43F3AFF",
+    cancer_cells = "#D43F3AFF",
+    aneuploid = "#D43F3AFF",
+    normal_cells = "#EEA236FF",
+    normal = "#EEA236FF",
+    Host = "#EEA236FF",
+    diploid = "#EEA236FF")
+
+
+dimplot_list <- list()
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
+
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    for (col in metadata_col) {
+        if (col %in% colnames(object@meta.data)) {
+            dimplot <-
+                DimPlot(object,
+                group.by = col, # Use the plot_labels for better aesthetics
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = unlist(cols),
+                label.size = 5,
+                raster = F) +
+            coord_fixed() +
+            theme_void() +
+            #scale_color_manual(values = cols) +
+            NoLegend() +
+            ggtitle(str_replace_all(col, "_", " ")) +
+            theme(aspect.ratio=1,
+                  plot.title = element_text(size = 15,
+                                            hjust = 0.5))
+        } else {
+            dimplot <-
+                ggplot(data = NULL) +
+                aes(x = as.factor(1), y = as.factor(1)) +
+                geom_text(aes(label = str_c(col, " not present for ", group)))
+        }
+        dimplot_list[[col]] <- dimplot
+    }
+    combined_plots <- 
+        patchwork::wrap_plots(dimplot_list,
+                            ncol = 2) +
+            patchwork::plot_annotation(title = group) +
+            theme(plot.title = element_text(size = 20))
+
+    directory <-
+        str_c("output/figures/Final_Annotations/results1/suppliment/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+    #save the combined plots
+    ggsave(str_c(directory,
+                 "/",
+                 "combined_tumor_id_plots.png"),
+           plot = combined_plots,
+           width = 14,
+           height = 21)
+}
+
+# make a featureplot of tumor
+tumor_features <- 
+    list("RUNX2",
+        "SATB2",
+        "COL1A1",
+        "COL1A2")
+
+featureplot_list <- list()
+
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    for (feature in tumor_features) {
+        if (object$organism[1] == "mouse") {
+            feature <-
+                nichenetr::convert_human_to_mouse_symbols(feature) %>% as.character()
+        }
+        if (feature %in% rownames(object)) {
+            featureplot <-
+                FeaturePlot(object,
+                            features = feature,
+                            order = T) +
+                coord_fixed()  +
+                theme_void() +
+                ggtitle(feature) +
+                theme(aspect.ratio=1,
+                    plot.title = element_text(size = 15,
+                                            hjust = 0.5))
+        } else {
+            featureplot <-
+                ggplot(data = NULL) +
+                aes(x = as.factor(1), y = as.factor(1)) +
+                geom_text(aes(label = str_c(feature, " not present for ", group)))
+        }
+        # save the featureplot
+        featureplot_list[[feature]] <- featureplot
+    }
+    dimplot1 <-
+        dimplot_better(object,
+                group_by = "Ann_Level0") +
+        NoLegend() +
+        ggtitle(str_replace_all(col, "_", " ")) +
+        theme(aspect.ratio=1,
+                plot.title = element_text(size = 15,
+                                        hjust = 0.5))
+    # make another col because the first is messy
+    object$new_label_for_plot <-
+        str_remove_all(object$SingleR_Ann3, "_.*")
+
+    dimplot2 <-
+        dimplot_better(object,
+                group_by = "new_label_for_plot") +
+        NoLegend() +
+        ggtitle(str_replace_all(col, "_", " ")) +
+        theme(aspect.ratio=1,
+                plot.title = element_text(size = 15,
+                                        hjust = 0.5))
+        
+    combined_plots <-
+        patchwork::wrap_plots(featureplot_list[[1]],
+                            featureplot_list[[2]],
+                            featureplot_list[[3]],
+                            featureplot_list[[4]],
+                            dimplot1,
+                            dimplot2,
+                            ncol = 2) +
+            patchwork::plot_annotation(title = group) +
+            theme(plot.title = element_text(size = 20))
+
+    directory <-
+        str_c("output/figures/Final_Annotations/results1/suppliment/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+    #save the combined plots
+    ggsave(str_c(directory,
+                    "/",
+                    "tumor_featureplots.png"),
+            plot = combined_plots,
+            width = 14,
+            height = 21)
+}
+
+
+# another way to show that there was descrepancy in tumor cell calling is using sanky plots and heatmaps
+cols <-
+    list("Tumor" = "#D43F3AFF",
+        "Normal" = "#EEA236FF",
+        "unknown" = "#357EBDFF",
+        "Host" = "#EEA236FF")
+# make a sankey plot to show the tumor calling
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+
+    metadata <- 
+        object@meta.data %>%
+        as.data.frame() %>%
+        rownames_to_column("cell_id") %>%
+        select(cell_id,
+               scatomic_tumor_call,
+               scevan_tumor_call,
+               final_snv_call,
+               Ann_Level0) %>%
+               arrange(Ann_Level0,
+                       final_snv_call,
+                       scatomic_tumor_call,
+                       scevan_tumor_call) %>%
+        mutate(cell_id_number = row_number()) %>%
+        mutate(scATOMIC = str_replace_all(scatomic_tumor_call, 
+                                        c("normal_cells" = "Normal",
+                                        "cancer_cells" = "Tumor",
+                                        "Host" = "Normal")),
+               SCEVAN = str_replace_all(scevan_tumor_call, 
+                                        c("normal_cells" = "Normal",
+                                        "cancer_cells" = "Tumor",
+                                        "Host" = "Normal")),
+               SCANBIT = str_replace_all(final_snv_call,
+                                        c("normal_cells" = "Normal",
+                                        "cancer_cells" = "Tumor",
+                                        "Host" = "Normal")),
+               FinalCall = str_replace_all(Ann_Level0,
+                                        c("Host" = "Normal"))) %>%
+        mutate(across(c(scATOMIC, SCEVAN, SCANBIT, FinalCall), ~replace_na(., "unknown"))) %>%
+        select(cell_id, cell_id_number, scATOMIC, SCEVAN, SCANBIT, FinalCall)
+    # do some statistics to see how different the tumor calling is compared to truth set Ann_Level0
+    # Calculate confusion matrices and agreement statistics for each method vs Ann_Level0
+    comparison <- list()
+    for (method in c("scATOMIC", "SCEVAN", "SCANBIT", "FinalCall")) {
+        tbl <- 
+            table(Truth = metadata$FinalCall,
+                  Prediction = metadata[[method]])
+        # Cohen's kappa (skip for Ann_Level0 vs itself)
+        if (method == "FinalCall") {
+            kappa <- NA
+        } else {
+            kappa <- suppressWarnings(irr::kappa2(data.frame(metadata$FinalCall,
+                                                             metadata[[method]]))$value)
+        }
+        # Accuracy
+        acc <- sum(diag(tbl)) / sum(tbl)
+        comparison[[method]] <- 
+            list(confusion_matrix = tbl,
+                 kappa = kappa,
+                 accuracy = acc)
+    }
+    # Prepare accuracy data frame
+    comparison_df <- 
+        tibble(Method = names(comparison),
+               Accuracy = sapply(comparison, function(x) x$accuracy))
+    comparison_df$Method <- 
+        factor(comparison_df$Method,
+               levels = c("FinalCall", "SCANBIT", "scATOMIC", "SCEVAN"))
+    # Accuracy barplot
+    accuracy_plot <- 
+        ggplot(comparison_df, aes(x = Method, y = Accuracy, fill = Method)) +
+            geom_col(width = 0.7) +
+            geom_text(aes(label = round(Accuracy, 3), y = Accuracy / 2), size = 4, color = "white") +
+            theme_minimal() +
+            scale_fill_manual(values = c("scATOMIC" = "#5CB85CFF",
+                                         "SCEVAN" = "#46B8DAFF",
+                                         "SCANBIT" = "#9632B8FF",
+                                         "FinalCall" = "#D43F3AFF")) +
+            theme(legend.position = "none",
+                  panel.grid = element_blank(),
+                  axis.title.x = element_text(),
+                  axis.title.y = element_text(),
+                  axis.text.y = element_text(face = "bold"),
+                  axis.text.x = element_text(angle = 0, hjust = 0.5, face = "bold")) +
+            labs(x = "Methods", y = "Accuracy")+
+            scale_y_continuous(expand = c(0, 0)) +
+            scale_x_discrete(expand = c(0, 0))
+
+    # Plot confusion matrices for each method vs FinalCall
+    confusion_plots <- list()
+    for (method in c("SCANBIT", "scATOMIC", "SCEVAN")) {
+        tbl <- comparison[[method]]$confusion_matrix
+        acc <- comparison[[method]]$accuracy
+        df_tbl <- as.data.frame(as.table(tbl))
+        confusion_plot <- 
+            ggplot(df_tbl, aes(x = Prediction, y = Truth, fill = Freq)) +
+            geom_tile(color = "white") +
+            geom_text(aes(label = Freq), size = 3) +
+            scale_fill_gradient(low = "#F0F0F0", high = "#D43F3AFF") +
+            theme_minimal() +
+            labs(title = paste0("Confusion Matrix: ", method, "\nAccuracy: ", round(acc, 2)),
+                x = "Predicted", 
+                y = "Truth") +
+            theme(panel.grid = element_blank(),
+                plot.title = element_text(hjust = 0.5, size = 8, face = "bold"),
+                legend.position = "none",
+                axis.title.y = element_text(angle = 90),
+                axis.text.y = element_text(angle = 90, vjust = 0.5, hjust = 0.5))
+
+        confusion_plots[[method]] <- confusion_plot
+    }
+    # Combine confusion plots into one figure
+    confusion_combined <- 
+        patchwork::wrap_plots(confusion_plots,
+                                nrow = 1) 
+            
+    matadata_mimic <-
+        metadata %>%
+        pivot_longer(cols = -c(cell_id, cell_id_number),
+                names_to = "method",
+                values_to = "call") %>%
+        mutate(method = str_replace_all(method, c("scatomic_tumor_call" = "scATOMIC",
+                                                   "final_snv_call" = "SCANBIT",
+                                                   "scevan_tumor_call" = "SCEVAN",
+                                                   "Ann_Level0" = "FinalCall")),
+               call = str_replace_all(call, c("normal_cells" = "Normal",
+                                              "cancer_cells" = "Tumor",
+                                              "Host" = "Normal"))) %>%
+        replace_na(list(call = "unknown"))
+    
+    # make a tile plot to show the tumor calling by methods
+    tile_plot <-
+        ggplot(matadata_mimic %>%
+            mutate(method = factor(method,
+                                  levels = c("FinalCall", "SCANBIT", "scATOMIC", "SCEVAN"))),
+            aes(x = method, y = -cell_id_number, fill = call)) +
+        geom_tile() +
+        scale_fill_manual(values = unlist(cols)) +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            axis.text.y = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
+            panel.grid = element_blank())
+    # put tile and final_plot together
+    combined_tile_plot <-
+        cowplot::plot_grid(tile_plot, accuracy_plot, confusion_combined,
+                            ncol = 1,
+                            rel_heights = c(1, 0.5, 0.4),
+                            align = "v") +
+        patchwork::plot_annotation(title = str_c(group, " Tumor ID by methods")) &
+        theme(plot.title = element_text(size = 20))
+
+    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
+                 group, "/",
+                 "tumor_id_tileplot.pdf"),
+           plot = combined_tile_plot,
+           bg = "white",
+           width = 7,
+           height = 10)
+    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
+                 group, "/",
+                 "tumor_id_tileplot",
+                 ".png"),
+           plot = combined_tile_plot,
+           bg = "white",
+           width = 7,
+           height = 10,
+           dpi = 300,           # Higher resolution
+           type = "cairo")      # Better color rendering for PNG
+
+    # make a sankey plot to show the tumor calling
+    # sankey_plot <-
+    #     ggplot(matadata_mimic %>% 
+    #             mutate(method = factor(method, 
+    #                                     levels = c("scATOMIC", "SCEVAN", "SNV"))),
+    #             aes(x = method, stratum = call, alluvium = cell_id,
+    #                 y = cell_id_number,
+    #                 fill = call, label = call)) +
+    #     geom_flow() +
+    #     scale_fill_manual(values = unlist(cols)) +
+    #     geom_stratum(alpha = 1) +
+    #     scale_y_continuous(expand = c(0, 0)) +
+    #     scale_x_discrete(expand = c(0, 0)) +
+    #     theme_minimal() +
+    #     theme(axis.title.x = element_blank(),
+    #         axis.title.y = element_blank(),
+    #         axis.text.x = element_text(size = 10, face = "bold"),
+    #         axis.text.y = element_blank(),
+    #         plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
+    #         panel.grid = element_blank()) +
+    #     ggtitle(str_c(group, " Tumor ID by methods"))
+
+}
+
+
+```
+
+# regulon combined plots heatmap
+```{r hatmap_regulon, eval = TRUE}
+# create a list of the groups
+regulon_list <- list()
+# load the regulon activity saved data
+for (group in c("patient_prim_cancer_cells",
+                "patient_mets_cancer_cells" ,
+                "mm_prim_cancer_cells",
+                "mm_mets_cancer_cells",
+                "xeno_prim_human",
+                "xeno_mets_human",
+                "dogs_prim_cancer_cells",
+                "dogs_mets_cancer_cells"
+                )) {
+    name <- 
+        group %>%
+        str_remove("_cancer_cells")
+    #load the regulon activity
+    regulon_activity_scaled <-
+        qs::qread(str_c("output/figures/regulon_analysis/",
+                        group,
+                        "/regulon_activity_scaled.qs"))
+
+    # append to the list
+    regulon_activity_formatted <- 
+        regulon_activity_scaled %>%
+        as.data.frame() %>%
+        rownames_to_column("Regulon") %>%
+        mutate(Regulon = str_replace(Regulon, " .*", "")) %>%
+        mutate(Regulon = str_replace(Regulon, "_.*", "")) %>%
+        mutate(Regulon = str_replace(Regulon, "\\(.*\\)", "")) %>%
+        dplyr::rename_with(~ str_remove(., "Tumor_")) %>%
+            rename_with(~ paste0(name, "_", .), -Regulon)
+    # add the group name
+    regulon_list[[group]] <- regulon_activity_formatted
+}
+
+# combine the list into a single data frame and make a single heatmap
+object_list <-
+    tribble(~group1,                         ~group2,                       ~group3,
+            "patient_prim_cancer_cells",    "patient_mets_cancer_cells",   "Human_Patients",
+            "mm_prim_cancer_cells",         "mm_mets_cancer_cells",         "Syngeneic_Mouse",
+            "dogs_prim_cancer_cells",       "dogs_mets_cancer_cells",       "Canine_Patients",
+            "xeno_prim_human",             "xeno_mets_human",             "Human Patient_Xenograft")
+
+# make the color labels
+col_colors1 <- 
+    c("Primary" = "#BF6BE2FF",
+        "Metastatic" = "#69D1F3FF")
+
+# subpopulation  colors
+col_colors2 <- 
+    c(Synthetic = "#D43F3AFF",
+    Fibrogenic = "#EEA236FF",
+    Progenitor = "#357EBDFF",
+    Proliferative = "#5CB85CFF",
+    Interactive = "#B8B8B8FF",
+    Apoptosis = "#9632B8FF")
+
+col_colors <- 
+    list(Group = col_colors1,
+        Subpopulation = col_colors2)
+
+# make the regulon heatmap
+for (i in seq_len(nrow(object_list))) {
+    group1 <- object_list$group1[i]
+    group2 <- object_list$group2[i]
+    group3 <- object_list$group3[i]
+
+    # combine the data frames
+    output <-
+        regulon_list[[group1]] %>%
+        full_join(regulon_list[[group2]], by = "Regulon") %>%
+         replace(is.na(.), 0) %>%
+        column_to_rownames("Regulon") %>%
+        as.matrix()
+
+    col_colors_df <-
+        output %>%
+        colnames() %>%
+        tibble(col = .) %>%
+        mutate(Group = if_else(str_detect(col, "prim"), "Primary", "Metastatic"),
+            Subpopulation = case_when(
+                str_detect(col, "Progenitor") ~ "Progenitor",
+                str_detect(col, "Proliferative") ~ "Proliferative",
+                str_detect(col, "Synthetic") ~ "Synthetic",
+                str_detect(col, "Fibrogenic") ~ "Fibrogenic",
+                str_detect(col, "Interactive") ~ "Interactive",
+                str_detect(col, "Apoptosis") ~ "Apoptosis",
+                TRUE ~ "Unknown")) %>%
+        column_to_rownames("col")
+
+# make a heatmap to show average regulon activity per cell type or cluster
+    regulon_activity_heatmap_all <-
+        pheatmap::pheatmap(output,
+            name = "Regulon activity",
+            scale = "none",
+            annotation_col = col_colors_df,
+            annotation_colors = col_colors,
+            cluster_cols = TRUE,
+            show_row_dend = FALSE,
+            silent = TRUE,
+            labels_col = NULL,
+            labels_row = NULL)
+
+    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/regulons/",
+                group3, "_regulon.pdf"),
+        plot = regulon_activity_heatmap_all,
+        width = 10,
+        height = 15)
+    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/regulons/",
+                group3, "_regulon.png"),
+        plot = regulon_activity_heatmap_all,
+        width = 10,
+        height = 15)
+
+    # remove the NAs
+    output_shared_TF <-
+        output %>%
+        apply(1, function(x) {
+            min(x) > 0
+        })
+    output_shared <-
+        output[output_shared_TF, ]
+
+    regulon_activity_heatmap_shared <-
+        pheatmap::pheatmap(output_shared,
+                        name = "Regulon activity",
+                        scale = "none",
+                        annotation_col = col_colors_df,
+                        annotation_colors = col_colors,
+                        cluster_cols = TRUE,
+                        show_row_dend = FALSE,
+                        silent = TRUE)
+    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/regulons/",
+                group3, "_regulon_shared.pdf"),
+        plot = regulon_activity_heatmap_shared,
+        width = 10,
+        height = 8)
+    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/regulons/",
+                group3, "_regulon_shared.png"),
+        plot = regulon_activity_heatmap_shared,
+        width = 10,
+        height = 8)
+}
+
+```
