@@ -60,12 +60,44 @@ tumor_qs_files <-
         xeno_prim = paste0(base_dir, "xeno_prim_human.qs"),
         xeno_mets = paste0(base_dir, "xeno_mets_human.qs"),
         patient_prim = paste0(base_dir, "patient_prim_cancer_cells.qs"),
-        patient_mets = paste0(base_dir, "patient_mets_cancer_cells.qs")
+        patient_mets = paste0(base_dir, "patient_mets_cancer_cells.qs"),
+        dogs_prim = paste0(base_dir, "dogs_prim_cancer_cells.qs"),
+        dogs_mets = paste0(base_dir, "dogs_mets_cancer_cells.qs")
     )
 
 gsea_on_pseuobulked_sobjs(
     aggregation_column = "Ann_Level3",
-    mouse_sample_regex = "^mm",
+    mouse_sample_regex = "^mm|^dogs",
+    qs_list = tumor_qs_files,
+    parallel_threads = 4,
+    gsea_categories = cat_tib,
+    figure_dir = "output/figures/tumor_subtypes_correlations/",
+    corr_figure_name_stub = "tumor_subtypes_correlation_",
+    gsea_output = "output/tumor_subtypes_correlations/gsea_results_tumor.tsv"
+)
+```
+
+
+## Doing correlations across species and tumor subtypes
+```{r species_tumor_subtypes_corr}
+patient_base_dir <- "output/seurat_objects/final_tumor_vs_stroma/"
+other_base_dir <- "output/seurat_objects/tumor_vs_stroma/"
+tumor_qs_files <-
+    list(
+        mm_prim = paste0(other_base_dir, "mm_prim_cancer_cells.qs"),
+        mm_mets = paste0(other_base_dir, "mm_mets_cancer_cells.qs"),
+        xeno_prim = paste0(other_base_dir, "xeno_prim_human.qs"),
+        xeno_mets = paste0(other_base_dir, "xeno_mets_human.qs"),
+        patient_prim = paste0(patient_base_dir, "patient_prim_cancer_cells.qs"),
+        patient_mets = paste0(patient_base_dir, "patient_mets_cancer_cells.qs"),
+        dogs_prim = paste0(other_base_dir, "dogs_prim_cancer_cells.qs"),
+        dogs_mets = paste0(other_base_dir, "dogs_mets_cancer_cells.qs")
+    )
+
+gsea_on_pseuobulked_sobjs(
+    aggregation_column = "seurat_clusters",
+    mouse_regex = "^mm",
+    dog_regex = "^dogs",
     qs_list = tumor_qs_files,
     parallel_threads = 4,
     gsea_categories = cat_tib,
