@@ -5,7 +5,10 @@ We're only running on patient and mouse model samples that are primary tumors or
 samples_to_run <-
     read_tsv("misc/allsample_details.txt",
         show_col_types = FALSE
-    )
+    ) %>%
+    filter(!unique %in% c("dogs_cc", "normal_bone",
+                        "xeno_mets_human", "xeno_mets_mouse",
+                        "xeno_prim_human", "xeno_prim_mouse"))
 ```
 
 ## Run SNV calling on the pseudobulked clusters to try to ID tumor cells

@@ -44,20 +44,21 @@ for (group in c("patient_prim", "patient_mets",
         organism <- "human"
     }
 
-    count_mtx_list <- 
-        object %>%
-        SplitObject(split.by = "sample_name") %>%
-        lapply(FUN = function(x) GetAssayData(x, layer = "counts"))
-
     # SCEVAN results listed into an output for each seurat object
     result_list <-
-        parallel::mclapply(names(count_mtx_list),
+        parallel::mclapply(unique(object$sample_name),
                             mc.preschedule = FALSE,
-                            mc.cores = parallelly::availableCores(),
+                            mc.cores = 1,
                             function(x) {
             # If we have too few cells SCEVAN errors out
             # dim(x) must have a positive length
-            if (ncol(count_mtx_list[[x]]) > min_cells) {
+
+            count_matrix <- 
+                object %>%
+                subset(sample_name == x) %>%
+                GetAssayData(layer = "counts")
+
+            if (ncol(count_matrix) > min_cells) {
                 # output <-
                 #     SCEVAN::pipelineCNA(count_mtx = count_mtx_list[[x]],
                 #                         sample = x,
@@ -68,11 +69,11 @@ for (group in c("patient_prim", "patient_mets",
                 output <- 
                     tryCatch(
                         {
-                            SCEVAN::pipelineCNA(count_mtx = count_mtx_list[[x]],
-                                    sample = x,
-                                    organism = organism,
-                                    par_cores = parallelly::availableCores(),
-                                    SUBCLONES = FALSE)
+                            SCEVAN::pipelineCNA(count_mtx = count_matrix,
+                                                sample = x,
+                                                organism = organism,
+                                                par_cores = parallelly::availableCores(),
+                                                SUBCLONES = FALSE)
                         },
                         error = function(e) {
                             message("SCEVAN failed for ",group, " ", x, " with error: ", e)

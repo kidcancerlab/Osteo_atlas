@@ -38,10 +38,11 @@ for (group in c("patient_prim", "patient_mets",
                 dplyr::filter(cell %in% colnames(object)) %>%
                 dplyr::distinct(cell, .keep_all = TRUE) %>%
                 tibble::column_to_rownames("cell")
+
+            object <- 
+                object %>%
+                AddMetaData(metadata = cancer_label)
         }
-        object <- 
-            object %>%
-            AddMetaData(metadata = cancer_label)
     }
 
     directory <-
@@ -272,62 +273,65 @@ harmony_params <-
                            theta = c(7)))
 
 count <- list()
-parallel::mclapply(
-    c("patient_prim", "patient_mets", "mm_prim", "mm_mets", "dogs_prim", "dogs_mets"),
-    function(group) {
-        object <-
-            qs::qread(str_c("output/seurat_objects/final_combined_sobjs/", group, ".qs"))
-        #dimplot_better(object, group_by = "celltype_tumor_call") + NoLegend()
-        if (any(c("S0200", "S0201") %in% object$sample_name)) {
-            object <- subset(object, sample_name != "S0200" & sample_name != "S0201")
-        }
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets"
+                )) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                        group,
+                        ".qs"))
+    #dimplot_better(object, group_by = "celltype_tumor_call") + NoLegend()
+    if (any(c("S0200", "S0201") %in% object$sample_name)) {
+        object <- 
+            subset(object,
+                   sample_name != "S0200" & sample_name != "S0201")
+    }
 
-        for (cell_group_name in c("cancer_cells", "normal_cells")) {
-            sub_group <- str_c(group, "_", cell_group_name)
+    for (cell_group_name in c("cancer_cells", "normal_cells")) {
+        sub_group <- str_c(group, "_", cell_group_name)
 
+        s_obj <-
+            subset(x = object,
+                    celltype_tumor_call == cell_group_name) %>%
+            process_seurat()
+        # add the filter genes that are present in less than 1% of cells
+        min_prop_cells_expressing <- 0.01
+        n_cells_in_data <- length(Cells(s_obj))
+        cells_expressing_genes <-
+            rowSums(
+                GetAssayData(s_obj, layer = "counts") > 0
+            ) > min_prop_cells_expressing * n_cells_in_data
+
+        set.seed(199820)
+        if (cell_group_name == "normal_cells") {
             s_obj <-
-                subset(x = object, celltype_tumor_call == cell_group_name) %>%
-                process_seurat()
-            # add the filter genes that are present in less than 1% of cells
-            min_prop_cells_expressing <- 0.01
-            n_cells_in_data <- length(Cells(s_obj))
-            cells_expressing_genes <-
-                rowSums(
-                    GetAssayData(s_obj, layer = "counts") > 0
-                ) > min_prop_cells_expressing * n_cells_in_data
-
-            set.seed(199820)
-            if (cell_group_name == "normal_cells") {
-                s_obj <-
-                    s_obj[cells_expressing_genes, ] %>%
-                    process_seurat() %>%
-                    RunHarmony(group.by.vars = harmony_params[[group]]$group_by) %>%
-                    process_seurat(reduction = "harmony")
-            } else {
-                s_obj <-
-                    s_obj[cells_expressing_genes, ] %>%
-                    process_seurat() %>%
-                    RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
-                                         theta = harmony_params[[group]]$theta,
-                                         lambda = harmony_params[[group]]$lambda) %>%
-                    process_seurat(reduction = "harmony")
-            }
-            directory <-
-                str_c("output/seurat_objects/pre_clean_tumor_vs_stroma/")
-            if (!dir.exists(directory)) {
-                dir.create(directory, recursive = TRUE)
-            }
-            #save the seurat object size
-            qs::qsave(s_obj, str_c("output/seurat_objects/pre_clean_tumor_vs_stroma/",
-                                                         group, "_", cell_group_name,
-                                                         ".qs"))
+                s_obj[cells_expressing_genes, ] %>%
+                process_seurat() %>%
+                RunHarmony(group.by.vars = harmony_params[[group]]$group_by) %>%
+                process_seurat(reduction = "harmony")
+        } else {
+            s_obj <- 
+                s_obj[cells_expressing_genes, ] %>%
+                process_seurat() %>%
+                RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
+                            theta = harmony_params[[group]]$theta,
+                            lambda = harmony_params[[group]]$lambda) %>%
+                process_seurat(reduction = "harmony")
         }
-        NULL
-    },
-    mc.cores = parallelly::availableCores(),
-    mc.preschedule = FALSE
-)
-#dimplot_better(s_obj, group_by = "annotations") + NoLegend()
+        directory <-
+            str_c("output/seurat_objects/pre_clean_tumor_vs_stroma/")
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
+        #save the seurat object size
+        qs::qsave(s_obj, str_c("output/seurat_objects/pre_clean_tumor_vs_stroma/",
+                                group, "_", cell_group_name,
+                                ".qs"))
+    }
+}
+#dimplot_better(s_obj, group_by = "celltype_tumor_call") + NoLegend()
+xy <- s_obj
 ```
 
 
@@ -336,12 +340,21 @@ parallel::mclapply(
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.5,
-            "patient_mets_cancer_cells",    0.5,
-            "mm_prim_cancer_cells",         0.3,
-            "mm_mets_cancer_cells",         0.3,
+            # "patient_prim_cancer_cells",    0.5,
+            # "patient_mets_cancer_cells",    0.5,
+            # "mm_prim_cancer_cells",         0.3,
+            # "mm_mets_cancer_cells",         0.3,
             "dogs_prim_cancer_cells",         0.3,
             "dogs_mets_cancer_cells",         0.3)
+
+annotation_type <- 
+    list(
+        patient_prim_cancer_cells = list("human", TRUE),
+        patient_mets_cancer_cells = list("human_lung", TRUE),
+        mm_prim_cancer_cells = list("mouse", TRUE),
+        mm_mets_cancer_cells = list("mouse_lung", TRUE),
+        dogs_prim_cancer_cells = list("human", TRUE),
+        dogs_mets_cancer_cells = list("human_lung", TRUE))
 
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
@@ -376,31 +389,19 @@ for (i in seq_len(nrow(object_list))) {
             sub_obj <- 
                 dog_to_human_setup(object = sub_obj,
                                     harm_vars = c("sample_name"),
-                                    theta = c(7))
-            if (length(unique(sub_obj$sample_name)) > 1 && ncol(sub_obj) > 50) {
-                res_score <-
-                    optimize_silhouette(sobject = sub_obj,
-                                        test_res = seq(0.05, 0.9, by = 0.05),
-                                        summary_plot = FALSE,
-                                        reduction = "harmony") %>%
-                    filter(!is.na(sil_vals)) %>%
-                    filter(sil_vals == max(sil_vals)) %>%
-                    slice_head(n = 1) %>%
-                    dplyr::pull(res_vals)
-                sub_obj <-
-                    FindClusters(sub_obj,
-                                resolution = res_score)
-            } else {
+                                    theta = c(7)) %>%
+                FindClusters(resolution = 0.1)
+        } else {
                sub_obj <- sub_obj
-            }
-            species <- "human"
         }
-        
+        print("done 1")
+
         ann_obj <-
             annotate_celltypes(sobject = sub_obj,
-                                species = species,
+                                species = annotation_type[[group]][[1]],
                                 with_tumor = TRUE,
                                 aggr_ref = TRUE)
+
         ann_obj <-
             clusterbased_annot(s_obj = ann_obj)
         #dimplot_better(ann_obj, group_by = "new_annot_clust") + NoLegend()
@@ -412,24 +413,12 @@ for (i in seq_len(nrow(object_list))) {
                             theta = 7) %>%
                 process_seurat(reduction = "harmony",
                                 resolution = 0.1)
-        
-            res_score <-
-                optimize_silhouette(sobject = ann_obj,
-                                    test_res = seq(0.05, 0.9, by = 0.05),
-                                    summary_plot = FALSE,
-                                    reduction = "harmony") %>%
-                filter(!is.na(sil_vals)) %>%
-                filter(sil_vals == max(sil_vals)) %>%
-                slice_head(n = 1) %>%
-                dplyr::pull(res_vals)
-
-            ann_obj <-
-                FindClusters(ann_obj,
-                            resolution = res_score)
             # dimplot_better(ann_obj, group_by = "seurat_clusters") + NoLegend()
         } else {
             ann_obj <- ann_obj
         }
+
+        print("done 2")
 
         if (sub_obj$organism[1] == "dog") {
             sub_obj <- 
@@ -452,12 +441,12 @@ for (i in seq_len(nrow(object_list))) {
             sub_obj$new_annot_clust <- obj_i_want$new_annot_clust
             ann_obj <- sub_obj
         }
-
+        print("done 3")
         dimplot1 <-
             dimplot_better(ann_obj,
                     group_by = "seurat_clusters") + 
                 NoLegend() +
-                ggtitle(str_c("res=", res_score," for ", clusters))
+                ggtitle(clusters)
 
         dimplot2 <-
             dimplot_better(ann_obj,
@@ -476,30 +465,57 @@ for (i in seq_len(nrow(object_list))) {
                     group_by = "new_annot_clust") + 
                 NoLegend() +
                 ggtitle(str_c("new_annot_clust ", clusters))
-
-        dimplot5 <-
-            dimplot_better(ann_obj,
+        if ("scATOMIC_pred" %in% colnames(ann_obj@meta.data)) {
+            dimplot5 <-
+                dimplot_better(ann_obj,
                     group_by = "scATOMIC_pred") + 
-                NoLegend() +
-                ggtitle(str_c("scATOMIC_pred ", clusters))
+                    NoLegend() +
+                    ggtitle(str_c("scATOMIC_pred ", clusters))
+        } else {
+            dimplot5 <- 
+                ggplot(data = NULL) +
+                    aes(x = as.factor(1), y = as.factor(1)) +
+                    geom_text(aes(label = str_c("scATOMIC_pred not present for ", group)))
+        }
 
-        dimplot6 <-
-            dimplot_better(ann_obj,
+        if ("CNV_status" %in% colnames(ann_obj@meta.data)) {
+            dimplot6 <-
+                dimplot_better(ann_obj,
                     group_by = "CNV_status") + 
-                NoLegend() +
-                ggtitle(str_c("CNV_status ", clusters))
-        
-        dimplot7 <-
-            dimplot_better(ann_obj,
-                    group_by = "scatomic_tumor_call") + 
-                NoLegend() +
-                ggtitle(str_c("scatomic_tumor_call ", clusters))
+                    NoLegend() +
+                    ggtitle(str_c("CNV_status ", clusters))
+        } else {
+            dimplot6 <- 
+                ggplot(data = NULL) +
+                    aes(x = as.factor(1), y = as.factor(1)) +
+                    geom_text(aes(label = str_c("CNV_status not present for ", group)))
+        }
 
-        dimplot8 <-
-            dimplot_better(ann_obj,
+        if ("scatomic_tumor_call" %in% colnames(ann_obj@meta.data)) {
+            dimplot7 <-
+                dimplot_better(ann_obj,
+                    group_by = "scatomic_tumor_call") + 
+                    NoLegend() +
+                    ggtitle(str_c("scatomic_tumor_call ", clusters))
+        } else {
+            dimplot7 <- 
+                ggplot(data = NULL) +
+                    aes(x = as.factor(1), y = as.factor(1)) +
+                    geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
+        }
+
+        if ("class" %in% colnames(ann_obj@meta.data)) {
+            dimplot8 <-
+                dimplot_better(ann_obj,
                     group_by = "class") + 
-                NoLegend() +
-                ggtitle(str_c("class ", clusters))
+                    NoLegend() +
+                    ggtitle(str_c("class ", clusters))
+        } else {
+            dimplot8 <- 
+                ggplot(data = NULL) +
+                    aes(x = as.factor(1), y = as.factor(1)) +
+                    geom_text(aes(label = str_c("class not present for ", group)))
+        }
 
         plot_c <-
             patchwork::wrap_plots(dimplot1, dimplot2, dimplot3,
@@ -563,12 +579,163 @@ for (i in seq_len(nrow(object_list))) {
                         ".tsv"))
 }
 
-#dimplot_better(ann_obj, group_by = "annotations") + NoLegend()
-
 ```
 
+# optimize intergation
+try all the potential parameters for harmony and save the results as a list of plots
+```{r harmony_optimization_brute_force, echo = FALSE}
+# run harmony on the tumor cells and optimize the parameters
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                        group,
+                        ".qs"))
 
+    if (any(c("S0200", "S0201") %in% object$sample_name)) {
+        object <- 
+            subset(object,
+                   sample_name != "S0200" & sample_name != "S0201")
+    }
 
+    # read the recent tumor ids
+    filename <-
+        system(paste0(
+            "ls output/metadata/reclustering_tumors/",
+            group, "_cancer_cells",
+            "/tumor_ids",
+            "_* | tail -n 1"),
+            intern = TRUE)
+
+    tumor_ids <- 
+        read_tsv(filename,
+        guess_max = Inf,
+        show_col_types = FALSE)
+
+    set.seed(199820)
+    s_obj <-
+        subset(x = object,
+                cells = tumor_ids$cell_ids) %>% 
+        process_seurat()
+    # dimplot_better(s_obj, group_by = "celltype_tumor_call") + NoLegend()
+    # add the filter genes that are present in less than 1% of cells
+    min_prop_cells_expressing <- 0.01
+    n_cells_in_data <- length(Cells(s_obj))
+    cells_expressing_genes <-
+        rowSums(
+            GetAssayData(s_obj, layer = "counts") > 0
+        ) > min_prop_cells_expressing * n_cells_in_data
+    set.seed(199820)
+    s_obj <- 
+        s_obj[cells_expressing_genes, ] %>%
+        process_seurat()
+
+    hopts <-
+        tibble(theta = c(0.5, 1, 2, 4, 8),
+                sigma = c(.01, .03, .1, .3, 1),
+                lambda = c(.1, .3, 1, 3, 10))
+
+    hopts <- 
+        expand.grid(hopts$theta, hopts$sigma, hopts$lambda) %>%
+        setNames(colnames(hopts))
+    # parallel::mclapply is used to run the harmony optimization in parallel
+    results <- parallel::mclapply(1:nrow(hopts), function(i) {
+        sobj <-
+            s_obj %>%
+            harmony::RunHarmony("sample_name",
+                                dims.use = 1:50,
+                                theta = hopts$theta[i],
+                                sigma = hopts$sigma[i],
+                                lambda = hopts$lambda[i]) %>%
+                                RunUMAP(dims = 1:50, reduction = "harmony") %>%
+                                FindNeighbors(reduction = "harmony") %>%
+                                FindClusters(resolution = 0.4)
+        return(r_dim_plot(sobj, 
+                        group.by = "sample_name",
+                        order = TRUE) +
+            ggtitle(paste0("The ",
+                hopts$theta[i],
+                ", Sig ",
+                hopts$sigma[i],
+                ", Lam ",
+                hopts$lambda[i])) +
+            theme(plot.title = element_text(size = 8)) +
+            theme_void() +
+            NoLegend())
+    }, mc.cores = parallelly::availableCores())
+  
+    if (!dir.exists(paste0("output/figures/harmony_optimization", group))) {
+        dir.create(paste0("output/figures/harmony_optimization", group), recursive = TRUE)
+    }
+    # save the results as a list of plots
+    plot1 <-
+        patchwork::wrap_plots(results[1:25], ncol = 3) +
+        patchwork::plot_annotation(title = group) +
+        theme(plot.title = element_text(size = 10))
+    # save the plot as png
+    ggsave(str_c("output/figures/harmony_optimization/",
+                 group,
+                 "/",
+                 "HO_1_25.png"),
+           plot = plot1,
+           width = 14,
+           height = 63)
+    # save the plot as pdf
+    plot2 <-
+        patchwork::wrap_plots(results[26:50], ncol = 3) +
+        patchwork::plot_annotation(title = group) +
+        theme(plot.title = element_text(size = 10))
+    # save the plot as png
+    ggsave(str_c("output/figures/harmony_optimization/",
+                 group,
+                 "/",
+                 "HO_26_50.png"),
+           plot = plot2,
+           width = 14,
+           height = 63)
+    # save the plot as pdf
+    plot3 <-
+        patchwork::wrap_plots(results[51:75], ncol = 3) +
+        patchwork::plot_annotation(title = group) +
+        theme(plot.title = element_text(size = 10))
+    # save the plot as png
+    ggsave(str_c("output/figures/harmony_optimization/",
+                 group,
+                 "/",
+                 "HO_51_75.png"),
+           plot = plot3,
+           width = 14,
+           height = 63)
+    # save the plot as pdf
+    plot4 <-
+        patchwork::wrap_plots(results[76:100], ncol = 3) +
+        patchwork::plot_annotation(title = group) +
+        theme(plot.title = element_text(size = 10))
+    # save the plot as png
+    ggsave(str_c("output/figures/harmony_optimization/",
+                 group,
+                 "/",
+                 "HO_76_100.png"),
+           plot = plot4,
+           width = 14,
+           height = 63)
+    # save the plot as pdf
+    plot5 <-
+        patchwork::wrap_plots(results[101:125], ncol = 3) +
+        patchwork::plot_annotation(title = group) +
+        theme(plot.title = element_text(size = 10))
+    # save the plot as png
+    ggsave(str_c("output/figures/harmony_optimization/",
+                 group,
+                 "/",
+                 "HO_101_125.png"),
+           plot = plot5,
+           width = 14,
+           height = 63)
+}
+
+```
 ## Split by clustering with right resolution as found by clustree
 
 ```{r split_tumor_stromal_main}
@@ -636,23 +803,12 @@ harmony_params <-
                            theta = c(7)))
 
 #reference for annotating mets
-human_lung_ref <-
-    qs::qread("input/downloads/ds_human_lung_atlas.qs") %>%
-    subset(free_annotation != "Lymphatic_EC_differentiating")
-
-mets_ref <- list(GetAssayData(human_lung_ref), hpca)
-mets_label <- list(human_lung_ref$free_annotation, hpca$label.fine)
-
-mouse_lung_ref_new <- qs::qread("input/downloads/normal_mouselung.qs")
-
-mouse_lung_ref_new$CellType <-
-            str_replace_all(mouse_lung_ref_new$free_annotation,
-                            c("/" = "_",
-                              "\\+" = "_plus",
-                              "-" = "_",
-                              " " = "_",
-                              "^Alveolar_Epithelial_Type_2$" = "Alveolar_Epithelial"))
-
+annotation_type <- list(patient_prim_normal_cells = list("human", FALSE),
+                        patient_mets_normal_cells = list("human_lung", FALSE),
+                        mm_prim_normal_cells = list("mouse", FALSE),
+                        mm_mets_normal_cells = list("mouse_lung", FALSE),
+                        dogs_prim_normal_cells = list("human", FALSE),
+                        dogs_mets_normal_cells = list("human_lung", FALSE))
 
 for (group in c("patient_prim", "patient_mets",
                 "mm_prim", "mm_mets",
@@ -712,45 +868,16 @@ for (group in c("patient_prim", "patient_mets",
                     dog_to_human_setup(object = s_obj)
             }
 
-            set.seed(199820)
-            if (sub_group == "patient_mets_normal_cells" | sub_group == "dogs_mets_normal_cells") {
-                set.seed(199820)
-                ref_lung <- 
-                    SingleR::SingleR(test = as.SingleCellExperiment(s_obj),
-                                    ref = GetAssayData(human_lung_ref),
-                                    labels = human_lung_ref$free_annotation,
-                                    aggr.ref = TRUE)
-            } else if (sub_group == "patient_prim_normal_cells" | sub_group == "dogs_prim_normal_cells") {
-                set.seed(199820)
-                ref_lung <- 
-                    SingleR::SingleR(test = as.SingleCellExperiment(s_obj),
-                                    ref = list(hpca, huim),
-                                    labels = list(hpca$label.fine, huim$label.fine),
-                                    aggr.ref = TRUE)
-            } else if (sub_group == "mm_mets_normal_cells") {
-                set.seed(199820)
-                ref_lung <- 
-                    SingleR::SingleR(test = as.SingleCellExperiment(s_obj),
-                                    ref = GetAssayData(mouse_lung_ref_new),
-                                    labels = mouse_lung_ref_new$CellType,
-                                    aggr.ref = TRUE)
-            } else {
-                set.seed(199820)
-                ref_lung <- 
-                    SingleR::SingleR(test = as.SingleCellExperiment(s_obj),
-                                    ref = list(moim, mord),
-                                    labels = list(moim$label.fine, mord$label.fine),
-                                    aggr.ref = TRUE)
-            }
-            s_obj$annotations <- ref_lung$labels
-            s_obj$cell_scores <-
-                apply(X = ref_lung$scores,
-                    MARGIN = 1,
-                    function(x) max(x, na.rm = TRUE))
+            # annotate the normal cells
+            s_obj <-
+                annotate_celltypes(sobject = s_obj,
+                                species = annotation_type[[sub_group]][[1]],
+                                with_tumor = FALSE,
+                                aggr_ref = TRUE)
 
             s_obj <-
                 clusterbased_annot(s_obj)
-    
+
             if (sub_group == "dogs_prim_normal_cells" | sub_group == "dogs_mets_normal_cells") {
                 normal_cell_ids <- colnames(s_obj)
                 dog_stroma_whuman_genes <- s_obj
@@ -1028,30 +1155,30 @@ for (group in c("xeno_prim_human",
             theme(plot.title = element_text(size = 7))
     
     if ("scATOMIC_pred" %in% colnames(object@meta.data)) {
-            scAtomic_call <-
-                dimplot_better(object,
-                            group_by = "scATOMIC_pred") +
-                    ggtitle(str_c("SCATOMIC_celltype")) +
-                    NoLegend()
-        } else {
-            scAtomic_call <- 
-                ggplot(data = NULL) +
-                    aes(x = as.factor(1), y = as.factor(1)) +
-                    geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
-        }
+        scAtomic_call <-
+            dimplot_better(object,
+                        group_by = "scATOMIC_pred") +
+                ggtitle(str_c("SCATOMIC_celltype")) +
+                NoLegend()
+    } else {
+        scAtomic_call <- 
+            ggplot(data = NULL) +
+                aes(x = as.factor(1), y = as.factor(1)) +
+                geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
+    }
 
-        if ("CNV_status" %in% colnames(object@meta.data)){
-            dimplot_CNV <-
-                dimplot_better(object,
-                            group_by = "CNV_status") +
-                    NoLegend() +
-                    theme(plot.title = element_text(size = 7))
-        } else {
-            dimplot_CNV <- 
-                ggplot(data = NULL) +
-                    aes(x = as.factor(1), y = as.factor(1)) +
-                    geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
-        }
+    if ("CNV_status" %in% colnames(object@meta.data)){
+        dimplot_CNV <-
+            dimplot_better(object,
+                        group_by = "CNV_status") +
+                NoLegend() +
+                theme(plot.title = element_text(size = 7))
+    } else {
+        dimplot_CNV <- 
+            ggplot(data = NULL) +
+                aes(x = as.factor(1), y = as.factor(1)) +
+                geom_text(aes(label = str_c("scatomic_tumor_call not present for ", group)))
+    }
 
     all_dimplots <- 
         patchwork::wrap_plots(dimplot1,
