@@ -21,7 +21,7 @@ dimplot_better <- function(object,
             shuffle = T,
             label.box = T,
             #raster.dpi = c(500, 500),
-            cols = c(plot_cols, sample(rainbow(50))),
+            cols = c(plot_cols, sample(rainbow(100))),
             ...) +
         coord_fixed() +
         theme(aspect.ratio=1) +
@@ -944,8 +944,8 @@ cat_tib <- dplyr::tribble(
     ~category, ~subcategory,   ~cat_expl,
     "H",        "NA",          "Hallmark_paths",
     "C2",       "CP:KEGG",     "KEGG",
-    "C3",       "TFT:GTRD",    "Transcription_factor_targets",
-    "C6",       "NA",          "Oncogenic_signature",
+    # "C3",       "TFT:GTRD",    "Transcription_factor_targets",
+    # "C6",       "NA",          "Oncogenic_signature",
     "C5",       "GO:BP",       "Biological_processes",
     "C2",       "CP:REACTOME", "Reactome")
 
@@ -1211,8 +1211,8 @@ make_panel_plot <- function(sobj,
             circle_plot_out,
             ggplotify::as.ggplot(heatmap_plots$Hallmark_paths),
             ggplotify::as.ggplot(heatmap_plots$KEGG),
-            ggplotify::as.ggplot(heatmap_plots$Oncogenic_signature),
-            ggplotify::as.ggplot(heatmap_plots$Transcription_factor_targets),
+            #ggplotify::as.ggplot(heatmap_plots$Oncogenic_signature),
+            #ggplotify::as.ggplot(heatmap_plots$Transcription_factor_targets),
             ggplotify::as.ggplot(heatmap_plots$Biological_processes),
             ggplotify::as.ggplot(heatmap_plots$Reactome),
             ncol = 2) +
@@ -1700,14 +1700,17 @@ make_cellcount_sankey <- function(cell_count_table,
 
 make_dim_dot_plot <- function(object,
                               group_by,
-                              title) {
+                              title,
+                              cell_markers,
+                              cols) {
     # Set the order of the cell types
     object$plot_labels <- 
         object[[group_by]][, 1] %>%
         gsub("_", " ", .) %>%
         str_replace_all("Endothelial cells", "Endothelial") %>%
         str_replace_all("Epithelial cells", "Epithelial")
-
+    
+    # Create a new column for plot labels
     dimplot <-
         DimPlot(object,
                 group.by = "plot_labels", # Use the plot_labels for better aesthetics
@@ -1790,6 +1793,100 @@ make_dim_dot_plot <- function(object,
         patchwork::plot_annotation(title = title,
                                     theme = theme(plot.title = element_text(hjust = 0.5)))
     return(dim_dot_plot)
+}
+
+```
+
+
+## optimize harmony
+```{r optimize_harmony}
+
+
+optimize_harmony <- function(s_obj, 
+                            group_by = c("sample_name", "model"),
+                            theta_combo = c(2, 5, 7, 12),
+                            lambda_combo = c(0.1, 0.5, 0.7),
+                            dimplot_col = "sample_name",
+                            output_dir = "output/figures/harmony_optimization",
+                            output_folder = "mm_mets") {
+    # generate all combinations of theta and lambda vectors of length equal to group_by
+    theta_combos <- asplit(expand.grid(rep(list(theta_combo), length(group_by))), 1)
+    lambda_combos <- asplit(expand.grid(rep(list(lambda_combo), length(group_by))), 1)
+    # create a data frame with all combinations of group_by, theta vector, and lambda vector
+    hopts <- tidyr::crossing(
+        group_by = list(group_by),
+        theta = theta_combos,
+        lambda = lambda_combos
+    ) %>%
+        tibble::as_tibble()
+
+    # run harmony for each combination of theta and lambda
+    # parallel::mclapply is used to run the harmony optimization in parallel
+    # results <- parallel::mclapply(1:nrow(hopts), function(i) {
+    results <- list()
+    for (i in seq_len(nrow(hopts))) {
+        theta <- as.vector(hopts$theta[i][[1]])
+        lambda <- as.vector(hopts$lambda[i][[1]])
+        s_obj <-
+            s_obj %>%
+            RunHarmony(
+                group.by.vars = hopts$group_by[i][[1]],
+                dims.use = 1:50,
+                theta = theta,
+                lambda = lambda) %>%
+            RunUMAP(dims = 1:50, reduction = "harmony") %>%
+            FindNeighbors(reduction = "harmony") %>%
+            FindClusters(resolution = 0.4)
+        dimplot <- 
+            DimPlot(object,
+                    group.by = dimplot_col,
+                    label.size = 4,
+                    label = T,
+                    raster = F,
+                    repel = T,
+                    shuffle = T,
+                    label.box = T,
+                    cols = c(plot_cols, sample(rainbow(50)))) +
+        coord_fixed() +
+        theme(aspect.ratio=1) +
+        theme_void() +
+        ggtitle(paste0(
+                paste("Theta:", paste(theta, collapse = ","),
+                " Lambda:", paste(lambda, collapse = ",")))) +
+        theme(plot.title = element_text(size = 8)) +
+        NoLegend()
+        results[[i]] <- dimplot
+    }
+    # , mc.cores = parallelly::availableCores(),
+    #    mc.preschedule = FALSE)
+    # return(results)
+    # Get the name of the object for directory naming
+    # Ensure output_dir/output_folder exists
+    full_output_dir <- 
+        str_c(output_dir, "/", output_folder)
+    if (!dir.exists(full_output_dir)) {
+        dir.create(full_output_dir, recursive = TRUE)
+    }
+    # Save the plots 24 at a time based on the length of results
+    plots_per_page <- 16
+    n_results <- length(results)
+    n_pages <- ceiling(n_results / plots_per_page)
+    for (page in seq_len(n_pages)) {
+        start_idx <- (page - 1) * plots_per_page + 1
+        end_idx <- min(page * plots_per_page, n_results)
+        plot_page <-
+            patchwork::wrap_plots(results[start_idx:end_idx], ncol = 2) +
+            patchwork::plot_annotation(title = paste0(names(s_obj), " (plots ", start_idx, "-", end_idx, ")")) +
+            theme(plot.title = element_text(size = 10))
+        ggsave(str_c(full_output_dir,
+                 "/",
+                 "HO_", start_idx, "_", end_idx, ".png"),
+               plot = plot_page,
+               width = 14,
+               height = 56,
+               limitsize = FALSE,
+               bg = "white")
+    }
 }
 
 ```

@@ -205,12 +205,18 @@ harmony_params <-
 
 threshold <-                            
     list(patient_prim = 0.23,
-         patient_mets = 0.5,
-         mm_prim = 0.3,
-         mm_mets = 0.2,
-         dogs_prim = 0.5,
-         dogs_mets = 0.2)
+         patient_mets = 0.71,
+         mm_prim = 0.30,
+         mm_mets = 0.20,
+         dogs_prim = 0.60,
+         dogs_mets = 0.24)
 
+
+osteosarcoma_markers <-
+    c("RUNX2",
+      "COL1A1",
+      "COL1A2",
+      "SATB2")
 
 #parallel::mclapply(unique(all_samples_csv$unique), function(group)
 for (group in c("patient_prim", "patient_mets",
@@ -584,7 +590,13 @@ Annotation_cleanup <-
             "^Neuroepithelial_cell_ESC_derived$" = "Mesenchymal",
             "^Chondrocytes_MSC_derived$" = "Mesenchymal",
             "^MSC$" = "Mesenchymal",
-            "^NK_cell_CD56hiCD62L_plus$" = "NK_cells"),
+            "^GMP_Progenitors$" = "Progenitors",
+            "^Tissue_stem_cells$" = "Mesenchymal",
+            "^Chondrocytes$" = "Mesenchymal",
+            "^Osteoblasts$" = "Mesenchymal",
+            "^NK_cell_CD56hiCD62L_plus$" = "NK_cells",
+            "^SMG_duct$" = "Epithelial_cells",
+            "^Lymphatic_EC$" = "Endothelial_cells"),
         SingleR_Ann1_label =
             c("^B_cells$" = "Immune_Lymphoid",
             "^Dendritic_cells$" = "Immune_Myeloid",

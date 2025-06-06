@@ -13,15 +13,16 @@ all_groups <-
       "xeno_prim_human",
       "xeno_mets_human",
       "dogs_prim_cancer_cells",
-      "dogs_mets_cancer_cells",
-      "patient_prim_normal_cells",
-      "patient_mets_normal_cells",
-      "xeno_prim_mouse",
-      "xeno_mets_mouse",
-      "mm_prim_normal_cells",
-      "mm_mets_normal_cells",
-      "dogs_prim_normal_cells",
-      "dogs_mets_normal_cells")
+      "dogs_mets_cancer_cells"
+    #   "patient_prim_normal_cells",
+    #   "patient_mets_normal_cells",
+    #   "xeno_prim_mouse",
+    #   "xeno_mets_mouse",
+    #   "mm_prim_normal_cells",
+    #   "mm_mets_normal_cells",
+    #   "dogs_prim_normal_cells",
+    #   "dogs_mets_normal_cells"
+      )
 
 sil_val_list <- list()
 clustrees <- list()
@@ -33,7 +34,8 @@ for (i in seq_len(length(all_groups))) {
         qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                         group,
                         ".qs"))
-    #dimplot_better(object, group_by = "new_annot_clust") + NoLegend()
+    #dimplot_better(object, group_by = "sample_name") + NoLegend()
+    #FeaturePlot(object, features = "Cd36")
     min_cell_silhouette <- 60000
     n_cells <- length(Cells(object))
     keep_n_cells <- min(min_cell_silhouette, n_cells)
@@ -81,58 +83,132 @@ for (i in seq_len(length(all_groups))) {
 ##  Differential expression analysis for tumor cells and GSEA
 ```{r degs_analysis_tumor, echo = FALSE}
 #| cache.vars: panel_plot_list
-theme_set(
-    theme_classic(base_size = 20) +
-    theme(
-        axis.title.y = element_text(
-            margin = ggplot2::margin(0, 20, 0, 0),
-            size = 10,
-            color = "black",
-            face = "bold"
-        ),
-        axis.title.x = element_text(
-            hjust = 0.5,
-            margin = ggplot2::margin(20, 0, 0, 0),
-            size = 10,
-            color = "black",
-            face = "bold"
-        ),
-        plot.title = element_text(
-            hjust = 0.5,
-            size = 10,
-            face = "bold"
-        ),
-        legend.text = element_text(size = 8, face = "bold")
-    )
-)
-
-# load the tsv for human_dog gene orthologs
-orthologs <-
-    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
-
-#GSEA Miltilevel
-cat_tib <- dplyr::tribble(
-    ~category, ~subcategory,   ~cat_expl,
-    "H",        "NA",          "Hallmark_paths",
-    "C2",       "CP:KEGG",     "KEGG",
-    "C3",       "TFT:GTRD",    "Transcription_factor_targets",
-    "C6",       "NA",          "Oncogenic_signature",
-    "C5",       "GO:BP",       "Biological_processes",
-    "C2",       "CP:REACTOME", "Reactome")
-
-panel_plots <- list()
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.15,
-            "patient_mets_cancer_cells",    0.25,
-            "mm_prim_cancer_cells",         1.5,
-            "mm_mets_cancer_cells",         1,
+            "patient_prim_cancer_cells",    0.3,
+            "patient_mets_cancer_cells",    0.35,
+            "mm_prim_cancer_cells",         0.9,
+            "mm_mets_cancer_cells",         0.7,
             "xeno_prim_human",              0.3,
             "xeno_mets_human",              0.4,
             "dogs_prim_cancer_cells",       0.2,
             "dogs_mets_cancer_cells",       0.45
             )
+
+top_7_markers <- list()
+# identify degs
+for (i in seq_len(nrow(object_list))) {
+    group <- object_list$group[i]
+    res_value <- object_list$res_value[i]
+    object <-
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    object <-
+        FindClusters(object,
+                    resolution = 0.35)
+    #dimplot_better(object, group_by = "seurat_clusters") + NoLegend()
+    # FeaturePlot(object, features = "PTPRC")
+    dimplot1 <-
+        dimplot_better(object,
+                     group_by = "seurat_clusters") +
+            NoLegend()
+    
+    Idents(object) <- "seurat_clusters"
+    markers <- 
+        FindAllMarkers(object = object,
+                        min.pct = 0.5,
+                        logfc.threshold = 0.25,
+                        only.pos = T)
+    
+    markers_to_save <-
+        markers %>%
+        as.data.frame() %>%
+        group_by(cluster) %>% 
+        group_by(cluster) %>%
+        mutate(percent_diff = pct.1 - pct.2) %>%
+        arrange(desc(percent_diff), .by_group = TRUE) %>%
+        slice_min(order_by = p_val_adj, 
+                n = 20,
+                with_ties = F) %>%
+        select(gene, cluster) %>%
+        group_by(cluster) %>%
+        summarise(genes = list(gene)) %>%
+        deframe()
+    # save the markers
+    write_tsv(x = markers_to_save,
+            file = str_c("output/degs/",
+                        group,
+                        "/seurat_clusters_markers.tsv"),
+            col_names = TRUE)
+
+    # reduce data
+    top_markers <- 
+        markers %>%
+        as.data.frame() %>%
+        group_by(cluster) %>% 
+        group_by(cluster) %>%
+        mutate(percent_diff = pct.1 - pct.2) %>%
+        arrange(desc(percent_diff), .by_group = TRUE) %>%
+        slice_min(order_by = p_val_adj, 
+                n = 7,
+                with_ties = F)
+
+    # get list of top marker genes; including each gene only once
+    genes <- 
+        top_markers$gene %>%
+        unique()
+
+    top_7_markers[[group]] <- genes
+
+    # change to RNA assay
+    DefaultAssay(object) <- "RNA"
+
+    # scale data for visualization
+    data <-
+        ScaleData(object = object,
+                    assay = "RNA")
+    data <-
+        subset(x = data,
+            downsample = min(100, ncol(object)))
+
+    heatmap_degs <-
+        DoHeatmap(object = data,
+                features = genes,
+                group.by = "seurat_clusters")
+
+    # make dot plot
+    dotplot_degs <-
+        DotPlot(object = object,
+                features = genes) +
+        RotatedAxis() 
+
+    # save the dotplot
+    width <- length(unique(object$seurat_clusters)) * 2
+    height <- length(unique(object$seurat_clusters)) *2
+
+    combine <-
+        cowplot::plot_grid(heatmap_degs,
+                        dotplot_degs,
+                        ncol = 1)
+
+    directory <-
+        str_c("output/figures/tumor_vs_stroma/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+
+    ggsave(str_c(directory, "/", "degs_per_cluster.png"),
+            plot = combine,
+            width = width,
+            height = height,
+            bg = "white")
+
+}
+
+
+
 
 # run force directed layout
 for (i in seq_len(nrow(object_list))) {
@@ -144,8 +220,13 @@ for (i in seq_len(nrow(object_list))) {
                         ".qs"))
     object <-
         FindClusters(object,
-                    resolution = res_value)
-    #dimplot_better(object, group_by = "seurat_clusters", raster=FALSE) +NoLegend()
+                    resolution = 0.3)
+    #dimplot_better(object, group_by = "seurat_clusters")
+    #FeaturePlot(object, features = "Bnip3")
+    #DotPlot(object, features = "Bnip3")
+    
+    #dimplot_better(object, group_by = "seurat_clusters") +NoLegend()
+    # DotPlot(object, features = tumor_features )
     force_directed_layout <- 
         run_fdl(sobject = object)
 
@@ -202,6 +283,47 @@ for (i in seq_len(nrow(object_list))) {
 }
 
 # Run GSEA 
+
+theme_set(
+    theme_classic(base_size = 20) +
+    theme(
+        axis.title.y = element_text(
+            margin = ggplot2::margin(0, 20, 0, 0),
+            size = 10,
+            color = "black",
+            face = "bold"
+        ),
+        axis.title.x = element_text(
+            hjust = 0.5,
+            margin = ggplot2::margin(20, 0, 0, 0),
+            size = 10,
+            color = "black",
+            face = "bold"
+        ),
+        plot.title = element_text(
+            hjust = 0.5,
+            size = 10,
+            face = "bold"
+        ),
+        legend.text = element_text(size = 8, face = "bold")
+    )
+)
+
+# load the tsv for human_dog gene orthologs
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
+
+#GSEA Miltilevel
+cat_tib <- dplyr::tribble(
+    ~category, ~subcategory,   ~cat_expl,
+    "H",        "NA",          "Hallmark_paths",
+    "C2",       "CP:KEGG",     "KEGG",
+    # "C3",       "TFT:GTRD",    "Transcription_factor_targets",
+    # "C6",       "NA",          "Oncogenic_signature",
+    "C5",       "GO:BP",       "Biological_processes",
+    "C2",       "CP:REACTOME", "Reactome")
+
+panel_plots <- list()
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
     res_value <- object_list$res_value[i]
@@ -214,8 +336,9 @@ for (i in seq_len(nrow(object_list))) {
     object <- 
         FindClusters(object,
                     resolution = res_value)
-    #dimplot_better(object, group_by = "seurat_clusters")
+    #dimplot_better(object, group_by = "seurat_clusters") + NoLegend()
     ## remmeber to put the run_degs filter to 10% of the cells
+    # DotPlot(object, features = tumor_features %>% unlist() %>% as.character())
     make_panel_plot(sobj = object,
                     comparison_col = "seurat_clusters",
                     label = "seurat_clusters",
@@ -343,14 +466,14 @@ orthologs <-
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.15,
-            "patient_mets_cancer_cells",    0.25,
-            "mm_prim_cancer_cells",         1,
-            "mm_mets_cancer_cells",         1,
+            "patient_prim_cancer_cells",    0.3,
+            "patient_mets_cancer_cells",    0.35,
+            "mm_prim_cancer_cells",         0.9,
+            "mm_mets_cancer_cells",         0.7,
             "xeno_prim_human",              0.3,
-            "xeno_mets_human",              0.15,
+            "xeno_mets_human",              0.4,
             "dogs_prim_cancer_cells",       0.2,
-            "dogs_mets_cancer_cells",       0.1
+            "dogs_mets_cancer_cells",       0.45
             )
 
 for (i in seq_len(nrow(object_list))) {
@@ -544,12 +667,12 @@ hist(genelist$percent_target_degs)
 ```{r previous_annotation_heatmap, echo = FALSE}
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.15,
+            "patient_prim_cancer_cells",    0.3,
             "patient_mets_cancer_cells",    0.35,
-            "mm_prim_cancer_cells",         1.5,
-            "mm_mets_cancer_cells",         1,
-            # "xeno_prim_human",              0.3,
-            # "xeno_mets_human",              0.4,
+            "mm_prim_cancer_cells",         0.9,
+            "mm_mets_cancer_cells",         0.7,
+            "xeno_prim_human",              0.3,
+            "xeno_mets_human",              0.4,
             "dogs_prim_cancer_cells",       0.2,
             "dogs_mets_cancer_cells",       0.45
             )
@@ -570,7 +693,7 @@ for (i in seq_len(nrow(object_list))) {
     #dimplot_better(object, group_by = "seurat_clusters")
     filename <-
         system(paste0(
-            "ls output/metadata/celltype_tumor/",
+            "ls output_5_29_2025/metadata/celltype_tumor/",
             group,
             "_* | tail -n 1"),
             intern = TRUE)
@@ -628,12 +751,12 @@ for (i in seq_len(nrow(object_list))) {
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.15,
-            "patient_mets_cancer_cells",    0.35,
-            "mm_prim_cancer_cells",         1.5,
-            "mm_mets_cancer_cells",         1,
-            # "xeno_prim_human",              0.3,
-            # "xeno_mets_human",              0.4,
+            "patient_prim_cancer_cells",    0.3,
+            "patient_mets_cancer_cells",    0.3,
+            "mm_prim_cancer_cells",         0.9,
+            "mm_mets_cancer_cells",         0.7,
+            "xeno_prim_human",              0.3,
+            "xeno_mets_human",              0.4,
             "dogs_prim_cancer_cells",       0.2,
             "dogs_mets_cancer_cells",       0.45
             )
@@ -660,6 +783,8 @@ for (i in seq_len(nrow(object_list))) {
                      group_by = "seurat_clusters") +
             NoLegend()
 
+    # dimplot_better(object, group_by = "annotations") + NoLegend()
+    # DimPlot(object, cells.highlight = subset(object,seurat_clusters == "8") %>% colnames())
     sample_dimplot <-
         dimplot_better(object,
                      group_by = "sample_name") +
@@ -679,13 +804,22 @@ for (i in seq_len(nrow(object_list))) {
             str_replace_all(object$seurat_clusters,
                           c("^0$" = "Tumor_Progenitor",   #neuronal and bone development, CD36 degs
                             "^1$" = "Tumor_Fibrogenic",
-                            "^2$" = "Tumor_Synthetic",  
-                            "^3$" = "Tumor_Proliferative",   
-                            "^4$" = "Tumor_Apoptosis",   
-                            "^5$" = "Tumor_Interactive",  
-                            "^6$" = "Tumor_Synthetic",  # is hypermetabolic coz similar
+                            "^2$" = "Tumor_Proliferative",  
+                            "^3$" = "Tumor_Synthetic",   
+                            "^4$" = "Tumor_Basal",   
+                            "^5$" = "Tumor_Fibrogenic",  
+                            "^6$" = "Tumor_Interactive",  # is hypermetabolic coz similar
                             "^7$" = "Tumor_Fibrogenic",
-                            "^8$" = "Tumor_Synthetic"))  #by the degs and fdl
+                            "^8$" = "Tumor_Proliferative",
+                            "^9$" = "Tumor_Interactive",
+                            "^10$" = "Tumor_Proliferative",   #neuronal and bone development, CD36 degs
+                            "^11$" = "Tumor_Proliferative",
+                            "^12$" = "Tumor_Synthetic",  
+                            "^13$" = "Tumor_Progenitor",   
+                            "^14$" = "Tumor_Progenitor",   
+                            "^15$" = "Tumor_Progenitor",  
+                            "^16$" = "Tumor_Fibrogenic",  # is hypermetabolic coz similar
+                            "^17$" = "Tumor_Synthetic"))  #by the degs and fdl
     }
     if (group == "patient_mets_cancer_cells") {
         object$Ann_Level3 <-
@@ -716,38 +850,31 @@ for (i in seq_len(nrow(object_list))) {
     if (group == "mm_prim_cancer_cells") {       #KEGG pathways are good to differentiate the clusters
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
-                          c("^0$" = "Tumor_Proliferative",
+                          c("^0$" = "Tumor_Fibrogenic",
                             "^1$" = "Tumor_Progenitor",
                             "^2$" = "Tumor_Proliferative",  
-                            "^3$" = "Tumor_Progenitor",  
+                            "^3$" = "Tumor_Proliferative",  
                             "^4$" = "Tumor_Synthetic",
-                            "^5$" = "Tumor_Synthetic",
-                            "^6$" = "Tumor_Apoptosis",   
-                            "^7$" = "Tumor_Apoptosis",
-                            "^8$" = "Tumor_Proliferative",
-                            "^9$" = "Tumor_Interactive",
-                            "^10$" = "Tumor_Fibrogenic",
-                            "^11$" = "Tumor_Fibrogenic",
-                            "^12$" = "Tumor_Interactive",
-                            "^13$" = "Tumor_Synthetic",
-                            "^14$" = "Tumor_Synthetic"))
+                            "^5$" = "Tumor_Fibrogenic",
+                            "^6$" = "Tumor_Synthetic",   
+                            "^7$" = "Tumor_Interactive",      ## IFIT expression
+                            "^8$" = "Tumor_Basal",
+                            "^9$" = "Tumor_Progenitor"))
     }
     if (group == "mm_mets_cancer_cells") {
         object$Ann_Level3 <-
             str_replace_all(object$seurat_clusters,
                           c("^0$" = "Tumor_Proliferative",    #
                             "^1$" = "Tumor_Synthetic",   
-                            "^2$" = "Tumor_Progenitor",
-                            "^3$" = "Tumor_Apoptosis",           #Apoptotic
-                            "^4$" = "Tumor_Progenitor",
-                            "^5$" = "Tumor_Proliferative",
-                            "^6$" = "Tumor_Interactive",
+                            "^2$" = "Tumor_Fibrogenic",
+                            "^3$" = "Tumor_Progenitor",           #Apoptotic
+                            "^4$" = "Tumor_Fibrogenic",
+                            "^5$" = "Tumor_Interactive",
+                            "^6$" = "Tumor_Proliferative",
                             "^7$" = "Tumor_Fibrogenic",
                             "^8$" = "Tumor_Interactive",   #potentially interactive
                             "^9$" = "Tumor_Progenitor",
-                            "^10$" = "Tumor_Progenitor",
-                            "^11$" = "Tumor_Interactive",
-                            "^12$" = "Tumor_Synthetic"))
+                            "^10$" = "Tumor_Progenitor"))
     }
     # if (group == "xeno_prim_human") {
     #     object$Ann_Level3 <-
@@ -853,6 +980,11 @@ for (i in seq_len(nrow(object_list))) {
             ncol = 2
         )
 
+    directory <- file.path("output/figures/tumor_vs_stroma/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+
     ggsave(str_c("output/figures/tumor_vs_stroma/",
                 group,
                 "/",
@@ -934,7 +1066,15 @@ harmony_parameters <-
                                         "data_source",
                                         "unique"),
                             theta = c(12, 12, 12),
-                            lambda = c(0.1, 0.1, 0.1)))
+                            lambda = c(0.1, 0.1, 0.1)),
+        patient_xeno_prim_mets = list(group_by = c("sample_name",
+                                                    "data_source",
+                                                    "method",
+                                                    "unique"),
+                                    theta = c(12, 12, 12, 12),
+                                    lambda = c(0.1, 0.1, 0.1, 0.1)))
+
+# save the combined for each dataset
 
 
 for (item in seq_len(nrow(combine_tumor_per_species))) {
@@ -943,14 +1083,16 @@ for (item in seq_len(nrow(combine_tumor_per_species))) {
     comb_group <- combine_tumor_per_species$combined[item]
 
     object1 <- 
-        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                         group1,
                         ".qs"))
+    # DotPlot(object1, group.by = "seurat_clusters", features = c("Ifit3", "Bnip3"))
     object2 <-
-        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
                         group2,
                         ".qs"))
-    
+    # dimplot_better(object, group_by = "seurat_clusters")
+     # DotPlot(object2, group.by = "seurat_clusters", features = c("Ifit3", "Bnip3"))
     object <- 
         merge(x = object1,
             y = object2) %>%
@@ -960,7 +1102,24 @@ for (item in seq_len(nrow(combine_tumor_per_species))) {
                     theta = harmony_parameters[[comb_group]]$theta,
                     lambda = harmony_parameters[[comb_group]]$lambda) %>%
         process_seurat(reduction = "harmony",
-                        resolution = 0.15)
+                        resolution = 0.2)
+
+    dim1 <-
+        object %>%
+        subset(unique == object1$unique[[1]]) %>%
+        dimplot_better(group_by = "seurat_clusters") + NoLegend()
+
+    dim2 <-
+        object %>%
+        subset(unique == object2$unique[[1]]) %>%
+        dimplot_better(group_by = "seurat_clusters") + NoLegend()
+    panel_plot <-
+        cowplot::plot_grid(dim1, dim2,
+                            ncol = 2,
+                            labels = c("prim", "mets"))
+    # save the panel plot
+    #DotPlot(object, group.by = "seurat_clusters", features = c("CSF1R","CD36", "RPLP1", "THBS2"))
+    #dimplot_better(object, group_by = "data_source")
 
     qs::qsave(object,
             str_c("output/seurat_objects/final_combined_sobjs/",
@@ -968,6 +1127,637 @@ for (item in seq_len(nrow(combine_tumor_per_species))) {
                     ".qs"))
 
 }
+
+# since xenograft and human patient tumor cells are human, we can combine them
+patient_prim_mets <-
+    qs::qread("output/seurat_objects/final_combined_sobjs/patient_prim_mets.qs")
+
+xeno_prim_mets <-
+    qs::qread("output/seurat_objects/final_combined_sobjs/xeno_prim_mets.qs")
+
+combine_all <-
+    merge(x = patient_prim_mets,
+          y = xeno_prim_mets) %>%
+    JoinLayers() %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = c("sample_name",
+                                "data_source",
+                                "method",
+                                "unique"),
+                theta = c(12, 12, 12, 12),
+                lambda = c(0.1, 0.1, 0.1, 0.1)) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.2)
+
+qs::qsave(combine_all,
+        str_c("output/seurat_objects/final_combined_sobjs/",
+                "patient_xeno_prim_mets_harm.qs"))
+
+combine_all <-
+    qs::qread("output/seurat_objects/final_combined_sobjs/patient_xeno_prim_mets.qs")
+
+celltype_percent <-
+    table(combine_all$seurat_clusters) %>%
+    as.data.frame() %>%
+    arrange(desc(Freq)) %>%
+    mutate(Percentage = Freq / sum(Freq) * 100) %>%
+    ggplot(aes(x = reorder(Var1, -Percentage), y = Percentage)) +
+    geom_bar(stat = "identity", fill = "#ae0600") +
+    labs(x = "Seurat Clusters", y = "Percentage of Cells")
+
+
+
+# we can optimise harmony parameters for the combined objects
+for (comb_group in c("patient_xeno_prim_mets",
+                "mouse_prim_mets",
+                "dog_prim_mets")) {
+
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                        comb_group,
+                        ".qs"))
+    optimize_harmony(s_obj = object, 
+                    group_by = harmony_parameters[[comb_group]]$group_by,
+                    theta_combo = c(7, 12),
+                    lambda_combo = c(0.1, 0.5),
+                    dimplot_col = "sample_name",
+                    output_dir = "output/figures/harmony_optimization",
+                    output_folder = comb_group)
+
+}
+
+# for combined optimize clustering resolution
+for (comb_group in c("patient_xeno_prim_mets",
+                "mouse_prim_mets",
+                "dog_prim_mets")) {
+
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                        comb_group,
+                        ".qs"))
+
+    resolution_range <- seq(from = 0, to = 1, by = 0.05)
+    clustree_sobj <- 
+        FindClusters(object,
+        resolution = resolution_range)
+    tree <- 
+        clustree::clustree(clustree_sobj,
+                            prefix = "RNA_snn_res.") +
+            ggtitle(comb_group)
+
+    directory <-
+        "output/figures/tumor_vs_stroma/clustree/"
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+    ggsave(str_c("output/figures/tumor_vs_stroma/clustree/", comb_group, ".png"),
+            width = 10,
+            height = 10,
+            plot = tree)
+
+    #save as qs
+    ggsave(str_c("output/figures/tumor_vs_stroma/clustree/", comb_group, ".pdf"),
+            width = 10,
+            height = 10,
+            plot = tree)
+}
+
+
+
+# new table for resolution
+combine_tumor_per_species_new <-
+    tribble(~combined,             ~res_value,   ~prim,        ~mets,
+            "patient_xeno_prim_mets", 0.3,       "patient_prim", "patient_mets",
+            "mouse_prim_mets",       0.35,     "mm_prim",       "mm_mets",
+            "dog_prim_mets",         0.3,     "dogs_prim_cancer_cells", "dogs_mets_cancer_cells"
+            ) 
+
+# we can make gsea panel plots
+for (item in seq_len(nrow(combine_tumor_per_species_new))) {
+    comb_group <- combine_tumor_per_species_new$combined[item]
+    res_value <- combine_tumor_per_species_new$res_value[item]
+
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                        comb_group,
+                        ".qs")) %>%
+        FindClusters(resolution = res_value)
+    #dimplot_better(object, group_by = "seurat_clusters") +NoLegend()
+    # DotPlot(object, group.by = "seurat_clusters", features = "ENSCAFG00805016104")
+    make_panel_plot(sobj = object,
+                    comparison_col = "seurat_clusters",
+                    label = "seurat_clusters",
+                    group = comb_group,
+                    aggregate_by = c("sample_name", "seurat_clusters"),
+                    organism_col = "organism",
+                    subset = FALSE,
+                    batch_var = "data_source")
+    fdl_obj <-
+        run_fdl(sobject = object)
+    #dimplot_better(fdl_obj, group_by = "ann_lvl2", reduction = "fdl")
+    qs::qsave(fdl_obj,
+            str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    comb_group,
+                    "_fdl.qs"))
+}
+
+marker_list <- list()
+# we can make gsea panel plots
+for (item in seq_len(nrow(combine_tumor_per_species_new))) {
+    comb_group <- combine_tumor_per_species_new$combined[item]
+    res_value <- combine_tumor_per_species_new$res_value[item]
+
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                        comb_group,
+                        ".qs")) %>%
+        FindClusters(resolution = res_value)
+    #dimplot_better(object, group_by = "seurat_clusters")
+    percent_per_cluster <-
+        table(object$seurat_clusters) %>%
+        as.data.frame() %>%
+        arrange(desc(Freq)) %>%
+        mutate(Percentage = Freq / sum(Freq) * 100) %>%
+        ggplot(aes(x = reorder(Var1, -Percentage), y = Percentage)) +
+        geom_bar(stat = "identity", fill = "#ae0600") +
+        labs(x = "Seurat Clusters", y = "Percentage of Cells") +
+        ggtitle(str_c("Cell type distribution for ", comb_group))
+    
+    # average_expression <-
+    #     AverageExpression(object,
+    #                     assays = "RNA",
+    #                     slot = "data",
+    #                     group.by = "seurat_clusters") %>%
+    #     as.data.frame() %>%
+    #     rownames_to_column(var = "gene") %>%
+    #     pivot_longer(cols = -gene,
+    #                 names_to = "cluster",
+    #                 values_to = "expression") %>%
+    #     mutate(cluster = str_remove(cluster, "RNA.g"))
+
+    markers_all <- 
+        FindAllMarkers(object = object,
+                        min.pct = 0.1,
+                        logfc.threshold = 0.25,
+                        only.pos = T)
+
+    markers_to_save <-
+        markers_all %>%
+        # left_join(average_expression,
+        #         by = c("gene", "cluster")) %>%
+        as.data.frame() %>%
+        #filter(expression > 1) %>%
+        mutate(percent_diff = pct.1 - pct.2) %>%
+        filter(p_val_adj < 0.05) %>%
+        group_by(cluster) %>%
+        slice_max(order_by = percent_diff, 
+                n = 20,
+                with_ties = F) %>%
+        select(gene, cluster) %>%
+        group_by(cluster) %>%
+        summarise(genes = list(gene)) %>%
+        deframe()
+
+    # correlation
+    correlation <-
+        object %>%
+        FindVariableFeatures(nfeatures = 5000) %>%
+        ScaleData() %>%
+        AverageExpression(group.by = "seurat_clusters",
+                        assays = "RNA",
+                        slot = "data") %>% 
+        as.data.frame() %>%
+        filter(!rownames(.) %in% c("Gm42418", "Malat1", "MALAT1")) %>%
+        # arrange(desc(RNA.g0)) %>%
+        # head()
+        GGally::ggpairs() 
+
+    ggsave(str_c("output/figures/tumor_vs_stroma/correlation/",
+                comb_group,
+                "_correlation.png"),
+            plot = correlation,
+            width = 30,
+            height = 30,
+            limitsize = FALSE,
+            bg = "white")
+
+    correlation_with_gsea <-
+        read_tsv(list.files("output/gsea/all_tumur_human_and_xeno/seurat_clusters/",
+                            full.names = TRUE,
+                            pattern = "Reactome"),
+                  id = "clusters") %>%
+        mutate(cluster = basename(clusters) %>%
+                str_replace_all("Reactome_cluster_", "C") %>%
+                str_remove_all("\\.tsv")) %>%
+        pivot_wider(names_from = cluster,
+                    values_from = NES,
+                    id_cols = pathway,
+                    values_fill = 0) %>%
+        column_to_rownames(var = "pathway") %>%
+        select(paste0("C", 1:ncol(.) - 1, "_gsea")) %>%
+        GGally::ggpairs()
+
+
+    ggsave(str_c("output/figures/tumor_vs_stroma/correlation/",
+                comb_group,
+                "_gsea_correlation.png"),
+            plot = correlation_with_gsea,
+            width = 30,
+            height = 30,
+            limitsize = FALSE,
+            bg = "white")
+
+}
+
+FeaturePlot(object,
+            features = c("RPL37A", "RPS18", "RPL39", "RPL35"),
+            reduction = "umap",
+            ncol = 2,
+            order=T)
+
+tumor_features <- list(
+    #Osteosarcoma = c("RUNX2", "COL1A1", "COL1A2"),
+    Apoptosis = c("BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104"),
+    Fibrogenic = c("COL6A3", "COL3A1", "PDGFRB", "COL6A1", "POSTN"),
+    Interactive = c("CTSB", "CSF1R", "PTPRC", "PTPRJ"),
+    Progenitor = c("ROBO2", "CD36", "SATB2"),
+    Proliferative = c("CENPF", "ASPM", "BIRC5", "AURKB"),
+    Synthetic = c("RPL37A", "RPS18", "RPL39", "RPL35")
+) %>%
+    unlist() %>%
+    nichenetr::convert_human_to_mouse_symbols() %>%
+    as.character()
+
+# human and xeno
+markers <- list(
+  Fibrogenic = c("COL3A1", "COL6A1", "COL6A2", "COL6A3", "POSTN", "LUM"),
+  Synthetic  = c("RPL37A", "RPS18", "RPL39", "RPL35"),
+  Progenitor = c("CD36", "COL24A1", "PTPRZ1", "PDGFD", "ANO5", "INSC"),
+  Proliferative = c("MKI67", "ASPM", "TOP2A", "CENPE", "CENPF", "KIF4A"),
+  Stressed = c("BNIP3", "NDRG1", "EGLN3", "HILPDA", "ANGPTL4", "VEGFA"),
+  Interactive = c("PTPRC", "CD74", "MSR1", "CD163", "LAPTM5", "DOCK8")
+)
+
+#mouse
+markers <- list(
+    Proliferative = c("Mki67", "Ccnb1", "Ccna2", "Ube2c", "Aurkb"),
+    Synthetic = c("Rpl29", "Rplp1", "Rps3", "Eif3g", "Eif4a1"),
+    Progenitor = c("Adamts6", "Rictor", "Ambra1", "Akt3", "Ptprg"),
+    Stressed = c("Pten", "Csf1r", "Ifi202b", "Clca3a1", "Eno3"),
+    Fibrogenic = c("Aspn", "Col11a1", "Mgp", "Adamts9", "Lama4"),
+    Interactive = c("Alcam", "Lcp1", "Tyrobp", "Ctss", "Fcer1g")
+)
+
+# dog
+markers <- list(
+    "Synthetic" = c("RPL29", "EIF3G", "ATP5PF", "LAMTOR2", "RPL11"),
+    "Progenitor" = c("ST6GALNAC3", "INSC", "ESRRG", "LEPR", "DLG2"),
+    "Proliferative" = c("KIF4A", "CENPF", "NCAPG", "ANLN", "ASPM"),
+    "Stressed" = c("MMP9", "TYROBP", "CD84", "FGF10", "ZC3H12B"),
+    "Interactive" = c("PTPRC", "LCP1", "SYK", "CD74", "HLA-DRB1"),
+    "Fibrogenic" = c("COL11A2", "CD36", "CHST11", "COL24A1", "VIT")
+)
+
+DotPlot(object,
+        group.by = "seurat_clusters",
+        features = markers) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+# Mouse Prim and Mets
+Annotation_list <-  
+    list(patient_xeno_prim_mets = c("^0$" = "Fibrogenic",    
+                                    "^1$" = "Synthetic", 
+                                    "^2$" = "Progenitor",  
+                                    "^3$" = "Proliferative",
+                                    "^4$" = "Stressed",
+                                    "^5$" = "Interactive",
+                                    "^6$" = "Fibrogenic",
+                                    "^7$" = "Interactive",
+                                    "^8$" = "Proliferative",
+                                    "^9$" = "Synthetic", 
+                                    "^10$" = "Fibrogenic",
+                                    "^11$" = "Fibrogenic",
+                                    "^12$" = "Synthetic",
+                                    "^13$" = "Synthetic",
+                                    "^14$" = "Fibrogenic",
+                                    "^15$" = "Fibrogenic",
+                                    "^16$" = "Fibrogenic",
+                                    "^17$" = "Fibrogenic",
+                                    "^18$" = "Progenitor", #
+                                    "^19$" = "Progenitor",   
+                                    "^20$" = "Fibrogenic",
+                                    "^21$" = "Synthetic",
+                                    "^22$" = "Fibrogenic"),
+        mouse_prim_mets = c("^0$" = "Proliferative",
+                             "^1$" = "Synthetic",
+                             "^2$" = "Progenitor",
+                             "^3$" = "Stressed",
+                             "^4$" = "Fibrogenic",
+                             "^5$" = "Interactive",
+                             "^6$" = "Proliferative"),
+        dog_prim_mets = c("^0$" = "Synthetic",
+                            "^1$" = "Proliferative",   
+                            "^2$" = "Progenitor",   
+                            "^3$" = "Synthetic",
+                            "^4$" = "Fibrogenic",
+                            "^5$" = "Progenitor",
+                            "^6$" = "Interactive",
+                            "^7$" = "Stressed",
+                            "^8$" = "Stressed",
+                            "^9$" = "Interactive",
+                            "^10$" = "Interactive",
+                            "^11$" = "Interactive",
+                            "^12$" = "Stressed",
+                            "^13$" = "Proliferative",
+                            "^14$" = "Proliferative",
+                            "^15$" = "Synthetic"))
+
+object$Ann_Level3 <-
+    str_replace_all(object$seurat_clusters,
+                    Annotation_list[[comb_group]])
+
+dimplot_better(object,
+             group_by = "Ann_Level3") +
+    NoLegend()
+
+Idents(object_subset) <- "Ann_Level3"
+markers <-
+    FindAllMarkers(object = object_subset,
+                    min.pct = 0.1,
+                    logfc.threshold = 0.25,
+                    only.pos = T)
+
+dimplot_list <- list()
+markers_list <- list()
+for (names in unique(object$unique)) {
+    object_subset <- subset(object, unique == names)
+    Idents(object_subset) <- "Ann_Level3"
+    markers <-
+        FindAllMarkers(object = object_subset,
+                        min.pct = 0.1,
+                        logfc.threshold = 0.25,
+                        only.pos = T)
+
+     markers_to_save <-
+        markers %>%
+        # left_join(average_expression,
+        #         by = c("gene", "cluster")) %>%
+        as.data.frame() %>%
+        #filter(expression > 1) %>%
+        mutate(percent_diff = pct.1 - pct.2) %>%
+        filter(p_val_adj < 0.05) %>%
+        group_by(cluster) %>%
+        slice_max(order_by = percent_diff, 
+                n = 50,
+                with_ties = F) %>%
+        select(gene, cluster) %>%
+        group_by(cluster) %>%
+        summarise(genes = list(gene)) %>%
+        deframe()
+
+    markers_list[[names]] <- markers_to_save
+
+    dimplot <-
+        dimplot_better(object_subset,
+                    group_by = "Ann_Level3") +
+            NoLegend() +
+            ggtitle(str_c("Annotation for ", names))
+    dimplot_list[[names]] <- dimplot
+    dim_dot_plot <-
+        make_dim_dot_plot(object = object_subset,
+                            group_by = "Ann_Level3",
+                            title = names,
+                            cell_markers = markers,
+                            cols = c("#ae0600", "#00a1d6", "#f2c94c", "#27ae60", "#9b51e0", "#eb5757")) 
+}
+
+
+# save the dimplots
+patchwork::wrap_plots(dimplot_list,
+                    ncol = 2) +
+    patchwork::plot_annotation(title = "Annotation for Tumor vs Stroma") &
+    theme(plot.title = element_text(hjust = 0.5))
+
+
+# Find shared markers for each phenotype in xeno_prim_human and xeno_mets_human
+intersect(markers_list$xeno_prim_human$Interactive,
+         markers_list$xeno_mets_human$Interactive)
+intersect(markers_list$xeno_prim_human$Progenitor,
+         markers_list$xeno_mets_human$Progenitor)
+intersect(markers_list$xeno_prim_human$Proliferative,
+         markers_list$xeno_mets_human$Proliferative)
+intersect(markers_list$xeno_prim_human$Fibrogenic,
+         markers_list$xeno_mets_human$Fibrogenic)
+intersect(markers_list$xeno_prim_human$Synthetic,
+         markers_list$xeno_mets_human$Synthetic)
+intersect(markers_list$xeno_prim_human$Stressed,
+         markers_list$xeno_mets_human$Stressed)
+
+
+shared_markers <- lapply(
+    c("interactive", "progenitor", "proliferative", "fibrogenic", "synthetic", "stressed"),
+    function(type) intersect(markers_list$xeno_prim_human[[type]], markers_list$xeno_mets_human[[type]])
+)
+names(shared_markers) <- c("interactive", "progenitor", "proliferative", "fibrogenic", "synthetic", "stressed")
+shared_markers
+
+
+
+
+
+
+
+
+for (item in seq_len(nrow(combine_tumor_per_species))) {
+    comb_group <- combine_tumor_per_species$combined[item]
+    res_value <- combine_tumor_per_species$res_value[item]
+    prim <- combine_tumor_per_species$prim[item]
+    mets <- combine_tumor_per_species$mets[item]
+
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                        comb_group,
+                        ".qs")) %>%
+        FindClusters(resolution = res_value)
+    #dimplot_better(object, group_by = "seurat_clusters")
+    
+    object$ann_lvl3 <-
+        str_replace_all(object$seurat_clusters,
+                        Annotation_list[[comb_group]])
+    object$ann_lvl2 <- object$ann_lvl3
+    object$ann_lvl1 <- "Tumor"
+    object$ann_lvl0 <- "Tumor"
+    qs::qsave(object,
+            str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    comb_group,
+                    "_cancer_cells.qs"))
+
+    #dimplot_better(object, group_by = "ann_lvl2")
+    object1 <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        prim,
+                        "_cancer_cells.qs"))
+    object1 <-
+        object@meta.data %>%
+        filter(rownames(.) %in% colnames(object1)) %>%
+        select(ann_lvl3) %>%
+        AddMetaData(object1, metadata = .)
+    # dimplot_better(object1, group_by = "ann_lvl3")
+    
+    qs::qsave(object1,
+            str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    prim,
+                    "_cancer_cells.qs"))
+    object11 <-
+        subset(object,
+            unique == prim) %>%
+        process_seurat() %>%
+        RunHarmony(group.by.vars = harmony_params[[prim]]$group_by,
+                    theta = harmony_params[[prim]]$theta,
+                    lambda = harmony_params[[prim]]$lambda) %>%
+        process_seurat(reduction = "harmony")
+
+    # dimplot_better(object1, group_by = "ann_lvl3")
+    object2 <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        mets,
+                        "_cancer_cells.qs"))
+    object2 <-
+        object@meta.data %>%
+        filter(rownames(.) %in% colnames(object2)) %>%
+        select(ann_lvl3) %>%
+        AddMetaData(object2, metadata = .)
+    # dimplot_better(object2, group_by = "ann_lvl3")
+    # dimplot_better(object2, group_by = "seurat_clusters")
+    qs::qsave(object2,
+            str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    mets,
+                    "_cancer_cells.qs"))
+    object22 <-
+        subset(object,
+            unique == mets) %>%
+        process_seurat() %>%
+        RunHarmony(group.by.vars = harmony_params[[mets]]$group_by,
+                    theta = harmony_params[[mets]]$theta,
+                    lambda = harmony_params[[mets]]$lambda) %>%
+        process_seurat(reduction = "harmony")
+    # dimplot_better(object2, group_by = "ann_lvl3")
+    # dimplot_better(object22, group_by = "seurat_clusters")
+
+}
+
+
+
+# Find the markers for the combined patient prim and mets
+for (item in seq_len(nrow(combine_tumor_per_species))) {
+    comb_group <- combine_tumor_per_species$combined[item]
+    res_value <- combine_tumor_per_species$res_value[item]
+
+    object <- 
+        qs::qread(str_c(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    comb_group,
+                    "_cancer_cells.qs")))
+
+    dimplot1 <-
+        dimplot_better(object,
+                     group_by = "seurat_clusters") +
+            NoLegend()
+    
+    
+    Idents(object) <- "seurat_clusters"
+    markers <- 
+        FindAllMarkers(object = object,
+                        min.pct = 0.5,
+                        logfc.threshold = 0.25,
+                        only.pos = T)
+    # DotPlot(object, group.by = "seurat_clusters", features = apoptosis_markers)
+    object <- FindClusters(object, resolution = 0.35)
+    dimplot_better(object, group_by = "seurat_clusters") +
+        NoLegend()
+    # FeaturePlot(object, features = features , order = TRUE)
+    
+    markers_to_save <-
+        markers %>%
+        as.data.frame() %>%
+        filter(p_val_adj < 0.05) %>%
+        group_by(cluster) %>%
+        mutate(percent_diff = pct.1 - pct.2) %>%
+        arrange(desc(percent_diff), .by_group = TRUE) %>%
+        slice_min(order_by = avg_log2FC, 
+                n = 30,
+                with_ties = F) %>%
+        select(gene, cluster) %>%
+        group_by(cluster) %>%
+        summarise(genes = list(gene)) %>%
+        deframe()
+
+    # reduce data
+    top_markers <- 
+        markers %>%
+        as.data.frame() %>%
+        group_by(cluster) %>% 
+        group_by(cluster) %>%
+        mutate(percent_diff = pct.1 - pct.2) %>%
+        arrange(desc(percent_diff), .by_group = TRUE) %>%
+        slice_min(order_by = p_val_adj, 
+                n = 7,
+                with_ties = F)
+
+    # get list of top marker genes; including each gene only once
+    genes <- 
+        top_markers$gene %>%
+        unique()
+
+    # change to RNA assay
+    DefaultAssay(object) <- "RNA"
+
+    # scale data for visualization
+    data <-
+        ScaleData(object = object,
+                    assay = "RNA")
+    data <-
+        subset(x = data,
+            downsample = min(100, ncol(object)))
+
+    heatmap_degs <-
+        DoHeatmap(object = data,
+                features = genes,
+                group.by = "ann_lvl3")
+
+    # make dot plot
+    dotplot_degs <-
+        DotPlot(object = object,
+                features = genes) +
+        RotatedAxis() 
+
+    # save the dotplot
+    width <- length(unique(object$ann_lvl3)) * 2
+    height <- length(unique(object$ann_lvl3)) *2
+
+    combine <-
+        cowplot::plot_grid(heatmap_degs,
+                        dotplot_degs,
+                        ncol = 1)
+
+    directory <-
+        str_c("output/figures/tumor_vs_stroma/", comb_group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+
+    ggsave(str_c(directory, "/", "degs_per_cluster.png"),
+            plot = combine,
+            width = width,
+            height = height,
+            bg = "white")
+
+
+}
+
+
+
+
 
 ## trying to find the subpopulation specific markers from combined patient object 
 prim_mets_dog <-
@@ -1452,6 +2242,114 @@ for (i in seq_len(nrow(object_list))) {
             limitsize = FALSE,
             bg = "white")
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# make a heatmap of top 5 markers per cluster
+Idents(object) <- "Ann_Level3"
+dimplot_better(object, group_by = "Ann_Level3")
+markers <- 
+    FindAllMarkers(object = object,
+                    min.pct = 0.25,
+                    logfc.threshold = 0.25,
+                    only.pos = T)
+
+# reduce data
+top_markers <- 
+    markers %>%
+    as.data.frame() %>%
+    group_by(cluster) %>% 
+    group_by(cluster) %>%
+    mutate(percent_diff = pct.1 - pct.2) %>%
+    arrange(desc(percent_diff), .by_group = TRUE) %>%
+    slice_min(order_by = p_val_adj, 
+            n = 7,
+            with_ties = F)
+
+# get list of top marker genes; including each gene only once
+genes <- 
+    top_markers$gene %>%
+    unique()
+
+# change to RNA assay
+DefaultAssay(object) <- "RNA"
+
+# scale data for visualization
+data <-
+    ScaleData(object = object,
+                assay = "RNA")
+data <-
+    subset(x = data,
+        downsample = min(100, ncol(object)))
+
+heatmap_degs <-
+    DoHeatmap(object = data,
+            features = genes,
+            group.by = "Ann_Level3")
+
+# dotplot
+top_markers <- 
+    markers %>%
+    as.data.frame() %>%
+    group_by(cluster) %>% # group by cluster (cell type)
+    slice_max(order_by = avg_log2FC, 
+                n = 4,
+                with_ties = F) # sort by log2FC and get top 2
+
+# get genes
+genes <-
+    top_markers$gene %>%
+    unique()
+
+# Create a named list: each cluster as a name, each value is a vector of its four genes
+genes_Iwant <- 
+    top_markers %>%
+    group_by(cluster) %>%
+    summarise(genes = list(gene)) %>%
+    deframe()
+
+
+# make dot plot
+dotplot_degs <-
+    DotPlot(object = object,
+            features = genes) +
+    RotatedAxis() 
+
+# save the dotplot
+width <- length(unique(object$seurat_clusters)) * 1.5
+height <- length(unique(object$seurat_clusters)) * 2
+
+combine <-
+    cowplot::plot_grid(heatmap_degs,
+                    dotplot_degs,
+                    ncol = 1)
+
+ggsave(str_c("output/figures/relustering_normals/",
+                group, "/", cell_type,
+                "_degs_per_cluster.png"),
+        plot = combine,
+        width = width,
+        height = height,
+        bg = "white")
+
+
+
+
+
+
 
 ```
 
