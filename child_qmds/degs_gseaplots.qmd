@@ -1388,43 +1388,6 @@ tumor_features <- list(
     nichenetr::convert_human_to_mouse_symbols() %>%
     as.character()
 
-# human and xeno
-markers <- list(
-  Fibrogenic = c("COL3A1", "COL6A1", "COL6A2", "COL6A3", "POSTN", "LUM"),
-  Synthetic  = c("RPL37A", "RPS18", "RPL39", "RPL35"),
-  Progenitor = c("CD36", "COL24A1", "PTPRZ1", "PDGFD", "ANO5", "INSC"),
-  Proliferative = c("MKI67", "ASPM", "TOP2A", "CENPE", "CENPF", "KIF4A"),
-  Stressed = c("BNIP3", "NDRG1", "EGLN3", "HILPDA", "ANGPTL4", "VEGFA"),
-  Interactive = c("PTPRC", "CD74", "MSR1", "CD163", "LAPTM5", "DOCK8")
-)
-
-#mouse
-markers <- list(
-    Proliferative = c("Mki67", "Ccnb1", "Ccna2", "Ube2c", "Aurkb"),
-    Synthetic = c("Rpl29", "Rplp1", "Rps3", "Eif3g", "Eif4a1"),
-    Progenitor = c("Adamts6", "Rictor", "Ambra1", "Akt3", "Ptprg"),
-    Stressed = c("Pten", "Csf1r", "Ifi202b", "Clca3a1", "Eno3"),
-    Fibrogenic = c("Aspn", "Col11a1", "Mgp", "Adamts9", "Lama4"),
-    Interactive = c("Alcam", "Lcp1", "Tyrobp", "Ctss", "Fcer1g")
-)
-
-# dog
-markers <- list(
-    "Synthetic" = c("RPL29", "EIF3G", "ATP5PF", "LAMTOR2", "RPL11"),
-    "Progenitor" = c("ST6GALNAC3", "INSC", "ESRRG", "LEPR", "DLG2"),
-    "Proliferative" = c("KIF4A", "CENPF", "NCAPG", "ANLN", "ASPM"),
-    "Stressed" = c("MMP9", "TYROBP", "CD84", "FGF10", "ZC3H12B"),
-    "Interactive" = c("PTPRC", "LCP1", "SYK", "CD74", "HLA-DRB1"),
-    "Fibrogenic" = c("COL11A2", "CD36", "CHST11", "COL24A1", "VIT")
-)
-
-DotPlot(object,
-        group.by = "seurat_clusters",
-        features = markers) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-
-# Mouse Prim and Mets
 Annotation_list <-  
     list(patient_xeno_prim_mets = c("^0$" = "Fibrogenic",    
                                     "^1$" = "Synthetic", 
@@ -1473,97 +1436,258 @@ Annotation_list <-
                             "^14$" = "Proliferative",
                             "^15$" = "Synthetic"))
 
-object$Ann_Level3 <-
-    str_replace_all(object$seurat_clusters,
-                    Annotation_list[[comb_group]])
 
-dimplot_better(object,
-             group_by = "Ann_Level3") +
-    NoLegend()
+combine_tumor_per_species_new <-
+    tribble(~combined,             ~res_value,   ~prim,        ~mets,
+            "patient_xeno_prim_mets", 0.3,       "patient_prim", "patient_mets",
+            "mouse_prim_mets",       0.35,     "mm_prim",       "mm_mets",
+            "dog_prim_mets",         0.3,     "dogs_prim_cancer_cells", "dogs_mets_cancer_cells"
+            ) 
 
-Idents(object_subset) <- "Ann_Level3"
-markers <-
-    FindAllMarkers(object = object_subset,
-                    min.pct = 0.1,
-                    logfc.threshold = 0.25,
-                    only.pos = T)
+# we can make gsea panel plots
+for (item in seq_len(nrow(combine_tumor_per_species_new))) {
+    comb_group <- combine_tumor_per_species_new$combined[item]
+    res_value <- combine_tumor_per_species_new$res_value[item]
 
-dimplot_list <- list()
-markers_list <- list()
-for (names in unique(object$unique)) {
-    object_subset <- subset(object, unique == names)
-    Idents(object_subset) <- "Ann_Level3"
-    markers <-
-        FindAllMarkers(object = object_subset,
-                        min.pct = 0.1,
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                        comb_group,
+                        ".qs")) %>%
+        FindClusters(resolution = res_value)
+
+
+    object$Ann_Level3 <-
+        str_replace_all(object$seurat_clusters,
+                        Annotation_list[[comb_group]])
+    object$Ann_Level2 <- object$Ann_Level3
+    object$Ann_Level1 <- "Tumor"
+    object$Ann_Level0 <- "Tumor"
+
+    make_panel_plot(sobj = object,
+                    comparison_col = "Ann_Level3",
+                    label = "Ann_Level3",
+                    group = comb_group,
+                    aggregate_by = c("sample_name", "Ann_Level3"),
+                    organism_col = "organism",
+                    subset = FALSE,
+                    batch_var = "data_source")
+
+    for (names in unique(object$unique)) {
+        object_subset <- subset(object, unique == names)
+        # reduce data
+        Idents(object_subset) <- "Ann_Level3"
+        #dimplot_better(object_subset, group_by = "Ann_Level3")
+
+        markers <- 
+            FindAllMarkers(object = object_subset,
+                        min.pct = 0.3,
+                        logfc.threshold = 0.15,
+                        only.pos = T)
+        top_markers <- 
+            markers %>%
+            as.data.frame() %>%
+            group_by(cluster) %>% 
+            filter(p_val_adj < 0.05) %>%
+            mutate(pct_diff = pct.1 - pct.2) %>%
+            slice_max(order_by = pct_diff, 
+                    n = 5,
+                    with_ties = F) %>%
+            dplyr::select(gene, cluster) %>%
+            #filter(!cluster == "Stressed") %>%
+            mutate(cluster = factor(cluster, 
+                                levels = c("Fibrogenic", "Interactive", "Progenitor",
+                                           "Proliferative", "Stressed", "Synthetic"))) %>%
+            arrange(cluster)
+
+        # get list of top marker genes; including each gene only once
+        genes <- 
+            top_markers$gene %>%
+            unique()
+        # change to RNA assay
+        DefaultAssay(object_subset) <- "RNA"
+        # scale data for visualization
+        data <-
+            ScaleData(object = object_subset,
+                        assay = "RNA")
+        data <-
+            subset(x = data,
+                downsample = min(500, ncol(object_subset)))
+        heatmap_degs <-
+            DoHeatmap(object = data,
+                    features = genes,
+                    group.by = "Ann_Level3")
+        # make dot plot
+        dotplot_degs <-
+            DotPlot(object = object_subset,
+                features = genes,
+                group.by = "Ann_Level3") +
+                scale_y_discrete(limits = c("Fibrogenic", "Interactive", "Progenitor",
+                                            "Proliferative", "Stressed", "Synthetic")) +
+                RotatedAxis()
+        # save the dotplot
+        width <- length(unique(object_subset$Ann_Level3)) * 2
+        height <- length(unique(object_subset$Ann_Level3)) *2
+
+        combine <-
+            cowplot::plot_grid(heatmap_degs,
+                            dotplot_degs,
+                            ncol = 1)
+
+        directory <-
+            str_c("output/figures/final_tumor_vs_stroma/", names)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
+
+        ggsave(str_c(directory, "/", "degs_per_cluster.png"),
+                plot = combine,
+                width = width,
+                height = height,
+                bg = "white")
+
+        qs::qsave(object_subset,
+                str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        names,
+                        "_cancer_cells.qs"))
+    }
+}
+
+
+
+# derive the markers for each group by intersecting the markers
+new_list_for_markers <-
+    tribble(~group1,                    ~group2,                    
+            "patient_prim_cancer_cells", "patient_mets_cancer_cells",
+            "xeno_prim_human_cancer_cells", "xeno_mets_human_cancer_cells",
+            "mm_prim_cancer_cells",      "mm_mets_cancer_cells",   
+            "dogs_prim_cancer_cells",    "dogs_mets_cancer_cells")
+
+for (item in seq_len(nrow(new_list_for_markers))) {
+    group1 <- new_list_for_markers$group1[item]
+    group2 <- new_list_for_markers$group2[item]
+
+    object1 <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group1,
+                        ".qs"))
+    object2 <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group2,
+                        ".qs"))
+    Idents(object1) <- "Ann_Level3"
+    Idents(object2) <- "Ann_Level3"
+    markers1 <-
+        FindAllMarkers(object = object1,
+                        min.pct = 0.33,
                         logfc.threshold = 0.25,
                         only.pos = T)
-
-     markers_to_save <-
-        markers %>%
-        # left_join(average_expression,
-        #         by = c("gene", "cluster")) %>%
+    markers1_top <-
+        markers1 %>%
         as.data.frame() %>%
-        #filter(expression > 1) %>%
         mutate(percent_diff = pct.1 - pct.2) %>%
         filter(p_val_adj < 0.05) %>%
         group_by(cluster) %>%
         slice_max(order_by = percent_diff, 
                 n = 50,
                 with_ties = F) %>%
-        select(gene, cluster) %>%
+        dplyr::select(gene, cluster) %>%
         group_by(cluster) %>%
         summarise(genes = list(gene)) %>%
         deframe()
-
-    markers_list[[names]] <- markers_to_save
-
-    dimplot <-
-        dimplot_better(object_subset,
-                    group_by = "Ann_Level3") +
-            NoLegend() +
-            ggtitle(str_c("Annotation for ", names))
-    dimplot_list[[names]] <- dimplot
-    dim_dot_plot <-
-        make_dim_dot_plot(object = object_subset,
-                            group_by = "Ann_Level3",
-                            title = names,
-                            cell_markers = markers,
-                            cols = c("#ae0600", "#00a1d6", "#f2c94c", "#27ae60", "#9b51e0", "#eb5757")) 
+    markers2 <-
+        FindAllMarkers(object = object2,
+                        min.pct = 0.33,
+                        logfc.threshold = 0.25,
+                        only.pos = T)
+    markers2_top <-
+        markers2 %>%
+        as.data.frame() %>%
+        mutate(percent_diff = pct.1 - pct.2) %>%
+        filter(p_val_adj < 0.05) %>%
+        group_by(cluster) %>%
+        slice_max(order_by = percent_diff, 
+                n = 50,
+                with_ties = F) %>%
+        dplyr::select(gene, cluster) %>%
+        group_by(cluster) %>%
+        summarise(genes = list(gene)) %>%
+        deframe()
+    
+    # Intersect markers per cluster
+    intersected_markers <- list()
+    clusters <- 
+        intersect(names(markers1_top), names(markers2_top))
+    for (cl in clusters) {
+        intersected_markers[[cl]] <- intersect(markers1_top[[cl]], markers2_top[[cl]])
+    }
+    names(intersected_markers) <- clusters
+    # Save as a TSV with cluster as rownames and genes as comma-separated strings
+    intersected_markers_df <- 
+        tibble::tibble(cluster = names(intersected_markers),
+                        genes = sapply(intersected_markers, function(x) paste(x, collapse = ",")))
+    write_tsv(intersected_markers_df,
+        str_c("output/metadata/celltype_tumor/",
+                group1,
+                "_vs_",
+                group2,
+                "_markers.tsv"))
+    
 }
 
 
-# save the dimplots
-patchwork::wrap_plots(dimplot_list,
-                    ncol = 2) +
-    patchwork::plot_annotation(title = "Annotation for Tumor vs Stroma") &
-    theme(plot.title = element_text(hjust = 0.5))
+patient <-
+    list(Synthetic = c("RPS28", "RPL36", "RPS13", "RPS27"),
+        Fibrogenic = c("COL3A1", "PDGFRB", "COL6A3", "POSTN"),
+        Progenitor = c("CD36", "ROBO2", "SATB2", "ANO5"),
+        Proliferative = c("TOP2A", "ASPM", "CENPF", "MKI67"),
+        Interactive = c("CSF1R", "PTPRC", "PTPRJ"),
+        Stressed = c("EGLN3", "VEGFA", "BNIP3", "HILPDA")) %>%
+    unlist() %>%
+    as.character() %>%
+    unique()
+
+mouse <-
+    list(Synthetic = c("Rps2", "Rpl10", "Rpl26", "Rpl21"),
+        Fibrogenic = c("Col3a1","Pdgfrb", "Bicc1", "Antxr1", "Pdgfrl", "Fap"),
+        Progenitor = c("Pdgfc", "Zfp462", "Ahr", "Ptbp2"),
+        Proliferative = c("Ccna2", "Cenpf", "Ube2c", "Cenpe"),
+        Interactive = c("Alcam", "Ptprc", "Ptprj"),
+        Stressed = c("Ifi202b", "Apol9a", "Apol9b", "Eno3", "Ccl9")) %>%
+unlist() %>%
+as.character() %>%
+unique()
 
 
-# Find shared markers for each phenotype in xeno_prim_human and xeno_mets_human
-intersect(markers_list$xeno_prim_human$Interactive,
-         markers_list$xeno_mets_human$Interactive)
-intersect(markers_list$xeno_prim_human$Progenitor,
-         markers_list$xeno_mets_human$Progenitor)
-intersect(markers_list$xeno_prim_human$Proliferative,
-         markers_list$xeno_mets_human$Proliferative)
-intersect(markers_list$xeno_prim_human$Fibrogenic,
-         markers_list$xeno_mets_human$Fibrogenic)
-intersect(markers_list$xeno_prim_human$Synthetic,
-         markers_list$xeno_mets_human$Synthetic)
-intersect(markers_list$xeno_prim_human$Stressed,
-         markers_list$xeno_mets_human$Stressed)
+xenograft <-
+    list(Synthetic = c("RPS28", "RPL36", "RPS13", "RPS15", "RPL35", "RPL11", "RPS2"),
+        Fibrogenic = c("COL3A1", "COL6A1", "POSTN", "PRRX1", "HMCN1", "COL6A3"),
+        Progenitor = c("PTPRZ1", "ROBO2", "CD36", "PDGFD"),
+        Proliferative = c("TOP2A", "ASPM", "CENPF", "MKI67"),
+        Interactive = c("PTPRJ", "FILIP1L", "ECM2"),
+        Stressed = c("NDRG1", "BNIP3", "VEGFA", "DDIT4", "EGLN3")) %>%
+    unlist() %>%
+    as.character() %>%
+    unique()
+
+dog <-
+    list(Synthetic = c("RPS28", "RPL36", "RPS13", "RPS15", "RPL35", "RPL11", "RPS2"),
+        Fibrogenic = c("COL3A1", "COL6A1", "POSTN", "PRRX1", "HMCN1", "COL6A3", "PDGFRB", "COL24A1", "COL11A2"),
+        Progenitor = c("PTPRZ1", "ROBO2", "CD36", "PDGFD"),
+        Proliferative = c("CENPF", "ASPM", "TK1", "ANLN", "UBE2C"),
+        Interactive = c("PTPRC", "CSF1R", "ECM2", "CD44"),
+        Stressed = c("PLXDC2", "IGFBP7", "ZFPM2", "CAMK1D", "MAP3K5")) %>%
+    unlist() %>%
+    as.character() %>%
+    unique()
 
 
-shared_markers <- lapply(
-    c("interactive", "progenitor", "proliferative", "fibrogenic", "synthetic", "stressed"),
-    function(type) intersect(markers_list$xeno_prim_human[[type]], markers_list$xeno_mets_human[[type]])
-)
-names(shared_markers) <- c("interactive", "progenitor", "proliferative", "fibrogenic", "synthetic", "stressed")
-shared_markers
-
-
-
+DotPlot(object1,
+        features = dog,
+        group.by = "Ann_Level3",
+        cols = "RdBu",
+        dot.scale = 7,
+        col.max = 1.5) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 
 

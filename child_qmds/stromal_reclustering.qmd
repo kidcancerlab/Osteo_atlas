@@ -549,6 +549,31 @@ for (item in seq_len(nrow(object_list))) {
                             logfc.threshold = 0.25,
                             only.pos = T)
         # reduce data
+        top_markers_save <- 
+            markers %>%
+            as.data.frame() %>%
+            group_by(cluster) %>% # group by cluster
+            slice_min(order_by = p_val_adj, 
+                        n = 10,
+                        with_ties = F) %>%
+            select(gene, cluster) %>%
+            group_by(cluster) %>%
+            summarise(genes = list(gene)) %>%
+            deframe()
+
+        # save the markers
+        directory <- 
+            str_c("output/degs/celltype_stroma/",
+                  group)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
+        write_tsv(as.data.frame(top_markers_save),
+                file = str_c("output/degs/celltype_stroma/",
+                            group, "/",
+                            cell_type, "_markers.tsv"))
+
+        # get top markers for heatmap and plots
         top_markers <- 
             markers %>%
             as.data.frame() %>%
