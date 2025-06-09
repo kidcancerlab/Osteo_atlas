@@ -1570,10 +1570,12 @@ for (item in seq_len(nrow(new_list_for_markers))) {
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group1,
                         ".qs"))
+    #dimplot_better(object1, group_by = "Ann_Level3")
     object2 <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group2,
                         ".qs"))
+    #dimplot_better(object2, group_by = "Ann_Level3")
     Idents(object1) <- "Ann_Level3"
     Idents(object2) <- "Ann_Level3"
     markers1 <-
@@ -1670,239 +1672,21 @@ xenograft <-
     unique()
 
 dog <-
-    list(Synthetic = c("RPS28", "RPL36", "RPS13", "RPS15", "RPL35", "RPL11", "RPS2"),
-        Fibrogenic = c("COL3A1", "COL6A1", "POSTN", "PRRX1", "HMCN1", "COL6A3", "PDGFRB", "COL24A1", "COL11A2"),
-        Progenitor = c("PTPRZ1", "ROBO2", "CD36", "PDGFD"),
-        Proliferative = c("CENPF", "ASPM", "TK1", "ANLN", "UBE2C"),
-        Interactive = c("PTPRC", "CSF1R", "ECM2", "CD44"),
-        Stressed = c("PLXDC2", "IGFBP7", "ZFPM2", "CAMK1D", "MAP3K5")) %>%
-    unlist() %>%
-    as.character() %>%
-    unique()
+    list(Fibrogenic = c("F13A1", "COL11A2", "CHST11",  "COL24A1"),
+         Progenitor = c("ESRRG", "PTPRD", "ST6GALNAC3", "SRGAP3"),
+         Proliferative =c("CENPF", "ANLN", "KIF4A", "NCAPG"),
+         Interactive = c("ALCAM", "PTPRC", "CD74", "CSF1R"),
+         Stressed =c("IGFBP7", "MAP3K5", "ROR1", "VEGFA"),
+         Synthetic = c("RPL29.1", "RPL26", "RPL14", "RPL27A")
+    )
 
-
-DotPlot(object1,
-        features = dog,
-        group.by = "Ann_Level3",
-        cols = "RdBu",
-        dot.scale = 7,
-        col.max = 1.5) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
 
 
 
+# combine patient prim with xeno prim and patient mets with xeno mets
 
-
-for (item in seq_len(nrow(combine_tumor_per_species))) {
-    comb_group <- combine_tumor_per_species$combined[item]
-    res_value <- combine_tumor_per_species$res_value[item]
-    prim <- combine_tumor_per_species$prim[item]
-    mets <- combine_tumor_per_species$mets[item]
-
-    object <- 
-        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
-                        comb_group,
-                        ".qs")) %>%
-        FindClusters(resolution = res_value)
-    #dimplot_better(object, group_by = "seurat_clusters")
-    
-    object$ann_lvl3 <-
-        str_replace_all(object$seurat_clusters,
-                        Annotation_list[[comb_group]])
-    object$ann_lvl2 <- object$ann_lvl3
-    object$ann_lvl1 <- "Tumor"
-    object$ann_lvl0 <- "Tumor"
-    qs::qsave(object,
-            str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                    comb_group,
-                    "_cancer_cells.qs"))
-
-    #dimplot_better(object, group_by = "ann_lvl2")
-    object1 <- 
-        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                        prim,
-                        "_cancer_cells.qs"))
-    object1 <-
-        object@meta.data %>%
-        filter(rownames(.) %in% colnames(object1)) %>%
-        select(ann_lvl3) %>%
-        AddMetaData(object1, metadata = .)
-    # dimplot_better(object1, group_by = "ann_lvl3")
-    
-    qs::qsave(object1,
-            str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                    prim,
-                    "_cancer_cells.qs"))
-    object11 <-
-        subset(object,
-            unique == prim) %>%
-        process_seurat() %>%
-        RunHarmony(group.by.vars = harmony_params[[prim]]$group_by,
-                    theta = harmony_params[[prim]]$theta,
-                    lambda = harmony_params[[prim]]$lambda) %>%
-        process_seurat(reduction = "harmony")
-
-    # dimplot_better(object1, group_by = "ann_lvl3")
-    object2 <-
-        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                        mets,
-                        "_cancer_cells.qs"))
-    object2 <-
-        object@meta.data %>%
-        filter(rownames(.) %in% colnames(object2)) %>%
-        select(ann_lvl3) %>%
-        AddMetaData(object2, metadata = .)
-    # dimplot_better(object2, group_by = "ann_lvl3")
-    # dimplot_better(object2, group_by = "seurat_clusters")
-    qs::qsave(object2,
-            str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                    mets,
-                    "_cancer_cells.qs"))
-    object22 <-
-        subset(object,
-            unique == mets) %>%
-        process_seurat() %>%
-        RunHarmony(group.by.vars = harmony_params[[mets]]$group_by,
-                    theta = harmony_params[[mets]]$theta,
-                    lambda = harmony_params[[mets]]$lambda) %>%
-        process_seurat(reduction = "harmony")
-    # dimplot_better(object2, group_by = "ann_lvl3")
-    # dimplot_better(object22, group_by = "seurat_clusters")
-
-}
-
-
-
-# Find the markers for the combined patient prim and mets
-for (item in seq_len(nrow(combine_tumor_per_species))) {
-    comb_group <- combine_tumor_per_species$combined[item]
-    res_value <- combine_tumor_per_species$res_value[item]
-
-    object <- 
-        qs::qread(str_c(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                    comb_group,
-                    "_cancer_cells.qs")))
-
-    dimplot1 <-
-        dimplot_better(object,
-                     group_by = "seurat_clusters") +
-            NoLegend()
-    
-    
-    Idents(object) <- "seurat_clusters"
-    markers <- 
-        FindAllMarkers(object = object,
-                        min.pct = 0.5,
-                        logfc.threshold = 0.25,
-                        only.pos = T)
-    # DotPlot(object, group.by = "seurat_clusters", features = apoptosis_markers)
-    object <- FindClusters(object, resolution = 0.35)
-    dimplot_better(object, group_by = "seurat_clusters") +
-        NoLegend()
-    # FeaturePlot(object, features = features , order = TRUE)
-    
-    markers_to_save <-
-        markers %>%
-        as.data.frame() %>%
-        filter(p_val_adj < 0.05) %>%
-        group_by(cluster) %>%
-        mutate(percent_diff = pct.1 - pct.2) %>%
-        arrange(desc(percent_diff), .by_group = TRUE) %>%
-        slice_min(order_by = avg_log2FC, 
-                n = 30,
-                with_ties = F) %>%
-        select(gene, cluster) %>%
-        group_by(cluster) %>%
-        summarise(genes = list(gene)) %>%
-        deframe()
-
-    # reduce data
-    top_markers <- 
-        markers %>%
-        as.data.frame() %>%
-        group_by(cluster) %>% 
-        group_by(cluster) %>%
-        mutate(percent_diff = pct.1 - pct.2) %>%
-        arrange(desc(percent_diff), .by_group = TRUE) %>%
-        slice_min(order_by = p_val_adj, 
-                n = 7,
-                with_ties = F)
-
-    # get list of top marker genes; including each gene only once
-    genes <- 
-        top_markers$gene %>%
-        unique()
-
-    # change to RNA assay
-    DefaultAssay(object) <- "RNA"
-
-    # scale data for visualization
-    data <-
-        ScaleData(object = object,
-                    assay = "RNA")
-    data <-
-        subset(x = data,
-            downsample = min(100, ncol(object)))
-
-    heatmap_degs <-
-        DoHeatmap(object = data,
-                features = genes,
-                group.by = "ann_lvl3")
-
-    # make dot plot
-    dotplot_degs <-
-        DotPlot(object = object,
-                features = genes) +
-        RotatedAxis() 
-
-    # save the dotplot
-    width <- length(unique(object$ann_lvl3)) * 2
-    height <- length(unique(object$ann_lvl3)) *2
-
-    combine <-
-        cowplot::plot_grid(heatmap_degs,
-                        dotplot_degs,
-                        ncol = 1)
-
-    directory <-
-        str_c("output/figures/tumor_vs_stroma/", comb_group)
-    if (!dir.exists(directory)) {
-        dir.create(directory, recursive = TRUE)
-    }
-
-    ggsave(str_c(directory, "/", "degs_per_cluster.png"),
-            plot = combine,
-            width = width,
-            height = height,
-            bg = "white")
-
-
-}
-
-
-
-
-
-## trying to find the subpopulation specific markers from combined patient object 
-prim_mets_dog <-
-    qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
-                    "dog_prim_mets",
-                    ".qs"))
-prim_mets_dog <- FindClusters(prim_mets_dog, resolution = 0.35)
-
-dimplot_better(prim_mets_dog, group_by = "seurat_clusters")
-
-make_panel_plot(sobj = prim_mets_dog,
-                    comparison_col = "seurat_clusters",
-                    label = "seurat_clusters",
-                    group = "harmony_dog_prim_mets",
-                    aggregate_by = c("sample_name", "seurat_clusters"),
-                    organism_col = "organism",
-                    subset = FALSE,
-                    batch_var = "data_source")
-
-
-
+```{r human_xeno_prim_mets_analysis}
 ## combine patient prim with xeno prim and patient mets with xeno mets
 combine_tumor_per_site <-
     tribble(~primary,                     ~metastatic,      ~combined,            ~res,
@@ -2046,24 +1830,24 @@ Fibrogenic <- list()
 Progenitor <- list()
 Proliferative <- list()
 Interactive <- list()
-Apoptosis <- list()
+Stressed <- list()
 
 ## Human dataset
 percent_diff <-
-    tribble(~population,            ~percent_diff_num,
-            "Tumor_Synthetic", 0.05,
-            "Tumor_Fibrogenic",     0.20,
-            "Tumor_Progenitor",     0.15,
-            "Tumor_Proliferative",  0.40,
-            "Tumor_Interactive",    0.30,
-            "Tumor_Apoptosis",         0.15
+    tribble(~population,          ~percent_diff_num,
+            "Synthetic",          0.05,
+            "Fibrogenic",         0.20,
+            "Progenitor",         0.15,
+            "Proliferative",      0.40,
+            "Interactive",        0.30,
+            "Stressed",           0.15
             )
 
 
 for (group in c(
                 "patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 "mm_prim_cancer_cells", "mm_mets_cancer_cells",
-                "xeno_prim_human", "xeno_mets_human",
+                "xeno_prim_human_cancer_cells", "xeno_mets_human_cancer_cells",
                 "dogs_prim_cancer_cells", "dogs_mets_cancer_cells"
                 )) {
     object <- 
@@ -2104,23 +1888,23 @@ for (group in c(
             as.character()
 
         if (length(genes_per_group) > 0) {
-            if (tumor_sub == "Tumor_Synthetic") {
+            if (tumor_sub == "Synthetic") {
                 Synthetic[[group]] <- genes_per_group
             }
-            if (tumor_sub == "Tumor_Fibrogenic") {
+            if (tumor_sub == "Fibrogenic") {
                 Fibrogenic[[group]] <- genes_per_group
             }
-            if (tumor_sub == "Tumor_Progenitor") {
+            if (tumor_sub == "Progenitor") {
                 Progenitor[[group]] <- genes_per_group
             }
-            if (tumor_sub == "Tumor_Proliferative") {
+            if (tumor_sub == "Proliferative") {
                 Proliferative[[group]] <- genes_per_group
             }
-            if (tumor_sub == "Tumor_Interactive") {
+            if (tumor_sub == "Interactive") {
                 Interactive[[group]] <- genes_per_group
             }
-            if (tumor_sub == "Tumor_Apoptosis") {
-                Apoptosis[[group]] <- genes_per_group
+            if (tumor_sub == "Stressed") {
+                Stressed[[group]] <- genes_per_group
             }
         }
     }
@@ -2130,7 +1914,7 @@ for (group in c(
 
 specific <-
     list(
-    humanp_specific = c("COL6A3", "COL3A1", "COL6A1", "FBN1", "COL4A1", "COL4A2", #firbo
+    human_specific = c("COL6A3", "COL3A1", "COL6A1", "FBN1", "COL4A1", "COL4A2", #firbo
                        "ROBO2", "SATB2", "IGF2BP3", "CD36", "MAML3", "INSC",  #progenitor
                        "TOP2A", "CENPF", "ASPM", "TPX2", "CENPE", "NUSAP1",  #proliferative
                        "CD74", "CSF1R", "PTPRC", "PTPRJ", "RGS1", "TBXAS1", #interactive
@@ -2157,79 +1941,132 @@ specific <-
     )
 
 
+human_xeno_shared <- list(
+    Fibrogenic = c("COL6A3", "COL6A2", "PLXDC2", "NFKBIZ", "PDGFRB", "PMEPA1", "CACNA1C", "MSC-AS1"),
+    Progenitor = c("ANO5", "CD36", "ROBO2", "ANGPT1", "FHOD3", "PLCB4", "FAT3", "COL24A1", "SLC8A3", "AC105941.1", "DTNA", "SLC44A5", "PDGFD", "PTPRZ1", "CACNB4", "PCDH7", "PATJ", "SATB2"),
+    Proliferative = c("TOP2A", "ASPM", "CENPF", "TPX2", "CENPE"),
+    Stressed = c("EGLN3", "SOX9", "NDUFA4L2", "VEGFA", "BNIP3", "NDRG1", "SLC2A1", "ADM", "HILPDA", "HIF1A-AS3")
+    )
+
+patient <-
+    list(Synthetic = c("RPS28", "RPL36", "RPS13", "RPS27"),
+        Fibrogenic = c("COL3A1", "COL6A3", "POSTN","FBN1"),
+        Progenitor = c("CD36", "ROBO2", "SATB2", "ANO5"),
+        Proliferative = c("TOP2A", "ASPM", "CENPF", "MKI67"),
+        Interactive = c("CSF1R", "PTPRC", "PTPRJ", "CD74"),
+        Stressed = c("EGLN3", "VEGFA", "BNIP3", "HILPDA")) %>%
+    unlist() %>%
+    as.character() %>%
+    unique()
+
+mouse <-
+    list(Synthetic = c("Rps2", "Rpl10", "Rpl26", "Rpl21"),
+        Fibrogenic = c("Col3a1","Pdgfrb", "Bicc1", "Antxr1"),
+        Progenitor = c("Pdgfc", "Zfp462", "Ahr", "Ptbp2"),
+        Proliferative = c("Ccna2", "Cenpf", "Ube2c", "Cenpe"),
+        Interactive = c("Alcam", "Ptprc", "Ptprj", "Cd74"),
+        Stressed = c("Hspb7", "Eno3", "Ccng1", "Bnip3")) %>%
+unlist() %>%
+as.character() %>%
+unique()
+
+
+dog <-
+    list(Fibrogenic = c("F13A1", "COL11A2", "CHST11",  "COL24A1"),
+         Progenitor = c("ESRRG", "PTPRD", "ST6GALNAC3", "SRGAP3"),
+         Proliferative =c("CENPF", "ANLN", "KIF4A", "NCAPG"),
+         Interactive = c("ALCAM", "PTPRC", "CD74", "CSF1R"),
+         Stressed =c("IGFBP7", "MAP3K5", "ROR1", "VEGFA"),
+         Synthetic = c("RPL26", "RPS28", "RPS13", "RPS27"))%>%
+unlist() %>%
+as.character() %>%
+unique()
+
+
+xenograft <-
+    list(Synthetic = c("RPL26", "RPL8","RPL35", "RPS13"),
+        Fibrogenic = c("COL3A1", "COL6A1", "POSTN", "COL6A3"),
+        Progenitor = c("PTPRZ1", "ROBO2", "CD36", "PDGFD"),
+        Proliferative = c("TOP2A", "ASPM", "CENPF", "MKI67"),
+        Interactive = c("PTPRC", "PTPRJ", "MERTK", "CD96"),
+        Stressed = c("NDRG1", "BNIP3", "VEGFA", "EGLN3")) %>%
+    unlist() %>%
+    as.character() %>%
+    unique()
 
 
 fibrogenic_shared <- 
     Reduce(intersect, list(
                         #    Fibrogenic$patient_prim_cancer_cells,
                         #    Fibrogenic$patient_mets_cancer_cells,
-                           Fibrogenic$mm_prim_cancer_cells,
-                           Fibrogenic$mm_mets_cancer_cells,
-                        #    Fibrogenic$xeno_prim_human,
-                        #    Fibrogenic$xeno_mets_human,
-                           Fibrogenic$dogs_prim_cancer_cells,
-                           Fibrogenic$dogs_mets_cancer_cells
+                           Fibrogenic$xeno_prim_human,
+                           Fibrogenic$xeno_mets_human
+                        #    Fibrogenic$dogs_prim_cancer_cells,
+                        #    Fibrogenic$dogs_mets_cancer_cells,
+                           
+                        #    Fibrogenic$mm_prim_cancer_cells,
+                        #    Fibrogenic$mm_mets_cancer_cells,
                            ))
 
 progenitor_shared <-
      Reduce(intersect, list(
                         #    Progenitor$patient_prim_cancer_cells,
                         #    Progenitor$patient_mets_cancer_cells,
-                        #    Progenitor$mm_prim_cancer_cells,
-                        #    Progenitor$mm_mets_cancer_cells,
                         #    Progenitor$xeno_prim_human,
                         #    Progenitor$xeno_mets_human,
                            Progenitor$dogs_prim_cancer_cells,
                            Progenitor$dogs_mets_cancer_cells
+                           Progenitor$mm_prim_cancer_cells,
+                           Progenitor$mm_mets_cancer_cells,
                            ))
 
 prolif <-
     Reduce(intersect, list(
                         #    Proliferative$patient_prim_cancer_cells,
                         #    Proliferative$patient_mets_cancer_cells,
-                        #    Proliferative$mm_prim_cancer_cells,
-                        #    Proliferative$mm_mets_cancer_cells,
                         #    Proliferative$xeno_prim_human,
                         #    Proliferative$xeno_mets_human,
                            Proliferative$dogs_prim_cancer_cells,
-                           Proliferative$dogs_mets_cancer_cells
+                           Proliferative$dogs_mets_cancer_cells,
+                           Proliferative$mm_prim_cancer_cells,
+                           Proliferative$mm_mets_cancer_cells,
                            ))
 
 
 inter <-
     Reduce(intersect, list(
-                           #Interactive$patient_prim_cancer_cells,
-                           #Interactive$patient_mets_cancer_cells,
+                        #    Interactive$patient_prim_cancer_cells,
+                        #    Interactive$patient_mets_cancer_cells,
+                           Interactive$xeno_prim_human,
+                           Interactive$xeno_mets_human
+                        #    Interactive$dogs_prim_cancer_cells,
+                        #    Interactive$dogs_mets_cancer_cells
                         #    Interactive$mm_prim_cancer_cells,
-                        #    Interactive$mm_mets_cancer_cells,
-                        #    Interactive$xeno_prim_human,
-                        #    Interactive$xeno_mets_human,
-                           Interactive$dogs_prim_cancer_cells,
-                           Interactive$dogs_mets_cancer_cells
+                        #    Interactive$mm_mets_cancer_cells
                            ))
 
-apoptosis <-
+stress <-
    Reduce(intersect, list(
-                        #    Apoptosis$patient_prim_cancer_cells,
-                        #    Apoptosis$patient_mets_cancer_cells,
-                        #    Apoptosis$mm_prim_cancer_cells,
-                        #    Apoptosis$mm_mets_cancer_cells,
-                        #    Apoptosis$xeno_prim_human,
-                        #    Apoptosis$xeno_mets_human,
-                           Apoptosis$dogs_prim_cancer_cells,
-                           Apoptosis$dogs_mets_cancer_cells
+                        #    Stressed$patient_prim_cancer_cells,
+                        #    Stressed$patient_mets_cancer_cells,
+                        #    Stressed$xeno_prim_human,
+                        #    Stressed$xeno_mets_human,
+                        #    Stressed$dogs_prim_cancer_cells,
+                        #    Stressed$dogs_mets_cancer_cells,
+                           Stressed$mm_prim_cancer_cells,
+                           Stressed$mm_mets_cancer_cells
                            ))
 
 synthe <-
    Reduce(intersect, list(
-                           Synthetic$patient_prim_cancer_cells,
-                           Synthetic$patient_mets_cancer_cells,
+                        #    Synthetic$patient_prim_cancer_cells,
+                        #    Synthetic$patient_mets_cancer_cells,
+                           Synthetic$xeno_prim_human,
+                           Synthetic$xeno_mets_human
+                        #    Synthetic$dogs_prim_cancer_cells,
+                        #    Synthetic$dogs_mets_cancer_cells,
                         #    Synthetic$mm_prim_cancer_cells,
-                        #    Synthetic$mm_mets_cancer_cells,
-                        #    Synthetic$xeno_prim_human,
-                        #    Synthetic$xeno_mets_human,
-                           Synthetic$dogs_prim_cancer_cells,
-                           Synthetic$dogs_mets_cancer_cells
+                        #    Synthetic$mm_mets_cancer_cells
                            ))
 
 ## progenitor and ground need revisiting
@@ -2366,114 +2203,4 @@ for (i in seq_len(nrow(object_list))) {
             limitsize = FALSE,
             bg = "white")
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# make a heatmap of top 5 markers per cluster
-Idents(object) <- "Ann_Level3"
-dimplot_better(object, group_by = "Ann_Level3")
-markers <- 
-    FindAllMarkers(object = object,
-                    min.pct = 0.25,
-                    logfc.threshold = 0.25,
-                    only.pos = T)
-
-# reduce data
-top_markers <- 
-    markers %>%
-    as.data.frame() %>%
-    group_by(cluster) %>% 
-    group_by(cluster) %>%
-    mutate(percent_diff = pct.1 - pct.2) %>%
-    arrange(desc(percent_diff), .by_group = TRUE) %>%
-    slice_min(order_by = p_val_adj, 
-            n = 7,
-            with_ties = F)
-
-# get list of top marker genes; including each gene only once
-genes <- 
-    top_markers$gene %>%
-    unique()
-
-# change to RNA assay
-DefaultAssay(object) <- "RNA"
-
-# scale data for visualization
-data <-
-    ScaleData(object = object,
-                assay = "RNA")
-data <-
-    subset(x = data,
-        downsample = min(100, ncol(object)))
-
-heatmap_degs <-
-    DoHeatmap(object = data,
-            features = genes,
-            group.by = "Ann_Level3")
-
-# dotplot
-top_markers <- 
-    markers %>%
-    as.data.frame() %>%
-    group_by(cluster) %>% # group by cluster (cell type)
-    slice_max(order_by = avg_log2FC, 
-                n = 4,
-                with_ties = F) # sort by log2FC and get top 2
-
-# get genes
-genes <-
-    top_markers$gene %>%
-    unique()
-
-# Create a named list: each cluster as a name, each value is a vector of its four genes
-genes_Iwant <- 
-    top_markers %>%
-    group_by(cluster) %>%
-    summarise(genes = list(gene)) %>%
-    deframe()
-
-
-# make dot plot
-dotplot_degs <-
-    DotPlot(object = object,
-            features = genes) +
-    RotatedAxis() 
-
-# save the dotplot
-width <- length(unique(object$seurat_clusters)) * 1.5
-height <- length(unique(object$seurat_clusters)) * 2
-
-combine <-
-    cowplot::plot_grid(heatmap_degs,
-                    dotplot_degs,
-                    ncol = 1)
-
-ggsave(str_c("output/figures/relustering_normals/",
-                group, "/", cell_type,
-                "_degs_per_cluster.png"),
-        plot = combine,
-        width = width,
-        height = height,
-        bg = "white")
-
-
-
-
-
-
-
 ```
-
