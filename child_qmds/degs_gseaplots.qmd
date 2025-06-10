@@ -1823,6 +1823,26 @@ this chunk will identify the shared markers across the tumor subpopulations usin
 patient primary and metastatic datasets
 ```{r markers_for_tumor}
 
+library(parallel)
+
+groups <- c(
+    "patient_prim_cancer_cells", "patient_mets_cancer_cells",
+    "mm_prim_cancer_cells", "mm_mets_cancer_cells",
+    "xeno_prim_human_cancer_cells", "xeno_mets_human_cancer_cells",
+    "dogs_prim_cancer_cells", "dogs_mets_cancer_cells"
+)
+
+mclapply(groups, function(group) {
+    object <- qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/", group, ".qs"))
+    object <- run_fdl(sobject = object)
+    qs::qsave(object, str_c("output/seurat_objects/final_tumor_vs_stroma/", group, "_fdl.qs"))
+    NULL
+}, mc.cores = min(length(groups), detectCores()))
+
+dimplot_better(object, group_by = "Ann_Level3", reduction = "fdl") +
+    NoLegend() + ggtitle("Tumor FDL")
+
+
 obj_list <- list()
 
 Synthetic <- list()
@@ -1842,7 +1862,10 @@ percent_diff <-
             "Interactive",        0.30,
             "Stressed",           0.15
             )
+dimplot_list <- list()
 
+patchwork::wrap_plots(dimplot_list,
+    ncol = 2) 
 
 for (group in c(
                 "patient_prim_cancer_cells", "patient_mets_cancer_cells",
@@ -1854,8 +1877,12 @@ for (group in c(
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
+
     obj_list[[group]] <- object
     species <- object$organism[1]
+    dimplot_list[[group]] <-
+        dimplot_better(object, group_by = "Ann_Level3") + NoLegend() +
+        ggtitle(str_c("Tumor", group))
     
     Idents(object) <- object$Ann_Level3
     #dimplot_better(object, group_by = c("Ann_Level3", "seurat_clusters")) 
