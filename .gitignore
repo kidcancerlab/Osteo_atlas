@@ -79,7 +79,10 @@ analyze_looms*
 new_looms
 
 #DoubletFinder Files
-DoubletFinder
+DoubletFinder/Counts
+DoubletFinder/output
+DoubletFinder/slurm
+DoubletFinder/all_demuxafy_results.qs
 
 figures
 demuxafy_figs
