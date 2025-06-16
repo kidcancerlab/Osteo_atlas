@@ -130,12 +130,14 @@ I need to do this in order to check how consistent the single nuclei data's velo
 
 ```{r}
 ob_names <- c(
-    "patient_mets_cancer_cells",
-    "patient_prim_cancer_cells",
-    "mm_mets_cancer_cells",
-    "mm_prim_cancer_cells",
-    "dogs_mets_cancer_cells",
-    "dogs_prim_cancer_cells"
+    "patient_mets_cancer_cells_fdl",
+    "patient_prim_cancer_cells_fdl",
+    "mm_mets_cancer_cells_fdl",
+    "mm_prim_cancer_cells_fdl",
+    "dogs_mets_cancer_cells_fdl",
+    "dogs_prim_cancer_cells_fdl",
+    "xeno_mets_human_cancer_cells_fdl",
+    "xeno_prim_human_cancer_cells_fdl"
 )
 
 split_ob_list <- list()
@@ -214,195 +216,48 @@ from matplotlib.colors import ListedColormap
 import scanpy as sc
 import os
 import re
+import misc/python_functions.py
 ```
 
 ### Make Objects and Plots
 
-```{python analyze-mm-mets-cancer-cells}
-#get names of loom files
-ob_names = os.listdir("loom_output/metadata")
+I'll do this individually for Single Cell and Single Nucleus.
 
-#remove T_OS_0046_M1 bc it has a bad bam file
-os.remove("loom_output/metadata/dogs_mets_cancer_cells/T_OS_0046_M1_metadata.csv")
-os.remove("loom_output/metadata/dogs_mets_normal_cells/T_OS_0046_M1_metadata.csv")
-os.remove("loom_output/metadata/dogs_mets/T_OS_0046_M1_metadata.csv")
-
-for ob in ob_names:
-    write_obs(ob)
-
-def write_obs(ob):
-    print("starting on " + ob)
-    merged_ad=loom_to_an(obj_name = ob,
-                     loom_dir = "loom_output/samples",
-                     metadata_dir = "loom_output/metadata")
-    print("made " + ob + " , now calculating velocity")
-    calc_velo(merged_ad)
-    merged_ad.write(filename = "loom_output/anndata/" + ob + ".ad")
-    print("calculated velocity and saved off " + ob)
-
-
-```
-
-#### Remaking Tumor Plots with Lab Colors
-
-I'm remaking the velocity stream plots for the tumor objects with 2 changes:
-    1. Removing "Tumor_" from the cell type annotations
-    2. Using the lab colors for coloring the clusters so we are consistent across Seurat and scv
+path to figures will now be
+    - output/figures/rna_velocity/
+    - figures will be split into single-cell and single-nuclei data in here
 
 ```{python}
+# specify colors for plots
 color_mapping = {"Synthetic": "#D43F3A",
                  "Fibrogenic": "#EEA236",
                  "Progenitor": "#357EBD",
                  "Proliferative": "#5CB85C",
                  "Interactive": "#B8B8B8",
-                 "Apoptosis": "#9632B8"}
+                 "Stressed": "#9632B8"}
 
 hex_codes = ["#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF", "#9632B8FF", "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF", "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF", "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF", "#00FF00", "#00FFFF", "#FF00FF", "#0000FF", "#FFFF00", "#FF0000"]
 
-ob_names = os.listdir("loom_output/anndata")
-
-for ob in ob_names:
-    ad_ob = anndata.read("loom_output/anndata/" + ob)
-    #remove .ad from ob
-    ob = ob.replace(".ad", "")
-    scv.pl.velocity_embedding_stream(ad_ob,
-                                     basis = "umap",
-                                     color = "seurat_clusters",
-                                     show = False,
-                                     palette = hex_codes,
-                                     sort_order = False,
-                                     figsize = (7, 7),
-                                     legend_loc = "none")
-    pyplot.savefig("figures/scvelo/yogesh_04_29_25/" + ob + "_umap_clusters.svg")
-    #seurat_clusters in fdl
-    scv.pl.velocity_embedding_stream(ad_ob,
-                                     basis = "fdl",
-                                     color = "seurat_clusters",
-                                     palette = hex_codes,
-                                     show = False,
-                                     sort_order = False,
-                                     figsize = (7, 7),
-                                     legend_loc = "none")
-    pyplot.savefig("figures/scvelo/yogesh_04_29_25/" + ob + "_fdl_clusters.svg")
-    #Specify color dict for colors if cancer object
-    if ob.find("cancer") != -1 or ob.find("_human") != -1:
-        #Strip Tumor_ from ann level 3
-        ad_ob.obs["Ann_Level3"] = ad_ob.obs["Ann_Level3"].str.replace("Tumor_", "")
-        #Ann_Level3 in umap space
-        scv.pl.velocity_embedding_stream(ad_ob,
-                                         basis = "umap",
-                                         color = "Ann_Level3",
-                                         palette = color_mapping,
-                                         show = False,
-                                         sort_order = False,
-                                         figsize = (7, 7),
-                                         legend_loc = "none")
-        pyplot.savefig("figures/scvelo/yogesh_04_29_25/" + ob + "_umap_annotations.svg")
-        #cell types in fdl
-        scv.pl.velocity_embedding_stream(ad_ob,
-                                         basis = "fdl",
-                                         color = "Ann_Level3",
-                                         palette = color_mapping,
-                                         show = False,
-                                         sort_order = False,
-                                         figsize = (7, 7),
-                                         legend_loc = "none")
-        pyplot.savefig("figures/scvelo/yogesh_04_29_25/" + ob + "_fdl_annotations.svg")
-    else:
-        #Ann_Level3 in umap space
-        scv.pl.velocity_embedding_stream(ad_ob,
-                                         basis = "umap",
-                                         color = "Ann_Level3",
-                                         palette = hex_codes,
-                                         show = False,
-                                         sort_order = False,
-                                         figsize = (7, 7),
-                                         legend_loc = "none")
-        pyplot.savefig("figures/scvelo/yogesh_04_29_25/" + ob + "_umap_annotations.svg")
-        #cell types in fdl
-        scv.pl.velocity_embedding_stream(ad_ob,
-                                         basis = "fdl",
-                                         color = "Ann_Level3",
-                                         palette = hex_codes,
-                                         show = False,
-                                         sort_order = False,
-                                         figsize = (7, 7),
-                                         legend_loc = "none")
-        pyplot.savefig("figures/scvelo/yogesh_04_29_25/" + ob + "_fdl_annotations.svg")
-
-```
-
-### Make Objects and Plots for Single Cell and Single Nucleus
-
-```{python}
+# get names of objects for writing and saving
 sc_obs = os.listdir("loom_output/split_metadata/sc/")
-sc_obs = list(filter(lambda x:"dogs_mets" not in x, sc_obs))
 sn_obs = os.listdir("loom_output/split_metadata/sn/")
+
+# Make directories for loom object output
 os.makedirs("loom_output/split_ad/sc")
 os.makedirs("loom_output/split_ad/sn")
-os.makedirs("figures/scvelo/split_methods/sc")
-os.makedirs("figures/scvelo/split_methods/sn")
+
+# make directories for velocity figures
+os.makedirs("output/figures/rna_velocity/sc")
+os.makedirs("output/figures/rna_velocity/sc")
 
 for snob in sn_obs:
-    write_ob_and_plots(ob = snob, method = "sn")
+    write_obs(ob = snob, method = "sn")
+    save_plots(ob = snob, method = "sn")
 
 
 for scob in sc_obs:
-    write_ob_and_plots(ob = scob, method = "sc")
-
-
-def write_ob_and_plots(ob, method):
-    print("starting on " + ob)
-    merged_ad=loom_to_an(obj_name = ob,
-                     loom_dir = "loom_output/samples",
-                     metadata_dir = "loom_output/split_metadata/" + method)
-    print("made " + ob + " , now calculating velocity")
-    calc_velo(merged_ad)
-    merged_ad.write(filename = "loom_output/split_ad/" + method + "/" + ob + ".ad")
-    print("calculated velocity and saved off " + ob + " for " + method)
-    #remove "Tumor_" from ann_level 3
-    merged_ad.obs["Ann_Level3"] = merged_ad.obs["Ann_Level3"].str.replace("Tumor_", "")
-    #Now start making plots
-    scv.pl.velocity_embedding_stream(merged_ad,
-                                     basis = "umap",
-                                     color = "seurat_clusters",
-                                     show = False,
-                                     palette = hex_codes,
-                                     sort_order = False,
-                                     figsize = (7, 7),
-                                     legend_loc = "none")
-    pyplot.savefig("figures/scvelo/split_methods/" + method + "/" + ob + "_umap_clusters.svg")
-    #seurat_clusters in fdl
-    scv.pl.velocity_embedding_stream(merged_ad,
-                                     basis = "fdl",
-                                     color = "seurat_clusters",
-                                     palette = hex_codes,
-                                     show = False,
-                                     sort_order = False,
-                                     figsize = (7, 7),
-                                     legend_loc = "none")
-    pyplot.savefig("figures/scvelo/split_methods/" + method + "/" + ob + "_fdl_clusters.svg")
-    #Now plot cell types
-    scv.pl.velocity_embedding_stream(merged_ad,
-                                     basis = "umap",
-                                     color = "Ann_Level3",
-                                     palette = color_mapping,
-                                     show = False,
-                                     sort_order = False,
-                                     figsize = (7, 7),
-                                     legend_loc = "none")
-    pyplot.savefig("figures/scvelo/split_methods/" + method + "/" + ob + "_umap_annotations.svg")
-    #cell types in fdl
-    scv.pl.velocity_embedding_stream(merged_ad,
-                                     basis = "fdl",
-                                     color = "Ann_Level3",
-                                     palette = color_mapping,
-                                     show = False,
-                                     sort_order = False,
-                                     figsize = (7, 7),
-                                     legend_loc = "none")
-    pyplot.savefig("figures/scvelo/split_methods/" + method + "/" + ob + "_fdl_annotations.svg")
-
+    write_obs(ob = scob, method = "sc")
+    save_plots(ob = scob, method = "sc")
 
 ```
 
