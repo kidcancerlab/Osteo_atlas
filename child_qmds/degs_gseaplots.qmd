@@ -1075,7 +1075,72 @@ harmony_parameters <-
                                     lambda = c(0.1, 0.1, 0.1, 0.1)))
 
 # save the combined for each dataset
+object <- 
+    merge(x = object1,
+        y = object2) %>%
+    JoinLayers() %>%
+    process_seurat() 
+object1 <-
+    object %>%
+    RunHarmony(group.by.vars = c("sample_name",
+                                "data_source",
+                                "unique"),
+                theta = c(12, 12, 12),
+                lambda = c(0.1, 0.1, 0.4)) %>%
+    process_seurat(reduction = "harmony")
 
+
+object1 <-
+    object %>%
+    RunHarmony(group.by.vars = c("sample_name",
+                                "data_source",
+                                "unique"),
+                theta = c(12, 12, 12),
+                lambda = c(0.1, 0.2, 0.3)) %>%
+    process_seurat(reduction = "harmony")
+
+object1 <-
+    object1 %>%
+    FindClusters(resolution = 0.6)
+
+dimplot_better(object1,
+               group_by = "seurat_clusters") + NoLegend()
+
+markers <-
+    FindAllMarkers(object1,
+            min.pct = 0.33,
+            logfc.threshold = 0.25,
+            only.pos = T) %>%
+    as.data.frame() %>%
+    mutate(percent_diff = pct.1 - pct.2) %>%
+    filter(p_val_adj < 0.05) %>%
+    group_by(cluster) %>%
+    slice_max(order_by = percent_diff, 
+            n = 40,
+            with_ties = F) %>%
+    dplyr::select(gene, cluster) %>%
+    group_by(cluster) %>%
+    summarise(genes = list(gene)) %>%
+    deframe()
+
+make_panel_plot(sobj = object1,
+                comparison_col = "seurat_clusters",
+                label = "seurat_clusters",
+                group = "obj1_mm_prim_mets_cancer_cells",
+                aggregate_by = c("sample_name", "seurat_clusters"),
+                organism_col = "organism",
+                subset = FALSE,
+                batch_var = "data_source")
+
+
+
+
+
+DotPlot(object1, 
+        features = c("Bnip3", "Mki67", "Egln3", "Vegfa", "Ifit3", "Ifit1"))
+
+FeaturePlot(object1, 
+            features = c("Egln3", "Bnip3", "Vegfa", "Hif1a"), order = TRUE)
 
 for (item in seq_len(nrow(combine_tumor_per_species))) {
     group1 <- combine_tumor_per_species$primary[item]
@@ -1243,7 +1308,7 @@ for (item in seq_len(nrow(combine_tumor_per_species_new))) {
                         ".qs")) %>%
         FindClusters(resolution = res_value)
     #dimplot_better(object, group_by = "seurat_clusters") +NoLegend()
-    # DotPlot(object, group.by = "seurat_clusters", features = "ENSCAFG00805016104")
+    #DotPlot(object, group.by = "seurat_clusters", features = c("Bnip3","Egln3","Hif1a","Vegfa","Hilda"))
     make_panel_plot(sobj = object,
                     comparison_col = "seurat_clusters",
                     label = "seurat_clusters",
@@ -1369,62 +1434,44 @@ for (item in seq_len(nrow(combine_tumor_per_species_new))) {
 
 }
 
-FeaturePlot(object,
-            features = c("RPL37A", "RPS18", "RPL39", "RPL35"),
-            reduction = "umap",
-            ncol = 2,
-            order=T)
-
-tumor_features <- list(
-    #Osteosarcoma = c("RUNX2", "COL1A1", "COL1A2"),
-    Apoptosis = c("BNIP3", "EGLN3", "PDK1", "ENSCAFG00805016104"),
-    Fibrogenic = c("COL6A3", "COL3A1", "PDGFRB", "COL6A1", "POSTN"),
-    Interactive = c("CTSB", "CSF1R", "PTPRC", "PTPRJ"),
-    Progenitor = c("ROBO2", "CD36", "SATB2"),
-    Proliferative = c("CENPF", "ASPM", "BIRC5", "AURKB"),
-    Synthetic = c("RPL37A", "RPS18", "RPL39", "RPL35")
-) %>%
-    unlist() %>%
-    nichenetr::convert_human_to_mouse_symbols() %>%
-    as.character()
 
 Annotation_list <-  
     list(patient_xeno_prim_mets = c("^0$" = "Fibrogenic",    
-                                    "^1$" = "Synthetic", 
-                                    "^2$" = "Progenitor",  
+                                    "^1$" = "MP_Progenitor", 
+                                    "^2$" = "Basal_Progenitor",  
                                     "^3$" = "Proliferative",
                                     "^4$" = "Stressed",
                                     "^5$" = "Interactive",
                                     "^6$" = "Fibrogenic",
                                     "^7$" = "Interactive",
                                     "^8$" = "Proliferative",
-                                    "^9$" = "Synthetic", 
+                                    "^9$" = "MP_Progenitor", 
                                     "^10$" = "Fibrogenic",
                                     "^11$" = "Fibrogenic",
-                                    "^12$" = "Synthetic",
-                                    "^13$" = "Synthetic",
+                                    "^12$" = "MP_Progenitor",
+                                    "^13$" = "MP_Progenitor",
                                     "^14$" = "Fibrogenic",
                                     "^15$" = "Fibrogenic",
                                     "^16$" = "Fibrogenic",
                                     "^17$" = "Fibrogenic",
-                                    "^18$" = "Progenitor", #
-                                    "^19$" = "Progenitor",   
+                                    "^18$" = "Basal_Progenitor", #
+                                    "^19$" = "Basal_Progenitor",   
                                     "^20$" = "Fibrogenic",
-                                    "^21$" = "Synthetic",
+                                    "^21$" = "Basal_Progenitor",
                                     "^22$" = "Fibrogenic"),
         mouse_prim_mets = c("^0$" = "Proliferative",
-                             "^1$" = "Synthetic",
-                             "^2$" = "Progenitor",
-                             "^3$" = "Stressed",
+                             "^1$" = "MP_Progenitor",
+                             "^2$" = "Proliferative",
+                             "^3$" = "Basal_Progenitor",
                              "^4$" = "Fibrogenic",
                              "^5$" = "Interactive",
                              "^6$" = "Proliferative"),
-        dog_prim_mets = c("^0$" = "Synthetic",
+        dog_prim_mets = c("^0$" = "MP_Progenitor",
                             "^1$" = "Proliferative",   
-                            "^2$" = "Progenitor",   
-                            "^3$" = "Synthetic",
+                            "^2$" = "Basal_Progenitor",   
+                            "^3$" = "Basal_Progenitor",
                             "^4$" = "Fibrogenic",
-                            "^5$" = "Progenitor",
+                            "^5$" = "Basal_Progenitor",
                             "^6$" = "Interactive",
                             "^7$" = "Stressed",
                             "^8$" = "Stressed",
@@ -1434,16 +1481,14 @@ Annotation_list <-
                             "^12$" = "Stressed",
                             "^13$" = "Proliferative",
                             "^14$" = "Proliferative",
-                            "^15$" = "Synthetic"))
-
+                            "^15$" = "MP_Progenitor"))
 
 combine_tumor_per_species_new <-
     tribble(~combined,             ~res_value,   ~prim,        ~mets,
             "patient_xeno_prim_mets", 0.3,       "patient_prim", "patient_mets",
             "mouse_prim_mets",       0.35,     "mm_prim",       "mm_mets",
             "dog_prim_mets",         0.3,     "dogs_prim_cancer_cells", "dogs_mets_cancer_cells"
-            ) 
-
+            )
 # we can make gsea panel plots
 for (item in seq_len(nrow(combine_tumor_per_species_new))) {
     comb_group <- combine_tumor_per_species_new$combined[item]
@@ -1462,6 +1507,12 @@ for (item in seq_len(nrow(combine_tumor_per_species_new))) {
     object$Ann_Level2 <- object$Ann_Level3
     object$Ann_Level1 <- "Tumor"
     object$Ann_Level0 <- "Tumor"
+    # dimplot_better(object, group_by = "Ann_Level3") + NoLegend()
+    # FeaturePlot(object, features = dog$Progenitor, order = TRUE)
+    qs::qsave(object,
+            str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    comb_group,
+                    "_cancer_cells.qs"))
 
     make_panel_plot(sobj = object,
                     comparison_col = "Ann_Level3",
@@ -1481,7 +1532,7 @@ for (item in seq_len(nrow(combine_tumor_per_species_new))) {
         markers <- 
             FindAllMarkers(object = object_subset,
                         min.pct = 0.3,
-                        logfc.threshold = 0.15,
+                        logfc.threshold = 0.25,
                         only.pos = T)
         top_markers <- 
             markers %>%
@@ -1490,13 +1541,13 @@ for (item in seq_len(nrow(combine_tumor_per_species_new))) {
             filter(p_val_adj < 0.05) %>%
             mutate(pct_diff = pct.1 - pct.2) %>%
             slice_max(order_by = pct_diff, 
-                    n = 5,
+                    n = 20,
                     with_ties = F) %>%
             dplyr::select(gene, cluster) %>%
             #filter(!cluster == "Stressed") %>%
             mutate(cluster = factor(cluster, 
-                                levels = c("Fibrogenic", "Interactive", "Progenitor",
-                                           "Proliferative", "Stressed", "Synthetic"))) %>%
+                                levels = c("Fibrogenic", "Interactive", "MP_Progenitor",
+                                           "Proliferative", "Stressed", "Basal_Progenitor"))) %>%
             arrange(cluster)
 
         # get list of top marker genes; including each gene only once
@@ -1521,8 +1572,8 @@ for (item in seq_len(nrow(combine_tumor_per_species_new))) {
             DotPlot(object = object_subset,
                 features = genes,
                 group.by = "Ann_Level3") +
-                scale_y_discrete(limits = c("Fibrogenic", "Interactive", "Progenitor",
-                                            "Proliferative", "Stressed", "Synthetic")) +
+                scale_y_discrete(limits = c("Fibrogenic", "Interactive", "MP_Progenitor",
+                                           "Proliferative", "Stressed", "Basal_Progenitor")) +
                 RotatedAxis()
         # save the dotplot
         width <- length(unique(object_subset$Ann_Level3)) * 2
@@ -1551,7 +1602,6 @@ for (item in seq_len(nrow(combine_tumor_per_species_new))) {
                         "_cancer_cells.qs"))
     }
 }
-
 
 
 # derive the markers for each group by intersecting the markers
@@ -1635,50 +1685,6 @@ for (item in seq_len(nrow(new_list_for_markers))) {
                 "_markers.tsv"))
     
 }
-
-
-patient <-
-    list(Synthetic = c("RPS28", "RPL36", "RPS13", "RPS27"),
-        Fibrogenic = c("COL3A1", "PDGFRB", "COL6A3", "POSTN"),
-        Progenitor = c("CD36", "ROBO2", "SATB2", "ANO5"),
-        Proliferative = c("TOP2A", "ASPM", "CENPF", "MKI67"),
-        Interactive = c("CSF1R", "PTPRC", "PTPRJ"),
-        Stressed = c("EGLN3", "VEGFA", "BNIP3", "HILPDA")) %>%
-    unlist() %>%
-    as.character() %>%
-    unique()
-
-mouse <-
-    list(Synthetic = c("Rps2", "Rpl10", "Rpl26", "Rpl21"),
-        Fibrogenic = c("Col3a1","Pdgfrb", "Bicc1", "Antxr1", "Pdgfrl", "Fap"),
-        Progenitor = c("Pdgfc", "Zfp462", "Ahr", "Ptbp2"),
-        Proliferative = c("Ccna2", "Cenpf", "Ube2c", "Cenpe"),
-        Interactive = c("Alcam", "Ptprc", "Ptprj"),
-        Stressed = c("Ifi202b", "Apol9a", "Apol9b", "Eno3", "Ccl9")) %>%
-unlist() %>%
-as.character() %>%
-unique()
-
-
-xenograft <-
-    list(Synthetic = c("RPS28", "RPL36", "RPS13", "RPS15", "RPL35", "RPL11", "RPS2"),
-        Fibrogenic = c("COL3A1", "COL6A1", "POSTN", "PRRX1", "HMCN1", "COL6A3"),
-        Progenitor = c("PTPRZ1", "ROBO2", "CD36", "PDGFD"),
-        Proliferative = c("TOP2A", "ASPM", "CENPF", "MKI67"),
-        Interactive = c("PTPRJ", "FILIP1L", "ECM2"),
-        Stressed = c("NDRG1", "BNIP3", "VEGFA", "DDIT4", "EGLN3")) %>%
-    unlist() %>%
-    as.character() %>%
-    unique()
-
-dog <-
-    list(Fibrogenic = c("F13A1", "COL11A2", "CHST11",  "COL24A1"),
-         Progenitor = c("ESRRG", "PTPRD", "ST6GALNAC3", "SRGAP3"),
-         Proliferative =c("CENPF", "ANLN", "KIF4A", "NCAPG"),
-         Interactive = c("ALCAM", "PTPRC", "CD74", "CSF1R"),
-         Stressed =c("IGFBP7", "MAP3K5", "ROR1", "VEGFA"),
-         Synthetic = c("RPL29.1", "RPL26", "RPL14", "RPL27A")
-    )
 
 ```
 
@@ -1823,31 +1829,37 @@ this chunk will identify the shared markers across the tumor subpopulations usin
 patient primary and metastatic datasets
 ```{r markers_for_tumor}
 
-library(parallel)
-
 groups <- c(
     "patient_prim_cancer_cells", "patient_mets_cancer_cells",
     "mm_prim_cancer_cells", "mm_mets_cancer_cells",
     "xeno_prim_human_cancer_cells", "xeno_mets_human_cancer_cells",
     "dogs_prim_cancer_cells", "dogs_mets_cancer_cells"
 )
-
-mclapply(groups, function(group) {
+library(parallel)
+parallel::mclapply(groups, function(group) {
     object <- qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/", group, ".qs"))
     object <- run_fdl(sobject = object)
     qs::qsave(object, str_c("output/seurat_objects/final_tumor_vs_stroma/", group, "_fdl.qs"))
     NULL
 }, mc.cores = min(length(groups), detectCores()))
 
-dimplot_better(object, group_by = "Ann_Level3", reduction = "fdl") +
-    NoLegend() + ggtitle("Tumor FDL")
-
+for (group in groups) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group, "_fdl.qs"))
+    DimPlot(object,
+            group.by = "Ann_Level3",
+            reduction = "fdl") +
+        NoLegend() +
+        ggtitle(str_c("Tumor", group))
+}
+dimplot_better(object, group_by = "Ann_Level3") + NoLegend()
 
 obj_list <- list()
 
-Synthetic <- list()
+MP_Progenitor <- list()
 Fibrogenic <- list()
-Progenitor <- list()
+Basal_Progenitor <- list()
 Proliferative <- list()
 Interactive <- list()
 Stressed <- list()
@@ -1864,9 +1876,6 @@ percent_diff <-
             )
 dimplot_list <- list()
 
-patchwork::wrap_plots(dimplot_list,
-    ncol = 2) 
-
 for (group in c(
                 "patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 "mm_prim_cancer_cells", "mm_mets_cancer_cells",
@@ -1877,227 +1886,234 @@ for (group in c(
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
-
     obj_list[[group]] <- object
+
+
     species <- object$organism[1]
     dimplot_list[[group]] <-
         dimplot_better(object, group_by = "Ann_Level3") + NoLegend() +
         ggtitle(str_c("Tumor", group))
     
     Idents(object) <- object$Ann_Level3
-    #dimplot_better(object, group_by = c("Ann_Level3", "seurat_clusters")) 
-    #FeaturePlot(object, features = c("BNIP3","RPL37A", "RPS18", "RPL39", "RPL35", "MRPL23", "MRPL9"), order = TRUE)
     genes <-
         FindAllMarkers(object,
                         only.pos = TRUE,
-                        min.pct = 0.1,
+                        min.pct = 0.25,
                         logfc.threshold = 0.2)
-    if (species == "mouse") {
-        genes$gene <- 
-            nichenetr::convert_mouse_to_human_symbols(genes$gene) %>%
-            as.character()
-    }
 
-    for (item in seq_len(nrow(percent_diff))) {
-        tumor_sub <- percent_diff$population[item]
-        percent_differ <- percent_diff$percent_diff_num[item]
+    markers <-
+        genes %>%
+        as.data.frame() %>%
+        mutate(percent_diff = pct.1 - pct.2) %>%
+        #filter(p_val_adj < 0.05) %>%
+        group_by(cluster) %>%
+        slice_max(order_by = percent_diff, 
+                n = 50) %>%
+        dplyr::select(gene, cluster) %>%
+        group_by(cluster) %>%
+        summarise(genes = list(gene)) %>%
+        deframe()
+    
+    MP_Progenitor[[group]] <- markers$MP_Progenitor
+    Fibrogenic[[group]] <- markers$Fibrogenic
+    Basal_Progenitor[[group]] <- markers$Basal_Progenitor
+    Proliferative[[group]] <- markers$Proliferative
+    Interactive[[group]] <- markers$Interactive
+    Stressed[[group]] <- markers$Stressed
 
-        genes_per_group <-
-            genes %>%
-            filter(cluster == tumor_sub) %>%
-            mutate(percent_diff = pct.1 - pct.2) %>%
-            arrange(desc(percent_diff)) %>%
-            slice_head(n=100) %>%
-            #arrange(desc(avg_log2FC)) %>%
-            pull(gene) %>%
-            unique() %>%
-            na.omit() %>%
-            as.character()
-
-        if (length(genes_per_group) > 0) {
-            if (tumor_sub == "Synthetic") {
-                Synthetic[[group]] <- genes_per_group
-            }
-            if (tumor_sub == "Fibrogenic") {
-                Fibrogenic[[group]] <- genes_per_group
-            }
-            if (tumor_sub == "Progenitor") {
-                Progenitor[[group]] <- genes_per_group
-            }
-            if (tumor_sub == "Proliferative") {
-                Proliferative[[group]] <- genes_per_group
-            }
-            if (tumor_sub == "Interactive") {
-                Interactive[[group]] <- genes_per_group
-            }
-            if (tumor_sub == "Stressed") {
-                Stressed[[group]] <- genes_per_group
-            }
-        }
-    }
 }
-
-
-
-specific <-
-    list(
-    human_specific = c("COL6A3", "COL3A1", "COL6A1", "FBN1", "COL4A1", "COL4A2", #firbo
-                       "ROBO2", "SATB2", "IGF2BP3", "CD36", "MAML3", "INSC",  #progenitor
-                       "TOP2A", "CENPF", "ASPM", "TPX2", "CENPE", "NUSAP1",  #proliferative
-                       "CD74", "CSF1R", "PTPRC", "PTPRJ", "RGS1", "TBXAS1", #interactive
-                       "BNIP3", "EGLN3", "PDK1", "SCIN",                   #apoptosis
-                       "MT1G", "MT1X", "FABP5"),                          #hypermetabolic
-    xeno_specific = c("COL3A1", "COL6A1", "COL6A2", "COL6A3", "FN1", "COL16A1",
-                        "CD36", "ROBO2", "SATB2", "IGF2BP2", "ANGPT1", "PTPRZ1",
-                        "ASPM", "CENPE", "DIAPH3", "TPX2", "TOP2A", "CENPF",
-                        "PTPRC", "CD53", "TYROBP", "PTPRJ", "SIRPA", "TBXAS1",  
-                        "BNIP3", "EGLN3", "PDK1", "SCIN",
-                        "TSIX", "LINC00960", "MTCP1", "INKA2"),
-    mice_specific = c("THBS2", "COL6A3", "COL6A2", "LOXL1", "FBLN1", "LOXL2",
-                        "SETBP1", "NAALADL2", "GLIS3", "CACNA1C", "TANC1",
-                        "ASPM", "CENPE", "DIAPH3", "TPX2", "TOP2A", "CENPF",
-                        "PTPRC", "CD53", "TYROBP", "PTPRJ", "SIRPA", "TBXAS1",
-                        "BNIP3", "DDIT3", "MAP1LC3A", "PDK1", "SCIN",
-                        "RPS24", "RPS29", "RPS10", "RPL37A", "RPS18", "RPL36"),
-    dog_specific = c("ID3", "HAPLN3", "ENSCAFG00805019256", "TFPI2", "JUNB", "FBN1",
-                    "INSC", "CD36", "SEMA5A", "PLCB4", "SYTL2",
-                    "TK1", "CENPF", "NCAPG", "ANLN", "NUF2", "UBE2C",
-                    "PTPRC", "CD84", "CD74", "CD44", "LCP1", "CSF1R",
-                    "S100A1", "BNIP3", "EGLN3", "PDK1", "SCIN",
-                    "MMP9", "ESRRG", "PPARA")
-    )
-
-
-human_xeno_shared <- list(
-    Fibrogenic = c("COL6A3", "COL6A2", "PLXDC2", "NFKBIZ", "PDGFRB", "PMEPA1", "CACNA1C", "MSC-AS1"),
-    Progenitor = c("ANO5", "CD36", "ROBO2", "ANGPT1", "FHOD3", "PLCB4", "FAT3", "COL24A1", "SLC8A3", "AC105941.1", "DTNA", "SLC44A5", "PDGFD", "PTPRZ1", "CACNB4", "PCDH7", "PATJ", "SATB2"),
-    Proliferative = c("TOP2A", "ASPM", "CENPF", "TPX2", "CENPE"),
-    Stressed = c("EGLN3", "SOX9", "NDUFA4L2", "VEGFA", "BNIP3", "NDRG1", "SLC2A1", "ADM", "HILPDA", "HIF1A-AS3")
-    )
-
-patient <-
-    list(Synthetic = c("RPS28", "RPL36", "RPS13", "RPS27"),
-        Fibrogenic = c("COL3A1", "COL6A3", "POSTN","FBN1"),
-        Progenitor = c("CD36", "ROBO2", "SATB2", "ANO5"),
-        Proliferative = c("TOP2A", "ASPM", "CENPF", "MKI67"),
-        Interactive = c("CSF1R", "PTPRC", "PTPRJ", "CD74"),
-        Stressed = c("EGLN3", "VEGFA", "BNIP3", "HILPDA")) %>%
-    unlist() %>%
-    as.character() %>%
-    unique()
-
-mouse <-
-    list(Synthetic = c("Rps2", "Rpl10", "Rpl26", "Rpl21"),
-        Fibrogenic = c("Col3a1","Pdgfrb", "Bicc1", "Antxr1"),
-        Progenitor = c("Pdgfc", "Zfp462", "Ahr", "Ptbp2"),
-        Proliferative = c("Ccna2", "Cenpf", "Ube2c", "Cenpe"),
-        Interactive = c("Alcam", "Ptprc", "Ptprj", "Cd74"),
-        Stressed = c("Hspb7", "Eno3", "Ccng1", "Bnip3")) %>%
-unlist() %>%
-as.character() %>%
-unique()
-
-
-dog <-
-    list(Fibrogenic = c("F13A1", "COL11A2", "CHST11",  "COL24A1"),
-         Progenitor = c("ESRRG", "PTPRD", "ST6GALNAC3", "SRGAP3"),
-         Proliferative =c("CENPF", "ANLN", "KIF4A", "NCAPG"),
-         Interactive = c("ALCAM", "PTPRC", "CD74", "CSF1R"),
-         Stressed =c("IGFBP7", "MAP3K5", "ROR1", "VEGFA"),
-         Synthetic = c("RPL26", "RPS28", "RPS13", "RPS27"))%>%
-unlist() %>%
-as.character() %>%
-unique()
-
-
-xenograft <-
-    list(Synthetic = c("RPL26", "RPL8","RPL35", "RPS13"),
-        Fibrogenic = c("COL3A1", "COL6A1", "POSTN", "COL6A3"),
-        Progenitor = c("PTPRZ1", "ROBO2", "CD36", "PDGFD"),
-        Proliferative = c("TOP2A", "ASPM", "CENPF", "MKI67"),
-        Interactive = c("PTPRC", "PTPRJ", "MERTK", "CD96"),
-        Stressed = c("NDRG1", "BNIP3", "VEGFA", "EGLN3")) %>%
-    unlist() %>%
-    as.character() %>%
-    unique()
-
+dimplot_better(obj_list$patient_mets_cancer_cells, group_by = "Ann_Level3")
 
 fibrogenic_shared <- 
     Reduce(intersect, list(
                         #    Fibrogenic$patient_prim_cancer_cells,
-                        #    Fibrogenic$patient_mets_cancer_cells,
-                           Fibrogenic$xeno_prim_human,
-                           Fibrogenic$xeno_mets_human
-                        #    Fibrogenic$dogs_prim_cancer_cells,
-                        #    Fibrogenic$dogs_mets_cancer_cells,
-                           
+                        #    Fibrogenic$patient_mets_cancer_cells
+                        #    Fibrogenic$xeno_prim_human_cancer_cells,
+                        #    Fibrogenic$xeno_mets_human_cancer_cells
+                           Fibrogenic$dogs_prim_cancer_cells,
+                           Fibrogenic$dogs_mets_cancer_cells
                         #    Fibrogenic$mm_prim_cancer_cells,
-                        #    Fibrogenic$mm_mets_cancer_cells,
+                        #    Fibrogenic$mm_mets_cancer_cells
                            ))
+cowplot::plot_grid(
+    DotPlot(object = obj_list$patient_prim_cancer_cells,
+                    features = fibrogenic_goldstandard_strong,
+                    group.by = "Ann_Level3",
+                    cols = "RdBu") + RotatedAxis(),
+    DotPlot(object = obj_list$patient_mets_cancer_cells,
+                    features =  fibrogenic_goldstandard_strong,
+                    group.by = "Ann_Level3",
+                    cols = "RdBu") + RotatedAxis(),
+    ncol = 1
+)
+
+fibrogenic <-
+    list(mouse = c(Bicc1, Setbp1, Antxr1, Lama4))
 
 progenitor_shared <-
      Reduce(intersect, list(
-                        #    Progenitor$patient_prim_cancer_cells,
-                        #    Progenitor$patient_mets_cancer_cells,
-                        #    Progenitor$xeno_prim_human,
-                        #    Progenitor$xeno_mets_human,
-                           Progenitor$dogs_prim_cancer_cells,
-                           Progenitor$dogs_mets_cancer_cells
-                           Progenitor$mm_prim_cancer_cells,
-                           Progenitor$mm_mets_cancer_cells,
+                        #    Basal_Progenitor$patient_prim_cancer_cells,
+                        #    Basal_Progenitor$patient_mets_cancer_cells
+                        #    Basal_Progenitor$xeno_prim_human_cancer_cells,
+                        #    Basal_Progenitor$xeno_mets_human_cancer_cells
+                           Basal_Progenitor$dogs_prim_cancer_cells,
+                           Basal_Progenitor$dogs_mets_cancer_cells
+                        #    Basal_Progenitor$mm_prim_cancer_cells,
+                        #    Basal_Progenitor$mm_mets_cancer_cells
                            ))
+cowplot::plot_grid(
+    DotPlot(object = obj_list$dogs_prim_cancer_cells,
+            features = Basal_Progenitor,
+            group.by = "Ann_Level3",
+            cols = "RdBu") + RotatedAxis(),
+    DotPlot(object = obj_list$dogs_mets_cancer_cells,
+            features = Basal_Progenitor,
+            group.by = "Ann_Level3",
+            cols = "RdBu") + RotatedAxis(),
+    ncol = 1
+)
+
+basal_p <-
+    list(mouse = c("Pten", "Bmp4", "Aqp5", "Crip2"))
 
 prolif <-
     Reduce(intersect, list(
-                        #    Proliferative$patient_prim_cancer_cells,
-                        #    Proliferative$patient_mets_cancer_cells,
-                        #    Proliferative$xeno_prim_human,
-                        #    Proliferative$xeno_mets_human,
-                           Proliferative$dogs_prim_cancer_cells,
-                           Proliferative$dogs_mets_cancer_cells,
-                           Proliferative$mm_prim_cancer_cells,
-                           Proliferative$mm_mets_cancer_cells,
+                           Proliferative$patient_prim_cancer_cells,
+                           Proliferative$patient_mets_cancer_cells
+                        #    Proliferative$xeno_prim_human_cancer_cells,
+                        #    Proliferative$xeno_mets_human_cancer_cells
+                        #    Proliferative$dogs_prim_cancer_cells,
+                        #    Proliferative$dogs_mets_cancer_cells
+                        #    Proliferative$mm_prim_cancer_cells,
+                        #    Proliferative$mm_mets_cancer_cells
                            ))
+cowplot::plot_grid(
+    DotPlot(object = obj_list$patient_prim_cancer_cells,
+            features = prolif,
+            group.by = "Ann_Level3",
+            cols = "RdBu") + RotatedAxis(),
+    DotPlot(object = obj_list$patient_mets_cancer_cells,
+            features = prolif,
+            group.by = "Ann_Level3",
+            cols = "RdBu") + RotatedAxis(),
+    ncol = 1
+)
+
+
 
 
 inter <-
     Reduce(intersect, list(
                         #    Interactive$patient_prim_cancer_cells,
-                        #    Interactive$patient_mets_cancer_cells,
-                           Interactive$xeno_prim_human,
-                           Interactive$xeno_mets_human
-                        #    Interactive$dogs_prim_cancer_cells,
-                        #    Interactive$dogs_mets_cancer_cells
+                        #    Interactive$patient_mets_cancer_cells
+                        #    Interactive$xeno_prim_human_cancer_cells,
+                        #    Interactive$xeno_mets_human_cancer_cells
+                           Interactive$dogs_prim_cancer_cells,
+                           Interactive$dogs_mets_cancer_cells
                         #    Interactive$mm_prim_cancer_cells,
                         #    Interactive$mm_mets_cancer_cells
                            ))
+cowplot::plot_grid(
+    DotPlot(object = obj_list$dogs_prim_cancer_cells,
+            features = inter,
+            group.by = "Ann_Level3",
+            cols = "RdBu") + RotatedAxis(),
+    DotPlot(object = obj_list$dogs_mets_cancer_cells,
+            features = inter,
+            group.by = "Ann_Level3",
+            cols = "RdBu") + RotatedAxis(),
+    ncol = 1
+)
+
+
 
 stress <-
    Reduce(intersect, list(
-                        #    Stressed$patient_prim_cancer_cells,
-                        #    Stressed$patient_mets_cancer_cells,
-                        #    Stressed$xeno_prim_human,
-                        #    Stressed$xeno_mets_human,
+                           Stressed$patient_prim_cancer_cells,
+                           Stressed$patient_mets_cancer_cells
+                        #    Stressed$xeno_prim_human_cancer_cells,
+                        #    Stressed$xeno_mets_human_cancer_cells
                         #    Stressed$dogs_prim_cancer_cells,
-                        #    Stressed$dogs_mets_cancer_cells,
-                           Stressed$mm_prim_cancer_cells,
-                           Stressed$mm_mets_cancer_cells
+                        #    Stressed$dogs_mets_cancer_cells
+                        #    Stressed$mm_prim_cancer_cells,
+                        #    Stressed$mm_mets_cancer_cells
                            ))
+cowplot::plot_grid(
+    DotPlot(object = obj_list$patient_prim_cancer_cells,
+            features = stress,
+            group.by = "Ann_Level3",
+            cols = "RdBu") + RotatedAxis(),
+    DotPlot(object = obj_list$patient_mets_cancer_cells,
+            features = stress,
+            group.by = "Ann_Level3",
+            cols = "RdBu") + RotatedAxis(),
+    ncol = 1
+)
 
 synthe <-
    Reduce(intersect, list(
-                        #    Synthetic$patient_prim_cancer_cells,
-                        #    Synthetic$patient_mets_cancer_cells,
-                           Synthetic$xeno_prim_human,
-                           Synthetic$xeno_mets_human
-                        #    Synthetic$dogs_prim_cancer_cells,
-                        #    Synthetic$dogs_mets_cancer_cells,
-                        #    Synthetic$mm_prim_cancer_cells,
-                        #    Synthetic$mm_mets_cancer_cells
+                           MP_Progenitor$patient_prim_cancer_cells,
+                           MP_Progenitor$patient_mets_cancer_cells
+                        #    MP_Progenitor$xeno_prim_human_cancer_cells,
+                        #    MP_Progenitor$xeno_mets_human_cancer_cells
+                        #    MP_Progenitor$dogs_prim_cancer_cells,
+                        #    MP_Progenitor$dogs_mets_cancer_cells
+                        #    MP_Progenitor$mm_prim_cancer_cells,
+                        #    MP_Progenitor$mm_mets_cancer_cells
                            ))
+cowplot::plot_grid(
+    DotPlot(object = obj_list$mm_prim_cancer_cells,
+            features = metabolically_primed_RP_genes1,
+            group.by = "Ann_Level3",
+            cols = "RdBu") + RotatedAxis(),
+    DotPlot(object = obj_list$mm_mets_cancer_cells,
+            features = metabolically_primed_RP_genes1,
+            group.by = "Ann_Level3",
+            cols = "RdBu") + RotatedAxis(),
+    ncol = 1
+)
+metabolically_primed_RP_genes1 <- 
+    metabolically_primed_RP_genes %>%
+    nichenetr::convert_human_to_mouse_symbols() %>%
+    as.character()
+    
+#plots for cancer panel
+patient <-
+    list(Fibrogenic = c("COL6A3", "POSTN","FBN1", "CCN1"),
+         Interactive = c("CSF1R", "PTPRC", "PTPRJ", "CD74", "MSR1"),
+         Progenitor = c("CD36", "ROBO2", "ANO5", "PDGFD"),
+         Proliferative = c("TOP2A", "CENPF", "MKI67", "ASPM"),
+         Stressed = c("EGLN3", "BNIP3", "HILPDA", "VEGFA"),
+         Synthetic = c("RPS28", "RPL36", "RPS13"))
 
-## progenitor and ground need revisiting
-#in mice, the progenitor might be fibrogenic
+xenograft <-
+    list(Fibrogenic = c("COL3A1", "COL6A1", "POSTN", "COL6A3"),
+         Interactive = c("PTPRC", "PTPRJ", "MERTK", "CD96"),
+         Progenitor = c("PTPRZ1", "ROBO2", "CD36", "PDGFD", "ANO5"),
+         Proliferative = c("TOP2A", "ASPM", "CENPF", "MKI67"),
+         Stressed = c("NDRG1", "BNIP3", "VEGFA", "EGLN3"),
+         Synthetic = c("RPL26", "RPL8","RPL35", "RPS13"))
+
+
+mouse <-
+    list(
+        Fibrogenic = c("Setbp1", "Lama4", "Adamts9", "Rbms3", "Pdzrn3", " Antxr1"),
+        Interactive = c("Alcam", "Ptprc", "Ptprj", "Lcp1"),
+        Basal_Progenitor = c("Pten", "Bmp4", "Aqp5", "Crip2"),
+        Proliferative = c("Pclaf", "Mki67", "Cenph", "Cenpf"),
+        Stressed = c("Hspb7", "Eno3", "Bnip3"),
+        Synthetic = c("Rps2", "Rpl10", "Rpl26")
+    )
+
+dog <-
+    list(Fibrogenic = c("F13A1", "COL11A2", "CHST11", "COL24A1"),
+         Interactive = c("ALCAM", "PTPRC", "CSF1R", "CD74", "MSR1"),
+         Basal_Progenitor = c("ESRRG", "PTPRD", "ST6GALNAC3", "SRGAP3", "MEGF10"),
+         Proliferative = c("CENPF", "ANLN", "KIF4A", "NCAPG"),
+         Stressed = c("IGFBP7", "MAP3K5", "ROR1", "VEGFA"),
+         Synthetic = c("RPS28", "RPS13", "RPS27"))
+
+
 
 ```
 
@@ -2120,16 +2136,6 @@ tumor_markers <-
                             "CD74", "CD68", "CD83", "CD84", "CD14", "CD53"),
         Tumor_Progenitor = c("MAML3","CD36", "ANGPT1", "PLCB4", "CDH2", "PCDH7", "PTPRZ1",
                              "MMP16", "MAML3", "PDGFD", "TMTC2", "ROBO2", "SOX6"))
-
-VlnPlot(object, 
-        features = nichenetr::convert_human_to_mouse_symbols(tumor_markers$Tumor_Progenitor),
-        group.by = "Ann_Level3",
-        pt.size = 0)
-
-VlnPlot(object, 
-        features = tumor_markers$Tumor_Ground,
-        group.by = "Ann_Level3",
-        pt.size = 0)
 
 object_list <-
     tribble(~group,                         ~res_value,
@@ -2231,3 +2237,4 @@ for (i in seq_len(nrow(object_list))) {
             bg = "white")
 }
 ```
+
