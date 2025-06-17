@@ -216,7 +216,8 @@ from matplotlib.colors import ListedColormap
 import scanpy as sc
 import os
 import re
-import misc/python_functions.py
+import python_functions
+
 ```
 
 ### Make Objects and Plots
@@ -229,12 +230,14 @@ path to figures will now be
 
 ```{python}
 # specify colors for plots
-color_mapping = {"Synthetic": "#D43F3A",
-                 "Fibrogenic": "#EEA236",
-                 "Progenitor": "#357EBD",
-                 "Proliferative": "#5CB85C",
-                 "Interactive": "#B8B8B8",
-                 "Stressed": "#9632B8"}
+color_mapping = {
+    "MP_Progenitor": "#D43F3AFF",
+    "Fibrogenic": "#EEA236FF",
+    "Basal_Progenitor": "#357EBDFF",
+    "Proliferative": "#5CB85CFF",
+    "Interactive": "#B8B8B8FF",
+    "Stressed": "#9632B8FF"
+}
 
 hex_codes = ["#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF", "#9632B8FF", "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF", "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF", "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF", "#00FF00", "#00FFFF", "#FF00FF", "#0000FF", "#FFFF00", "#FF0000"]
 
@@ -258,6 +261,17 @@ for snob in sn_obs:
 for scob in sc_obs:
     write_obs(ob = scob, method = "sc")
     save_plots(ob = scob, method = "sc")
+
+```
+
+#### Make objects with Stochastic Model
+
+```{python}
+sc_obs = os.listdir("loom_output/split_metadata/sc/")
+for scob in sc_obs:
+    write_obs(ob = scob, method = "sc", mode = "stochastic", out_prefix = "loom_output/split_ad/stochastic/")
+    # ad_ob = calc_velo(scob, mode = "stochastic")
+    save_plots(ob = scob, method = "sc", file_prefix = "output/figures/rna_velocity/stochastic/")
 
 ```
 
