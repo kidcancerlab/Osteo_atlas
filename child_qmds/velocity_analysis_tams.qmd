@@ -173,3 +173,28 @@ for cell_type in col_names:
 
 Weirdly, even with increasing the minimum number of gene counts required for a gene to be included in the rank_genes results, there are still a significant amount of human genes in our results...
 
+I realized that this is because it's constructing the anndata object from the loom file, which was created from the bam containing ALL reads from this run. For now, I'm going to ditch the xenograft objects
+
+## Infer Trajectory
+
+```{python}
+ob_names = list(filter(lambda x: "xeno" not in x, ob_names))
+
+for ob in ob_names:
+    tmp = tam_ob_dict[ob]
+    tmp.uns['neighbors']['distances'] = tmp.obsp['distances']
+    tmp.uns['neighbors']['connectivities'] = tmp.obsp['connectivities']
+    scv.tl.paga(tmp, groups='Ann_Level3')
+    tam_ob_dict[ob] = tmp
+
+trajectory_res = dict()
+for ob in ob_names:
+    tmp = tam_ob_dict[ob]
+    scv.pl.paga(tmp, basis = "fdl", size = 50, alpha = 0.1, min_edge_width = 2, node_size_scale = 1.5)
+    pyplot.figure(figsize = (8, 6))
+    pyplot.savefig("figures/scvelo/tams/" + ob + "_paga_fdl.png")
+    scv.pl.paga(tmp, basis = "umap", size = 50, alpha = 0.1, min_edge_width = 2, node_size_scale = 1.5)
+    pyplot.figure(figsize = (8, 6))
+    pyplot.savefig("figures/scvelo/tams/" + ob + "_paga_fdl.png")
+
+```
