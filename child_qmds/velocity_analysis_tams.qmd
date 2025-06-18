@@ -4,7 +4,9 @@ First we need to read in our objects for this. I'm using the objects from TAMs_o
 
 ```{r}
 yogi_prefix <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/"
-obj_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/TAMs_objects"))
+obj_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/final_tumor_vs_stroma/")) %>%
+    grep(pattern = "normal", value = TRUE)
+obj_names <- c(obj_names, "xeno_mets_mouse.qs", "xeno_prim_mouse.qs")
 
 #get only fdl files
 obj_names <- str_replace_all(obj_names,
@@ -14,8 +16,13 @@ obj_names <- str_replace_all(obj_names,
 tam_list <- list()
 for (ob_name in obj_names) {
     tam_list[[ob_name]] <-
-        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/TAMs_objects/", ob_name, ".qs"))
+        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/", ob_name, ".qs")) %>%
+        subset(Ann_Level2 %in% c("DC", "Monocytes", "TAMs")) %>%
+        process_seurat() %>%
+        RunHarmony(group.by.vars = c("sample_name")) %>%
+        process_seurat(reduction = "harmony")
 }
+
 ```
 
 ```{r}
