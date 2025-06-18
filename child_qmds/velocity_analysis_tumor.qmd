@@ -254,8 +254,8 @@ os.makedirs("output/figures/rna_velocity/sc")
 os.makedirs("output/figures/rna_velocity/sc")
 
 for snob in sn_obs:
-    write_obs(ob = snob, method = "sn")
-    save_plots(ob = snob, method = "sn")
+    python_functions.write_obs(ob = snob, method = "sn")
+    python_functions.save_plots(ob = snob, method = "sn")
 
 
 for scob in sc_obs:
@@ -269,10 +269,37 @@ for scob in sc_obs:
 ```{python}
 sc_obs = os.listdir("loom_output/split_metadata/sc/")
 for scob in sc_obs:
-    write_obs(ob = scob, method = "sc", mode = "stochastic", out_prefix = "loom_output/split_ad/stochastic/")
+    if not os.path.exists("loom_output/split_ad/stochastic/sc/" + scob + ".ad"):
+        write_obs(
+            ob = scob,
+            method = "sc",
+            mode = "stochastic",
+            out_prefix = "loom_output/split_ad/stochastic/"
+        )
     # ad_ob = calc_velo(scob, mode = "stochastic")
-    save_plots(ob = scob, method = "sc", file_prefix = "output/figures/rna_velocity/stochastic/")
+    save_plots(ob = scob, method = "sc", file_prefix = "output/figures/rna_velocity/stochastic/", ad_prefix = "loom_output/split_ad/stochastic/sc/")
 
+```
+
+Going to test it with a sample object
+
+```{r}
+ob = "mm_mets_cancer_cells_fdl"
+
+ad_ob = loom_to_an(
+    ob,
+    loom_dir = "loom_output/samples",
+    metadata_dir = "loom_output/split_metadata/sc"
+)
+
+calc_velo(ad_ob, mode = "stochastic")
+
+scv.pl.velocity_embedding_stream(
+    ad_ob,
+    basis = "umap",
+    palette = color_mapping,
+    color = "Ann_Level3"
+)
 ```
 
 ### Get Top Velocity Genes for Each Cluster/Cell Type
