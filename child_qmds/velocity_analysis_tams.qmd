@@ -17,18 +17,22 @@ tam_list <- list()
 for (ob_name in obj_names) {
     tam_list[[ob_name]] <-
         qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/", ob_name, ".qs")) %>%
-        subset(Ann_Level2 %in% c("DC", "Monocytes", "TAMs")) %>%
-        process_seurat() %>%
-        RunHarmony(group.by.vars = c("sample_name")) %>%
-        process_seurat(reduction = "harmony")
+        subset(Ann_Level2 %in% c("DC", "Monocytes", "TAMs"))
+        # process_seurat() %>%
+        # RunHarmony(group.by.vars = c("sample_name")) %>%
+        # process_seurat(reduction = "harmony")
 }
 
+ucts <- lapply(tam_list, function(x) {
+    unique(x$Ann_Level3)
+})
+unlist(ucts) %>% unique()
 ```
 
 ```{r}
 #run fdl
-parallel::detectCores()
-tam_list <- parallel::mclapply(tam_list, FUN = run_fdl, mc.cores = (parallel::detectCores() - 8))
+# parallel::detectCores()
+# tam_list <- parallel::mclapply(tam_list, FUN = run_fdl, mc.cores = (parallel::detectCores() - 8))
 
 qs::qsave(tam_list, "output/seurat_objects/tam_list_05_22.qs")
 
@@ -82,7 +86,11 @@ import re
 
 I'm going to make anndata objects for the TAM datasets and write them off after calculating velocity so I don't have to re-run that.
 
+I'm going to use both the dynamical model and the stochastic
+
 ```{python make-tam-anndata}
+hex_codes = ["#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF", "#9632B8FF", "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF", "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF", "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF", "#00FF00", "#00FFFF", "#FF00FF", "#0000FF", "#FFFF00", "#FF0000"]
+
 ob_names = os.listdir("loom_output/tam_metadata")
 for ob in ob_names:
     print("starting on " + ob)
@@ -95,19 +103,45 @@ for ob in ob_names:
     merged_ad.write(filename = "loom_output/tam_anndata/" + ob + ".ad")
     print("finished " + ob)
 
+for ob in ob_names:
+    # write_obs(
+    #     ob = ob,
+    #     method = "sc",
+    #     mode = "stochastic",
+    #     out_prefix = "loom_output/tam_anndata/stochastic/",
+    #     metadata_dir = "loom_output/tam_metadata/"
+    # )
+    ad_ob = anndata.read("loom_output/tam_anndata/stochastic/sc/" + ob + ".ad")
+    scv.pl.velocity_embedding_stream(
+        ad_ob,
+        basis = "umap",
+        color = "Ann_Level2",
+        show = False,
+        palette = hex_codes,
+        sort_order = False
+    )
+    pyplot.savefig("figures/scvelo/tams/" + ob + "_umap.svg")
+
 ```
 
 ### Make Velocity Plots
 
 ```{python}
-color_mapping = {"Osteoclast_TAMs": "#D43F3AFF",
-                 "TAMs": "#EEA236FF",
-                 "Scar_TAMs": "#357EBDFF",
-                 "Inflam_TAMs": "#5CB85CFF",
-                 "Prolif_TAMs": "#B8B8B8FF",
-                 "IFN_TAMs": "#9632B8FF",
-                 "Monocytes": "#46B8DAFF",
-                 "Alv_TAMs": "#90302DFF"}
+# color_mapping = {"Osteoclast_TAMs": "#D43F3AFF",
+#                  "TAMs": "#EEA236FF",
+#                  "Scar_TAMs": "#357EBDFF",
+#                  "Inflam_TAMs": "#5CB85CFF",
+#                  "Prolif_TAMs": "#B8B8B8FF",
+#                  "IFN_TAMs": "#9632B8FF",
+#                  "Monocytes": "#46B8DAFF",
+#                  "Alv_TAMs": "#90302DFF",
+#                  "DC": "#A66D04FF",
+#                  "pDC",
+#                  "DC1",
+#                  "DC2",
+#                  "Migratory_DC",
+#                  "cMonocytes",
+#                  "ncMonocytes"}
 
 
 for ob in ob_names:
@@ -117,7 +151,7 @@ for ob in ob_names:
         basis = "umap",
         color = "Ann_Level3",
         show = False,
-        palette = color_mapping,
+        palette = hex_codes,
         sort_order = False)
     pyplot.savefig("figures/scvelo/tams/" + ob + "_umap.png")
     scv.pl.velocity_embedding_stream(
@@ -125,7 +159,7 @@ for ob in ob_names:
         basis = "fdl",
         color = "Ann_Level3",
         show = False,
-        palette = color_mapping,
+        palette = hex_codes,
         sort_order = False)
     pyplot.savefig("figures/scvelo/tams/" + ob + "_fdl.png")
 
@@ -137,7 +171,7 @@ for ob in ob_names:
 tam_velo_genes = dict()
 tam_ob_dict = dict()
 for ob in ob_names:
-    tmp = anndata.read("loom_output/tam_anndata/" + ob + ".ad")
+    tmp = anndata.read("loom_output/tam_anndata/stochastic/sc/" + ob + ".ad")
     tam_ob_dict[ob] = tmp
     scv.tl.rank_velocity_genes(tmp, groupby = "Ann_Level3", min_corr = 0.3, min_counts = 10)
     rank_genes = tmp.uns["rank_velocity_genes"]
@@ -185,23 +219,20 @@ I realized that this is because it's constructing the anndata object from the lo
 ## Infer Trajectory
 
 ```{python}
-ob_names = list(filter(lambda x: "xeno" not in x, ob_names))
+# ob_names = list(filter(lambda x: "xeno" not in x, ob_names))
 
 for ob in ob_names:
     tmp = tam_ob_dict[ob]
     tmp.uns['neighbors']['distances'] = tmp.obsp['distances']
     tmp.uns['neighbors']['connectivities'] = tmp.obsp['connectivities']
-    scv.tl.paga(tmp, groups='Ann_Level3')
+    scv.tl.paga(tmp, groups='Ann_Level2')
     tam_ob_dict[ob] = tmp
 
 trajectory_res = dict()
 for ob in ob_names:
     tmp = tam_ob_dict[ob]
-    scv.pl.paga(tmp, basis = "fdl", size = 50, alpha = 0.1, min_edge_width = 2, node_size_scale = 1.5)
-    pyplot.figure(figsize = (8, 6))
-    pyplot.savefig("figures/scvelo/tams/" + ob + "_paga_fdl.png")
     scv.pl.paga(tmp, basis = "umap", size = 50, alpha = 0.1, min_edge_width = 2, node_size_scale = 1.5)
-    pyplot.figure(figsize = (8, 6))
-    pyplot.savefig("figures/scvelo/tams/" + ob + "_paga_fdl.png")
+    # pyplot.figure(figsize = (8, 6))
+    pyplot.savefig("output/figures/rna_velocity_tams/stochastic/" + ob + "_paga_umap.svg")
 
 ```
