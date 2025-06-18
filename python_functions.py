@@ -61,14 +61,14 @@ def calc_velo(ad_ob, mode = "dynamical"):
     scv.tl.velocity(ad_ob, mode = mode)
     scv.tl.velocity_graph(ad_ob, backend = "threading", n_jobs = 30)
 
-def write_obs(ob, method, mode = "dynamical", out_prefix = "loom_output/split_ad/"):
+def write_obs(ob, method, mode = "dynamical", out_prefix = "loom_output/split_ad/", metadata_dir = "loom_output/split_metadata/"):
     # make out_prefix end with a "/"
     if not out_prefix.endswith('/'):
         out_prefix = out_prefix + "/"
     print("starting on " + ob)
     merged_ad=loom_to_an(obj_name = ob,
                      loom_dir = "loom_output/samples",
-                     metadata_dir = "loom_output/split_metadata/" + method)
+                     metadata_dir = metadata_dir)
     print("made " + ob + " , now calculating velocity")
     calc_velo(merged_ad, mode = mode)
     if not os.path.isdir(out_prefix + method):
