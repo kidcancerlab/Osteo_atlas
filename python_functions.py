@@ -1,3 +1,15 @@
+import os
+import re
+import anndata
+import pandas as pd
+import scvelo as scv
+import numpy as np
+import matplotlib as plt
+plt.use("Agg")
+from matplotlib import pyplot
+import scanpy as py
+
+
 ### Python Functions
 
 # `loom_to_an` will take all loom files associated with a seurat object, load them in one-by-one, add in appropriate metadata, and then merge them into a single anndata object
@@ -44,7 +56,8 @@ def calc_velo(ad_ob, mode = "dynamical"):
     scv.pp.filter_and_normalize(ad_ob, n_top_genes = 2000)
     sc.pp.neighbors(ad_ob, n_pcs = 30, n_neighbors = 30)
     scv.pp.moments(ad_ob)
-    scv.tl.recover_dynamics(ad_ob, n_jobs = 30)
+    if mode == "dynamical":
+        scv.tl.recover_dynamics(ad_ob, n_jobs = 30)
     scv.tl.velocity(ad_ob, mode = mode)
     scv.tl.velocity_graph(ad_ob, backend = "threading", n_jobs = 30)
 
@@ -57,7 +70,7 @@ def write_obs(ob, method, mode = "dynamical", out_prefix = "loom_output/split_ad
                      loom_dir = "loom_output/samples",
                      metadata_dir = "loom_output/split_metadata/" + method)
     print("made " + ob + " , now calculating velocity")
-    calc_velo(merged_ad, mode)
+    calc_velo(merged_ad, mode = mode)
     if not os.path.isdir(out_prefix + method):
         os.makedirs(out_prefix + method)
     out_path = out_prefix + method + "/" + ob + ".ad"
@@ -65,8 +78,8 @@ def write_obs(ob, method, mode = "dynamical", out_prefix = "loom_output/split_ad
     print("calculated velocity and saved off " + ob + " for " + method)
 
 
-def save_plots(ob, method, file_prefix = "output/figures/rna_velocity/"):
-    merged_ad = anndata.read("loom_output/split_ad/" + method + "/" + ob + ".ad")
+def save_plots(ob, method, file_prefix = "output/figures/rna_velocity/", ad_prefix = "loom_output/split_ad/sc/"):
+    merged_ad = anndata.read(ad_prefix + ob + ".ad")
     file_prefix = file_prefix + method + "/"
     # make file prefix end with "/"
     if not file_prefix.endswith('/'):
