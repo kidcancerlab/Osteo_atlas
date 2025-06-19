@@ -44,7 +44,7 @@ celltypes <-
     cancer_celltype_list %>%
     unlist() %>%
     unique() %>%
-    str_replace("Tumor_", "")
+    str_replace("_", " ")
 
 cols <- 
     as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
@@ -94,7 +94,7 @@ for (i in seq_len(nrow(object_list))) {
             mutate(percent = count / sum(count) * 100) %>%
             ungroup() %>%
             mutate(group = str_replace_all(group, title_replacement),
-                    celltypes = str_remove_all(celltypes, "Tumor_"))
+                    celltypes = str_replace_all(celltypes, "_", " "))
 
     # Create a color palette
     sanky_plot_ryan <-
@@ -151,7 +151,7 @@ xenograft <-
          Basal_Progenitor = c("ROBO2", "CD36", "PDGFD", "ANO5"),
          Proliferative = c("TOP2A", "ASPM", "CENPF", "MKI67"),
          Stressed = c("NDRG1", "BNIP3", "VEGFA", "EGLN3"),
-         MP_Progenitor = c("RPL8", "RPL35", "RPL29", "RPL7L1"))
+         MP_Progenitor = c("RPL7L1", "MT-ND1", "MT-ND2", "MT-ATP6"))
 
 mouse <-
     list(
@@ -181,17 +181,17 @@ markers_list <-
 
 #set the order of the cells for the dotplot
 cols <- list(
-    MP_Progenitor = "#D43F3AFF",
+    `MP Progenitor` = "#D43F3AFF",
     Fibrogenic = "#EEA236FF",
-    Basal_Progenitor = "#357EBDFF",
+    `Basal Progenitor` = "#357EBDFF",
     Proliferative = "#5CB85CFF",
     Interactive = "#B8B8B8FF",
     Stressed = "#9632B8FF"
-)
+) 
 # Set the order of the tumors
 order_Tumors <-
-    c("Fibrogenic", "Interactive", "Basal_Progenitor", 
-     "Proliferative", "Stressed", "MP_Progenitor")
+    c("Fibrogenic", "Interactive", "Basal Progenitor", 
+     "Proliferative", "Stressed", "MP Progenitor")
 
 # Generate a feature dotplot for the macrophages from the different groups
 dotplot_list <- list()
@@ -209,8 +209,9 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
     # Set the order of the tumors
     object$plot_labels <-
         object$Ann_Level3 %>%
-        gsub("Tumor_", "", .) %>%
-        factor(levels = unique(object$Ann_Level3)) 
+        gsub("_", " ", .) %>%
+        factor(levels = unique(object$Ann_Level3) %>% 
+               str_replace_all("_", " "))
 
     dimplot <-
         DimPlot(object,
@@ -259,7 +260,7 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 dot.scale = 7,
                 col.max = 1.5) +
                 scale_y_discrete(limits = rev(order_tumor_subset), 
-                                labels = function(x) gsub("Tumor_", "", x)) +
+                                labels = function(x) gsub("_", " ", x)) +
                 scale_x_discrete(limits = intersect(order_features, present_features),
                                     labels = function(x) gsub("ENSCAFG00805016104", "BNIP3", x)) +
                 #ggtitle(title_replacement[group][1]) +

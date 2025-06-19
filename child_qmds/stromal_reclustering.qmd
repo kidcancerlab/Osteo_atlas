@@ -1771,9 +1771,8 @@ for (group in c(
             object %>%
             subset(Ann_Level1 == sub_group) %>%
             process_seurat() %>%
-            RunHarmony(group.by.vars = "sample_name",
-                        theta = 7,
-                        lambda = 0.1) %>%
+            RunHarmony(group.by.vars = c("sample_name","data_source"),
+                        theta = c(7, 7)) %>%
             process_seurat(reduction = "harmony")
         sobj_list[[sub_group]] <- sub_obj
     }
@@ -1853,36 +1852,38 @@ for (group in c(
 
 
 
-mouse_lymphoid <-
-    list(NK_cells = c("Gzma", "Prf1", "Serpinb9", "Gzmb"),
-         CD8_T = c("Cd8a", "Cd8b1", "Trbc2", "Cd3d"),
-         CD4_T = c("Il7r", "Icos", "Lat", "Cd4"),
-         Naive_T = c("Tcf7", "Lef1", "S1pr1", "Bach2"),
-         Naive_B = c("Ighd", "Pax5", "Ebf1", "Fcmr", "Lyn"),
-         Plasma_B = c("Prdm1", "Xbp1", "Sdc1", "Jchain"),
-         B_cells = c("Ebf1", "Lyn", "Xbp1", "Sdc1"),
-         T_Reg = c("Foxp3", "Ctla4", "Tnfrsf18", "Tnfrsf9"),
-         Prolif_T = c("Mki67", "Top2a", "Cenpf", "Nusap1"))
+top5_markers <- list(
+  AT2 = c("SFTPC", "SFTPB", "ABCA3", "SLC34A2"),
+  Endothelial_Capillary = c("PECAM1", "FLT1", "PLVAP"),
+  Endothelial_Vein = c("VWF", "SLCO2A1", "MYRIP"),
+  Endothelial_Artery = c("VEGFC", "IGFBP3", "NOTCH4", "GJA5", "HEY1"),
+  Endothelial_Lymphatic = c("PROX1", "CCL21", "LYVE1", "FLT4", "SEMA5A"),
+  Endothelial_Prolif = c("MKI67", "TOP2A", "ASPM", "NUSAP1", "DIAPH3"),
+  Ciliated_cells = c("FOXJ1", "DNAH9", "HYDIN", "DCDC1", "LRRIQ1"),
+  AT1 = c("AGER", "COL4A3", "RTKN2", "CLIC5"),
+  Tuft_cells = c("TRPM5", "DCLK1", "TFF3", "MYLPF", "ACTC1")
+)
 
 
-s_obj$ann_l3 <-
-    str_replace_all(s_obj$seurat_clusters,
-                c("^0$" = "Naive_B",
-                    "^1$" = "T_Reg",
-                    "^2$" = "CD8_T",
-                    "^3$" = "Naive_T",
-                    "^4$" = "CD4_T",
-                    "^5$" = "NK_cells",
-                    "^6$" = "Naive_B",
-                    "^7$" = "CD4_T",
-                    "^8$" = "CD8_T",
-                    "^9$" = "Prolif_T",
-                    "^10$" = "Plasma_B",
-                    "^11$" = "CD4_T",
-                    "^12$" = "DC1",
-                    "^13$" = "CD4_T"))
-dimplot_better(s_obj, group_by = "ann_l3") +
-    ggtitle("Mouse Lymphoid Cells")
+
+
+
+DotPlot(object = sobj_list$Epithelial_Endothelial,
+        features = AT1,
+        cols = "RdBu",
+        group.by = "Ann_Level3") +
+    RotatedAxis() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+
+dimplot_better(sobj_list$Epithelial_Endothelial,
+               group_by = "Ann_Level3") +
+    ggtitle("Epithelial_Endothelial")
+
+
+FeaturePlot(object = sobj_list$Epithelial_Endothelial,
+           features = Endothelial_Artery)
 
 
 DotPlot(object = s_obj,
@@ -1912,6 +1913,43 @@ genes_Iwant <-
     as.data.frame()
 
 
+dimplot_better(s_obj, group_by = "Ann_Level3") +
+    ggtitle("Mouse Lymphoid Cells")
+
+
+
+
+
+
+
+
+
+
+s_obj$ann_l3 <-
+    str_replace_all(s_obj$seurat_clusters,
+                c("^0$" = "AT1",
+                "^1$" = "Endothelial_Capillary",
+                "^2$" = "Endothelial_Capillary",
+                "^3$" = "Alv_CAFs",
+                "^4$" = "AT2",
+                "^5$" = "AT1",
+                "^6$" = "Endothelial_Capillary",
+                "^7$" = "Endothelial_Vein",
+                "^8$" = "AT2",
+                "^9$" = "AT2",
+                "^10$" = "AT1",
+                "^11$" = "Endothelial_Vein",
+                "^12$" = "Endothelial_Artery",
+                "^13$" = "Endothelial_Lymphatic",
+                "^14$" = "Endothelial_Prolif",
+                "^15$" = "Endothelial_Capillary",
+                "^16$" = "Ciliated_cells",
+                "^17$" = "AT2",
+                "^18$" = "AT2",
+                "^19$" = "Endothelial_Capillary",
+                "^20$" = "Endothelial_Capillary",
+                "^21$" = "AT2",
+                "^22$" = "Tuft_cells"))
 dimplot_better(s_obj, group_by = "ann_l3") +
     ggtitle("Mouse Lymphoid Cells")
 
@@ -1925,26 +1963,8 @@ dimplot_better(s_obj, group_by = "ann_l3") +
 
 
 
-
-
-
-
-
-
-
-
 #Human patient
-top5_markers <- list(
-  AT2 = c("SFTPB", "ABCA3", "ROS1"),
-  Endothelial_Capillary = c("PECAM1", "FLT1", "PLVAP"),
-  Endothelial_Vein = c("VWF", "SLCO2A1", "MYRIP"),
-  Endothelial_Artery = c("VEGFC", "IGFBP3", "NOTCH4", "GJA5", "HEY1"),
-  Endothelial_Lymphatic = c("PROX1", "CCL21", "LYVE1", "FLT4", "SEMA5A"),
-  Endothelial_Prolif = c("MKI67", "TOP2A", "ASPM", "NUSAP1", "DIAPH3"),
-  Ciliated_cells = c("FOXJ1", "DNAH9", "HYDIN", "DCDC1", "LRRIQ1"),
-  AT1 = c("AGER", "COL4A3", "SCEL", "SFTPA1", "GPX3"),
-  Tuft_cells = c("TRPM5", "DCLK1", "TFF3", "MYLPF", "ACTC1")
-)
+
 Idents(sobj_list$Epithelial_Endothelial) <-
     sobj_list$Epithelial_Endothelial$Ann_Level3
 DotPlot(object = sobj_list$Epithelial_Endothelial,

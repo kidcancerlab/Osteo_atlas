@@ -1879,7 +1879,7 @@ dimplot_list <- list()
 for (group in c(
                 "patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 "mm_prim_cancer_cells", "mm_mets_cancer_cells",
-                "xeno_prim_human_cancer_cells", "xeno_mets_human_cancer_cells",
+                # "xeno_prim_human_cancer_cells", "xeno_mets_human_cancer_cells",
                 "dogs_prim_cancer_cells", "dogs_mets_cancer_cells"
                 )) {
     object <- 
@@ -1898,8 +1898,8 @@ for (group in c(
     genes <-
         FindAllMarkers(object,
                         only.pos = TRUE,
-                        min.pct = 0.25,
-                        logfc.threshold = 0.2)
+                        min.pct = 0.15,
+                        logfc.threshold = 0.15)
 
     markers <-
         genes %>%
@@ -2029,21 +2029,21 @@ cowplot::plot_grid(
 
 stress <-
    Reduce(intersect, list(
-                           Stressed$patient_prim_cancer_cells,
-                           Stressed$patient_mets_cancer_cells
-                        #    Stressed$xeno_prim_human_cancer_cells,
-                        #    Stressed$xeno_mets_human_cancer_cells
+                        #    Stressed$patient_prim_cancer_cells,
+                        #    Stressed$patient_mets_cancer_cells
+                           Stressed$xeno_prim_human_cancer_cells,
+                           Stressed$xeno_mets_human_cancer_cells
                         #    Stressed$dogs_prim_cancer_cells,
                         #    Stressed$dogs_mets_cancer_cells
                         #    Stressed$mm_prim_cancer_cells,
                         #    Stressed$mm_mets_cancer_cells
                            ))
 cowplot::plot_grid(
-    DotPlot(object = obj_list$patient_prim_cancer_cells,
+    DotPlot(object = obj_list$xeno_prim_human_cancer_cells,
             features = stress,
             group.by = "Ann_Level3",
             cols = "RdBu") + RotatedAxis(),
-    DotPlot(object = obj_list$patient_mets_cancer_cells,
+    DotPlot(object = obj_list$xeno_mets_human_cancer_cells,
             features = stress,
             group.by = "Ann_Level3",
             cols = "RdBu") + RotatedAxis(),
@@ -2052,22 +2052,22 @@ cowplot::plot_grid(
 
 synthe <-
    Reduce(intersect, list(
-                           MP_Progenitor$patient_prim_cancer_cells,
-                           MP_Progenitor$patient_mets_cancer_cells
-                        #    MP_Progenitor$xeno_prim_human_cancer_cells,
-                        #    MP_Progenitor$xeno_mets_human_cancer_cells
+                        #    MP_Progenitor$patient_prim_cancer_cells,
+                        #    MP_Progenitor$patient_mets_cancer_cells
+                           MP_Progenitor$xeno_prim_human_cancer_cells,
+                           MP_Progenitor$xeno_mets_human_cancer_cells
                         #    MP_Progenitor$dogs_prim_cancer_cells,
                         #    MP_Progenitor$dogs_mets_cancer_cells
                         #    MP_Progenitor$mm_prim_cancer_cells,
                         #    MP_Progenitor$mm_mets_cancer_cells
                            ))
 cowplot::plot_grid(
-    DotPlot(object = obj_list$mm_prim_cancer_cells,
-            features = metabolically_primed_RP_genes1,
+    DotPlot(object = obj_list$xeno_prim_human_cancer_cells,
+            features = metabolic_oxphos_genes,
             group.by = "Ann_Level3",
             cols = "RdBu") + RotatedAxis(),
-    DotPlot(object = obj_list$mm_mets_cancer_cells,
-            features = metabolically_primed_RP_genes1,
+    DotPlot(object = obj_list$xeno_mets_human_cancer_cells,
+            features = metabolic_oxphos_genes,
             group.by = "Ann_Level3",
             cols = "RdBu") + RotatedAxis(),
     ncol = 1
@@ -2094,6 +2094,7 @@ xenograft <-
          Stressed = c("NDRG1", "BNIP3", "VEGFA", "EGLN3"),
          Synthetic = c("RPL26", "RPL8","RPL35", "RPS13"))
 
+synthetic <- c("MT-ND1", "MT-ND2", "MT-ATP6", "MT-ND3")
 
 mouse <-
     list(
@@ -2113,7 +2114,45 @@ dog <-
          Stressed = c("IGFBP7", "MAP3K5", "ROR1", "VEGFA"),
          Synthetic = c("RPS28", "RPS13", "RPS27"))
 
+metabolic_progenitor_markers <- c(
+  # Mitochondrial OXPHOS genes
+  "MT-ND1", "MT-ND2", "MT-ND3", "MT-ND4",
+  "MT-CO1", "MT-CO2", "MT-CO3",
+  "MT-ATP6", "ATP5MC3", "ATP5MF",
+  "NDUFA3", "NDUFB3", "NDUFB4", "UQCR11",
+  "TIMM13", "TIMM8B", "PRDX2",
+  
+  # Ribosomal proteins (small and large subunits)
+  "RPS2", "RPS3", "RPS6", "RPS10", "RPS12", "RPS13", "RPS14", "RPS15A",
+  "RPS18", "RPS19", "RPS21", "RPS23", "RPS24", "RPS27", "RPS27A", "RPS28", "RPS29", "RPS4X",
+  "RPL8", "RPL10A", "RPL11", "RPL12", "RPL13", "RPL15", "RPL19", "RPL22", "RPL23A",
+  "RPL26", "RPL30", "RPL32", "RPL35", "RPL35A", "RPL36", "RPL37", "RPL37A",
+  "RPL39", "RPL41", "RPLP1", "RPLP2",
+  
+  # Metallothioneins
+  "MT1E", "MT1F", "MT1G", "MT1M", "MT1X", "MT2A",
+  
+  # Other metabolic-related genes
+  "IFITM5", "PRDX2"
+) %>%
+unique()
 
+# Combine all ribosomal genes from both lists (genes starting with RPL, RPS, MRPL, MRPS)
+metabolic_oxphos_genes <- c(
+  # OXPHOS and mitochondrial genes
+  "NDUFAF8", "NDUFA2", "CYC1", "UQCRQ", "UQCRB", "COX5B", "MT-ND1", "MT-ND2", "MT-ND3",
+  "MT-CO1", "MT-CO2", "MT-CYB", "MT-ATP6", "ATP5MC3", "SLC25A5", "STOML2",
+  # Mitochondrial ribosomal proteins
+  "MRPL12", "MRPL36", "MRPL51", "MRPS34",
+  # Cytosolic ribosomal proteins
+  "RPS2", "RPS10", "RPL13A", "RPS28", "RPS21", "RPL36", "RPS15", "RPL35", "RPL11", "RPL8",
+  "RPL13", "RPL18", "RPLP1", "RPL22", "RPL14", "RPS7", "RPL26", "RPL29", "RPL34", "RPL41",
+  "RPL27", "RPLP2", "RPS27", "RPS13",
+  # Other metabolic genes
+  "SCD", "MYC", "SLC1A5", "PRELID1", "FTH1", "PRDX2"
+)
+ribosomal_genes <- unique(grep("^RPL|^RPS|^MRPL|^MRPS", all_genes, value = TRUE))
+ribosomal_genes
 
 ```
 

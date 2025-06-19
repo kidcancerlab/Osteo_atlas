@@ -464,6 +464,11 @@ For human part # reference has "S0170", "S0042" for xenograft hence we will use
 "SJOS013769_X1_human", "X00018_human",
 "S0034_human",          "X00020_human"
 
+
+random samples for xeno primary validation: 1) S0042 2)SJOS016015_X1
+ random samples for xeno mets validation: 1) S0055  2)SJOS001112_X1
+
+
 ```{r test_tumor_anno_with_curated_data}
 
 # make mouse object for validation
