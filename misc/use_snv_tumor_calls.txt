@@ -1,5 +1,5 @@
 sample_name	use_snv_column	z	datasets	y	snv_worked	tumor_groups	Note
-F331	snv_top_lvl_tumor_call_5	mousemodel	mouse	F331	no		
+F331		mousemodel	mouse	F331	no		
 S0067	snv_top_lvl_tumor_call_20	mousemodel	mouse	S0067	yes	tumor	
 S0068	snv_top_lvl_tumor_call_10	mousemodel	mouse	S0068	yes	none	No groups were found to be tumor
 S0075	snv_top_lvl_tumor_call_10	mousemodel	mouse	S0075	yes	none	Basophils and neutrophils also labelled tumor
@@ -7,9 +7,9 @@ S0104	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0104	yes	tumor	looking good
 S0105	snv_top_lvl_tumor_call_10	mousemodel	mouse	S0105	yes	tumor	looks good
 S0122	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0122	yes	none	clustering issue
 S0200	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0200	yes	top_lvl_group0	No snv because cell culture tumor
-S0201	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0201	no		No snv because cell culture tumor
+S0201		mousemodel	mouse	S0201	no		No snv because cell culture tumor
 S0246	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0246	yes	top_lvl_group0	tumor call only at 5 depth
-S0282	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0282	yes		unclear which group might be tumor
+S0282		mousemodel	mouse	S0282	yes		unclear which group might be tumor
 S0123	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0123	yes	none	likely a clustering issue here 
 S0291	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0291	yes	tumor	very clean
 S0058	snv_top_lvl_tumor_call_5	patient	human	S0058	yes	top_lvl_group0	Same snp at all depth
