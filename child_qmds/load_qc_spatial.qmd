@@ -162,7 +162,7 @@ Troy likes this method so I'm going to give it a go.
 
 ```{r stdeconvolve}
 library(STdeconvolve)
-opt_ldas <- list()
+all_ldas <- list()
 for (sid in names(spatial_list)) {
     ob <- spatial_list[[sid]]
     pos <- GetTissueCoordinates(ob)
@@ -177,14 +177,37 @@ for (sid in names(spatial_list)) {
         verbose = TRUE
     )
     # fit LDA models for
-    ldas <- fitLDA(
+    all_ldas[[sid]] <- fitLDA(
         t(as.matrix(corpus)),
         Ks = seq(2, 9, by = 1),
         perc.rare.thresh = 0.05,
         plot = TRUE,
         verbose = TRUE
         )
-    opt_ldas[[sid]] <- optimalModel(models = ldas, opt = "kneed")
 }
-qs::qsave(opt_ldas, "output/STdeconvolve/opt_ldas.qs")
+qs::qsave(all_ldas, "output/STdeconvolve/all_ldas.qs")
 ```
+
+### Looking at OS1
+
+```{r}
+os1 <- spatial_list[[1]]
+pos <- GetTissueCoordinates(os1)
+colnames(pos) <- c("x", "y")
+
+# using model from loop above
+optLDA <- opt_ldas[["OS1_Seurat"]]
+
+## extract deconvolved cell-type proportions (theta) and transcriptional profiles (beta)
+results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+names(results)
+dim(results[["theta"]])
+
+theta <- results$theta
+beta <- results$beta
+
+#visualize deconvolved cell type props
+vizAllTopics(theta, pos, r = 2) | SpatialFeaturePlot(os1, c("Tumor_Apoptosis", "Tumor_Fibrogenic", "Tumor_Interactive", "Tumor_Progenitor", "Tumor_Proliferative", "Tumor_Synthetic"), pt.size.factor = 1200, image.alpha = 0)
+```
+
+This only identified 3 topics in our spatial data, and it did a good job of separating the tumor from stroma. However, it only labelled 1 total stromal cell type, which is kinda low resolution. I wonder if allowing more topics would produce more distinct stromal populations.
