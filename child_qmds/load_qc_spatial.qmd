@@ -154,3 +154,37 @@ he_list <-lapply(names(spatial_list), function(x) {
 grid.arrange(grobs = he_list, nrow = 2)
 dev.off()
 ```
+
+## Try STdeconvolve
+
+Troy likes this method so I'm going to give it a go.
+
+
+```{r stdeconvolve}
+library(STdeconvolve)
+opt_ldas <- list()
+for (sid in names(spatial_list)) {
+    ob <- spatial_list[[sid]]
+    pos <- GetTissueCoordinates(ob)
+    counts <- GetAssayData(ob, layer = "counts")
+    # feature select for genes
+    corpus <- restrictCorpus(
+        counts,
+        removeAbove = 1.0,
+        removeBelow = 0.05,
+        alpha = 0.05,
+        plot = FALSE,
+        verbose = TRUE
+    )
+    # fit LDA models for
+    ldas <- fitLDA(
+        t(as.matrix(corpus)),
+        Ks = seq(2, 9, by = 1),
+        perc.rare.thresh = 0.05,
+        plot = TRUE,
+        verbose = TRUE
+        )
+    opt_ldas[[sid]] <- optimalModel(models = ldas, opt = "kneed")
+}
+qs::qsave(opt_ldas, "output/STdeconvolve/opt_ldas.qs")
+```
