@@ -1,122 +1,122 @@
-sample_name	use_snv_column	z	datasets	y	tumor_groups	Note
-F331	snv_top_lvl_tumor_call_5	mousemodel	mouse	F331	unknown	
-S0067	snv_top_lvl_tumor_call_10	mousemodel	mouse	S0067		No groups were found to be tumor
-S0068	snv_top_lvl_tumor_call_10	mousemodel	mouse	S0068		No groups were found to be tumor
-S0075	snv_top_lvl_tumor_call_20	mousemodel	mouse	S0075		Basophils and neutrophils also labelled tumor
-S0104	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0104	tumor	looking good
-S0105	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0105	tumor	looks good
-S0122	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0122		Same snp at all depth
-S0200	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0200	unknown	No snv because cell culture tumor
-S0201	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0201	unknown	No snv because cell culture tumor
-S0246	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0246		tumor call only at 5 depth
-S0282	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0282		
-S0123	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0123		
-S0291	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0291	tumor	
-S0058	snv_top_lvl_tumor_call_5	patient	human	S0058	tumor	Same snp at all depth
-S0059	snv_top_lvl_tumor_call_5	patient	human	S0059	tumor	Same snp at all depth
-S0217	snv_top_lvl_tumor_call_5	patient	human	S0217	"top_lvl_group1, top_lvl_group0"	Same snp at all depth
-S0218	snv_top_lvl_tumor_call_5	patient	human	S0218	top_lvl_group0	Same snp at all depth
-SC069	snv_top_lvl_tumor_call_5	patient	human	SC069		
-SC072	snv_top_lvl_tumor_call_5	patient	human	SC072		
-SC073	snv_top_lvl_tumor_call_5	patient	human	SC073	top_lvl_group0	Same snp at all depth
-SJOS001105_M1		patient	human	SJOS001105_M1		
-SJOS001107_M2		patient	human	SJOS001107_M2		
-SJOS001108_M1	snv_top_lvl_tumor_call_5	patient	human	SJOS001108_M1	top_lvl_group0	
-SJOS001112_M2		patient	human	SJOS001112_M2		could not find the snp plot
-SJOS001116_M2	snv_top_lvl_tumor_call_5	patient	human	SJOS001116_M2		could not find the snp plot
-SJOS001127_M1		patient	human	SJOS001127_M1		could not find the snp plot
-SJOS001132_M1		patient	human	SJOS001132_M1		could not find the snp plot
-SJOS010929_D1		patient	human	SJOS010929_D1		could not find the snp plot
-SJOS010930_D1		patient	human	SJOS010930_D1		could not find the snp plot
-SJOS012409_D1	snv_top_lvl_tumor_call_5	patient	human	SJOS012409_D1		
-SJOS013768_D1		patient	human	#N/A		could not find the snp plot
-SJOS013768_D1_repB		patient	human	SJOS013768_D1_repB		could not find the snp plot
-SJOS013768_M1		patient	human	SJOS013768_M1		could not find the snp plot
-SJOS013769_D1	snv_top_lvl_tumor_call_5	patient	human	SJOS013769_D1	unknown	no so good result
-SJOS016015_D1		patient	human	SJOS016015_D1		
-SJOS016016_D1		patient	human	#N/A		
-SJOS030101_D1		patient	human	SJOS030101_D1		
-SJOS030272_D1		patient	human	SJOS030272_D1		
-SJOS030279_D1		patient	human	SJOS030279_D1		
-SJOS030441_D1		patient	human	#N/A		
-SJOS030597_D1		patient	human	SJOS030597_D1		
-SJOS030605_D2		patient	human	#N/A		
-SJOS030645_D2		patient	human	SJOS030645_D2		
-SJOS031478_D1		patient	human	SJOS031478_D1		
-SJOS063819_D2	snv_top_lvl_tumor_call_5	patient	human	SJOS063819_D2	top_lvl_group0	
-SJOS063822_A1		patient	human	SJOS063822_A1		
-SJOS063824_D1		patient	human	SJOS063824_D1		
-SJOS063833_D1		patient	human	SJOS063833_D1		
-SJOS063833_D2	snv_top_lvl_tumor_call_5	patient	human	SJOS063833_D2		
-X00003	snv_top_lvl_tumor_call_5	patient	human	X00003	tumor	no tumor called at any depth
-X00004	snv_top_lvl_tumor_call_5	patient	human	X00004		
-X00005	snv_top_lvl_tumor_call_5	patient	human	X00005	top_lvl_group0	
-X00006	snv_top_lvl_tumor_call_5	patient	human	X00006	tumor	
-X00007	snv_top_lvl_tumor_call_5	patient	human	X00007	tumor	
-X00008	snv_top_lvl_tumor_call_5	patient	human	X00008	tumor	
-X00009	snv_top_lvl_tumor_call_5	patient	human	X00009		
-X00010	snv_top_lvl_tumor_call_5	patient	human	X00010	tumor	
-X00011	snv_top_lvl_tumor_call_20	patient	human	X00011	"tumor, unknown"	
-X00012	snv_top_lvl_tumor_call_20	patient	human	X00012	"tumor, unknown"	
-X00013	snv_top_lvl_tumor_call_20	patient	human	X00013	"tumor, unknown"	
-X00014	snv_top_lvl_tumor_call_5	patient	human	X00014	tumor	
-X00015	snv_top_lvl_tumor_call_5	patient	human	X00015	tumor	
-X00016	snv_top_lvl_tumor_call_5	patient	human	X00016	tumor	
-X00017	snv_top_lvl_tumor_call_5	patient	human	X00017	tumor	
-X00018	snv_top_lvl_tumor_call_5	patient	human	X00018		
-X00019	snv_top_lvl_tumor_call_5	patient	human	X00019	tumor	
-X00020	snv_top_lvl_tumor_call_5	patient	human	X00020		
-X00021	snv_top_lvl_tumor_call_5	patient	human	X00021		calls endothelial as tumor
-CCDI0101_16178b	snv_top_lvl_tumor_call_20	patient	human	CCDI0101_16178b	"top_lvl_group0, top_lvl_group1"	
-CCDI0058_16183	snv_top_lvl_tumor_call_5	patient	human	CCDI0058_16183	top_lvl_group1	
-CCDI0097_8978	snv_top_lvl_tumor_call_10	patient	human	CCDI0097_8978	"top_lvl_group0, top_lvl_group1"	
-CCDI0102_16183b	snv_top_lvl_tumor_call_5	patient	human	CCDI0102_16183b	top_lvl_group0	
-CCDI0057_16178	snv_top_lvl_tumor_call_5	patient	human	CCDI0057_16178	top_lvl_group1	
-CCDI0098_8951	snv_top_lvl_tumor_call_10	patient	human	CCDI0098_8951		
-CCDI0096_8952	snv_top_lvl_tumor_call_10	patient	human	CCDI0096_8952		
-CCDI0053_445	snv_top_lvl_tumor_call_5	patient	human	CCDI0053_445		No plot for the tumor normal or level
-CCDI0100_12416	snv_top_lvl_tumor_call_5	patient	human	CCDI0100_12416	tumor	osteoblasts not called as tumor
-CCDI0051_6547	snv_top_lvl_tumor_call_5	patient	human	CCDI0051_6547	tumor	
-CCDI0050_5928	snv_top_lvl_tumor_call_5	patient	human	CCDI0050_5928	top_lvl_group0	endothelial called as tumor
-CCDI0092_3911	snv_top_lvl_tumor_call_5	patient	human	CCDI0092_3911	tumor	everything has been called tumor
-CCDI0091_3666	snv_top_lvl_tumor_call_5	patient	human	CCDI0091_3666	tumor	everything has been called tumor
-CCDI0094_7977	snv_top_lvl_tumor_call_5	patient	human	CCDI0094_7977	tumor	
-CCDI0095_7978	snv_top_lvl_tumor_call_5	patient	human	CCDI0095_7978	top_lvl_group0	
-CCDI0093_6546	snv_top_lvl_tumor_call_5	patient	human	CCDI0093_6546	tumor	
-CCDI0090_2318	snv_top_lvl_tumor_call_5	patient	human	CCDI0090_2318		No plot for the tumor normal or level
-CCDI0048_5864	snv_top_lvl_tumor_call_5	patient	human	CCDI0048_5864	tumor	
-CCDI0049_5899	snv_top_lvl_tumor_call_5	patient	human	CCDI0049_5899	top_lvl_group0	everything has been called tumor
-GSM8001766	snv_top_lvl_tumor_call_5	canine	dog	GSM8001766	tumor	
-GSM8001767	snv_top_lvl_tumor_call_5	canine	dog	GSM8001767	tumor	
-GSM8001768	snv_top_lvl_tumor_call_5	canine	dog	GSM8001768	tumor	
-GSM8001769	snv_top_lvl_tumor_call_5	canine	dog	GSM8001769	tumor	
-GSM8001770	snv_top_lvl_tumor_call_5	canine	dog	GSM8001770	tumor	
-GSM8001771	snv_top_lvl_tumor_call_30	canine	dog	GSM8001771	tumor	
-GSM8001773	snv_top_lvl_tumor_call_5	canine	dog	GSM8001773	tumor	
-GSM8001772	snv_top_lvl_tumor_call_5	canine	dog	GSM8001772	tumor	
-T_OS_0046_P1	snv_top_lvl_tumor_call_30	canine	dog	T_OS_0046_P1	unknown	
-T_OS_0054_P1	snv_top_lvl_tumor_call_5	canine	dog	T_OS_0054_P1	top_lvl_group0	top_lvl_group0
-T_OS_0061_P1	snv_top_lvl_tumor_call_10	canine	dog	T_OS_0061_P1	unknown	top_lvl_group0
-S0032	snv_top_lvl_tumor_call_5	canine	dog	S0032	tumor	
-S0231	snv_top_lvl_tumor_call_5	canine	dog	S0231	tumor	
-T_OS_0046_M1	snv_top_lvl_tumor_call_10	canine	dog	T_OS_0046_M1	top_lvl_group0	
-T_OS_0050_M1_1	snv_top_lvl_tumor_call_10	canine	dog	T_OS_0050_M1_1	unknown	
-T_OS_0050_M1_2	snv_top_lvl_tumor_call_5	canine	dog	T_OS_0050_M1_2	top_lvl_group0	No plot for the tumor normal or level
-T_OS_0059_M1_1n	snv_top_lvl_tumor_call_5	canine	dog	T_OS_0059_M1_1n	top_lvl_group0	top_lvl_group0
-T_OS_0059_M1_2	snv_top_lvl_tumor_call_5	canine	dog	T_OS_0059_M1_2		
-T_OS_0061_M1_1	snv_top_lvl_tumor_call_10	canine	dog	T_OS_0061_M1_1	unknown	top_lvl_group0
-T_OS_0061_M1_2	snv_top_lvl_tumor_call_30	canine	dog	T_OS_0061_M1_2	unknown	top_lvl_group0
-OSLM1	snv_top_lvl_group_5	canine	dog	OSLM1	tumor	
-OSLM2	snv_top_lvl_group_20	canine	dog	OSLM2	tumor	
-OSLM3	snv_top_lvl_group_5	canine	dog	OSLM3	tumor	
-OSLM4	snv_top_lvl_group_5	canine	dog	OSLM4	top_lvl_group0	No plot for the tumor normal or level
-OSLM5	snv_top_lvl_group_5	canine	dog	OSLM5	tumor	
-OSLM6	snv_top_lvl_group_5	canine	dog	OSLM6	tumor	
-OSLM7	snv_top_lvl_group_5	canine	dog	OSLM7	tumor	
-OSLM8	snv_top_lvl_group_5	canine	dog	OSLM8	tumor	
-Modiano_071_DOS_2304_3GEX_FL	snv_top_lvl_group_20	canine	dog	Modiano_071_DOS_2304_3GEX_FL	"top_lvl_group0,top_lvl_group1"	
-Modiano_066_DOS_2301_reamp_GEX_FL	snv_top_lvl_group_20	canine	dog	Modiano_066_DOS_2301_reamp_GEX_FL		
-Modiano_066_DOS_2302_GEX_FL	snv_top_lvl_group_5	canine	dog	Modiano_066_DOS_2302_GEX_FL	tumor	
-Modiano_075_DOS_2305_3GEX_FL	snv_top_lvl_group_5	canine	dog	Modiano_075_DOS_2305_3GEX_FL	"top_lvl_group0, unknown"	
-Modiano_078_DOS_2308_3GEX_FL	snv_top_lvl_group_5	canine	dog	Modiano_078_DOS_2308_3GEX_FL	top_lvl_group0	
-Modiano_053_DOS_2101_FL	snv_top_lvl_group_5	canine	dog	Modiano_053_DOS_2101_FL	top_lvl_group0	"did not run, no plot"
+sample_name	use_snv_column	z	datasets	y	snv_worked	tumor_groups	Note
+F331		mousemodel	mouse	F331	no		
+S0067	snv_top_lvl_tumor_call_20	mousemodel	mouse	S0067	yes	tumor	
+S0068	snv_top_lvl_tumor_call_10	mousemodel	mouse	S0068	yes	none	No groups were found to be tumor
+S0075	snv_top_lvl_tumor_call_10	mousemodel	mouse	S0075	yes	none	Basophils and neutrophils also labelled tumor
+S0104	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0104	yes	tumor	looking good
+S0105	snv_top_lvl_tumor_call_10	mousemodel	mouse	S0105	yes	tumor	looks good
+S0122	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0122	yes	none	clustering issue
+S0200	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0200	yes	top_lvl_group0	No snv because cell culture tumor
+S0201		mousemodel	mouse	S0201	no		No snv because cell culture tumor
+S0246	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0246	yes	top_lvl_group0	tumor call only at 5 depth
+S0282		mousemodel	mouse	S0282	yes		unclear which group might be tumor
+S0123	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0123	yes	none	likely a clustering issue here 
+S0291	snv_top_lvl_tumor_call_5	mousemodel	mouse	S0291	yes	tumor	very clean
+S0058	snv_top_lvl_tumor_call_5	patient	human	S0058	yes	top_lvl_group0	Same snp at all depth
+S0059	snv_top_lvl_tumor_call_5	patient	human	S0059	yes	tumor	Same snp at all depth
+S0217	snv_top_lvl_tumor_call_5	patient	human	S0217	yes	"top_lvl_group1, top_lvl_group0"	looks like maybe two clones?
+S0218	snv_top_lvl_tumor_call_5	patient	human	S0218	yes	top_lvl_group0	Same snp at all depth
+SC069	snv_top_lvl_tumor_call_5	patient	human	SC069	yes	tumor	
+SC072	snv_top_lvl_tumor_call_10	patient	human	SC072	yes	top_lvl_group0	
+SC073	snv_top_lvl_tumor_call_5	patient	human	SC073	yes	top_lvl_group0	Same snp at all depth
+SJOS001105_M1	snv_top_lvl_tumor_call_10	patient	human	SJOS001105_M1	yes	top_lvl_group1	
+SJOS001107_M2	snv_top_lvl_tumor_call_5	patient	human	SJOS001107_M2	yes	top_lvl_group0	
+SJOS001108_M1	snv_top_lvl_tumor_call_10	patient	human	SJOS001108_M1	yes	"top_lvl_group0,top_lvl_group1"	
+SJOS001112_M2		patient	human	SJOS001112_M2	no		too few cells
+SJOS001116_M2		patient	human	SJOS001116_M2	no		too few cells
+SJOS001127_M1		patient	human	SJOS001127_M1	no		could not find the snp plot
+SJOS001132_M1		patient	human	SJOS001132_M1	no		too few cells
+SJOS010929_D1		patient	human	SJOS010929_D1	no		too few cells
+SJOS010930_D1		patient	human	SJOS010930_D1	no		could not find the snp plot
+SJOS012409_D1	snv_top_lvl_tumor_call_10	patient	human	SJOS012409_D1	yes	"top_lvl_group0,top_lvl_group1"	
+SJOS013768_D1		patient	human	#N/A	no		not enough cells
+SJOS013768_D1_repB		patient	human	SJOS013768_D1_repB	no		could not find the snp plot
+SJOS013768_M1		patient	human	SJOS013768_M1	no		not enough cells
+SJOS013769_D1	snv_top_lvl_tumor_call_5	patient	human	SJOS013769_D1	yes	"top_lvl_group0,top_lvl_group1"	all tumor
+SJOS016015_D1		patient	human	SJOS016015_D1	no		"one cluster, likely all tumor"
+SJOS016016_D1		patient	human	#N/A	no		
+SJOS030101_D1		patient	human	SJOS030101_D1	no		"one cluster, likely all tumor"
+SJOS030272_D1		patient	human	SJOS030272_D1	no		too few cells
+SJOS030279_D1		patient	human	SJOS030279_D1	no		
+SJOS030441_D1		patient	human	#N/A	no		too few cells
+SJOS030597_D1		patient	human	SJOS030597_D1	no		"one cluster, likely all tumor"
+SJOS030605_D2		patient	human	#N/A	no		
+SJOS030645_D2		patient	human	SJOS030645_D2	no		too few cells
+SJOS031478_D1		patient	human	SJOS031478_D1	no		too few cells
+SJOS063819_D2	snv_top_lvl_tumor_call_5	patient	human	SJOS063819_D2	yes	"top_lvl_group0,top_lvl_group1"	all tumor
+SJOS063822_A1		patient	human	SJOS063822_A1	no		
+SJOS063824_D1		patient	human	SJOS063824_D1	no		
+SJOS063833_D1		patient	human	SJOS063833_D1	no		
+SJOS063833_D2		patient	human	SJOS063833_D2	no		"one cluster, likely all tumor"
+X00003	snv_top_lvl_tumor_call_5	patient	human	X00003	yes	tumor	no tumor called at any depth
+X00004		patient	human	X00004	yes		no good bootstrap
+X00005		patient	human	X00005	yes		"no good bootstrap, clustering issue?"
+X00006	snv_top_lvl_tumor_call_5	patient	human	X00006	yes	tumor	
+X00007	snv_top_lvl_tumor_call_5	patient	human	X00007	yes	tumor	
+X00008	snv_top_lvl_tumor_call_5	patient	human	X00008	yes	top_lvl_group1	
+X00009		patient	human	X00009	yes		no good bootstrap values
+X00010	snv_top_lvl_tumor_call_5	patient	human	X00010	yes	tumor	
+X00011		patient	human	X00011	yes		no good bootstrap values
+X00012		patient	human	X00012	yes		no good bootstrap values
+X00013	snv_top_lvl_tumor_call_5	patient	human	X00013	yes	tumor	
+X00014	snv_top_lvl_tumor_call_5	patient	human	X00014	yes	tumor	
+X00015	snv_top_lvl_tumor_call_5	patient	human	X00015	yes	tumor	
+X00016	snv_top_lvl_tumor_call_5	patient	human	X00016	yes	tumor	
+X00017	snv_top_lvl_tumor_call_5	patient	human	X00017	yes	tumor	
+X00018		patient	human	X00018	yes		normal femur
+X00019		patient	human	X00019	yes		normal femur
+X00020		patient	human	X00020	yes		normal femur
+X00021		patient	human	X00021	yes		normal femur
+CCDI0101_16178b	snv_top_lvl_tumor_call_5	patient	human	CCDI0101_16178b	yes	top_lvl_group0	
+CCDI0058_16183	snv_top_lvl_tumor_call_5	patient	human	CCDI0058_16183	yes	top_lvl_group1	
+CCDI0097_8978	snv_top_lvl_tumor_call_5	patient	human	CCDI0097_8978	yes	"top_lvl_group0, top_lvl_group1"	
+CCDI0102_16183b	snv_top_lvl_tumor_call_5	patient	human	CCDI0102_16183b	yes	top_lvl_group0	
+CCDI0057_16178	snv_top_lvl_tumor_call_5	patient	human	CCDI0057_16178	yes	top_lvl_group1	
+CCDI0098_8951	snv_top_lvl_tumor_call_20	patient	human	CCDI0098_8951	yes	top_lvl_group0	
+CCDI0096_8952	snv_top_lvl_tumor_call_5	patient	human	CCDI0096_8952	yes	top_lvl_group0	
+CCDI0053_445	snv_top_lvl_tumor_call_5	patient	human	CCDI0053_445	yes	"top_lvl_group0, top_lvl_group1"	all tumor
+CCDI0100_12416	snv_top_lvl_tumor_call_5	patient	human	CCDI0100_12416	yes	top_lvl_group0	osteoblasts not called as tumor
+CCDI0051_6547	snv_top_lvl_tumor_call_5	patient	human	CCDI0051_6547	yes	top_lvl_group0	
+CCDI0050_5928	snv_top_lvl_tumor_call_20	patient	human	CCDI0050_5928	yes	"top_lvl_group0, top_lvl_group1"	all tumor
+CCDI0092_3911	snv_top_lvl_tumor_call_5	patient	human	CCDI0092_3911	yes	top_lvl_group0	
+CCDI0091_3666	snv_top_lvl_tumor_call_30	patient	human	CCDI0091_3666	yes	top_lvl_group1	unclear which group might be tumor
+CCDI0094_7977	snv_top_lvl_tumor_call_5	patient	human	CCDI0094_7977	yes	top_lvl_group0	
+CCDI0095_7978	snv_top_lvl_tumor_call_5	patient	human	CCDI0095_7978	yes	top_lvl_group0	
+CCDI0093_6546	snv_top_lvl_tumor_call_5	patient	human	CCDI0093_6546	yes	top_lvl_group0	
+CCDI0090_2318		patient	human	CCDI0090_2318	yes		no good bootstrap values - clustering issue?
+CCDI0048_5864	snv_top_lvl_tumor_call_5	patient	human	CCDI0048_5864	yes	"top_lvl_group0, top_lvl_group1"	all tumor
+CCDI0049_5899	snv_top_lvl_tumor_call_10	patient	human	CCDI0049_5899	yes	"top_lvl_group0, top_lvl_group1"	all tumor
+GSM8001766	snv_top_lvl_tumor_call_5	canine	dog	GSM8001766	yes	tumor	
+GSM8001767	snv_top_lvl_tumor_call_5	canine	dog	GSM8001767	yes	tumor	
+GSM8001768	snv_top_lvl_tumor_call_5	canine	dog	GSM8001768	yes	tumor	
+GSM8001769	snv_top_lvl_tumor_call_5	canine	dog	GSM8001769	yes	tumor	
+GSM8001770	snv_top_lvl_tumor_call_5	canine	dog	GSM8001770	yes	tumor	
+GSM8001771	snv_top_lvl_tumor_call_30	canine	dog	GSM8001771	yes	tumor	
+GSM8001773	snv_top_lvl_tumor_call_10	canine	dog	GSM8001773	yes	tumor	
+GSM8001772	snv_top_lvl_tumor_call_10	canine	dog	GSM8001772	yes	tumor	
+T_OS_0046_P1	snv_top_lvl_tumor_call_5	canine	dog	T_OS_0046_P1	yes	"top_lvl_group0, top_lvl_group1"	all tumor
+T_OS_0054_P1	snv_top_lvl_tumor_call_5	canine	dog	T_OS_0054_P1	yes	top_lvl_group0	top_lvl_group0
+T_OS_0061_P1	snv_top_lvl_tumor_call_10	canine	dog	T_OS_0061_P1	yes	top_lvl_group0	all tumor
+S0032	snv_top_lvl_tumor_call_5	canine	dog	S0032	yes	tumor	
+S0231	snv_top_lvl_tumor_call_5	canine	dog	S0231	yes	tumor	
+T_OS_0046_M1	snv_top_lvl_tumor_call_5	canine	dog	T_OS_0046_M1	yes	tumor	
+T_OS_0050_M1_1	snv_top_lvl_tumor_call_5	canine	dog	T_OS_0050_M1_1	no	top_lvl_group0	"all cells called were tumor, but few cells"
+T_OS_0050_M1_2		canine	dog	T_OS_0050_M1_2	yes		No plot for the tumor normal or level
+T_OS_0059_M1_1n	snv_top_lvl_tumor_call_5	canine	dog	T_OS_0059_M1_1n	yes	top_lvl_group0	almost all tumor
+T_OS_0059_M1_2		canine	dog	T_OS_0059_M1_2	yes		no good bootstrap values - clustering issue?
+T_OS_0061_M1_1	snv_top_lvl_tumor_call_5	canine	dog	T_OS_0061_M1_1	yes	top_lvl_group0	almost all tumor -clustering issue?
+T_OS_0061_M1_2	snv_top_lvl_tumor_call_5	canine	dog	T_OS_0061_M1_2	yes	top_lvl_group0	almost all tumor -clustering issue?
+OSLM1	snv_top_lvl_group_5	canine	dog	OSLM1	yes	tumor	
+OSLM2		canine	dog	OSLM2	yes		no good bootstrap values - clustering issue?
+OSLM3	snv_top_lvl_group_5	canine	dog	OSLM3	yes	tumor	
+OSLM4	snv_top_lvl_group_5	canine	dog	OSLM4	yes	top_lvl_group0	
+OSLM5	snv_top_lvl_group_5	canine	dog	OSLM5	yes	tumor	
+OSLM6	snv_top_lvl_group_5	canine	dog	OSLM6	yes	tumor	
+OSLM7	snv_top_lvl_group_10	canine	dog	OSLM7	yes	tumor	
+OSLM8	snv_top_lvl_group_10	canine	dog	OSLM8	yes	tumor	
+Modiano_071_DOS_2304_3GEX_FL	snv_top_lvl_group_5	canine	dog	Modiano_071_DOS_2304_3GEX_FL	yes	top_lvl_group0	all tumor
+Modiano_066_DOS_2301_reamp_GEX_FL		canine	dog	Modiano_066_DOS_2301_reamp_GEX_FL	yes		no good bootstrap values and few cells
+Modiano_066_DOS_2302_GEX_FL	snv_top_lvl_group_5	canine	dog	Modiano_066_DOS_2302_GEX_FL	yes	tumor	
+Modiano_075_DOS_2305_3GEX_FL	snv_top_lvl_group_10	canine	dog	Modiano_075_DOS_2305_3GEX_FL	yes	top_lvl_group0	
+Modiano_078_DOS_2308_3GEX_FL	snv_top_lvl_group_5	canine	dog	Modiano_078_DOS_2308_3GEX_FL	yes	tumor	
+Modiano_053_DOS_2101_FL		canine	dog	Modiano_053_DOS_2101_FL	yes		"did not run, no plot"
