@@ -531,18 +531,38 @@ for (ob in names(ob_list)) {
 }
 
 # merge
-mouse_sobj <- merge(ob_list[[1]], ob_list[[2]]) %>%
+mouse_sobj <- 
+    merge(ob_list[[1]], ob_list[[2]]) %>%
+    JoinLayers() %>%
     process_seurat()
 mouse_sobj$organism <- "mouse"
 mouse_sobj$sample_name <- mouse_sobj$sample_id
+
+dimplot_better(mouse_sobj,
+            group_by = "barcoded")
+FeaturePlot(mouse_sobj,
+            features = c("Runx2", "Satb2", "Col1a1", "Col1a2"))
+
+# Identify the cluster(s) with the most barcoded=="tumor" cells
+cluster_counts <- 
+    table(mouse_sobj$seurat_clusters, mouse_sobj$barcoded)
+# Find cluster(s) where most cells are barcoded (TRUE)
+tumor_clusters <- 
+    names(which(cluster_counts[, "TRUE"] == max(cluster_counts[, "TRUE"])))
+# Assign "tumor" to cells in those clusters, "stroma" otherwise
 mouse_sobj$truth_metadata <-
-    ifelse(mouse_sobj$is_tumor == "TRUE",
-           "tumor",
-           "stroma")
-S0260 <-
+
+    ifelse(mouse_sobj$seurat_clusters %in% tumor_clusters, "tumor", "stroma")
+
+dimplot_better(mouse_sobj, group_by= "truth_metadata")
+# save the individual object
+S0260 <- 
     mouse_sobj %>%
     subset(sample_name == "S0260") %>%
     process_seurat()
+if (!dir.exists("output/seurat_objects/validation/tumor_annotation/")) {
+    dir.create("output/seurat_objects/validation/tumor_annotation/", recursive = TRUE)
+}
 qs::qsave(S0260,
             str_c("output/seurat_objects/validation/tumor_annotation/",
                 "S0260_mouse.qs"))
@@ -556,32 +576,83 @@ qs::qsave(S0261,
 
 
 
-# combination of samples for human tumor annotation and reference validation
-samples_to_combine <-
-    tribble(~tumor_name, ~stroma_name,
-            "SJOS013769_X1_human", "X00018_human",
-            "S0034_human",          "X00020_human")
+## prepare the human healthy lung stroma to be merged 
+lungblood_obj <-
+    qs::qread("input/downloads/human_lung.qs")
+dimplot_better(lungblood_obj,
+            group_by = "free_annotation") +
+    NoLegend() + ggtitle("lungblood object")
 
+# make first stroma for human lung
+stroma1 <-
+    subset(lungblood_obj,
+            cells = sample(colnames(lungblood_obj), 10000)) %>%
+    process_seurat()
+qs::qsave(stroma1,
+            str_c("output/seurat_objects/validation/tumor_annotation/",
+                "human_lung_stroma1.qs"))
+# make second stroma for human lung
+stroma2 <-
+    subset(lungblood_obj,
+           cells = sample(setdiff(colnames(lungblood_obj), colnames(stroma1)), 10000)) %>%
+    process_seurat()
+qs::qsave(stroma2,
+            str_c("output/seurat_objects/validation/tumor_annotation/",
+                "human_lung_stroma2.qs"))
+
+# combination of samples for human tumor annotation and reference validation
+
+samples <- c(
+    "SJOS016015_X1_human",  # xeno primary tumor cell with femur head
+    "S0042_human",          # xeno primary tumor cell with femur head
+    "S0055_human",          # xeno mets tumor cell
+    "SJOS001112_X1_human",   # xeno mets tumor cell
+    "X00018_human",
+    "X00020_human"
+)
+# save into the one location for all the validation object
+for (tumor_name in samples) {
+    dir <- str_c("output/seurat_objects/sobj_preprocess")
+    tumor <-
+        qs::qread(str_c(dir, "/", tumor_name, ".qs"))
+    tumor$truth_metadata <- "tumor"
+    #dimplot_better(tumor, group_by = "truth_metadata")
+    qs::qsave(tumor,
+            str_c("output/seurat_objects/validation/tumor_annotation/",
+                tumor_name, ".qs"))
+}
+
+# the combination
+samples_to_combine <- 
+    tribble(~tumor_name,                ~stroma_name,
+            "SJOS016015_X1_human",    "X00018_human",   #xeno primary tumor cell with femur head
+            "S0042_human",            "X00020_human",   #xeno primary tumor cell with femur head
+            "S0055_human",            "human_lung_stroma1",  # xeno mets tumor cell with human lung stroma
+            "SJOS001112_X1_human",    "human_lung_stroma2") # xeno mets tumor cell with human lung stroma
+
+# combine and prepare the stroma and tumor for validation
 for (i in seq_len(nrow(samples_to_combine))) {
     stroma_name <- samples_to_combine$stroma_name[i]
     tumor_name <- samples_to_combine$tumor_name[i]
     stromal_metadata <- list()
     tumor_metadata <- list()
 
-    # check if the object already exists
-    dir <- str_c("output/seurat_objects/sobj_preprocess")
-    stroma <-
-        qs::qread(str_c(dir, "/", stroma_name, ".qs"))
-    stroma$truth_metadata <- "stroma"
+    dir <- str_c("output/seurat_objects/validation/tumor_annotation/")
     tumor <-
         qs::qread(str_c(dir, "/", tumor_name, ".qs"))
     tumor$truth_metadata <- "tumor"
+
+    # check if the object already exists
+    stroma <-
+        qs::qread(str_c(dir, "/", stroma_name, ".qs"))
+    stroma$truth_metadata <- "stroma"
 
     combine_sobject <-
         merge(stroma, tumor,
               add.cell.ids = c("stroma", "tumor")) %>%
         JoinLayers() %>%
         process_seurat()
+
     if (!dir.exists("output/seurat_objects/validation/tumor_annotation/")) {
         dir.create("output/seurat_objects/validation/tumor_annotation/", recursive = TRUE)
     }
@@ -592,22 +663,23 @@ for (i in seq_len(nrow(samples_to_combine))) {
 
 }
 
-
 # actual validation parent
-samples_for_validation <-
-    c("S0260_mouse.qs",
-      "S0261_mouse.qs",
-      "SJOS013769_X1_human_X00018_human_combined.qs",
-      "S0034_human_X00020_human_combined.qs")
+samples_for_validation <- 
+    c("S0260_mouse",
+      "S0261_mouse",
+      "S0042_human_X00020_human_combined",
+      "SJOS016015_X1_human_X00018_human_combined",
+      "SJOS001112_X1_human_human_lung_stroma2_combined",
+      "S0055_human_human_lung_stroma1_combined")
 
 for (names in samples_for_validation) {
     combine_sobject <-
         qs::qread(str_c("output/seurat_objects/validation/tumor_annotation/",
-                        names))
+                        names, ".qs"))
     dimplot1 <-
         dimplot_better(combine_sobject,
                     group_by = "truth_metadata") +
-        NoLegend() + ggtitle("object with known tumor/stroma")
+        NoLegend() + ggtitle("object with known tumor and stroma")
     # Annotation
     species <- combine_sobject$organism[[1]]
 
@@ -645,10 +717,13 @@ for (names in samples_for_validation) {
             na.omit() %>%
             unique()
     }
+    # prepare the matrix
     entire_matrix <-
         ann_obj@assays$RNA$counts
 
-    genelist_present <-
+
+    # run AUcell
+    genelist_present <- 
         genelist[genelist %in% rownames(entire_matrix)]
 
     cell_ranks <-
@@ -795,6 +870,152 @@ for (names in samples_for_validation) {
             plot = dimplot_combined,
             width = 14,
             height = 14)
+    # save the combined object
+    qs::qsave(combine_sobject,
+            str_c("output/seurat_objects/validation/tumor_annotation/",
+                names, "_validated.qs"))
+}
+
+samples_for_validation <- 
+    c("S0260_mouse",
+      "S0261_mouse",
+      "S0042_human_X00020_human_combined",
+      "SJOS016015_X1_human_X00018_human_combined",
+      "SJOS001112_X1_human_human_lung_stroma2_combined",
+      "S0055_human_human_lung_stroma1_combined")
+
+for (group in samples_for_validation) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/validation/tumor_annotation/",
+                        group, 
+                        "_validated.qs"))
+    # SCEVAN results listed into an output for each seurat object
+    organism <-
+        object$organism[1]
+    #count matrix
+    count_matrix <- 
+        object %>%
+        GetAssayData(layer = "counts")
+    output <- 
+        SCEVAN::pipelineCNA(count_mtx = count_matrix,
+                            sample = group,
+                            organism = organism,
+                            par_cores = parallelly::availableCores(),
+                            SUBCLONES = FALSE)
+    # SCEVAN writes a bunch of files to ./output/ so we need to move them
+    system(paste0("mv output/",
+                group,
+                "* output/id_tumor/SCEVAN/"))
+    # Two of the files have spaces in their names :-|
+    system(paste0("mv output/' ",
+                    group,
+                    " vega_output' output/id_tumor/SCEVAN/"))
+    system(paste0("mv output/' ",
+                group,
+                "onlytumor vega_output' output/id_tumor/SCEVAN/"))
+    object <-
+        AddMetaData(object,
+                    metadata = output)
+    object$scevan_tumor_call <-
+        ifelse(object$class == "tumor",
+                "cancer_cells",
+                "normal_cells")
+    
+    # run scATOMIC
+    if (organism = "human") {
+        min_count_per_gene <- 10
+        count_matrix <- 
+            object %>%
+            GetAssayData(layer = "counts")
+        count_matrix <- 
+            count_matrix[rowSums(count_matrix) > min_count_per_gene, ]
+        cell_predictions <-
+            scATOMIC::run_scATOMIC(rna_counts = count_matrix,
+                                    mc.cores = parallelly::availableCores() )
+
+        scATOMIC_results <-
+            scATOMIC::create_summary_matrix(prediction_list = cell_predictions,
+                                            use_CNVs = T,
+                                            modify_results = T,
+                                            mc.cores = parallelly::availableCores(),
+                                            raw_counts = count_matrix,
+                                            min_prop = 0.5) %>%
+            select(starts_with("layer_"),
+                    any_of(c("scATOMIC_pred",
+                            "classification_confidence",
+                            "CNV_status")))
+    }
+               
+}
+
+
+
+    min_count_per_gene <- 10
+    count_mtx_list <- object %>%
+        SplitObject(split.by = "sample_name") %>%
+        lapply(FUN = function(x) {
+            temp_data <- GetAssayData(x, layer = "counts")
+            temp_data <- temp_data[rowSums(temp_data) > min_count_per_gene, ]
+        })
+
+    result_list <-
+        parallel::mclapply(names(count_mtx_list),
+                           mc.cores = parallelly::availableCores(),
+                           mc.preschedule = FALSE,
+                           function(x) {
+            cell_predictions <-
+                scATOMIC::run_scATOMIC(
+                    rna_counts = count_mtx_list[[x]],
+                    mc.cores = parallelly::availableCores()
+                )
+            scATOMIC_results <-
+                tryCatch(
+                    {
+                        scATOMIC::create_summary_matrix(
+                            prediction_list = cell_predictions,
+                            use_CNVs = T,
+                            modify_results = T,
+                            mc.cores = parallelly::availableCores(),
+                            raw_counts = count_mtx_list[[x]],
+                            min_prop = 0.5
+                        ) %>%
+                        select(starts_with("layer_"),
+                               any_of(c("scATOMIC_pred",
+                                      "classification_confidence",
+                                      "CNV_status",
+                                      "pan_cancer_cluster")))
+                },
+                error = function(e) {
+                    message("scATOMIC failed for ",group, " ", x, " with error: ", e)
+                    scATOMIC::create_summary_matrix(
+                        prediction_list = cell_predictions,
+                        modify_results = T,
+                        mc.cores = parallelly::availableCores(),
+                        raw_counts = count_mtx_list[[x]],
+                        min_prop = 0.5
+                    ) %>%
+                    select(starts_with("layer_"),
+                               any_of(c("scATOMIC_pred",
+                                      "classification_confidence",
+                                      "CNV_status")))
+                })
+
+            return(scATOMIC_results)
+        })
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
     # give me some kind of metric to see how well do the two annotations match
     metadata <-
         combine_sobject@meta.data %>%

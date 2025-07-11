@@ -273,3 +273,4 @@ Normal_bone$Comparison_col <-
                       "^Fibroblasts$" = "Fibroblasts",
                       "^Myofibroblasts$" = "Fibroblasts"))
 ```
+
