@@ -12,8 +12,8 @@ assigned by highest number of celltype per each seurat cluster
 
 annotation_type <- list(patient_prim = list("human", FALSE),
                         patient_mets = list("human_lung", FALSE),
-                        mm_prim = list("mouse", TRUE),
-                        mm_mets = list("mouse_lung", TRUE),
+                        mm_prim = list("mouse", FALSE),
+                        mm_mets = list("mouse_lung", FALSE),
                         xeno_prim_human = list("human", FALSE),
                         xeno_mets_human = list("human_lung", FALSE),
                         xeno_prim_mouse = list("mouse", FALSE),
@@ -27,104 +27,105 @@ orthologs <-
     read_tsv("input/downloads/dog_human_gene_orthologs.txt")
 
 #Result for annotation
-results <-
-    parallel::mclapply(unique(all_samples_csv$unique),
-                       mc.cores = parallelly::availableCores(),
-                       function(group) {
+for (group in c("patient_prim","patient_mets",
+                "mm_prim", "mm_mets",
+                "xeno_prim_human", "xeno_mets_human",
+                "xeno_prim_mouse", "xeno_mets_mouse",
+                "dogs_prim", "dogs_mets")) {
+    ann_sobj <- 
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                        group,
+                        ".qs"))
+    set.seed(199820)
+    if (group == "dogs_prim" || group == "dogs_mets") {
         ann_sobj <- 
-            qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
-                            group,
-                            ".qs"))
-        set.seed(199820)
-        if (group == "dogs_prim" || group == "dogs_mets") {
-            ann_sobj <- 
-                dog_to_human_setup(object = ann_sobj)
+            dog_to_human_setup(object = ann_sobj)
+    }
+    set.seed(199820)
+    ann_sobj <-
+        annotate_celltypes(sobject = ann_sobj,
+                            species = annotation_type[[group]][[1]],
+                            with_tumor = FALSE,
+                            aggr_ref = TRUE)
+
+    Idents(ann_sobj) <- ann_sobj$seurat_clusters
+    clust_info <- tibble()
+    for (cluster in unique(ann_sobj$seurat_clusters)) {
+        subset_object <- subset(ann_sobj, ident = cluster) %>%
+            FindVariableFeatures() %>%
+            ScaleData() %>%
+            # don't ask for more PCs than there are cells
+            RunPCA(npcs = min(50,
+                                sum(ann_sobj$seurat_clusters == cluster) - 1))
+
+        if (length(unique(subset_object$sample_name)) > 1 &&
+            ncol(subset_object) > 50) {
+            subset_object <- RunHarmony(subset_object,
+                                        group.by.vars = "sample_name") %>%
+                process_seurat(reduction = "harmony")
+        } else {
+            subset_object <- subset_object
         }
-        set.seed(199820)
+
+        subset_object$re_cluster <- str_c(cluster,
+                                            ".",
+                                            subset_object$seurat_clusters)
+
+        print(str_c("Done reclustering ", group, " ", cluster))
+        clust_info <- subset_object@meta.data %>%
+                as.data.frame() %>%
+                select(re_cluster) %>%
+                rbind(clust_info)
+    }
+
+    ann_sobj <- 
+        AddMetaData(ann_sobj, metadata = clust_info)
+    ann_sobj$new_annot_clust <- 
+        ann_sobj$re_cluster
+
+    cluster_celltypes <-
+        table(ann_sobj$re_cluster, ann_sobj$annotations) %>%
+        as.data.frame() %>%
+        group_by(Var1) %>%
+        arrange(desc(Freq), .by_group = TRUE) %>%
+        slice_head(n = 1)
+
+    for (i in seq_len(nrow(cluster_celltypes))) {
+        seurat_clust <- str_c("^", cluster_celltypes$Var1[i], "$") %>%
+            as.character()
+
+        celltype <- cluster_celltypes$Var2[i] %>%
+            as.character()
+
+        ann_sobj$new_annot_clust <-
+            str_replace_all(string = ann_sobj$new_annot_clust,
+                            pattern = seurat_clust,
+                            replacement = celltype)
+    }
+    
+    if (group == "dogs_prim" || group == "dogs_mets") {
+        object <- ann_sobj
         ann_sobj <-
-            annotate_celltypes(sobject = ann_sobj,
-                                species = annotation_type[[group]][[1]],
-                                with_tumor = annotation_type[[group]][[2]],
-                                aggr_ref = TRUE)
+            qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                        group,
+                        ".qs"))
+        ann_sobj$annotations <- object$annotations
+        ann_sobj$new_annot_clust <- object$new_annot_clust
+        ann_sobj$re_cluster <- object$re_cluster
+        ann_sobj$cell_scores <- object$cell_scores
+    }
 
-        Idents(ann_sobj) <- ann_sobj$seurat_clusters
-        clust_info <- tibble()
-        for (cluster in unique(ann_sobj$seurat_clusters)) {
-            subset_object <- subset(ann_sobj, ident = cluster) %>%
-                FindVariableFeatures() %>%
-                ScaleData() %>%
-                # don't ask for more PCs than there are cells
-                RunPCA(npcs = min(50,
-                                  sum(ann_sobj$seurat_clusters == cluster) - 1))
+    directory <- 
+        str_c("output/seurat_objects/harmony_sobjs_annot/")
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
 
-            if (length(unique(subset_object$sample_name)) > 1 &&
-                ncol(subset_object) > 50) {
-                subset_object <- RunHarmony(subset_object,
-                                            group.by.vars = "sample_name") %>%
-                    process_seurat(reduction = "harmony")
-            } else {
-                subset_object <- subset_object
-            }
-
-            subset_object$re_cluster <- str_c(cluster,
-                                              ".",
-                                              subset_object$seurat_clusters)
-
-            print(str_c("Done reclustering ", group, " ", cluster))
-            clust_info <- subset_object@meta.data %>%
-                    as.data.frame() %>%
-                    select(re_cluster) %>%
-                    rbind(clust_info)
-        }
-
-        ann_sobj <- 
-            AddMetaData(ann_sobj, metadata = clust_info)
-        ann_sobj$new_annot_clust <- 
-            ann_sobj$re_cluster
-
-        cluster_celltypes <-
-            table(ann_sobj$re_cluster, ann_sobj$annotations) %>%
-            as.data.frame() %>%
-            group_by(Var1) %>%
-            arrange(desc(Freq), .by_group = TRUE) %>%
-            slice_head(n = 1)
-
-        for (i in seq_len(nrow(cluster_celltypes))) {
-            seurat_clust <- str_c("^", cluster_celltypes$Var1[i], "$") %>%
-                as.character()
-
-            celltype <- cluster_celltypes$Var2[i] %>%
-                as.character()
-
-            ann_sobj$new_annot_clust <-
-                str_replace_all(string = ann_sobj$new_annot_clust,
-                                pattern = seurat_clust,
-                                replacement = celltype)
-        }
-        
-        if (group == "dogs_prim" || group == "dogs_mets") {
-            object <- ann_sobj
-            ann_sobj <-
-                qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+    qs::qsave(x = ann_sobj,
+                file = str_c("output/seurat_objects/harmony_sobjs_annot/",
                             group,
                             ".qs"))
-            ann_sobj$annotations <- object$annotations
-            ann_sobj$new_annot_clust <- object$new_annot_clust
-            ann_sobj$re_cluster <- object$re_cluster
-            ann_sobj$cell_scores <- object$cell_scores
-        }
-
-        directory <- 
-            str_c("output/seurat_objects/harmony_sobjs_annot/")
-        if (!dir.exists(directory)) {
-            dir.create(directory, recursive = TRUE)
-        }
-
-        qs::qsave(x = ann_sobj,
-                  file = str_c("output/seurat_objects/harmony_sobjs_annot/",
-                               group,
-                               ".qs"))
-})
+}
 
 
 ```

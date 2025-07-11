@@ -239,6 +239,11 @@ for (names in c("Soragni", "Collins")) {
         Final_obj[["tumor_type_filter"]] <- tumor_type_filter
         Final_obj[["age"]] <- age
 
+        if (!dir.exists(str_c("output/seurat_objects/validation/before_harmony/",
+                        names))) {
+            dir.create(str_c("output/seurat_objects/validation/before_harmony/",
+                            names), recursive = TRUE)
+        }
         qs::qsave(Final_obj,
                 str_c("output/seurat_objects/validation/before_harmony/",
                         names, "/",
@@ -254,33 +259,13 @@ for (names in c("Soragni", "Collins")) {
 #     qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim.qs")) 
 
 patient_prim_stroma <-
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim_normal_cells.qs")) %>% 
-    subset(scatomic_tumor_call != "cancer_cells") %>%
-    subset(scevan_tumor_call != "cancer_cells")
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim_normal_cells.qs")) 
 
 patient_prim_tumor <-
     qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim_cancer_cells.qs"))
 
-patient_prim = list(group_by = c("sample_name",
-                                          "method",
-                                          "data_source"),
-                             theta = c(5, 5, 5),
-                             lambda = c(0.5, 0.5, 0.5))
-
 patient_prim_ref <- 
-    merge(x = patient_prim_tumor,
-        y = patient_prim_stroma) %>%
-    JoinLayers() %>%
-    process_seurat() %>%
-    RunHarmony(group.by.vars = patient_prim$group_by,
-               theta = patient_prim$theta,
-               lambda = patient_prim$lambda) %>%
-    process_seurat(reduction = "harmony")
-
-
-
-dimplot_better(patient_prim_ref, group_by = "Ann_Level3") +
-    NoLegend()
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim.qs"))
 
 patient_mets_stroma <-
     qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets_normal_cells.qs"))
@@ -329,6 +314,10 @@ for (sobj_name in soragni_sobj_list) {
         sobj$Ann_Level3 <- ref_lung1$labels
     }
     #return(sobj)
+    if (!dir.exists(str_c("output/seurat_objects/validation/before_harmony/Soragni/Annotated"))) {
+        dir.create(str_c("output/seurat_objects/validation/before_harmony/Soragni/Annotated"),
+                    recursive = TRUE)
+    }
     qs::qsave(sobj,
             str_c("output/seurat_objects/validation/before_harmony/Soragni/Annotated/anno_",
                     sobj_name))
@@ -356,7 +345,11 @@ for (sobj_name in Collins_sobj_list) {
                             labels = ref_obj$Ann_Level3,
                             aggr.ref = TRUE)
         sobj$Ann_Level3 <- ref_lung1$labels
-
+        
+        if (!dir.exists(str_c("output/seurat_objects/validation/before_harmony/Collins/Annotated"))) {
+            dir.create(str_c("output/seurat_objects/validation/before_harmony/Collins/Annotated"),
+                    recursive = TRUE)
+        }
         qs::qsave(sobj,
             str_c("output/seurat_objects/validation/before_harmony/Collins/anno_",
                     sobj_name))
@@ -369,7 +362,11 @@ for (sobj_name in Collins_sobj_list) {
                             labels = ref_obj$Ann_Level3,
                             aggr.ref = TRUE)
         sobj$Ann_Level3 <- ref_lung1$labels
-        
+    
+        if (!dir.exists(str_c("output/seurat_objects/validation/before_harmony/Collins/Annotated"))) {
+            dir.create(str_c("output/seurat_objects/validation/before_harmony/Collins/Annotated"),
+                    recursive = TRUE)
+        }
         qs::qsave(sobj,
             str_c("output/seurat_objects/validation/before_harmony/Collins/Annotated/anno_",
                     sobj_name))
@@ -466,6 +463,11 @@ for (sobj_name in soragni_sobj_list) {
                           "^Epithelial_Endothelial$" = "Host",
                           "^Immune_Lymphoid$" = "Host",
                           "^Mesenchymal$" = "Host"))
+
+    if (!dir.exists(str_c("output/seurat_objects/validation/before_harmony/Soragni/Annotated"))) {
+        dir.create(str_c("output/seurat_objects/validation/before_harmony/Soragni/Annotated"),
+                    recursive = TRUE)
+    }
     qs::qsave(sobj,
             str_c("output/seurat_objects/validation/before_harmony/Soragni/Annotated/",
                     sobj_name))
@@ -509,7 +511,10 @@ Soragni_Ann1_panelplot <-
 Soragni_Ann0_panelplot <-
     patchwork::wrap_plots(soragni_dimplots_Ann0,
                     ncol = 2)
-
+if (!dir.exists("output/figures/validation/reference_validation")) {
+    dir.create("output/figures/validation/reference_validation",
+                recursive = TRUE)
+}
 ggsave("output/figures/validation/reference_validation/soragni_panel_ann3.png",
     Soragni_Ann3_panelplot,
     width = 14,
@@ -626,6 +631,11 @@ for (sobj_name in collins_sobj_list) {
                           "^Epithelial_Endothelial$" = "Host",
                           "^Immune_Lymphoid$" = "Host",
                           "^Mesenchymal$" = "Host"))
+
+    if (!dir.exists(str_c("output/seurat_objects/validation/before_harmony/Collins/Annotated"))) {
+        dir.create(str_c("output/seurat_objects/validation/before_harmony/Collins/Annotated"),
+                    recursive = TRUE)
+    }
     qs::qsave(sobj,
             str_c("output/seurat_objects/validation/before_harmony/Collins/Annotated/",
                     sobj_name))
@@ -904,3 +914,558 @@ dimplot_better(subset, group_by = "annotations")
 
 ```
 
+
+
+```{r}
+
+obj <-
+    qs::qread(str_c("output_1_10/seurat_objects/validation/before_harmony/Soragni/SCPCS000525.qs"))
+
+dimplot_better(obj, group_by = "seurat_clusters") +
+    NoLegend()
+
+
+recursive_clustering <- function(obj,
+                                resolution) {
+    clust_info <- tibble()
+    for (clusters in unique(obj$seurat_clusters)) {
+            set.seed(199820)
+            sub_obj <- 
+                obj[, obj$seurat_clusters == clusters]
+
+            if (ncol(sub_obj) > 5000) {
+                sub_obj <-
+                    sub_obj %>%
+                    process_seurat(resolution = 0.2)
+            } else {
+                sub_obj <- sub_obj
+            }
+
+            sub_obj$re_cluster <- 
+                str_c(clusters,
+                    ".",
+                    sub_obj$seurat_clusters)
+
+            clust_info <- 
+                    sub_obj@meta.data %>%
+                    as.data.frame() %>%
+                    select(re_cluster) %>%
+                    rbind(clust_info)
+    }
+    return(clust_info)
+}
+
+
+Clusterbased_annot <- function(s_obj) {
+    Idents(s_obj) <- s_obj$seurat_clusters
+    recluster_info <- tibble()
+    for (cluster in unique(s_obj$seurat_clusters)) {
+        set.seed(199820)
+        subset_object <- 
+            subset(s_obj, ident = cluster) %>%
+            FindVariableFeatures() %>%
+            ScaleData() %>%
+            # don't ask for more PCs than there are cells
+            RunPCA(npcs = min(50,
+                            sum(s_obj$seurat_clusters == cluster) - 1))
+         if (ncol(subset_object) > 100) {
+            subset_object <- 
+                subset(s_obj, ident = cluster) %>%
+                process_seurat()
+        } else {
+            subset_object <- subset_object
+        }
+        subset_object$re_cluster <- 
+            str_c(cluster,
+                    ".",
+                    subset_object$seurat_clusters)
+
+        recluster_info <- 
+                subset_object@meta.data %>%
+                as.data.frame() %>%
+                select(re_cluster) %>%
+                rbind(recluster_info)
+    }
+
+    s_obj <- 
+        AddMetaData(s_obj, 
+                    metadata = recluster_info)
+    
+    s_obj$new_annot_clust <- s_obj$re_cluster
+
+    cluster_celltypes <-
+        table(s_obj$re_cluster, s_obj$annotations) %>%
+        as.data.frame() %>%
+        group_by(Var1) %>%
+        arrange(desc(Freq), .by_group = TRUE) %>%
+        slice_head(n = 1)
+
+    for (i in seq_len(nrow(cluster_celltypes))) {
+        seurat_clust <- str_c("^", cluster_celltypes$Var1[i], "$") %>%
+            as.character()
+
+        celltype <- cluster_celltypes$Var2[i] %>%
+            as.character()
+
+        s_obj$new_annot_clust <-
+            str_replace_all(string = s_obj$new_annot_clust,
+                            pattern = seurat_clust,
+                            replacement = celltype)
+    }
+    return(s_obj)
+}
+
+patient_prim_tumor <- 
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim_cancer_cells.qs"))
+patient_prim_stroma <- 
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_prim_normal_cells.qs"))
+
+patient_mets_tumor <- 
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets_cancer_cells.qs"))
+patient_mets_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets_normal_cells.qs"))
+
+mm_prim_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_prim_cancer_cells.qs"))
+mm_prim_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_prim_normal_cells.qs"))
+
+mm_mets_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_mets_cancer_cells.qs"))
+mm_mets_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/mm_mets_normal_cells.qs"))
+
+dog_prim_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_prim_cancer_cells.qs"))
+dog_prim_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_prim_normal_cells.qs"))
+
+dog_mets_tumor <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_mets_cancer_cells.qs"))
+dog_mets_stroma <-
+    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/dogs_mets_normal_cells.qs"))
+
+# Annotate tumor cells using SingleR and find what cells are tumor cells vs stroma cells
+annotate_tumor <- function(sobject,
+                            species,
+                            aggr_ref = TRUE,
+                            tissue_location) {
+    if (species == "human" && tissue_location == "bone") {
+        ref_obj <- 
+            list(GetAssayData(patient_prim_tumor),
+                 GetAssayData(patient_prim_stroma))
+        labels <-
+            list(patient_prim_tumor$Ann_Level1,
+                 patient_prim_stroma$Ann_Level2)
+    } else if (species == "human" && tissue_location == "lung") {
+        ref_obj <- 
+            list(GetAssayData(patient_mets_tumor),
+                 GetAssayData(patient_mets_stroma))
+        labels <-
+            list(patient_mets_tumor$Ann_Level1,
+                 patient_mets_stroma$Ann_Level2)
+    } else if (species == "mouse" && tissue_location == "bone") {
+        ref_obj <- 
+            list(GetAssayData(mm_prim_tumor),
+                 GetAssayData(mm_prim_stroma))
+        labels <-
+            list(mm_prim_tumor$Ann_Level1,
+                 mm_prim_stroma$Ann_Level2)
+    } else if (species == "mouse" && tissue_location == "lung") {
+        ref_obj <- 
+            list(GetAssayData(mm_mets_tumor),
+                 GetAssayData(mm_mets_stroma))
+        labels <-
+            list(mm_mets_tumor$Ann_Level1,
+                 mm_mets_stroma$Ann_Level2)
+    } else if (species == "dog" && tissue_location == "bone") {
+        ref_obj <-
+            list(GetAssayData(dog_prim_tumor),
+                 GetAssayData(dog_prim_stroma))
+        labels <-
+            list(dog_prim_tumor$Ann_Level1,
+                 dog_prim_stroma$Ann_Level2)
+    } else if (species == "dog" && tissue_location == "lung") {
+        ref_obj <- 
+            list(GetAssayData(dog_mets_tumor),
+                 GetAssayData(dog_mets_stroma))
+        labels <-
+            list(dog_mets_tumor$Ann_Level1,
+                 dog_mets_stroma$Ann_Level2)
+    }
+    # run SingleR annotation
+    ann_obj <-
+        SingleR::SingleR(test = as.SingleCellExperiment(sobject),
+                        ref = ref_obj,
+                        labels = labels,
+                        aggr.ref = aggr_ref)
+    # add the annotations to the Seurat object
+    sobject$annotations <- ann_obj$labels
+
+    # cell scores
+    sobject$tumor_stroma_cell_scores <-
+        apply(X = ann_obj$scores,
+            MARGIN = 1,
+            function(x) max(x, na.rm = TRUE))
+
+    return(sobject)
+}
+
+
+split_tumor_vs_stroma <- function(obj,
+                            markers,
+                            resolution = 0.2,
+                            modulescore_label = "modulescore",
+                            modulescore_cutoff = 0.5,
+                            recursive_cluster = TRUE,
+                            species = "human",
+                            aggr_ref = TRUE,
+                            with_tumor = TRUE,
+                            tissue_location = tissue_location) {
+    obj <- 
+        AddModuleScore(obj,
+                        features = list(markers),
+                        name = modulescore_label)
+    obj[[modulescore_label]] <- 
+        obj[[str_c(modulescore_label, "1")]]
+    obj[[str_c(modulescore_label, "1")]] <- NULL
+
+    # do recursive clustering if true
+    if (recursive_cluster) {
+        clust_info <- 
+            recursive_clustering(obj,
+                                 resolution = resolution)
+        obj <-
+            AddMetaData(obj,
+                        metadata = clust_info)
+        obj$recursive_clusters <- obj$re_cluster
+        obj$re_cluster <- NULL
+    } else {
+        obj$recursive_clusters <- obj$seurat_clusters
+    }
+    bulk_score_per_cluster <- 
+        obj@meta.data %>%
+        dplyr::select(all_of(modulescore_label), recursive_clusters) %>%
+        dplyr::group_by(recursive_clusters) %>%
+        dplyr::summarise(median = median(!!sym(modulescore_label), na.rm = TRUE)) %>%
+        dplyr::arrange(desc(median))
+
+    tumor_clusters <-
+        bulk_score_per_cluster %>%
+        dplyr::filter(median >= modulescore_cutoff) %>%
+        dplyr::pull(recursive_clusters)
+
+    stroma_clusters <-
+        bulk_score_per_cluster %>%
+        dplyr::filter(median < modulescore_cutoff) %>%
+        dplyr::pull(recursive_clusters)
+
+    tumor <-
+        subset(obj,
+                recursive_clusters %in% tumor_clusters) %>%
+                process_seurat()
+    #dimplot_better(tumor, group_by = "seurat_clusters") 
+
+    stromal_metadata <- list()
+    tumor_metadata <- list()
+    for (tumor_clusters in unique(tumor$seurat_clusters)) {
+        sub_tumor <- 
+            subset(tumor,
+                   seurat_clusters == tumor_clusters) %>%
+            process_seurat(resolution = resolution)
+
+        ann_obj <-
+            annotate_tumor(sobject = sub_tumor,
+                            species = species,
+                            aggr_ref = aggr_ref,
+                            tissue_location = tissue_location)
+
+        # save the ids
+        normal_ids <-
+            ann_obj@meta.data %>%
+            filter(annotations != "Tumor") %>%
+            rownames_to_column("cell_ids") %>%
+            select(cell_ids)
+
+        tumor_ids <-
+            ann_obj@meta.data %>%
+            filter(annotations == "Tumor") %>%
+            rownames_to_column("cell_ids") %>%
+            select(cell_ids)
+
+        # save the metadata
+        if (length(normal_ids$cell_ids) > 0) {
+            stromal_metadata[[tumor_clusters]] <- normal_ids
+        }
+        if (length(tumor_ids$cell_ids) > 0) {
+            tumor_metadata[[tumor_clusters]] <- tumor_ids
+        }
+    }
+    # ind the ids
+    stromal_cells_ids <-
+        bind_rows(stromal_metadata)
+    tumor_cells_ids <-
+        bind_rows(tumor_metadata)
+    
+    #split the actual tumor cleaned up
+    clean_tumor <-
+        obj %>%
+        subset(cells = tumor_cells_ids$cell_ids) %>%
+        process_seurat()
+
+    # split the actual stroma cleaned up
+    clean_stroma <-
+        obj %>%
+        subset(cells = setdiff(colnames(obj), tumor_cells_ids$cell_ids)) %>%
+        process_seurat()
+
+    return(list(tumor = clean_tumor,
+                stroma = clean_stroma))
+}
+
+#dimplot_better(clean_tumor, group_by = "Ann_Level3") + NoLegend()
+DotPlot(annotated_tumor, features = "BNIP3", group.by = "seurat_clusters")
+sobj_list <-
+    list(tumor = clean_tumor,
+         stroma = clean_stroma)
+
+Annotate_celltypes <- function(obj,
+                              markers,
+                              resolution = 0.2,
+                              modulescore_label = "modulescore",
+                              modulescore_cutoff = 0.5,
+                              recursive_cluster = TRUE,
+                              species = "human",
+                              aggr_ref = TRUE,
+                              with_tumor = TRUE,
+                              tissue_location = tissue_location) {
+    sobj_list <-
+        split_tumor_vs_stroma(obj = obj,
+                            markers = markers,
+                            resolution = 0.2,
+                            modulescore_label = "modulescore",
+                            modulescore_cutoff = 0.5,
+                            recursive_cluster = TRUE,
+                            species = species,
+                            aggr_ref = TRUE,
+                            with_tumor = TRUE,
+                            tissue_location = tissue_location)
+
+    if (species == "human" & tissue_location == "lung") {
+        tumor_ref <- patient_mets_tumor
+        stroma_ref <- patient_mets_stroma
+    } else if (species == "human" & tissue_location == "bone") {
+        tumor_ref <- patient_prim_tumor
+        stroma_ref <- patient_prim_stroma
+    } else if (species == "mouse" & tissue_location == "lung") {
+        tumor_ref <- mm_mets_tumor
+        stroma_ref <- mm_mets_stroma
+    } else if (species == "mouse" & tissue_location == "bone") {
+        tumor_ref <- mm_prim_tumor
+        stroma_ref <- mm_prim_stroma
+    } else if (species == "dog" & tissue_location == "lung") {
+        tumor_ref <- mm_mets_tumor
+        stroma_ref <- mm_mets_stroma
+    } else if (species == "dog" & tissue_location == "bone") {
+        tumor_ref <- dog_prim_tumor
+        stroma_ref <- dog_prim_stroma
+    }
+    annotation <-
+        SingleR::SingleR(test = as.SingleCellExperiment(sobj_list$tumor),
+                            ref = SeuratObject::GetAssayData(tumor_ref),
+                            labels = tumor_ref$Ann_Level3,
+                            aggr.ref = TRUE)
+    annotated_tumor <-  sobj_list$tumor
+    #rm(sobj_list$tumor)
+    annotated_tumor$Ann_Level3 <- annotation$labels
+    annotated_tumor$Ann_Level2 <- annotated_tumor$Ann_Level3
+    annotated_tumor$annotations <- annotation$labels
+    annotated_tumor$cell_scores <-
+        apply(X = annotation$scores,
+              MARGIN = 1,
+              function(x) max(x, na.rm = TRUE))
+    annotated_tumor$Ann_Level0 <- "Tumor"
+    annotated_tumor$Ann_Level1 <- "Tumor"
+
+    # do the cluster based annotation
+    #dimplot_better(annotated_tumor, group_by = "cb_Ann_Level3") + NoLegend()
+    # FeaturePlot(annotated_tumor, features = "CD74")
+    annotated_tumor <-
+        Clusterbased_annot(annotated_tumor)
+    
+    annotated_tumor$cb_Ann_Level3 <- annotated_tumor$new_annot_clust
+    annotated_tumor$cb_Ann_Level2 <- annotated_tumor$new_annot_clust
+    annotated_tumor$cb_Ann_Level1 <- "Tumor"
+    annotated_tumor$cb_Ann_Level0 <- "Tumor"
+
+    #do the same for the stroma
+    annotation <-
+        SingleR::SingleR(test = as.SingleCellExperiment(sobj_list$stroma),
+                            ref = SeuratObject::GetAssayData(stroma_ref),
+                            labels = stroma_ref$Ann_Level3,
+                            aggr.ref = TRUE)
+
+    annotated_stroma <-  sobj_list$stroma
+    #rm(sobj_list$stroma)
+    annotated_stroma$Ann_Level3 <- annotation$labels
+    annotated_stroma$annotations <- annotation$labels
+    annotated_stroma$cell_scores <-
+        apply(X = annotation$scores,
+              MARGIN = 1,
+              function(x) max(x, na.rm = TRUE))
+
+    # do the cluster based annotation
+    annotated_stroma <-
+        Clusterbased_annot(annotated_stroma)
+
+    annotated_stroma$cb_Ann_Level3 <- annotated_stroma$new_annot_clust
+
+    annotated_stroma$Ann_Level2 <- 
+        str_replace_all(annotated_stroma$Ann_Level3,
+                        c("^Angio_TAMs$" = "TAMs",
+                          "^CD4_T$" = "T_cells",
+                          "^CD8_T$" = "T_cells",
+                          "^EC_Blood$" = "Endothelial_cells",
+                          "^EC_Lymphatic$" = "Endothelial_cells",
+                          "^IFN_TAMs$" = "TAMs",
+                          "^Inflam_TAMs$" = "TAMs",
+                          "^Memory_B$" = "B_cells",
+                          "^Mature_B$" = "B_cells",
+                          "^Naive_T$" = "T_cells",
+                          "^Normal_Fibroblasts$" = "Fibroblasts",
+                          "^Osteoblasts$" = "Osteoblasts",
+                          "^Osteoclast_TAMs$" = "TAMs",
+                          "^Plasma_B$" = "B_cells",
+                          "^Plasmocytoid_DC$" = "DC",
+                          "^Prolif_TAMs$" = "TAMs",
+                          "^T_Reg$" = "T_cells",
+                          "^Prolif_T$" = "T_cells",
+                          "^TAMs$" = "TAMs",
+                          "^Alv_EpithelialT1$" = "Epithelial_cells",
+                          "^Alv_EpithelialT2$" = "Epithelial_cells",
+                          "^Alv_Fibroblasts$" = "Fibroblasts",
+                          "^Alv_Macrophages$" = "TAMs",
+                          "^Int_Macrophages$" = "TAMs",
+                          "^PreDC$" = "DC",
+                          "^Scar_TAMs$" = "TAMs",
+                          "^Transitional_Epithelial$" = "Epithelial_cells",
+                          "^preDC$" = "DC",
+                          "^Proli_TAMs$" = "TAMs",
+                          "^Myofibroblasts$" = "Fibroblasts",
+                          "^Tumor_Metabolic$" = "Tumor",
+                          "^EC_Artery$" = "Endothelial_cells",
+                          "^EC_Capillary$" = "Endothelial_cells",
+                          "^EC_Vein$" = "Endothelial_cells",
+                          "^Plueral_CAFs$" = "CAFs",
+                          "^Subpleural_CAFs$" = "CAFs",
+                          "^Myo_CAFs$" = "CAFs",
+                            "^pCAFs$" = "CAFs",
+                          "^Alv_CAFs$" = "CAFs",
+                          "^Peribronchial_CAFs$" = "CAFs",
+                          "^Alv_TAMs$" = "TAMs",
+                          "^Tuft_cells$" = "Epithelial_cells",
+                          "^Ciliated_cells$" = "Epithelial_cells",
+                          "^Adv_CAFs$" = "CAFs",
+                          "^Lymphocytes$" = "T_cells",
+                          "^myCAFs$" = "CAFs",
+                          "^apCAFs$" = "CAFs",
+                          "^Adv_TAMs$" = "TAMs",
+                          "^Adv_Macrophages$" = "TAMs",
+                          "^Adv_CAFs$" = "Fibroblasts",
+                          "^Alv_CAFs$" = "CAFs",
+                          "^Adv_TAMs$" = "TAMs",
+                          "^Alv_TAMs$" = "TAMs",
+                          "^iCAFs$" = "CAFs",
+                          "^mCAFs$" = "CAFs",
+                          "^Mast1$" = "Mast",
+                          "^Mast2$" = "Mast",
+                          "^Endothelial_Artery$" = "Endothelial_cells",
+                          "^Endothelial_Capillary$" = "Endothelial_cells",
+                          "^Endothelial_Vein$" = "Endothelial_cells",
+                          "^Endothelial_Lymphatic$" = "Endothelial_cells",
+                          "^DC1$" = "DC",
+                          "^DC2$" = "DC",
+                          "^pDC$" = "DC",
+                          "^AT1$" = "Epithelial_cells",
+                          "^AT2$" = "Epithelial_cells",
+                          "^Migratory_DC$" = "DC"))
+
+    annotated_stroma$Ann_Level1 <- 
+        str_replace_all(annotated_stroma$Ann_Level2,
+                        c("^B_cells$" = "Immune_Myeloid",
+                          "^CAFs$" = "Mesenchymal",
+                          "^Ciliated_cells$" = "Epithelial_Endothelial",
+                          "^Club_cells$" = "Epithelial_Endothelial",
+                          "^DC$" = "Immune_Myeloid",
+                          "^Endothelial_cells$" = "Epithelial_Endothelial",
+                          "^Epithelial_cells$" = "Epithelial_Endothelial",
+                          "^Fibroblasts$" = "Mesenchymal",
+                          "^Macrophages$" = "Immune_Myeloid",
+                          "^Monocytes$" = "Immune_Myeloid",
+                          "^Neutrophils$" = "Immune_Myeloid",
+                          "^NK_cells$" = "Immune_Lymphoid",
+                          "^Pericytes$" = "Mesenchymal",
+                          "^T_cells$" = "Immune_Lymphoid",
+                          "^Osteoblasts$" = "Mesenchymal",
+                          "^Smooth_muscle$" = "Mesenchymal",
+                          "^Cardiomyocytes$" = "Mesenchymal",
+                          "^Neurons$" = "Mesenchymal",
+                          "^Adipocytes$" = "Mesenchymal",
+                          "^Erythrocytes$" = "Immune_Myeloid",
+                          "^Tuft_cells$" = "Epithelial_Endothelial",
+                          "^Stromal_cells$" = "Mesenchymal",
+                          "^Mast$" = "Immune_Myeloid",
+                          "^TAMs$" = "Immune_Myeloid",
+                          "^CAF$" = "Mesenchymal",
+                          "^Ciliated_cells$" = "Epithelial_Endothelial",
+                          "^Naive_NKT$" = "Immune_Lymphoid"))
+
+    annotated_stroma$Ann_Level0 <- 
+        str_replace_all(annotated_stroma$Ann_Level1,
+                        c("^Immune_Myeloid$" = "Host",
+                          "^Epithelial_Endothelial$" = "Host",
+                          "^Immune_Lymphoid$" = "Host",
+                          "^Mesenchymal$" = "Host"))
+    
+    annotated_stroma$Ann_Level0 <- "Host"
+    #dimplot_better(annotated_stroma, group_by = "Ann_Level1") + NoLegend()
+
+    final_obj <- 
+        merge(annotated_tumor,
+            annotated_stroma) %>%
+        JoinLayers() %>%
+        process_seurat()
+
+    return(final_obj)
+}
+
+
+obj <-
+    qs::qread(str_c("output_1_10/seurat_objects/validation/before_harmony/Soragni/SCPCS000528.qs"))
+
+
+dimplot_better(obj, group_by = "seurat_clusters") +
+    NoLegend()
+
+
+markers <- c("COL1A1", "COL1A2", "SATB2", "RUNX2")
+
+
+object <-
+    Annotate_celltypes(obj = obj,
+                        markers = markers,
+                        resolution = 0.2,
+                        modulescore_label = "modulescore",
+                        modulescore_cutoff = 0.5,
+                        recursive_cluster = TRUE,
+                        species = "human",
+                        aggr_ref = TRUE,
+                        with_tumor = TRUE,
+                        tissue_location = "lung")
+
+dimplot_better(object, group_by = "Ann_Level1") +
+    NoLegend()
+
+FeaturePlot(object, features = c("RUNX2", "COL1A1", "SATB2", "COL1A2")) +
+    NoLegend()
+```

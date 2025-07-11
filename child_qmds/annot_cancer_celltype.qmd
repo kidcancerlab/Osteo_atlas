@@ -7,8 +7,105 @@ This will annotate celltypes for tumor and normal call
 #| fig.align: center
 #| echo: FALSE
 #| dependson: [annot_celltypes, read_metadata, dog_human_gene]
+osteosarcoma_markers <- 
+    c("COL1A1", "COL1A2", "SATB2", "RUNX2",
+      "TNC", "CTHRC1", "MRC2", "IBSP", "PDGFD")
 
+osteosarcoma_markers <-
+    c("RUNX2",
+      "COL1A1",
+      "COL1A2",
+      "SATB2")
 
+potential_tumor_cells_list <- list()
+potentil_tumor_by_annotations <- list()
+
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
+                        group,
+                        ".qs"))
+    #dimplot_better(object, group_by = c("new_annot_clust")) + NoLegend()
+    # species and markers
+    species <- object$organism[[1]]
+    genelist <- osteosarcoma_markers
+
+    if (species == "mouse") {
+        genelist <- 
+            nichenetr::convert_human_to_mouse_symbols(genelist) %>%
+            na.omit() %>%
+            unique()
+    }
+
+    # matrix
+    entire_matrix <-
+        object@assays$RNA$counts
+
+    genelist_present <- 
+        genelist[genelist %in% rownames(entire_matrix)]
+
+    percent_cells <- 
+        (length(genelist_present)/length(genelist)) * 100
+    if (percent_cells < 20.1) {
+        next
+    }
+    cell_ranks <-
+        AUCell::AUCell_run(exprMat = entire_matrix,
+                        geneSets = genelist)
+
+    object$AUC_OsteoMarkers <- AUCell::getAUC(cell_ranks)[1,]
+    
+    bulk_score_per_cluster <- 
+        object@meta.data %>%
+        dplyr::select(AUC_OsteoMarkers, new_annot_clust) %>%
+        dplyr::group_by(new_annot_clust) %>%
+        dplyr::summarise(median = median(AUC_OsteoMarkers, na.rm = TRUE)) %>%
+        dplyr::arrange(desc(median))
+    
+    bulk_score_per_cluster_by_annotation <- 
+        object@meta.data %>%
+        dplyr::select(AUC_OsteoMarkers, annotations) %>%
+        dplyr::group_by(annotations) %>%
+        dplyr::summarise(median = median(AUC_OsteoMarkers, na.rm = TRUE)) %>%
+        dplyr::arrange(desc(median))
+
+    if (!dir.exists("output/id_tumor/potential_tumor_celltypes/")) {
+        dir.create("output/id_tumor/potential_tumor_celltypes/", recursive = TRUE)
+    }
+    write_tsv(bulk_score_per_cluster_by_annotation,
+              str_c("output/id_tumor/potential_tumor_celltypes/",
+                    group,
+                    "_celltype_bulk_by_annotation.tsv"))
+    write_tsv(bulk_score_per_cluster,
+              str_c("output/id_tumor/potential_tumor_celltypes/",
+                    group,
+                    "_celltype_bulk.tsv"))
+
+    potential_tumor_cells <-
+        bulk_score_per_cluster %>%
+        dplyr::filter(median > 0.3) %>%
+        dplyr::pull(new_annot_clust)
+    
+    potential_tumor_cells_list[[group]] <-
+        potential_tumor_cells
+
+    stroma_clusters <-
+        bulk_score_per_cluster %>%
+        dplyr::filter(median <= 0.3) %>%
+        dplyr::pull(new_annot_clust)
+}
+
+threshold <-                            
+    list(patient_prim = 0.23,
+         patient_mets = 0.5,
+         mm_prim = 0.3,
+         mm_mets = 0.2,
+         dogs_prim = 0.5,
+         dogs_mets = 0.2)
+
+# Use the potential tumor cells
 cancer_celltypes <- list(patient_prim = c("MSC",
                                           "Chondrocytes",
                                           "Tissue_stem_cells",
@@ -23,7 +120,13 @@ cancer_celltypes <- list(patient_prim = c("MSC",
                                          "Myofibroblasts",
                                          "Mesothelial",
                                          "Smooth_muscle_cells",
-                                         "Fibromyocyte"),
+                                         "Fibromyocyte",
+                                         "Adventitial_fibroblasts",
+                                         "Alveolar_fibroblasts",
+                                         "Peribronchial_fibroblasts",
+                                         "Subpleural_fibroblasts",
+                                         "Stromal_cells",
+                                         "SM_activated_stress_response"),
                         xeno_prim_human = c(),
                         xeno_mets_human = c(),
                         xeno_prim_mouse = c(),
@@ -52,87 +155,6 @@ cancer_celltypes <- list(patient_prim = c("MSC",
                                       "Smooth_muscle_cells",
                                       "Osteoblasts"))
 
-annotations_cell_list <-
-    list(patient_prim = c("B_cells",
-                          "Basophil_Mast",
-                          "CD34_plusB_cells",
-                          "CD4T_cells",
-                          "CD8T_cells",
-                          "Dendritic_cells",
-                          "Endothelial_cells",
-                          "Epithelial_cells",
-                          "Macrophages",
-                          "Monocytes",
-                          "Neutrophils",
-                          "T_cells"),
-        patient_mets = c("Adventitial_Fibroblasts",
-                         "Airway_SMC",
-                         "Alveolar_Fibroblasts",
-                         "AlvEpithelial_T1",
-                         "AlvEpithelial_T2",
-                         "Artery_cells",
-                         "B_cells",
-                         "Basal",
-                         "Basophil_Mast1",
-                         "Basophil_Mast2",
-                         "Bronchial_Vessel1",
-                         "Capillary_Aerocytes",
-                         "Capillary_cells",
-                         "Capillary_Intermediate1",
-                         "CD4_plus_MemoryT",
-                         "CD4_plus_NaiveT",
-                         "CD4T_cells",
-                         "CD8_plus_MemoryT",
-                         "Ciliated_cells",
-                         "Classical_Monocytes",
-                         "Club_cells",
-                         "Dendritic_cells",
-                         "Differentiating_Basal",
-                         "Endothelial_cells",
-                         "EREG_plus Dendritic",
-                         "Fibroblasts",
-                         "Fibromyocyte",
-                         "IGSF21_plus_Dendritic_cells",
-                         "Ionocyte",
-                         "Intermediate_Monocytes",
-                         "Lipofibroblast",
-                         "Lymphatic_cells",
-                         "Mesothelial",
-                         "Macrophages",
-                         "Monocytes",
-                         "Myeloid_Dendritic1",
-                         "Myeloid_Dendritic2",
-                         "Myofibroblasts",
-                         "Neutrophils",
-                         "NK_cells",
-                         "NonClassical_Monocytes",
-                         "OLR1_plus Classical Monocyte",
-                         "Plasma_Bcells",
-                         "Plasmacytoid_Dendritic_cells",
-                         "Pericyte",
-                         "Platelet_Megakaryocyte",
-                         "Prolif_Basal",
-                         "Prolif_NKT",
-                         "Proximal Basal",
-                         "Serous",
-                         "Signalling_AlvEpithelial",
-                         "Prolif_Macrophages",
-                         "Proximal_Ciliated",
-                         "T_cells",
-                         "TREM2_plus_Dendritic_cells",
-                         "Vascular_SMC",
-                         "Vein_cells"),
-        xeno_prim_human = c(),
-        xeno_mets_human = c(),
-        xeno_prim_mouse = c(),
-        xeno_mets_mouse = c(),
-        normal_bone = c(),
-        mm_prim = c("Fibroblasts",
-                    "Macrophages"),
-        mm_mets = c("Fibroblasts",
-                    "Int_Macrophages"),
-        dogs_prim = c(),
-        dogs_mets = c())
 
 harmony_params <-
     list(patient_prim = list(group_by = c("sample_name",
@@ -181,6 +203,21 @@ harmony_params <-
         normal_bone = list(group_by = c("sample_name"),
                            theta = c(7)))
 
+threshold <-                            
+    list(patient_prim = 0.23,
+         patient_mets = 0.71,
+         mm_prim = 0.30,
+         mm_mets = 0.20,
+         dogs_prim = 0.60,
+         dogs_mets = 0.24)
+
+
+osteosarcoma_markers <-
+    c("RUNX2",
+      "COL1A1",
+      "COL1A2",
+      "SATB2")
+
 #parallel::mclapply(unique(all_samples_csv$unique), function(group)
 for (group in c("patient_prim", "patient_mets",
                 "mm_prim", "mm_mets",
@@ -189,52 +226,59 @@ for (group in c("patient_prim", "patient_mets",
         qs::qread(str_c("output/seurat_objects/harmony_sobjs_annot/",
                         group,
                         ".qs"))
-    #dimplot_better(object, group_by = c("new_annot_clust")) + NoLegend()
+
+    species <- object$organism[[1]]
+    genelist <- osteosarcoma_markers
+    if (species == "mouse") {
+        genelist <- 
+            nichenetr::convert_human_to_mouse_symbols(genelist) %>%
+            na.omit() %>%
+            unique()
+    }
+    entire_matrix <-
+        object@assays$RNA$counts
+
+    genelist_present <- 
+        genelist[genelist %in% rownames(entire_matrix)]
+
+    percent_cells <- 
+        (length(genelist_present)/length(genelist)) * 100
+    if (percent_cells < 20.1) {
+        next
+    }
+    cell_ranks <-
+        AUCell::AUCell_run(exprMat = entire_matrix,
+                        geneSets = genelist)
+
+    object$AUC_OsteoMarkers <- AUCell::getAUC(cell_ranks)[1,]
+    
+    bulk_score_per_cluster <- 
+        object@meta.data %>%
+        dplyr::select(AUC_OsteoMarkers, new_annot_clust) %>%
+        dplyr::group_by(new_annot_clust) %>%
+        dplyr::summarise(median = median(AUC_OsteoMarkers, na.rm = TRUE)) %>%
+        dplyr::arrange(desc(median))
+
+    potential_tumor_cells <-
+        bulk_score_per_cluster %>%
+        dplyr::filter(median > threshold[[group]][1]) %>%
+        dplyr::pull(new_annot_clust)
+
+    #dimplot_better(object, group_by = c("celltype_tumor_call")) + NoLegend()
     Idents(object) <-
         object$new_annot_clust
-
     object$cancer_normal <-
-        if_else(object$new_annot_clust %in% cancer_celltypes[[group]],
+        if_else(object$new_annot_clust %in% potential_tumor_cells,
                 "cancer_cells",
                 object$new_annot_clust)
 
     object$celltype_tumor_call <-
-        if_else(object$new_annot_clust %in% cancer_celltypes[[group]],
+        if_else(object$new_annot_clust %in% potential_tumor_cells,
                 "cancer_cells",
                 "normal_cells")
 
     object$original_call <- object$celltype_tumor_call
-    if (group == "patient_prim" || group == "patient_mets") {
-        object$celltype_tumor_call[object$annotations %in% annotations_cell_list[[group]] & object$celltype_tumor_call == "cancer_cells"] <- "kick"
-        object$celltype_tumor_call[object$annotations %in% cancer_celltypes[[group]] & object$celltype_tumor_call == "normal_cells"] <- "kick"
-        object <-
-            subset(object, celltype_tumor_call != "kick")
-    }
-
-    # mislabelled_cell_ids_normal <-
-    #     read_tsv(list.files(path = str_c("misc/mislabelled_ids/", group),
-    #                         pattern = "Epithelial_Endothelial|Mesenchymal|Immune_Lymphoid|Immune_Myeloid",
-    #                         full.names = TRUE)) %>%
-    #     distinct()
-
-    # object$celltype_tumor_call[object$cell %in% mislabelled_cell_ids_normal$cell] <- "normal_cells"
-
-    # mislabelled_cell_ids_tumor <-
-    #     read_tsv(list.files(path = str_c("misc/mislabelled_ids/", group),
-    #                         pattern = "Tumor",
-    #                         full.names = TRUE)) %>%
-    #     distinct()
-
-    # object$celltype_tumor_call[object$cell %in% mislabelled_cell_ids_tumor$cell] <- "cancer_cells"
-
-    set.seed(199820)
-    object <-
-        object %>%
-        process_seurat() %>%
-        RunHarmony(group.by.vars = harmony_params[[group]]$group_by,
-                   theta = harmony_params[[group]]$theta,
-                   lambda = harmony_params[[group]]$lambda) %>%
-        process_seurat(reduction = "harmony")
+    #dimplot_better(object, group_by = c("celltype_tumor_call")) + NoLegend()
 
     directory <-
         str_c("output/id_tumor/celltype/")
@@ -325,7 +369,7 @@ fdl_results <-
             width = 16,
             height = 16)
 })
-
+#dimplot_better(object, group_by = "new_annot_clust") + NoLegend()
 ```
 
 ## Annotation cleanup
@@ -448,7 +492,9 @@ Annotation_cleanup <-
             "^Macrophage_monocyte_derived_S._aureus$" = "Macrophages",
             "^iPS_cells_CRL2097_foreskin$" = "Progenitors",
             "^Monocyte_F._tularensis_novicida$" = "Monocytes",
-            "^iPS_cells_adipose_stem_cells$" = "Progenitors"),
+            "^iPS_cells_adipose_stem_cells$" = "Progenitors",
+            "^AT2_proliferating$" = "Epithelial_cells",
+            "^Non-switched memory B cells$" = "Memory_Bcells"),
     SingleR_Ann2_label =
         c("^Fibroblasts_activated$" = "Fibroblasts",
             "^Fibroblasts_senescent$" = "Fibroblasts",
@@ -530,7 +576,28 @@ Annotation_cleanup <-
             "^Vd2 gd T cells$" = "T_cells",
             "^Macrophage_monocyte_derived_M_CSF_IFNg$" = "Macrophages",
             "^Non-Vd2 gd T cells$" = "T_cells",
-            "^Adventitial_fibroblasts$" = "Fibroblasts"),
+            "^Adventitial_fibroblasts$" = "Fibroblasts",
+            "^Chondrocytes_MSC_derived$" = "Mesenchymal",
+            "^BM$" = "Mesenchymal",
+            "^Macrophage_monocyte_derived_M_CSF_IFNg_Pam3Cys$" = "Macrophages",
+            "^Monocyte$" = "Monocytes",
+            "^Neurons_Schwann_cell$" = "Neurons",
+            "^Smooth_muscle_cells_vascular$" = "Smooth_muscle",
+            "^Tissue_stem_cells_BM_MSC_BMP2$" = "Mesenchymal",
+            "^Macrophages__MFIO5_II_480INT_$" = "Macrophages",
+            "^Monocytes__MO_6C_II_plus_$" = "Monocytes",
+            "^Smooth_muscle_cells_bronchial$" = "Smooth_muscle",
+            "^Smooth_muscle_cells_arterial$" = "Smooth_muscle",
+            "^Neuroepithelial_cell_ESC_derived$" = "Mesenchymal",
+            "^Chondrocytes_MSC_derived$" = "Mesenchymal",
+            "^MSC$" = "Mesenchymal",
+            "^GMP_Progenitors$" = "Progenitors",
+            "^Tissue_stem_cells$" = "Mesenchymal",
+            "^Chondrocytes$" = "Mesenchymal",
+            "^Osteoblasts$" = "Mesenchymal",
+            "^NK_cell_CD56hiCD62L_plus$" = "NK_cells",
+            "^SMG_duct$" = "Epithelial_cells",
+            "^Lymphatic_EC$" = "Endothelial_cells"),
         SingleR_Ann1_label =
             c("^B_cells$" = "Immune_Lymphoid",
             "^Dendritic_cells$" = "Immune_Myeloid",

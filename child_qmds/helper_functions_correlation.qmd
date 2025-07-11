@@ -266,19 +266,28 @@ convert_sobj_gene_name_species <- function(s_obj,
                                            from = "mouse",
                                            to = "human") {
     if (from == "mouse" && to == "human") {
-        homologs <-
-            qs::qread("output/human_homologs_mm10.qs") %>%
-            dplyr::select(
-                external_gene_name,
-                hsapiens_homolog_associated_gene_name
-            )
-    } else if (from == "dog" && to == "human") {
-        homologs <-
-            qs::qread("output/human_homologs_dog.qs") %>%
-            dplyr::select(
-                external_gene_name,
-                hsapiens_homolog_associated_gene_name
-            )
+        keep_key_df <-
+            keep_key_df |>
+            dplyr::mutate(
+                gene = (nichenetr::convert_mouse_to_human_symbols(gene))
+            ) |>
+            dplyr::group_by(gene) |>
+            mutate(n = dplyr::n()) |>
+            mutate(keep = dplyr::if_else(!is.na(gene) & n == 1, TRUE, FALSE))
+
+    } else if (from == "human" && to == "mouse") {
+        keep_key_df <-
+            keep_key_df |>
+            dplyr::mutate(
+                gene = nichenetr::convert_human_to_mouse_symbols(gene)
+            ) |>
+            dplyr::group_by(gene) |>
+            mutate(n = dplyr::n()) |>
+            mutate(keep = dplyr::if_else(!is.na(gene) & n == 1, TRUE, FALSE))
+    } else if (from == "dogs" && to == "human") {
+        s_obj <- 
+            dog_to_human_setup(s_obj)
+        return(s_obj)
     } else {
         stop("Invalid from/to conversion. Only mouse and human are supported.")
     }
