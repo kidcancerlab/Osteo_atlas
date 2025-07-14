@@ -185,6 +185,30 @@ for (sid in names(spatial_list)) {
         verbose = TRUE
         )
 }
+
+
+all_ldas <- parallel::mclapply(spatial_list, function(ob) {
+    pos <- GetTissueCoordinates(ob)
+    counts <- GetAssayData(ob, layer = "counts")
+    # feature select
+    corpus <- restrictCorpus(
+        counts,
+        removeAbove = 1.0,
+        removeBelow = 0.05,
+        alpha = 0.05,
+        plot = FALSE,
+        verbose = TRUE
+    )
+    fitLDA(
+        t(as.matrix(corpus)),
+        Ks = seq(2, 15, by = 1),
+        perc.rare.thresh = 0.05,
+        plot = TRUE
+    )
+    },
+    mc.cores = parallelly::availableCores()
+)
+
 qs::qsave(all_ldas, "output/STdeconvolve/all_ldas.qs")
 ```
 
