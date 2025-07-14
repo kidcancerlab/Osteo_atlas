@@ -179,7 +179,7 @@ for (sid in names(spatial_list)) {
     # fit LDA models for
     all_ldas[[sid]] <- fitLDA(
         t(as.matrix(corpus)),
-        Ks = seq(2, 9, by = 1),
+        Ks = seq(2, 15, by = 1),
         perc.rare.thresh = 0.05,
         plot = TRUE,
         verbose = TRUE
