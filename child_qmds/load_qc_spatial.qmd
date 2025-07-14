@@ -68,6 +68,14 @@ spacexr_reference <-
     spacexr::Reference(GetAssayData(patient_mets, layer = "counts"),
                        as.factor(patient_mets$Ann_Level2),
                        n_max_cells = 2000)
+
+# Create level 1 reference too
+spacexr_level1 <-
+    spacexr::Reference(
+        GetAssayData(patient_mets, layer = "counts"),
+        as.factor(patient_mets$Ann_Level1),
+        n_max_cells = 2000
+    )
 ```
 
 ### Run RCTD on Spatial Data
@@ -95,6 +103,30 @@ for (ob_name in names(spatial_list)) {
     spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
 }
 qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level2_annotations.qs")
+
+
+# do it at level 1
+for (ob_name in names(spatial_list)) {
+    sp_ob <- spatial_list[[ob_name]]
+    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
+        dplyr::rename(x = imagerow, y = imagecol)
+    #convert our object to an rctd object
+    my_data <- spacexr::SpatialRNA(coords,
+                                   GetAssayData(sp_ob, layer = "counts"))
+    rctd_obj <- spacexr::create.RCTD(my_data,
+                                     spacexr_level1,
+                                     max_cores = 6,
+                                     UMI_min = 3,
+                                     counts_MIN = 0, 
+                                     UMI_max = 900000000,
+                                     CELL_MIN_INSTANCE = 0)
+    rctd_out <- spacexr::run.RCTD(rctd_obj, doublet_mode = "full")
+    qs::qsave(rctd_out, paste0("output/spatial_objects/spacexr_", ob_name, ".qs"))
+
+    norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
+    spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
+}
+qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level1_annotations.qs")
 ```
 
 ## Plot Tumor Cell Scores
@@ -162,32 +194,10 @@ Troy likes this method so I'm going to give it a go.
 
 ```{r stdeconvolve}
 library(STdeconvolve)
+
 all_ldas <- list()
-for (sid in names(spatial_list)) {
+parallel::mclapply(names(spatial_list), function(sid) {
     ob <- spatial_list[[sid]]
-    pos <- GetTissueCoordinates(ob)
-    counts <- GetAssayData(ob, layer = "counts")
-    # feature select for genes
-    corpus <- restrictCorpus(
-        counts,
-        removeAbove = 1.0,
-        removeBelow = 0.05,
-        alpha = 0.05,
-        plot = FALSE,
-        verbose = TRUE
-    )
-    # fit LDA models for
-    all_ldas[[sid]] <- fitLDA(
-        t(as.matrix(corpus)),
-        Ks = seq(2, 15, by = 1),
-        perc.rare.thresh = 0.05,
-        plot = TRUE,
-        verbose = TRUE
-        )
-}
-
-
-all_ldas <- parallel::mclapply(spatial_list, function(ob) {
     pos <- GetTissueCoordinates(ob)
     counts <- GetAssayData(ob, layer = "counts")
     # feature select
@@ -199,12 +209,16 @@ all_ldas <- parallel::mclapply(spatial_list, function(ob) {
         plot = FALSE,
         verbose = TRUE
     )
-    fitLDA(
+    lda_mod <- fitLDA(
         t(as.matrix(corpus)),
         Ks = seq(2, 15, by = 1),
         perc.rare.thresh = 0.05,
-        plot = TRUE
+        plot = FALSE
     )
+    all_ldas[[sid]] <- lda_mod
+    qs::qsave(
+        lda_mod,
+        paste0("output/STdeconvolve/", sid, "_lda.qs"))
     },
     mc.cores = parallelly::availableCores()
 )
