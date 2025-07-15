@@ -247,42 +247,81 @@ for (ob in ob_names) {
 }
 
 for (ob in names(cancer_obs)) {
-    png(paste0("figures/DoubletFinder/results_by_annotation_", ob, ".png"),
+    png(paste0("demuxafy_figs/results_by_annotation_cancer_", ob, ".png"),
         width = 2000,
         height = 800)
-    print(dimplot_better(obj_list[[ob]],
-                         group = c("Ann_Level3",
-                                   "MajoritySinglet_DropletType"),
-                         ncol = 2))
+    print(
+        dimplot_better(
+            cancer_obs[[ob]],
+            group = c("Ann_Level3", "MajoritySinglet_DropletType"),
+            ncol = 2,
+            coord.fixed = TRUE
+        )
+    )
     dev.off()
 }
-```
 
-### Investigate Tumor Interactive
-
-Since so much of tumor interactive is called doublets, we should expect there to not be many markers that are unique to this cluster, since it should share transcriptional features of multiple other clusters according to the doublet finder method calls.
-
-We're going to drill down into the Tumor Interactive population in the patient mets samples.
-
-```{r tumor-interactive-drill-down}
-p_mets <- obj_list[["patient_mets"]]
-Idents(p_mets) <- p_mets$Ann_Level3
-p_met_markers <- FindAllMarkers(p_mets)
-
-p_met_markers %>%
-    mutate(pct_exp_diff = pct.1 - pct.2) %>%
-    # filter(cluster == "Tumor_Interractive") %>%
-    group_by(cluster) %>%
-    arrange(desc(pct_exp_diff)) %>%
-    filter(p_val_adj < 0.05) %>%
+for (ob in names(stroma_obs)) {
+    png(paste0("demuxafy_figs/results_by_annotation_stroma_", ob, ".png"),
+        width = 2000,
+        height = 800)
+    print(
+        dimplot_better(
+            stroma_obs[[ob]],
+            group = c("Ann_Level3",
+            "MajoritySinglet_DropletType"),
+            ncol = 2
+        )
+    )
+    dev.off()
+}
 
 ```
 
-### Compare Doublet Calls to QC Checks
+### Make Heatmaps for % of Doublet Calls by Cell Types
 
-I'm going to compare the proportion of doublet calls in cells that passed QC compared to those that didn't.
-
+I'm going to look for patterns in if particular cell types are called doublets across models.
 ```{r}
+for (ob in names(obj_list)) {
+    png(
+        paste0("demuxafy_figs/heatmaps/", ob, ".png"),
+        width = 480,
+        height = 1200
+    )
+    all_demux[[ob]] %>%
+        dplyr::select(MajoritySinglet_DropletType) %>%
+
+}
+
+all_demux <- lapply(obj_list, function(x) {
+    dplyr::select(x@meta.data, MajoritySinglet_DropletType, object, Ann_Level3)
+})
+merged_demux <- bind_rows(all_demux)
+
+merged_demux %>%
+    group_by(Ann_Level3, object) %>%
+    mutate(
+        num_cells = n(),
+        perc_doublet = sum(MajoritySinglet_DropletType == "doublet") / num_cells * 100) %>%
+    dplyr::select(object, Ann_Level3, perc_doublet) %>%
+    unique() %>%
+    # pivot_wider(names_from = "object", values_from = "perc_doublet") %>%
+    # dplyr::select(-`NA`) %>%
+    ggplot(aes(x = object, y = Ann_Level3, fill = perc_doublet)) +
+    geom_tile()
+
+
+
+
+
+
+
+
+
+
+
+
+
 qc_doublet_heatmaps <- lapply(all_demux, function(x) {
     x %>%
         dplyr::select(MajoritySinglet_DropletType,
@@ -352,11 +391,11 @@ for (ob_name in names(obj_list)) {
 }
 
 #Make cancer dimplots
-for (name in names(obj_list)) {
-    png(paste0("demuxafy_figs/dimplots/", name, ".png"))
+for (name in names(cancer_obs)) {
+    png(paste0("demuxafy_figs/cancer_dimplot_", name, ".png"))
     print(dimplot_better(
-        obj_list[[name]],
-        group = c("Ann_Level1","MajoritySinglet_DropletType")),
+        cancer_obs[[name]],
+        group = c("Ann_Level3","MajoritySinglet_DropletType")),
         ncol = 2
     )
     dev.off()
