@@ -174,31 +174,29 @@ singularity exec --bind /home/gdrobertslab/lab/Analysis/MattGust/projects/Robert
 
 ```{r overlay-demuxafy-results}
 #we'll be using the objects from final_tumor_vs_stroma
-ob_names <- c("mm_mets_cancer_cells",
-              "mm_mets_normal_cells",
-              "mm_prim_cancer_cells",
-              "mm_prim_normal_cells",
-              "patient_mets_cancer_cells",
-              "patient_mets_normal_cells",
-              "patient_prim_cancer_cells",
-              "patient_prim_normal_cells",
-              "xeno_mets_human",
-              "xeno_mets_mouse",
-              "xeno_prim_human",
-              "xeno_prim_mouse",
-              "dogs_mets_cancer_cells",
-              "dogs_mets_normal_cells",
-              "dogs_prim_cancer_cells",
-              "dogs_prim_normal_cells")
+ob_names <- c(
+    "dogs_mets",
+    "dogs_prim",
+    "mm_mets",
+    "mm_prim",
+    "patient_mets",
+    "patient_prim",
+    "xeno_mets_human_cancer_cells",
+    "xeno_mets_mouse",
+    "xeno_prim_human_cancer_cells",
+    "xeno_prim_mouse"
+)
+
 obj_list <- list()
 all_demux <- list()
 
 for (ob_name in ob_names) {
     print(paste("loading", ob_name))
     #Read in seurat object from Yogesh's folder
-    tmp_ob <- qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/",
-                                       ob_name,
-                                       ".qs"))
+    tmp_ob <- qs::qread(
+        paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/",
+        ob_name,
+        ".qs"))
     # tmp_ob <- reconstruct_cell_types(tmp_ob)
     #read in demuxafy results
     demuxafy_res <- list()
@@ -232,10 +230,23 @@ for (ob_name in ob_names) {
 qs::qsave(obj_list, "output/seurat_objects/demuxafied_obj_list.qs")
 qs::qsave(all_demux, "DoubletFinder/all_demuxafy_results.qs")
 
-#make list of cancer objects, wanna see if tumor interactive is still messed up
-cancer_obs <- obj_list[grep("cancer", names(obj_list), value = TRUE)]
 
-for (ob in names(obj_list)) {
+
+# split into cancer vs stroma lists
+cancer_obs <- list()
+stroma_obs <- list()
+for (ob in ob_names) {
+    if (!str_detect(ob, "xeno")) {
+        cancer_obs[[ob]] <- subset(obj_list[[ob]], Ann_Level1 == "Tumor")
+        stroma_obs[[ob]] <- subset(obj_list[[ob]], Ann_Level1 != "Tumor")
+    } else if (str_detect(ob, "cancer_cells")) {
+        cancer_obs[[ob]] <- obj_list[[ob]]
+    } else {
+        cancer_obs[[ob]] <- obj_list[[ob]]
+    }
+}
+
+for (ob in names(cancer_obs)) {
     png(paste0("figures/DoubletFinder/results_by_annotation_", ob, ".png"),
         width = 2000,
         height = 800)
@@ -254,7 +265,7 @@ Since so much of tumor interactive is called doublets, we should expect there to
 We're going to drill down into the Tumor Interactive population in the patient mets samples.
 
 ```{r tumor-interactive-drill-down}
-p_mets <- obj_list[["patient_mets_cancer_cells"]]
+p_mets <- obj_list[["patient_mets"]]
 Idents(p_mets) <- p_mets$Ann_Level3
 p_met_markers <- FindAllMarkers(p_mets)
 
@@ -296,8 +307,6 @@ The dimplots will give us an idea of if the doublet callers exhibit a bias towar
 ```{r visualize-demuxafy-results}
 df_result_plts <- list()
 df_result_heatmaps <- list()
-
-obj_list <- lapply(obj_list, reconstruct_cell_types)
 
 for (ob_name in names(obj_list)) {
     plt_titles <- paste0(c("MajoritySinglet",
@@ -345,19 +354,21 @@ for (ob_name in names(obj_list)) {
 #Make cancer dimplots
 for (name in names(obj_list)) {
     png(paste0("demuxafy_figs/dimplots/", name, ".png"))
-    dimplot_better(obj_list[[1]], group = c("Ann_Level1", "MajoritySinglet_DropletType"))
+    print(dimplot_better(
+        obj_list[[name]],
+        group = c("Ann_Level1","MajoritySinglet_DropletType")),
+        ncol = 2
+    )
     dev.off()
 }
-dim_list <- lapply(obj_list[c(1, 3, 5, 7)], function(ob) {
+
+
+dim_list <- lapply(cancer_obs, function(ob) {
     dimplot_better(ob, group = c("Ann_Level1", "MajoritySinglet_DropletType"))
 })
 
-png("demuxafy_figs/all_cancer_dimplot.png", height = 1000, width = 3000)
-dim_list[[1]] | dim_list[[2]] | dim_list[[3]] | dim_list[[4]]
-dev.off()
-
 png(paste0("demuxafy_figs/tumor_cell_doublet_call_heatmap.png"), height = 1000, width = 3000)
-grid.arrange(grobs = df_result_heatmaps[c(1, 3, 5, 7)], ncol = 6)
+gridExtra::grid.arrange(grobs = dim_list, nrow = 2)
 dev.off()
 ```
 
@@ -383,13 +394,13 @@ for (ob_name in names(obj_list)) {
     df_by_filtered[[ob_name]] <- table(df_res_by_ob[[ob_name]]$passed_qc,
                                        df_res_by_ob[[ob_name]]$MajoritySinglet_DropletType)
 
-    df_res_by_ob[[ob_name]]@meta.data %>%
-        dplyr::select(DoubletDetection_DropletType,
-                      scDblFinder_DropletType,
-                      scds_DropletType,
-                      MajoritySinglet_DropletType,
-                      passed_qc) %>%
-        mutate(object = ob_name)
+    # df_res_by_ob[[ob_name]]@meta.data %>%
+    #     dplyr::select(DoubletDetection_DropletType,
+    #                   scDblFinder_DropletType,
+    #                   scds_DropletType,
+    #                   MajoritySinglet_DropletType,
+    #                   passed_qc) %>%
+    #     mutate(object = ob_name)
 }
 
 lapply(df_by_filtered, prop.table, margin = 1)
@@ -407,7 +418,7 @@ group_by(merged_demux, object, passed_qc) %>%
                   doublet_prop) %>%
     unique() %>%
     group_by(object) %>%
-    mutate(tot_cells = sum(num_cells))
+    mutate(tot_cells = sum(num_cells)) %>%
     ggplot(aes(x = object,
                y = doublet_prop,
                fill = passed_qc)) +
