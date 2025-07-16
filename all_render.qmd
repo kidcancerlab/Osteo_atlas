@@ -623,6 +623,60 @@ ggsave(filename = "output/figures/RUNX2_expression_ggplot.png",
         limitsize = FALSE)
 
 
+
+# this is the ridgeplot 
+obj <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs") 
+
+patient <-
+    subset(obj,
+           unique == "patient_prim" | unique == "patient_mets")
+
+dimplot_better(patient,
+            group_by = "Ann_Level3", split_by = "unique") + NoLegend()
+
+charles_data<-
+    FetchData(patient, vars = c("F3", "unique", "method")) %>%
+    as.data.frame() %>%
+    rownames_to_column("cell_ids") 
+    library(ggplot2)
+
+charles_data$unique <- 
+    factor(charles_data$unique, 
+    levels = c("patient_prim", setdiff(unique(charles_data$unique), "patient_prim")))
+
+charles1<-
+    ggplot(charles_data, aes(x = log10(F3+0.0001), fill = method)) +
+    geom_histogram(alpha = 1, bins = 50) +
+    facet_wrap(~unique + method, scales = "free_y") +
+    theme_minimal() +
+    labs(title = "Histogram of F3 split by unique and method",
+                x = "F3 Expression",
+                y = "Cell Count")
+
+ggsave(filename = "output/figures/charles_histogram1_F3.png",
+        plot = charles1,
+        width = 10,
+        height = 10,
+        limitsize = FALSE,
+        bg="white")
+
+charless <-
+    ggplot(charles_data, aes(x = log10(F3+ 0.0001), fill = unique)) +
+    geom_histogram(alpha = 1, bins = 50) +
+    facet_wrap(~ unique, scales = "free_y") +
+    theme_minimal() +
+    labs(title = "Histogram of F3 split by unique",
+         x = "F3 Expression",
+         y = "Cell Count")
+
+ggsave(filename = "output/figures/charles_histogram_F3.png",
+        plot = charless,
+        width = 10,
+        height = 10,
+        limitsize = FALSE,
+        bg="white")
+
 ```
 
 
