@@ -76,7 +76,10 @@ spacexr_level1 <-
         as.factor(patient_mets$Ann_Level1),
         n_max_cells = 2000
     )
+
+level1_types <- unique(patient_mets$Ann_Level1)
 ```
+
 
 ### Run RCTD on Spatial Data
 
@@ -127,6 +130,15 @@ for (ob_name in names(spatial_list)) {
     spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
 }
 qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level1_annotations.qs")
+
+level1_types
+SpatialFeaturePlot(
+    spatial_list[[1]],
+    features = level1_types,
+    image.alpha = 0,
+    pt.size.factor = 1500
+)
+
 ```
 
 ## Plot Tumor Cell Scores
@@ -187,10 +199,11 @@ grid.arrange(grobs = he_list, nrow = 2)
 dev.off()
 ```
 
-## Try STdeconvolve
+## STdeconvolve
 
 Troy likes this method so I'm going to give it a go.
 
+### Fit Models
 
 ```{r stdeconvolve}
 library(STdeconvolve)
@@ -211,41 +224,175 @@ parallel::mclapply(names(spatial_list), function(sid) {
     )
     lda_mod <- fitLDA(
         t(as.matrix(corpus)),
-        Ks = seq(2, 15, by = 1),
+        Ks = seq(5, 20, by = 1),
         perc.rare.thresh = 0.05,
-        plot = FALSE
+        plot = FALSE,
+        ncores = 8
     )
     all_ldas[[sid]] <- lda_mod
     qs::qsave(
         lda_mod,
         paste0("output/STdeconvolve/", sid, "_lda.qs"))
     },
-    mc.cores = parallelly::availableCores()
+    mc.cores = 6
 )
 
 qs::qsave(all_ldas, "output/STdeconvolve/all_ldas.qs")
 ```
 
-### Looking at OS1
+### Read back in Models
 
 ```{r}
-os1 <- spatial_list[[1]]
-pos <- GetTissueCoordinates(os1)
-colnames(pos) <- c("x", "y")
+all_ldas <- list()
+for (ob in names(spatial_list)) {
+    all_ldas[[ob]] <-
+        qs::qread(
+            paste0("output/STdeconvolve/", ob, "_lda.qs")
+        )
+}
 
-# using model from loop above
-optLDA <- opt_ldas[["OS1_Seurat"]]
+for (ob in names(all_ldas)) {
+    tmp_mod <- all_ldas[[ob]]
+    png(paste0("output/STdeconvolve/figures/bias_variance_", ob, ".png"))
+    perplexityPlot(tmp_mod)
+    dev.off()
+}
 
-## extract deconvolved cell-type proportions (theta) and transcriptional profiles (beta)
-results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
-names(results)
-dim(results[["theta"]])
-
-theta <- results$theta
-beta <- results$beta
-
-#visualize deconvolved cell type props
-vizAllTopics(theta, pos, r = 2) | SpatialFeaturePlot(os1, c("Tumor_Apoptosis", "Tumor_Fibrogenic", "Tumor_Interactive", "Tumor_Progenitor", "Tumor_Proliferative", "Tumor_Synthetic"), pt.size.factor = 1200, image.alpha = 0)
+# time to pick the optimal models
+opt_mods <- lapply(all_ldas, optimalModel, opt)
 ```
 
-This only identified 3 topics in our spatial data, and it did a good job of separating the tumor from stroma. However, it only labelled 1 total stromal cell type, which is kinda low resolution. I wonder if allowing more topics would produce more distinct stromal populations.
+### Pick Optimal Models
+
+I'm not sure which optimization procedure I should use, so I'm going to analyze using both methods.
+
+```{r}
+# minimizing perplexity
+min_lda <- lapply(all_ldas, optimalModel, opt = "min")
+min_lda
+
+# knee point of perplexity and # of cell types w < 5% of all cells
+# essentially point that minimizes bias-variance trade-off
+kneed_lda <- lapply(all_ldas, optimalModel, opt = "kneed")
+kneed_lda
+```
+
+As we can see, the kneed models have a lot more topics than the minimized_perplexity group.
+
+### Visualize Topics
+
+```{r}
+# Following along with their vignette,using patient mets instead of mOB
+patient_mets <- qs::qread("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs")
+
+pdf("output/STdeconvolve/figures/kneed_K_correlation.pdf")
+for (ob in names(spatial_list)) {
+    s_obj <- spatial_list[[ob]]
+    cor_plt <- make_cor_plt(kneed_lda[[ob]], s_obj)
+    
+    # get tissue coordinates and adjust so they match the h&e slide
+    pos <- GetTissueCoordinates(s_obj)
+    colnames(pos) <- c("y", "x")
+    pos$y <- -pos$y
+    
+    # get beta and theta from model
+    beta_theta <-
+        getBetaTheta(kneed_lda[[ob]], perc.filt = 0.05, betaScale = 1000)
+
+    print(cor_plt)
+    print(
+        vizAllTopics(
+            beta_theta$theta,
+            pos = pos,
+            r = 2) +
+        ggtitle(label = paste(ob,"Deconvolution Topics"))
+    )
+    print(
+        SpatialDimPlot(s_obj, pt.size.factor = 0) +
+        ggtitle(label = ob)
+    )
+}
+dev.off()
+
+
+pdf("output/STdeconvolve/figures/min_K_correlation.pdf")
+for (ob in names(spatial_list)) {
+    s_obj <- spatial_list[[ob]]
+    cor_plt <- make_cor_plt(min_lda[[ob]], s_obj)
+
+    # get tissue coordinates and adjust so they match the h&e slide
+    pos <- GetTissueCoordinates(s_obj)
+    colnames(pos) <- c("y", "x")
+    pos$y <- -pos$y
+    
+    # get beta and theta from model
+    beta_theta <-
+        getBetaTheta(min_lda[[ob]], perc.filt = 0.05, betaScale = 1000)
+
+    print(cor_plt)
+    print(
+        vizAllTopics(
+            beta_theta$theta,
+            pos = pos,
+            r = 2
+        )
+    )
+    print(SpatialDimPlot(s_obj, pt.size.factor = 0))
+}
+dev.off()
+
+
+
+
+make_cor_plt <- function(mod, s_obj) {
+    ### Make beta and theta matrices for reference dataset
+    #get counts
+    counts <- GetAssayData(patient_mets, layer = "counts")
+    # store the annotations as a factor
+    annot <- as.factor(patient_mets$Ann_Level2)
+    # create a de facto theta matrix for the single cell data
+    ref_proxy_theta <- model.matrix(~ 0 + annot)
+    rownames(ref_proxy_theta) <- names(annot)
+    # create a de facto gene expression deconvolution matrix for our reference
+    ref_proxy_gex <- counts %*% ref_proxy_theta
+
+
+    # get tissue coordinates and rename columns
+    pos <- GetTissueCoordinates(s_obj)
+    colnames(pos) <- c("y", "x")
+    pos$y <- -pos$y
+
+    # Get beta and theta values 
+    beta_theta <- getBetaTheta(mod)
+
+    # calculate correlation matrix
+    cor <- 
+        getCorrMtx(
+            m1 = as.matrix(beta_theta$beta),
+            m2 = t(as.matrix(ref_proxy_gex)),
+            type = "b"
+        )
+    rownames(cor) <- paste0("decon_", rownames(cor))
+    # remove "annot" from the front of cell types
+    colnames(cor) = str_remove(colnames(cor), "annot")
+
+    return(
+        correlationPlot(
+            mat = cor,
+            colLabs = "Deconvolved cell topics",
+            rowLabs = "Atlas cell types",
+            title = paste("Transcriptional Correlation in", ob)
+        ) +
+        theme(axis.text.x = element_text(angle = 315))
+    )
+}
+```
+
+### Topic-Based GSEA
+
+I'm also going to try running GSEA on 
+
+```{r}
+
+```
+
