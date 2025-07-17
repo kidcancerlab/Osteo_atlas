@@ -77,6 +77,14 @@ spacexr_level1 <-
         n_max_cells = 2000
     )
 
+# level 3 reference
+spacexr3 <-
+    spacexr::Reference(
+        GetAssayData(patient_mets, layer = "counts"),
+        as.factor(patient_mets$Ann_Level3),
+        n_max_cells = 2000
+    )
+
 level1_types <- unique(patient_mets$Ann_Level1)
 ```
 
@@ -131,13 +139,27 @@ for (ob_name in names(spatial_list)) {
 }
 qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level1_annotations.qs")
 
-level1_types
-SpatialFeaturePlot(
-    spatial_list[[1]],
-    features = level1_types,
-    image.alpha = 0,
-    pt.size.factor = 1500
-)
+# going to do it at level 3, specifying multi mode, though
+for (ob_name in names(spatial_list)) {
+    sp_ob <- spatial_list[[ob_name]]
+    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
+        dplyr::rename(x = imagerow, y = imagecol)
+    #convert our object to an rctd object
+    my_data <- spacexr::SpatialRNA(coords,
+                                   GetAssayData(sp_ob, layer = "counts"))
+    rctd_obj <- spacexr::create.RCTD(my_data,
+                                     spacexr3,
+                                     max_cores = 6,
+                                     UMI_min = 3,
+                                     counts_MIN = 0, 
+                                     UMI_max = 900000000,
+                                     CELL_MIN_INSTANCE = 0)
+    rctd_out <- spacexr::run.RCTD(
+        rctd_obj,
+        doublet_mode = "multi",
+        max_multi_types = 10)
+}
+qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level3_annotations.qs")
 
 ```
 
@@ -157,12 +179,12 @@ size.factors <- list("OS1_Seurat" = 1500,
 
 for (ob in names(spatial_list)) {
     tmp <- spatial_list[[ob]]
-    tmp$Tumor_Cumulative <- tmp$Tumor_Fibrogenic +
-                             tmp$Tumor_Apoptosis +
-                             tmp$Tumor_Interactive +
-                             tmp$Tumor_Progenitor +
-                             tmp$Tumor_Proliferative +
-                             tmp$Tumor_Synthetic
+    tmp$Tumor_Cumulative <- tmp$Basal_Progenitor +
+                             tmp$Fibrogenic +
+                             tmp$Interactive +
+                             tmp$MP_Progenitor +
+                             tmp$Proliferative +
+                             tmp$Stressed
     plot_list <- list("H&E" = SpatialDimPlot(tmp,
                                              pt.size.factor = 0) + NoLegend())
     tumor_feats <- grep("Tumor", colnames(tmp@meta.data), value = TRUE)
@@ -412,7 +434,7 @@ I really don't like this method of annotating. Perhaps it's an issue with the da
 
 I think for the time being, I'm better off sticking with the spacexr results, since they give an actual prediction (maybe?).
 
-Right now I'm interested in the fibrogenic TAMs population and the Interactive tumor subpopulation.
+Right now I'm interested in module
 
 ```{r}
 # read in dataset with fibrogenic tams
@@ -438,13 +460,39 @@ myeloid_modules <- lapply(myeloid_modules, function(x) {
 })
 # get fibrogenic module
 fib_mod <- myeloid_modules[["Fibrogenic_TAMs"]]
+# subset to genes present in objects
+length(fib_mod)
 
 
 spatial_list <- lapply(
     spatial_list,
     AddModuleScore,
-    features = myeloid_modules[["Fibrogenic_TAMs"]],
-    name = "Fibrogenic_TAMs"
+    features = myeloid_modules,
+    name = "myeloid"
 )
 
+as.list(setNames(names(myeloid_modules), paste0("myeloid", 1:13)))
+
+SpatialFeaturePlot(
+    spatial_list[[1]],
+    features = paste0("myeloid", 1:13),
+    pt.size.factor = size.factors[[1]],
+    ncol = 7
+)
+
+
+# visualize 
+fib_tam_plots <- lapply(
+    names(spatial_list),
+    function(x) {
+        print(
+            SpatialFeaturePlot(
+                spatial_list[[x]],
+                features = c("Fibrogenic_TAMs1", "Tumor_Cumulative"),
+                pt.size.factor = size.factors[[x]]
+            )
+        )
+    }
+)
+gridExtra::grid.arrange(grobs = fib_tam_plots)
 ```
