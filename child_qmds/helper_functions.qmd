@@ -1207,3 +1207,48 @@ confirm_mclapply_worked <- function(input_list) {
     }
 }
 ```
+
+```{r spatial-plotting-fxns}
+make_cor_plt <- function(mod, s_obj) {
+    ### Make beta and theta matrices for reference dataset
+    #get counts
+    counts <- GetAssayData(patient_mets, layer = "counts")
+    # store the annotations as a factor
+    annot <- as.factor(patient_mets$Ann_Level2)
+    # create a de facto theta matrix for the single cell data
+    ref_proxy_theta <- model.matrix(~ 0 + annot)
+    rownames(ref_proxy_theta) <- names(annot)
+    # create a de facto gene expression deconvolution matrix for our reference
+    ref_proxy_gex <- counts %*% ref_proxy_theta
+
+
+    # get tissue coordinates and rename columns
+    pos <- GetTissueCoordinates(s_obj)
+    colnames(pos) <- c("y", "x")
+    pos$y <- -pos$y
+
+    # Get beta and theta values 
+    beta_theta <- getBetaTheta(mod)
+
+    # calculate correlation matrix
+    cor <- 
+        getCorrMtx(
+            m1 = as.matrix(beta_theta$beta),
+            m2 = t(as.matrix(ref_proxy_gex)),
+            type = "b"
+        )
+    rownames(cor) <- paste0("decon_", rownames(cor))
+    # remove "annot" from the front of cell types
+    colnames(cor) = str_remove(colnames(cor), "annot")
+
+    return(
+        correlationPlot(
+            mat = cor,
+            colLabs = "Deconvolved cell topics",
+            rowLabs = "Atlas cell types",
+            title = paste("Transcriptional Correlation in", ob)
+        ) +
+        theme(axis.text.x = element_text(angle = 315))
+    )
+}
+```

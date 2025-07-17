@@ -282,6 +282,18 @@ As we can see, the kneed models have a lot more topics than the minimized_perple
 ### Visualize Topics
 
 ```{r}
+# create different radii based on spatial object
+r_vals <- list(
+    "OS1_Seurat" = 2,
+    "OS2_Seurat" = 2,
+    "OS3_Seurat" = 1,
+    "OS4_Seurat" = 2,
+    "OS5_Seurat" = 1,
+    "OS6_Seurat" = 1,
+    "OS7_Seurat" = 1,
+    "OS8_Seurat" = 2
+)
+
 # Following along with their vignette,using patient mets instead of mOB
 patient_mets <- qs::qread("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs")
 
@@ -304,7 +316,7 @@ for (ob in names(spatial_list)) {
         vizAllTopics(
             beta_theta$theta,
             pos = pos,
-            r = 2) +
+            r = r_vals[[ob]]) +
         ggtitle(label = paste(ob,"Deconvolution Topics"))
     )
     print(
@@ -340,52 +352,6 @@ for (ob in names(spatial_list)) {
     print(SpatialDimPlot(s_obj, pt.size.factor = 0))
 }
 dev.off()
-
-
-
-
-make_cor_plt <- function(mod, s_obj) {
-    ### Make beta and theta matrices for reference dataset
-    #get counts
-    counts <- GetAssayData(patient_mets, layer = "counts")
-    # store the annotations as a factor
-    annot <- as.factor(patient_mets$Ann_Level2)
-    # create a de facto theta matrix for the single cell data
-    ref_proxy_theta <- model.matrix(~ 0 + annot)
-    rownames(ref_proxy_theta) <- names(annot)
-    # create a de facto gene expression deconvolution matrix for our reference
-    ref_proxy_gex <- counts %*% ref_proxy_theta
-
-
-    # get tissue coordinates and rename columns
-    pos <- GetTissueCoordinates(s_obj)
-    colnames(pos) <- c("y", "x")
-    pos$y <- -pos$y
-
-    # Get beta and theta values 
-    beta_theta <- getBetaTheta(mod)
-
-    # calculate correlation matrix
-    cor <- 
-        getCorrMtx(
-            m1 = as.matrix(beta_theta$beta),
-            m2 = t(as.matrix(ref_proxy_gex)),
-            type = "b"
-        )
-    rownames(cor) <- paste0("decon_", rownames(cor))
-    # remove "annot" from the front of cell types
-    colnames(cor) = str_remove(colnames(cor), "annot")
-
-    return(
-        correlationPlot(
-            mat = cor,
-            colLabs = "Deconvolved cell topics",
-            rowLabs = "Atlas cell types",
-            title = paste("Transcriptional Correlation in", ob)
-        ) +
-        theme(axis.text.x = element_text(angle = 315))
-    )
-}
 ```
 
 ### Topic-Based GSEA
