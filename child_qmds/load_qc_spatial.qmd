@@ -286,11 +286,11 @@ As we can see, the kneed models have a lot more topics than the minimized_perple
 r_vals <- list(
     "OS1_Seurat" = 2,
     "OS2_Seurat" = 2,
-    "OS3_Seurat" = 1,
+    "OS3_Seurat" = 1.5,
     "OS4_Seurat" = 2,
-    "OS5_Seurat" = 1,
-    "OS6_Seurat" = 1,
-    "OS7_Seurat" = 1,
+    "OS5_Seurat" = 1.5,
+    "OS6_Seurat" = 1.5,
+    "OS7_Seurat" = 1.5,
     "OS8_Seurat" = 2
 )
 
@@ -346,7 +346,7 @@ for (ob in names(spatial_list)) {
         vizAllTopics(
             beta_theta$theta,
             pos = pos,
-            r = 2
+            r = r_vals[[ob]]
         )
     )
     print(SpatialDimPlot(s_obj, pt.size.factor = 0))
@@ -359,6 +359,92 @@ dev.off()
 I'm also going to try running GSEA on 
 
 ```{r}
+Idents(patient_mets) <- patient_mets$Ann_Level2
+ref_degs <- FindAllMarkers(
+    patient_mets,
+    only.pos = TRUE,
+    min.pct = 0.25
+)
+write.table(
+    ref_degs,
+    "output/degs/ann_level2_degs.tsv",
+    sep = "\t",
+    row.names = TRUE)
 
+# for fuse with STdeconvolve, I need a list of marker genes for each cell type
+# We'll limit things to the top 200 genes for each cell type
+ref_gene_set <- list()
+for (ct in unique(ref_degs$cluster)) {
+    tmp_degs <- subset(
+        ref_degs,
+        cluster == ct &
+        p_val_adj < 0.05 &
+        avg_log2FC > 1
+        ) %>%
+        arrange(desc(avg_log2FC))
+    ref_gene_set[[ct]] <- rownames(tmp_degs)
+}
+
+# going to try this with the kneed-optimized models first
+kneed_gsea <- list()
+for (ob in names(spatial_list)) {
+    mod_res <- getBetaTheta(
+        kneed_lda[[ob]],
+        perc.filt = 0.05,
+        betaScale = 1000
+        )
+    kneed_gsea[[ob]] <-
+        annotateCellTypesGSEA(
+            beta = mod_res$beta,
+            gset = ref_gene_set,
+            qval = 0.05
+        )
+}
+
+lapply(kneed_gsea, function(x) {
+    print(x$predictions)
+})
 ```
 
+I really don't like this method of annotating. Perhaps it's an issue with the data type and the inherent heterogeneity of OS tumor samples, but very few topics get annotated as any particular cell type. Furthermore, I obtain different annotations when I restrict gene sets to the top 200 genes as determined by log2FC
+
+### Look at Cell Types of Interest
+
+I think for the time being, I'm better off sticking with the spacexr results, since they give an actual prediction (maybe?).
+
+Right now I'm interested in the fibrogenic TAMs population and the Interactive tumor subpopulation.
+
+```{r}
+# read in dataset with fibrogenic tams
+myeloid <- qs::qread(
+    "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/stromal_subtypes/patient_mets_normal_cells/Immune_Myeloid.qs"
+)
+# get degs for each cell type
+Idents(myeloid) <- myeloid$Ann_Level3
+myeloid_degs <- FindAllMarkers(
+    myeloid,
+    min.pct = 0.1,
+    only.pos = TRUE,
+)
+
+
+myeloid_modules <- 
+    subset(myeloid_degs, avg_log2FC > 1 & p_val_adj < 0.05) %>%
+    group_by(cluster) %>%
+    dplyr::select(gene) %>%
+    split(f = .$cluster)
+myeloid_modules <- lapply(myeloid_modules, function(x) {
+    x$gene
+})
+# get fibrogenic module
+fib_mod <- myeloid_modules[["Fibrogenic_TAMs"]]
+
+
+spatial_list <- lapply(
+    spatial_list,
+    AddModuleScore,
+    features = myeloid_modules[["Fibrogenic_TAMs"]],
+    name = "Fibrogenic_TAMs"
+)
+
+```
