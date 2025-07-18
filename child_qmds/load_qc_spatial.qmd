@@ -115,7 +115,6 @@ for (ob_name in names(spatial_list)) {
 }
 qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level2_annotations.qs")
 
-rctd_res <- list()
 # do it at level 1
 for (ob_name in names(spatial_list)) {
     sp_ob <- spatial_list[[ob_name]]
@@ -139,7 +138,9 @@ for (ob_name in names(spatial_list)) {
 }
 qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level1_annotations.qs")
 
+
 # going to do it at level 3, specifying multi mode, though
+rctd_res <- list()
 for (ob_name in names(spatial_list)) {
     sp_ob <- spatial_list[[ob_name]]
     coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
@@ -182,6 +183,7 @@ size.factors <- list("OS1_Seurat" = 1500,
                      "OS7_Seurat" = 2500,
                      "OS8_Seurat" = 1300)
 
+cell_types2 <- unique(patient_mets$Ann_Level2)
 for (ob in names(spatial_list)) {
     tmp <- spatial_list[[ob]]
     tmp$Tumor_Cumulative <- tmp$Basal_Progenitor +
@@ -190,30 +192,32 @@ for (ob in names(spatial_list)) {
                              tmp$MP_Progenitor +
                              tmp$Proliferative +
                              tmp$Stressed
-    plot_list <- list("H&E" = SpatialDimPlot(tmp,
-                                             pt.size.factor = 0) + NoLegend())
-    tumor_feats <- grep("Tumor", colnames(tmp@meta.data), value = TRUE)
-
-    tumor_plts <- lapply(tumor_feats, function(x) {
-        SpatialFeaturePlot(tmp,
-                       features = x,
-                       pt.size.factor = size.factors[[ob]],
-                       image.alpha = 0)
-    })
-    names(tumor_plts) <- tumor_feats
-    plot_list <- c(plot_list, tumor_plts)
     
-    #create matrix for ideal figure arrangement
-    layout <- matrix(data = c(1, 2, 3, 4, 5, 6, 7, 8),
-                            nrow = 2)
-    png(paste0("figures/spatial/tumor_scores", ob, ".png"), res = 400, width = 6000, height = 3000)
-    grid.arrange(grobs = plot_list,
-                 nrow = 2,
-                 layout_matrix = layout,
-                 top = grid::textGrob(ob))
+    pdf(paste0("figures/spatial/spacexr/", ob, "_level2.pdf"), height = 4, width = 4)
+    print(
+        SpatialDimPlot(
+            tmp,
+            pt.size.factor = 0) + NoLegend()
+    )
+    print(
+        SpatialFeaturePlot(
+            tmp,
+            features = "Tumor_Cumulative",
+            pt.size.factor = size.factors[[ob]],
+            image.alpha = 0
+        )
+    )
+    for (ct in cell_types2) {
+        print(
+            SpatialFeaturePlot(
+                tmp,
+                features = ct,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+        )
+    }
     dev.off()
-    #update spatial_list with object containing Tumor_Cumulative
-    spatial_list[[ob]] <- tmp
 }
 
 png("figures/spatial/all_h_and_e_slides.png", height = 600, width = 1000)
@@ -284,9 +288,6 @@ for (ob in names(all_ldas)) {
     perplexityPlot(tmp_mod)
     dev.off()
 }
-
-# time to pick the optimal models
-opt_mods <- lapply(all_ldas, optimalModel, opt)
 ```
 
 ### Pick Optimal Models
@@ -324,7 +325,7 @@ r_vals <- list(
 # Following along with their vignette,using patient mets instead of mOB
 patient_mets <- qs::qread("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs")
 
-pdf("output/STdeconvolve/figures/kneed_K_correlation.pdf")
+pdf("output/STdeconvolve/figures/all_sample_correlation.pdf")
 for (ob in names(spatial_list)) {
     s_obj <- spatial_list[[ob]]
     cor_plt <- make_cor_plt(kneed_lda[[ob]], s_obj)
@@ -339,17 +340,17 @@ for (ob in names(spatial_list)) {
         getBetaTheta(kneed_lda[[ob]], perc.filt = 0.05, betaScale = 1000)
 
     print(cor_plt)
-    print(
-        vizAllTopics(
-            beta_theta$theta,
-            pos = pos,
-            r = r_vals[[ob]]) +
-        ggtitle(label = paste(ob,"Deconvolution Topics"))
-    )
-    print(
-        SpatialDimPlot(s_obj, pt.size.factor = 0) +
-        ggtitle(label = ob)
-    )
+    # print(
+    #     vizAllTopics(
+    #         beta_theta$theta,
+    #         pos = pos,
+    #         r = r_vals[[ob]]) +
+    #     ggtitle(label = paste(ob,"Deconvolution Topics"))
+    # )
+    # print(
+    #     SpatialDimPlot(s_obj, pt.size.factor = 0) +
+    #     ggtitle(label = ob)
+    # )
 }
 dev.off()
 
@@ -453,7 +454,7 @@ Idents(myeloid) <- myeloid$Ann_Level3
 myeloid_degs <- FindAllMarkers(
     myeloid,
     min.pct = 0.1,
-    only.pos = TRUE,
+    only.pos = TRUE
 )
 
 myeloid_modules <- 
@@ -464,13 +465,6 @@ myeloid_modules <-
 myeloid_modules <- lapply(myeloid_modules, function(x) {
     x$gene
 })
-
-
-# adding myeloid annotations to patient mets, perhaps we won't see as many 
-patient_mets@meta.data[colnames(myeloid), ]$Ann_Level3 <- myeloid$Ann_Level3
-
-
-
 
 spatial_list <- lapply(
     spatial_list,
@@ -514,7 +508,26 @@ spatial_list <- lapply(spatial_list, function(ob) {
     ob@meta.data <- ob@meta.data %>%
         rename(any_of(descriptive_modules))
 })
+```
 
+```{r}
+# I want to try this, but calculating the degs from the whole object first
+# adding myeloid annotations to patient mets, perhaps we won't see as many 
+patient_mets@meta.data[colnames(myeloid), ]$Ann_Level3 <- myeloid$Ann_Level3
+Idents(patient_mets) <- patient_mets$Ann_Level3
+full_myeloid_mods <- list()
+for (ct in names(tam_modules)) {
+    ct <- str_remove(ct, "mod_score_")
+    print(ct)
+    tmp <- FindMarkers(
+        patient_mets,
+        ident.1 = ct,
+        max.cells.per.ident = 2000,
+        min.pct = 0.1,
+        only.pos = TRUE) %>%
+        subset(p_val_adj < 0.05 & avg_log2FC > 1)
+    full_myeloid_mods[[ct]] <- rownames(tmp)
+}
 
 
 ```
