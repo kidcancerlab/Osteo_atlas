@@ -965,41 +965,41 @@ celltype_list <-
                                                 "^1$" = "CAFs",
                                                 "^2$" = "Pericytes",
                                                 "^3$" = "Muscle_cells"),
-                            Immune_Lymphoid = c("^0$" = "Naive_T"),
-                            Epithelial_Endothelial = c("^0$" = "Endothelial_Artery",
-                                                        "^1$" = "Endothelial_Artery",
-                                                        "^2$" = "Endothelial_Artery",
-                                                        "^3$" = "Endothelial_Artery",
+                            Immune_Lymphoid = c("^0$" = "T_cells"),
+                            Epithelial_Endothelial = c("^0$" = "Endothelial_cells",
+                                                        "^1$" = "Endothelial_cells",
+                                                        "^2$" = "Endothelial_cells",
+                                                        "^3$" = "Endothelial_cells",
                                                         "^4$" = "Endothelial_Prolif")),
         xeno_mets_mouse = list(Mesenchymal = c("^0$" = "myCAFs",
                                                 "^1$" = "Alv_CAFs",
                                                 "^2$" = "Pericytes",
                                                 "^3$" = "Adv_CAFs"),
                             Immune_Lymphoid = c("^0$" = "NK_cells",
-                                                "^1$" = "Naive_T",
-                                                "^2$" = "Naive_T"),
-                            Epithelial_Endothelial = c("^0$" = "Endothelial_Vein",
-                                                        "^1$" = "Endothelial_Artery",
-                                                        "^2$" = "Endothelial_Artery",
-                                                        "^3$" = "Endothelial_Capillary",
-                                                        "^4$" = "Endothelial_Artery",
-                                                        "^5$" = "Endothelial_Artery",
-                                                        "^6$" = "Endothelial_Capillary",
-                                                        "^7$" = "Endothelial_Vein",
-                                                        "^8$" = "Endothelial_Vein",
-                                                        "^9$" = "Endothelial_Artery",
+                                                "^1$" = "T_cells",
+                                                "^2$" = "ILCs"),
+                            Epithelial_Endothelial = c("^0$" = "Endothelial_cells",
+                                                        "^1$" = "Endothelial_cells",
+                                                        "^2$" = "Endothelial_cells",
+                                                        "^3$" = "Capillary_Aerocyte",
+                                                        "^4$" = "Endothelial_cells",
+                                                        "^5$" = "Endothelial_cells",
+                                                        "^6$" = "Endothelial_cells",
+                                                        "^7$" = "Endothelial_cells",
+                                                        "^8$" = "Endothelial_cells",
+                                                        "^9$" = "Endothelial_cells",
                                                         "^10$" = "AT2",
-                                                        "^11$" = "Endothelial_Artery",
+                                                        "^11$" = "Endothelial_cells",
                                                         "^12$" = "AT1",
                                                         "^13$" = "Ciliated_cells",
-                                                        "^14$" = "Endothelial_Artery",
-                                                        "^15$" = "Endothelial_Capillary")),
+                                                        "^14$" = "Endothelial_cells",
+                                                        "^15$" = "Capillary_Aerocyte")),
         mm_prim_normal_cells = list(Mesenchymal = c("^0$" = "mCAFs",
-                                                    "^1$" ="Osteoblast",
-                                                    "^2$"= "Scar_TAMs",
-                                                    "^3$" = "Endothelial_Capillary",
-                                                    "^4$" = "Osteoblast",
-                                                    "^5$" = "Pericytes"),
+                                                "^1$" ="Osteoblast",
+                                                "^2$"= "apCAFs",
+                                                "^3$" = "pCAFs",
+                                                "^4$" = "Osteoblast",
+                                                "^5$" = "Pericytes"),
                                     Immune_Lymphoid = c("^0$" = "CD8_T",
                                                         "^1$" = "CD8_T",
                                                         "^2$" = "T_Reg",
@@ -1018,23 +1018,23 @@ celltype_list <-
                                                     "^2$" = "Alv_CAFs",
                                                     "^3$" = "Pericytes",
                                                     "^4$" = "apCAFs",
-                                                    "^5$" = "MSC",
+                                                    "^5$" = "Neuronal",
                                                     "^6$" = "myCAFs",
                                                     "^7$" = "Smooth_muscle",
                                                     "^8$" = "pCAFs"),
-                                    Immune_Lymphoid = c("^0$" = "Naive_B",
+                                    Immune_Lymphoid = c("^0$" = "Memory_B",
                                                         "^1$" = "T_Reg",
                                                         "^2$" = "CD8_T",
                                                         "^3$" = "Naive_T",
                                                         "^4$" = "CD4_T",
                                                         "^5$" = "NK_cells",
-                                                        "^6$" = "Naive_B",
+                                                        "^6$" = "Memory_B",
                                                         "^7$" = "CD4_T",
                                                         "^8$" = "CD8_T",
                                                         "^9$" = "Prolif_T",
                                                         "^10$" = "Plasma_B",
                                                         "^11$" = "CD4_T",
-                                                        "^12$" = "DC1",
+                                                        "^12$" = "Memory_B",
                                                         "^13$" = "CD4_T"),
                                     Epithelial_Endothelial = c("^0$" = "Endothelial_Capillary",
                                                             "^1$" = "AT2",
@@ -1057,14 +1057,14 @@ celltype_list <-
                                                             "^18$" = "Endothelial_Capillary",
                                                             "^19$" = "Endothelial_Activated",
                                                             "^20$" = "Endothelial_Lymphatic")),
-        dogs_prim_normal_cells = list(Mesenchymal =c("^0$" = "mCAFs",
-                                                    "^1$" = "mCAFs",
+        dogs_prim_normal_cells = list(Mesenchymal =c("^0$" = "myCAFs",
+                                                    "^1$" = "Basal",
                                                     "^2$" = "pCAFs",
                                                     "^3$" = "pCAFs",
                                                     "^4$" = "apCAFs",
                                                     "^5$" = "Pericytes",
-                                                    "^6$" = "mCAFs",
-                                                    "^7$" = "mCAFs"),
+                                                    "^6$" = "myCAFs",
+                                                    "^7$" = "myCAFs"),
                                     Immune_Lymphoid = c("^0$" = "CD8_T",
                                                     "^1$" = "CD4_T",
                                                     "^2$" = "NK_cells",
@@ -1894,352 +1894,196 @@ for (item in seq_len(nrow(details))) {
 ## Combine the objects and create one
 ```{r combine_objects_to_one}
 #dogs 
-dogs_mesenchymal_marker_top6_list <- list(
-  mCAFs = list("FBN1", "FN1", "COL14A1", "FBLN2"),
-  #Smooth_muscle = list("MFAP5", "CCN3", "GPRC5A"),
-  pCAFs = list("CENPA", "UBE2C", "CDC20", "CENPF"),
-  apCAFs = list("CD74", "HLA-DRB1", "DLA-DQB1", "PTPRC"),
-  Pericytes = list("RGS5", "MCAM", "KCNJ8", "GUCY1B1"),
-  Progenitor = list("PRRX1", "LEPR", "IGF2", "CCN2"),
-  Adv_CAFs = list("CADM2", "DCN", "DPT", "SERPINF1"),
-  Smooth_muscle = list("CNN1", "ACTN2", "MYOCD", "FLNC"))
-dog_lymphoid_markers <- list(
-    CD8_T = c("GZMB", "GZMK", "CCL5", "CD8A"),
-    NK_cells = c("KLRK1", "KLRD1", "KLRB1", "NCR3"),
-    T_Reg = c("FOXP3", "CTLA4", "IL2RA", "TNFRSF18"),
-    Prolif_T = c("CDC20", "PCLAF", "UBE2C", "CENPA"),
-    Memory_B = c("EBF1", "AFF3", "MS4A1", "PAX5"),
-    Plasma_B = c("JCHAIN", "TNFRSF17", "FKBP11", "POU2AF1"),
-    CD4_T = c("IL7R","LEF1",  "PLCL1", "TNIK"))
-dog_marker_lists <- list(
-    Ciliated_cells = list("FOXJ1", "DNAH9", "RSPH1", "LRRIQ1"),
-    AT1 = list("AGER", "HOPX", "RTKN2", "CLIC5"),
-    AT2 = list("SFTPC", "SFTPD", "CFTR", "SLC34A2"),
-    Capillary_Aerocyte = list("HPGD", "EMP2", "CA4", "CNTNAP2"),
-    Endothelial_Capillary = list("CD36", "JAM2", "SLC16A9", "GALNT15"),
-    Endothelial_Artery = list("EFNB2", "HEY1", "GJA5", "SMAD6"),
-    Endothelial_Prolif = list("GTSE1", "PCNA", "CENPF", "ASPM"),
-    Endothelial_Lymphatic = list("PROX1", "CCL21", "MMRN1", "SEMA3D"),
-    Endothelial_Vein = list("APOD", "ENTPD1", "PLCB1", "RAPGEF4"),
-    Endothelial_Activated = list("LCP1", "VCAN", "CDH11", "COLEC12"))
-dog_prim_mets_Immune_Myeloid <-
-    list(Osteoclast_TAMs = list("MMP9", "NFATC1", "ACP5", "ATP6V0D2"),
-        #Reg_TAMs = list("STAB1", "COLEC12", "MAF", "MERTK"),
-        #TAMs = list("SELENOP", "MS4A7", "MS4A6A", "STAB1", "COLEC12", "CD68"),
-        Scar_TAMs = list("TREM2", "GPNMB.1", "CD36", "MSR1"),
-        Inflam_TAMs = list("CCL3", "IL1B", "IL37", "IL1A"),
-        Prolif_TAMs = list("CCNA2", "UBE2C", "CENPF", "AURKB"),
-        IFN_TAMs = list("IFIT1", "IFIT2", "IFIT3", "IFGGC1"),
+dogs_mesenchymal_marker_top6_list <- 
+    list(Adv_CAFs = list("CADM2", "DCN", "DPT", "SERPINF1"),
+        apCAFs = list("CD74", "HLA-DRB1", "DLA-DQB1", "PTPRC"),
+        myCAFs = list("ASPN", "DCN", "FBLN1", "SFRP2"),
+        pCAFs = list("CENPA", "UBE2C", "CDC20", "CENPF"),
+        Pericytes = list("RGS5", "MCAM", "KCNJ8", "GUCY1B1"),
+        Progenitor = list("PRRX1", "LEPR", "IGF2", "PTN"),
+        Smooth_muscle = list("CNN1", "ACTN2", "MYOCD", "FLNC"))
+dog_lymphoid_markers <- 
+    list(CD4_T = c("IL7R", "LEF1", "PLCL1", "TNIK"),
+        CD8_T = c("GZMB", "GZMK", "CCL5", "CD8A"),
+        Memory_B = c("EBF1", "AFF3", "MS4A1", "PAX5"),
+        NK_cells = c("KLRK1", "KLRD1", "KLRB1", "NCR3"),
+        Plasma_B = c("JCHAIN", "TNFRSF17", "FKBP11", "POU2AF1"),
+        Prolif_T = c("CDC20", "PCLAF", "UBE2C", "CENPA"),
+        T_Reg = c("FOXP3", "CTLA4", "IL2RA", "TNFRSF18"))
+dog_endo_epi <- 
+    list(AT1 = list("AGER", "HOPX", "RTKN2", "CLIC5"),
+        AT2 = list("SFTPC", "SFTPD", "CFTR", "SLC34A2"),
+        Capillary_Aerocyte = list("HPGD", "EMP2", "CA4", "CNTNAP2"),
+        Ciliated_cells = list("FOXJ1", "DNAH9", "RSPH1", "LRRIQ1"),
+        Endothelial_Activated = list("LCP1", "VCAN", "CDH11", "COLEC12"),
+        Endothelial_Artery = list("EFNB2", "HEY1", "GJA5", "SMAD6"),
+        Endothelial_Capillary = list("CD36", "JAM2", "SLC16A9", "GALNT15"),
+        Endothelial_Lymphatic = list("PROX1", "CCL21", "MMRN1", "SEMA3D"),
+        Endothelial_Prolif = list("GTSE1", "PCNA", "CENPF", "ASPM"),
+        Endothelial_Vein = list("APOD", "ENTPD1", "PLCB1", "RAPGEF4"))
+dog_Immune_Myeloid <-
+    list(DC1 = list("CLNK", "XCR1", "CD226", "TOX"),
         DC2 = list("FCER1A", "CD1B", "MS4A2", "SATB1"),
-        #Monocytes = list("S100A8", "S100A9", "FCN1", "VCAN"),
-        Migratory_DC = list("CCR7", "CD83", "CD40", "ENPP3"),
-        DC1 = list("CLNK", "XCR1", "CD226", "TOX"),
-        #Mast = list("TPSB2", "KIT", "HPGDS", "SLC24A3"),
-        pDC = list("BCL11A", "TCF4", "FCRLA", "SPATS2L"),
-        #Alv_TAMs = list("CHI3L1", "ALDH1A1", "ME1", "PPARG"),
         Fibrogenic_TAMs = list("MMP16", "CDH11", "COL1A1", "COL1A2"),
-        Neutrophils = list("S100A9", "CSF3R", "SELL", "SRGN"))
- 
-
-
-
+        IFN_TAMs = list("IFIT1", "IFIT2", "IFIT3", "IFGGC1"),
+        Inflam_TAMs = list("CCL3", "IL1B", "IL37", "IL1A"),
+        Migratory_DC = list("CCR7", "CD83", "CD40", "ENPP3"),
+        Neutrophils = list("S100A9", "CSF3R", "SELL", "SRGN"),
+        Osteoclast_TAMs = list("MMP9", "NFATC1", "ACP5", "ATP6V0D2"),
+        pDC = list("BCL11A", "TCF4", "FCRLA", "SPATS2L"),
+        Prolif_TAMs = list("CCNA2", "UBE2C", "CENPF", "AURKB"),
+        Scar_TAMs = list("TREM2", "GPNMB.1", "CD36", "MSR1"))
 
 
 # HUman
 patient_prim_mets_Immune_Myeloid <-
-    list(Osteoclast_TAMs = list("MMP9", "CTSK", "NFATC1", "ACP5"),
-        #Reg_TAMs = list("STAB1", "COLEC12", "MAF", "MERTK"),
-        #TAMs = list("SELENOP", "MS4A7", "MS4A6A", "MERTK", "STAB1"),
-        Scar_TAMs = list("TREM2", "FABP5", "GPNMB", "MS4A4A"),
-        Inflam_TAMs = list("CCL3", "CCL4", "CXCL1",  "CXCL8"),
-        Prolif_TAMs = list("MKI67", "TOP2A", "CENPF", "NUSAP1"),
-        IFN_TAMs = list("IFIT1", "IFIT2", "IFIT3", "IFI44L"),
-        DC2 = list("FCER1A", "CLEC10A", "GPAT3", "FCGR2B"),
-        Monocytes = list("S100A8", "S100A9", "FCN1", "VCAN"),
+    list(Alv_TAMs = list("MARCO", "FABP4", "PPARG", "OLR1"),
         DC1 = list("IDO1", "CLNK", "CLIC2", "GPR157"),
+        DC2 = list("FCER1A", "CLEC10A", "GPAT3", "FCGR2B"),
+        Fibrogenic_TAMs = list("COL1A2", "COL3A1", "COL5A1", "SPARC"),
+        IFN_TAMs = list("IFIT1", "IFIT2", "IFIT3", "IFI44L"),
+        Inflam_TAMs = list("CCL3", "CCL4", "CXCL1", "CXCL8"),
         Mast = list("TPSB2", "KIT", "HPGDS", "SLC24A3"),
+        Monocytes = list("S100A8", "S100A9", "FCN1", "VCAN"),
+        Osteoclast_TAMs = list("MMP9", "CTSK", "NFATC1", "ACP5"),
         pDC = list("JCHAIN", "GZMB", "IRF7", "PTPRS"),
-        Alv_TAMs = list("MARCO", "FABP4", "PPARG", "OLR1"),
-        Fibrogenic_TAMs = list("COL1A2", "COL3A1","COL5A1","SPARC"))
-celltype_top5_lymphoid <- list(
-    Plasma_B = list("MZB1", "JCHAIN", "IGHG1", "DERL3"),
-    CD4_T = list("CD4", "IL7R", "RORA", "ANXA1"),
-    CD8_T = list("CD8A", "CD8B", "GZMK", "GZMH"),
-    NK_cells = list("GNLY", "KLRD1", "NKG7", "PRF1"),
-    Prolif_T = list("MKI67", "TOP2A", "RRM2", "NUSAP1"),
-    T_Reg = list("IL2RA", "TNFRSF4", "TNFRSF18", "CTLA4"),
-    Memory_B = list("BANK1", "EBF1", "AFF3", "HLA-DQA1"),
-    Naive_T = list("LEF1", "BACH2", "TCF7", "TXK"))
-celltype_top5_endo_epi <- list(
-    AT2 = list("SFTPC", "SFTPB", "ABCA3", "SLC34A2"),
-    Endothelial_Capillary = list("RGCC", "SPARC", "PLVAP", "ESM1"),
-    Endothelial_Vein = list("VCAM1", "ACKR1", "MYRIP", "ZNF385D"),
-    Endothelial_Artery = list("EFNB2", "PIK3R3", "GJA4", "IGFBP3"),
-    Endothelial_Lymphatic = list("PROX1", "FLT4", "PDPN", "TBX1"),
-    Capillary_Aerocyte = list("HPGD", "FENDRR", "IL1RL1", "GRM8"),
-    Endothelial_Prolif = list("MKI67", "TOP2A", "ASPM", "NUSAP1"),
-    Ciliated_cells = list("DNAH9", "HYDIN", "DCDC1", "LRRIQ1"),
-    AT1 = list("AGER", "COL4A3", "RTKN2", "CLIC5"),
-    Endothelial_Activated = list("TGFBI", "SLIT2", "SLIT3", "ZEB2"))
-mesenchymal_marker_list <- list(
-    Osteoblast = c("SPP1", "BGLAP", "IBSP", "OMD"), 
-    Osteoblast_Stressed = c("SERPINE1", "PLIN2", "IER3", "PTX3"),
-    adiCAFs = c("APOD", "IGF1", "SFRP2", "SFRP1"), 
-    pCAFs = c("MKI67", "CCNB1", "CDC20", "CENPF"),
-    apCAFs = c("CD74", "HLA-DRA", "C1QA", "HLA-DRB1"),
-    Chondrocytes = c("COL2A1", "ACAN", "SOX9", "COL11A1"),
-    Adv_Fibroblasts = c("CXCL14", "DCN", "MGP", "FBLN5"),
-    Pericytes = c("RGS5", "TRPC6", "CDH6", "EDNRA"),
-    Neuronal = c("SEMA3A", "TENM3", "PTPRD", "FAT3"),
-    myCAFs = c("TAGLN", "MYL9", "TPM2", "SPARC")
-)
+        Prolif_TAMs = list("MKI67", "TOP2A", "CENPF", "NUSAP1"),
+        Scar_TAMs = list("TREM2", "FABP5", "GPNMB", "MS4A4A"))
+celltype_top5_lymphoid <- 
+    list(CD4_T = list("ANXA1", "CD4", "IL7R", "RORA"),
+        CD8_T = list("CD8A", "CD8B", "GZMH", "GZMK"),
+        Memory_B = list("AFF3", "BANK1", "EBF1", "HLA-DQA1"),
+        Naive_T = list("BACH2", "LEF1", "TCF7", "TXK"),
+        NK_cells = list("GNLY", "KLRD1", "NKG7", "PRF1"),
+        Plasma_B = list("DERL3", "IGHG1", "JCHAIN", "MZB1"),
+        Prolif_T = list("MKI67", "NUSAP1", "RRM2", "TOP2A"),
+        T_Reg = list("CTLA4", "IL2RA", "TNFRSF18", "TNFRSF4"))
 
+celltype_top5_endo_epi <- 
+    list(AT1 = list("AGER", "CLIC5", "COL4A3", "RTKN2"),
+        AT2 = list("ABCA3", "SFTPB", "SFTPC", "SLC34A2"),
+        Capillary_Aerocyte = list("FENDRR", "GRM8", "HPGD", "IL1RL1"),
+        Ciliated_cells = list("DCDC1", "DNAH9", "HYDIN", "LRRIQ1"),
+        Endothelial_Activated = list("SLIT2", "SLIT3", "TGFBI", "ZEB2"),
+        Endothelial_Artery = list("EFNB2", "GJA4", "IGFBP3", "PIK3R3"),
+        Endothelial_Capillary = list("ESM1", "PLVAP", "RGCC", "SPARC"),
+        Endothelial_Lymphatic = list("FLT4", "PDPN", "PROX1", "TBX1"),
+        Endothelial_Prolif = list("ASPM", "MKI67", "NUSAP1", "TOP2A"),
+        Endothelial_Vein = list("ACKR1", "MYRIP", "VCAM1", "ZNF385D"))
 
-
+mesenchymal_marker_list <- 
+    list(adiCAFs = c("APOD", "IGF1", "SFRP1", "SFRP2"),
+        Adv_Fibroblasts = c("CXCL14", "DCN", "FBLN5", "MGP"),
+        apCAFs = c("C1QA", "CD74", "HLA-DRA", "HLA-DRB1"),
+        Chondrocytes = c("ACAN", "COL11A1", "COL2A1", "SOX9"),
+        myCAFs = c("MYL9", "SPARC", "TAGLN", "TPM2"),
+        Neuronal = c("FAT3", "PTPRD", "SEMA3A", "TENM3"),
+        Osteoblast = c("BGLAP", "IBSP", "OMD", "SPP1"),
+        Osteoblast_Stressed = c("IER3", "PLIN2", "PTX3", "SERPINE1"),
+        pCAFs = c("CCNB1", "CDC20", "CENPF", "MKI67"),
+        Pericytes = c("CDH6", "EDNRA", "RGS5", "TRPC6"))
 
 
 
 
 # Mouse
 mouse_mesenchymal <-
-    list(Osteoblast=  c("Bglap", "Ibsp", "Bglap2", "Apoe"),
-        mCAF = c ("Fn1", "Fbn1", "Dcn", "Fbln2"),
-        Pericytes = c("Notch3", "Pdgfrb", "Mcam", "Cspg4"),
-        Smooth_muscle = c("Acta2", "Tagln", "Myl9", "Myh11"),
-        myCAFs =  c("Aspn", "Tgfbi", "Pdlim3", "Fhod3", "P4ha3"),
-        apCAFs = c("Cd74", "H2-Aa", "H2-Ab1", "H2-Eb1", "H2-DMb1"),
-        mCAFs = c("Col1a1", "Col1a2", "Col3a1", "Fbln2"),
-        pCAFs = c("Mki67", "Top2a", "Aspm", "Nusap1", "Diaph3"),
-        MSC = c("Dpp4", "Egfr", "Zfpm2", "Bicc1"))
+    list(Adv_CAFs = c("Dcn", "Col14a1", "Pdgfrl", "Igfbp4"),
+        Alv_CAFs = c("Pdgfra", "Fgf10", "Npnt", "Tcf21"),
+        apCAFs = c("Cd74", "H2-Aa", "H2-Ab1", "H2-Eb1"),
+        mCAFs = c("Fn1", "Fbn1", "Dcn", "Fbln2"),
+        MSC = c("Dpp4", "Egfr", "Zfpm2", "Bicc1"),
+        myCAFs = c("Aspn", "Tgfbi", "Pdlim3", "Adamts1"),
+        Neuronal = c("Myrf", "Npas3", "Sh3tc2", "Rspo1"),
+        Osteoblast = c("Bglap", "Ibsp", "Bglap2", "Lars2"),
+        pCAFs = c("Top2a", "Cenpf", "Ube2c", "Birc5"),
+        Pericytes = c("Pdgfrb", "Cspg4", "Mcam", "Notch3"),
+        Smooth_muscle = c("Acta2", "Tagln", "Myh11", "Myl9"))
 
-endo_epi_mouse <- list(
-    Endothelial_Activated = c("Tgfbi", "Zeb2", "Prkcb", "Nlrp3"),
-    Endothelial_Capillary = c("Plvap", "Adgrl3", "Glp1r", "Sema3c"),
-    Endothelial_Artery = c("Gja5", "Efnb2", "Cxcl12", "Dll4"),
-    Endothelial_Vein = c("Vwf", "Ephb4", "Vcam1", "Ackr3"),
-    Capillary_Aerocyte = c("Car4", "Rgs6", "Ednrb", "Tbx2"),
-    Endothelial_Lymphatic = c("Prox1", "Flt4", "Sema3d","Tbx1"),
-    AT1 = c("Aqp5", "Ager", "Hopx", "Clic5"),
-    AT2 = c("Sftpb", "Sftpa1", "Sftpd", "Napsa"),
-    Ciliated_cells = c("Tuba1a", "Dnah12", "Cfap54", "Ccdc181"),
-    Club_cells = c("Cyp2f2", "Gsta3","Scgb1a1",  "Scgb3a2"),
-    Endothelial_Prolif = c("Mki67", "Top2a", "Cenpp", "Brip1"),
-    Prolifarating_AT = c("Mki67", "Top2a", "Cenpp", "Brip1"),
-    Transitional_AT = c("Krt18", "Sfn", "Clu", "Nupr1"),
-    Erythroblast = c("Hbb-bs", "Hba-a2", "Hba-a1", "Hbb-bt"),
-    Endothelial_cells = c("Pecam1", "Cd34", "Cdh5", "Kdr")
-)
+endo_epi_mouse <- 
+    list(AT1 = c("Aqp5", "Ager", "Hopx", "Clic5"),
+        AT2 = c("Sftpb", "Sftpa1", "Sftpd", "Napsa"),
+        Capillary_Aerocyte = c("Car4", "Rgs6", "Ednrb", "Tbx2"),
+        Ciliated_cells = c("Tuba1a", "Dnah12", "Cfap54", "Ccdc181"),
+        Club_cells = c("Cyp2f2", "Gsta3", "Scgb1a1", "Scgb3a2"),
+        Endothelial_Activated = c("Tgfbi", "Zeb2", "Prkcb", "Nlrp3"),
+        Endothelial_Artery = c("Gja5", "Efnb2", "Cxcl12", "Dll4"),
+        Endothelial_Capillary = c("Plvap", "Adgrl3", "Glp1r", "Sema3c"),
+        Endothelial_Lymphatic = c("Prox1", "Flt4", "Sema3d", "Tbx1"),
+        Endothelial_Prolif = c("Mki67", "Top2a", "Cenpp", "Brip1"),
+        Endothelial_Vein = c("Vwf", "Ephb4", "Vcam1", "Ackr3"),
+        Endothelial_cells = c("Pecam1", "Emcn", "Cdh5", "Plvap"),
+        Erythroblast = c("Hbb-bs", "Hba-a2", "Hba-a1", "Hbb-bt"),
+        Prolifarating_AT = c("Mki67", "Top2a", "Cenpp", "Brip1"),
+        Transitional_AT = c("Krt18", "Sfn", "Clu", "Nupr1"))
+
 mouse_lymphoid <-
-    list(NK_cells = c("Gzma", "Prf1", "Serpinb9", "Gzmb"),
-         CD8_T = c("Cd8a", "Cd8b1", "Trbc2", "Cd3d"),
-         CD4_T = c("Il7r", "Icos", "Lat", "Cd4"),
-         Naive_T = c("Tcf7", "Lef1", "S1pr1", "Bach2"),
-         Naive_B = c("Ighd", "Pax5", "Ebf1", "Fcmr", "Lyn"),
-         Plasma_B = c("Prdm1", "Xbp1", "Sdc1", "Jchain"),
-         B_cells = c("Ebf1", "Lyn", "Xbp1", "Sdc1"),
-         T_Reg = c("Foxp3", "Ctla4", "Tnfrsf18", "Tnfrsf9"),
-         Prolif_T = c("Mki67", "Top2a", "Cenpf", "Nusap1"))
+    list(B_cells = c("Ebf1", "Lyn", "Xbp1", "Sdc1"),
+        CD4_T = c("Il7r", "Icos", "Lat", "Cd4"),
+        CD8_T = c("Cd8a", "Cd8b1", "Trbc2", "Cd3d"),
+        Memory_B = c("Ighd", "Pax5", "Ebf1", "Fcmr"),
+        Naive_T = c("Tcf7", "Lef1", "S1pr1", "Bach2"),
+        NK_cells = c("Gzma", "Prf1", "Serpinb9", "Gzmb"),
+        Plasma_B = c("Prdm1", "Xbp1", "Sdc1", "Jchain"),
+        Prolif_T = c("Mki67", "Top2a", "Cenpf", "Nusap1"),
+        T_Reg = c("Foxp3", "Ctla4", "Tnfrsf18", "Tnfrsf9"))
+
 mouse_prim_mets_Immune_Myeloid <-
-    list(IFN_TAMs = list("Ifit1", "Ifit2", "Ifi44", "Ifit3"),
-        Neutrophils = list("S100a8", "S100a9", "Trem1", "Clec4d"),
-        Prolif_TAMs = list("Mki67", "Top2a", "Cenpp", "Brip1"),
-        Alv_TAMs = list("Plet1", "Lpl", "Abcg1", "Mgll"),
-        Osteoclast_TAMs = list("Acp5", "Ctsk", "Nfatc1", "Mmp9"),
-        Scar_TAMs = list("Trem2", "Spp1", "Gpnmb", "Fabp5"),
-        Inflam_TAMs = list("Cxcl1", "Fn1", "Ccl24", "Cxcl3"),
-        # Erythroblast = list("Hba-a1", "Hba-a2", "Hbb-bt", "Hbb-bs"),
+    list(Alv_TAMs = list("Plet1", "Lpl", "Abcg1", "Mgll"),
         Ciliated_cells = list("Foxj1", "Dnah9", "Hydin", "Rp1"),
-        # ncMonocytes = list("Nr4a1", "Pparg", "Spn", "Treml4"),
-        # cMonocytes = list("Ccr2", "Vcan", "Thbs1", "Cd14"),
-        pDC = list("Tcf4", "Pacsin1",  "Aff3", "Satb1"),
-        Migratory_DC = list("Ccr7", "Fscn1", "Ccl5", "Cd40"),
-        DC2 = list("Mgl2", "H2-DMb2", "Clec10a", "H2-Oa"),
         DC1 = list("Itgae", "Cd207", "Wdfy4", "Btla"),
+        DC2 = list("Mgl2", "H2-DMb2", "Clec10a", "H2-Oa"),
         Fibrogenic_TAMs = c("Col1a2", "Col3a1", "Sparc", "Col5a1"),
-        Monocytes = list("Itgal", "Adgre4", "Treml4", "Spn"))
+        IFN_TAMs = list("Ifit1", "Ifit2", "Ifi44", "Ifit3"),
+        Inflam_TAMs = list("Cxcl1", "Fn1", "Ccl24", "Cxcl3"),
+        Migratory_DC = list("Ccr7", "Fscn1", "Ccl5", "Cd40"),
+        Monocytes = list("Itgal", "Adgre4", "Treml4", "Spn"),
+        Neutrophils = list("S100a8", "S100a9", "Trem1", "Clec4d"),
+        Osteoclast_TAMs = list("Acp5", "Ctsk", "Nfatc1", "Mmp9"),
+        pDC = list("Tcf4", "Pacsin1", "Aff3", "Satb1"),
+        Prolif_TAMs = list("Mki67", "Top2a", "Cenpp", "Brip1"),
+        Scar_TAMs = list("Trem2", "Spp1", "Gpnmb", "Fabp5"))
+
+
+
 
 # Xenograft
 xeno_prim_mets_Immune_Myeloid <-
-    list(IFN_TAMs = list("Ifit1", "Ifit2", "Ifi44", "Ifit3"),
-        Neutrophils = list("S100a8", "S100a9", "Trem1", "Clec4d"),
-        Prolif_TAMs = list("Mki67", "Top2a", "Cenpp", "Brip1"),
-        Alv_TAMs = list("Plet1", "Lpl", "Abcg1", "Mgll"),
-        Osteoclast_TAMs = list("Acp5", "Ctsk", "Nfatc1", "Mmp9"),
-        Scar_TAMs = list("Trem2", "Cd36", "Gpnmb", "Fabp5"),
-        Inflam_TAMs = list("Cxcl1", "Fn1", "Ccl7", "Ccl2"),
-        # Erythroblast = list("Hba-a1", "Hba-a2", "Hbb-bt", "Hbb-bs"),
+    list(Alv_TAMs = list("Plet1", "Lpl", "Abcg1", "Mgll"),
         Ciliated_cells = list("Foxj1", "Dnah9", "Hydin", "Rp1"),
-        # ncMonocytes = list("Nr4a1", "Pparg", "Spn", "Treml4"),
-        # cMonocytes = list("Ccr2", "Vcan", "Thbs1", "Cd14"),
-        pDC = list("Ccr9", "Spib", "Bcl11a", "Sell", "Tcf4"),
-        Migratory_DC = list("Ccr7", "Fscn1", "Ccl5", "Cd40"),
+        DC = list("Flt3", "Zbtb46", "Cbfa2t3", "H2-Ab1"),
         Fibrogenic_TAMs = c("Col1a2", "Col3a1", "Sparc", "Col5a1"),
+        IFN_TAMs = list("Ifit1", "Ifit2", "Ifi44", "Ifit3"),
+        Inflam_TAMs = list("Cxcl1", "Fn1", "Ccl7", "Ccl2"),
+        Migratory_DC = list("Ccr7", "Fscn1", "Ccl5", "Cd40"),
         Monocytes = list("Ly6c2", "Ly6c1", "Ccr2", "Plac8"),
-        DC = list("Flt3", "Zbtb46", "Cbfa2t3", "H2-Ab1"))
+        Neutrophils = list("S100a8", "Csf3r", "Trem1", "Clec4d"),
+        Osteoclast_TAMs = list("Acp5", "Ctsk", "Nfatc1", "Mmp9"),
+        pDC = list("Ccr9", "Spib", "Bcl11a", "Sell", "Tcf4"),
+        Prolif_TAMs = list("Mki67", "Top2a", "Cenpp", "Brip1"),
+        Scar_TAMs = list("Trem2", "Cd36", "Gpnmb", "Fabp5"))
 
-xeno_endo_epi<-
-    list(Endothelial_Vein = c("Nrp2", "Cdh13", "Nr2f2", "Vcam1"),
-        Endothelial_Artery = c("Epas1", "Edn1", "Sox17", "Ptprb"),
-        Endothelial_Capillary = c("Car4", "Prx", "Apln", "Rgs6"),
-        Ciliated_cells = c("Tuba1a", "Dnah12", "Cfap54", "Ccdc181"),
-        AT1 = c("Aqp5", "Ager", "Pdpn", "Hopx"),
-        AT2 = c("Sftpb", "Sftpa1", "Sftpd", "Napsa"),
-        Endothelial_Prolif = c("Mki67", "Top2a", "Cenpp", "Brip1"))
 xeno_mesenchymal <-
-    list(CAFs = c("Col1a1", "Col1a2", "Col3a1", "Fbln2"),
-      Pericytes = c("Rgs5", "Pdgfrb", "Mcam", "Cspg4"),
-      Muscle_cells = c("Myot", "Mypn", "Mlip", "Mylk4"),
-      MSC =  c("Runx1", "Egfr", "Zfpm2", "Bicc1"),
-      Alv_CAFs = c("Inmt", "Npnt", "Itga8", "Scube2"),
-      Adv_CAFs = c("Pi16", "Dcn", "Lum", "Fbln1", "Igfbp6"),
-      myCAFs= c(c("Tagln", "Tpm1", "Lgals1", "Mgp")))
+    list(Adv_CAFs = c("Dcn", "Lum", "Fbln1", "Igfbp6"),
+        Alv_CAFs = c("Inmt", "Npnt", "Itga8", "Scube2"),
+        CAFs = c("Col1a1", "Col1a2", "Col3a1", "Fbln2"),
+        MSC = c("Runx1", "Egfr", "Zfpm2", "Bicc1"),
+        Muscle_cells = c("Myot", "Mypn", "Mlip", "Mylk4"),
+        myCAFs = c("Tagln", "Tpm1", "Lgals1", "Mgp"),
+        Pericytes = c("Rgs5", "Pdgfrb", "Mcam", "Cspg4"))
 
+xeno_endo_epi <- 
+    list(AT1 = c("Aqp5", "Ager", "Cldn18", "Pdpn"),
+        AT2 = c("Sftpb", "Sftpa1", "Sftpd", "Napsa"),
+        Capillary_Aerocyte = c("Car4", "Rgs6", "Ednrb", "Tbx2"),
+        Ciliated_cells = c("Tuba1a", "Dnah12", "Cfap54", "Ccdc181"),
+        Endothelial_cells = c("Pecam1", "Cdh5", "Ptprb", "Erg"),
+        Endothelial_Prolif = c("Mki67", "Top2a", "Cenpp", "Brip1"))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-sobj_list$Epithelial_Endothelial$ann_l3 <-
-    str_replace_all(sobj_list$Epithelial_Endothelial$seurat_clusters,
-                c("^0$" = "",
-                "^1$" = "",
-                "^2$" = "",
-                "^3$" = "Capillary_Aerocyte",
-                "^4$" = "",
-                "^5$" = "",
-                "^6$" = "",
-                "^7$" = "Lymphatic_Endothelial",
-                "^8$" = "",
-                "^9$" = "",
-                "^10$" = "AT2",
-                "^11$" = "",
-                "^12$" = "AT1",
-                "^13$" = "Ciliatd_cells",
-                "^14$" = "",
-                "^15$" = "Capillary_Aerocyte"))
-
-dimplot_better(sobj_list$Epithelial_Endothelial, group_by = "ann_l3") +
-    NoLegend() 
-
-
-
-dimplot_better(sobj_list$Epithelial_Endothelial, group_by = "data_source") +
-    NoLegend() +
-    ggtitle("Epithelial_Endothelial")
-
-
-patchwork::wrap_plots(
-    dimplot_better(sobj_list$Epithelial_Endothelial, group_by = "Ann_Level3") + NoLegend(),
-    dimplot_better(sobj_list$Epithelial_Endothelial, group_by = "seurat_clusters") + NoLegend(),
-    dimplot_better(sobj_list$Epithelial_Endothelial, group_by = "new_annot_clust") + NoLegend(),
-    dimplot_better(sobj_list$Epithelial_Endothelial, group_by = "SingleR_Ann3") + NoLegend(),
-    ncol = 2)
-
-celltype_markers_mouse <- list(
-    Endothelial_Activated = c("Tgfbi", "Zeb2", "Prkcb", "Nlrp3"),
-    Endothelial_Capillary = c("Plvap", "Adgrl3", "Glp1r", "Sema3c"),
-    Endothelial_Artery = c("Gja5", "Efnb2", "Cxcl12", "Dll4"),
-    Endothelial_Vein = c("Vwf", "Ephb4", "Vcam1", "Ackr3"),
-    Capillary_Aerocyte = c("Car4", "Rgs6", "Ednrb", "Tbx2"),
-    Endothelial_Lymphatic = c("Prox1", "Flt4", "Sema3d","Tbx1"),
-    AT1 = c("Aqp5", "Ager", "Hopx", "Clic5"),
-    AT2 = c("Sftpb", "Sftpa1", "Sftpd", "Napsa"),
-    Ciliated_cells = c("Tuba1a", "Dnah12", "Cfap54", "Ccdc181"),
-    Club_cells = c("Cyp2f2", "Gsta3","Scgb1a1",  "Scgb3a2"),
-    Endothelial_Prolif = c("Mki67", "Top2a", "Cenpp", "Brip1"),
-    #Prolifarating_AT = c("Mki67", "Top2a", "Cenpp", "Brip1"),
-    Transitional_AT = c("Krt18", "Sfn", "Clu", "Nupr1"),
-    Erythroblast = c("Hbb-bs", "Hba-a2", "Hba-a1", "Hbb-bt")
-    #Endothelial_cells = c("Pecam1", "Cd34", "Cdh5", "Kdr")
-)
-
-DotPlot(sobj_list$Epithelial_Endothelial,
-            features = celltype_markers_mouse,
-            group.by = "seurat_clusters",
-            cols = "RdBu") +
-        RotatedAxis() +
-        theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-patchwork::wrap_plots(
-    DotPlot(sobj_list$Epithelial_Endothelial,
-            features = Endothelial_Capillary,
-            group.by = "ann_l3",
-            cols = "RdBu") +
-        RotatedAxis() +
-        theme(axis.text.x = element_text(angle = 90, hjust = 1)),
-    dimplot_better(sobj_list$Epithelial_Endothelial, group_by = "ann_l3") + NoLegend(),
-    ncol = 1
-)
-# mets
-sobj_list$Epithelial_Endothelial$ann_l3 <-
-    str_replace_all(sobj_list$Epithelial_Endothelial$seurat_clusters,
-                           )
-
-Idents(sobj_list$Epithelial_Endothelial) <- "ann_l3"
-markers <- 
-    FindAllMarkers(object = sobj_list$Epithelial_Endothelial,
-                    logfc.threshold = 1,
-                    min.pct = 0.1,
-                    only.pos = T)
-# reduce data
-top_markers_save <- 
-    markers %>%
-    as.data.frame() %>%
-    group_by(cluster) %>%
-    filter(p_val_adj < 0.05) %>%
-    mutate(pct_diff = pct.1 - pct.2) %>%
-    arrange(desc(pct_diff)) %>%
-    filter(pct_diff > 0.3) %>%
-    arrange(-avg_log2FC) %>%
-    select(gene, cluster) %>%
-    group_by(cluster) %>%
-    slice_head(n = 30) %>%
-    summarise(genes = list(gene)) %>%
-    deframe()
-
-
-
-
-dimplot_better(sobj_list$Epithelial_Endothelial, group_by = "ann_l3") +
-    NoLegend() +
-    ggtitle("Epithelial_Endothelial")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Xeno_lymphoid <-
+    list(ILCs = c("Gata3", "Il1rl1", "Areg", "Kit"),
+         NK_cells = c("Gzma", "Prf1", "Serpinb9", "Gzmb"),
+         T_cells = c("Cd3e", "Cd3g", "Zbtb16", "Ifngr2"))
 
 
 
@@ -2252,8 +2096,7 @@ object_list <-
             "mm_prim_normal_cells",         0.25,
             "mm_mets_normal_cells",         0.2,
             "dogs_prim_normal_cells",       0.2,
-            "dogs_mets_normal_cells",       0.2
-            )
+            "dogs_mets_normal_cells",       0.2)
 
 
 ## combine all the groups into one object
