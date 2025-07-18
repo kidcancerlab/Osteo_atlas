@@ -115,7 +115,7 @@ for (ob_name in names(spatial_list)) {
 }
 qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level2_annotations.qs")
 
-
+rctd_res <- list()
 # do it at level 1
 for (ob_name in names(spatial_list)) {
     sp_ob <- spatial_list[[ob_name]]
@@ -147,17 +147,22 @@ for (ob_name in names(spatial_list)) {
     #convert our object to an rctd object
     my_data <- spacexr::SpatialRNA(coords,
                                    GetAssayData(sp_ob, layer = "counts"))
-    rctd_obj <- spacexr::create.RCTD(my_data,
-                                     spacexr3,
-                                     max_cores = 6,
-                                     UMI_min = 3,
-                                     counts_MIN = 0, 
-                                     UMI_max = 900000000,
-                                     CELL_MIN_INSTANCE = 0)
+    rctd_obj <- spacexr::create.RCTD(
+        my_data,                     
+        spacexr3,
+        max_cores = 6,
+        UMI_min = 3,
+        counts_MIN = 0, 
+        UMI_max = 900000000,
+        CELL_MIN_INSTANCE = 0
+    )
     rctd_out <- spacexr::run.RCTD(
         rctd_obj,
-        doublet_mode = "multi",
-        max_multi_types = 10)
+        doublet_mode = "doublet"
+    )
+    rctd_res[[ob_name]] <- rctd_out
+    norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
+    spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
 }
 qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level3_annotations.qs")
 
@@ -441,6 +446,8 @@ Right now I'm interested in module
 myeloid <- qs::qread(
     "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/stromal_subtypes/patient_mets_normal_cells/Immune_Myeloid.qs"
 )
+
+
 # get degs for each cell type
 Idents(myeloid) <- myeloid$Ann_Level3
 myeloid_degs <- FindAllMarkers(
@@ -448,7 +455,6 @@ myeloid_degs <- FindAllMarkers(
     min.pct = 0.1,
     only.pos = TRUE,
 )
-
 
 myeloid_modules <- 
     subset(myeloid_degs, avg_log2FC > 1 & p_val_adj < 0.05) %>%
@@ -458,10 +464,12 @@ myeloid_modules <-
 myeloid_modules <- lapply(myeloid_modules, function(x) {
     x$gene
 })
-# get fibrogenic module
-fib_mod <- myeloid_modules[["Fibrogenic_TAMs"]]
-# subset to genes present in objects
-length(fib_mod)
+
+
+# adding myeloid annotations to patient mets, perhaps we won't see as many 
+patient_mets@meta.data[colnames(myeloid), ]$Ann_Level3 <- myeloid$Ann_Level3
+
+
 
 
 spatial_list <- lapply(
@@ -471,28 +479,42 @@ spatial_list <- lapply(
     name = "myeloid"
 )
 
-as.list(setNames(names(myeloid_modules), paste0("myeloid", 1:13)))
+# have descriptive names for our modules
+descriptive_modules <- 
+    setNames(paste0("myeloid", 1:13), paste0("mod_score_", names(myeloid_modules)))
+# only include any kind of TAMs
+tam_modules <- descriptive_modules[grep("TAMs", names(descriptive_modules))]
 
-SpatialFeaturePlot(
-    spatial_list[[1]],
-    features = paste0("myeloid", 1:13),
-    pt.size.factor = size.factors[[1]],
-    ncol = 7
-)
-
-
-# visualize 
-fib_tam_plots <- lapply(
-    names(spatial_list),
-    function(x) {
-        print(
-            SpatialFeaturePlot(
-                spatial_list[[x]],
-                features = c("Fibrogenic_TAMs1", "Tumor_Cumulative"),
-                pt.size.factor = size.factors[[x]]
-            )
+# update names of our metadata columns and make figures
+for (ob in names(spatial_list)) {
+    tmp <- spatial_list[[ob]]
+    tmp@meta.data <- tmp@meta.data %>%
+        rename(any_of(descriptive_modules))
+    plts <- lapply(names(tam_modules), function(mod) {
+        SpatialFeaturePlot(
+            tmp,
+            features = mod,
+            pt.size.factor = size.factors[[ob]],
+            image.alpha = 0
         )
-    }
-)
-gridExtra::grid.arrange(grobs = fib_tam_plots)
+    })
+    h_e <- SpatialDimPlot(tmp, pt.size.factor = 0) + NoLegend()
+    plts[["H&E"]] <- h_e
+
+    png(
+        paste0("figures/spatial/module_scores/myeloid_", ob, ".png"),
+        width = 1500,
+        height = 1500,
+    )
+    gridExtra::grid.arrange(grobs = plts, ncol = 3)
+    dev.off()
+}
+
+spatial_list <- lapply(spatial_list, function(ob) {
+    ob@meta.data <- ob@meta.data %>%
+        rename(any_of(descriptive_modules))
+})
+
+
+
 ```
