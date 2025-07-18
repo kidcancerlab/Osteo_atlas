@@ -329,55 +329,29 @@ pdf("output/STdeconvolve/figures/all_sample_correlation.pdf")
 for (ob in names(spatial_list)) {
     s_obj <- spatial_list[[ob]]
     cor_plt <- make_cor_plt(kneed_lda[[ob]], s_obj)
-    
-    # get tissue coordinates and adjust so they match the h&e slide
-    pos <- GetTissueCoordinates(s_obj)
-    colnames(pos) <- c("y", "x")
-    pos$y <- -pos$y
-    
-    # get beta and theta from model
-    beta_theta <-
-        getBetaTheta(kneed_lda[[ob]], perc.filt = 0.05, betaScale = 1000)
-
     print(cor_plt)
-    # print(
-    #     vizAllTopics(
-    #         beta_theta$theta,
-    #         pos = pos,
-    #         r = r_vals[[ob]]) +
-    #     ggtitle(label = paste(ob,"Deconvolution Topics"))
-    # )
-    # print(
-    #     SpatialDimPlot(s_obj, pt.size.factor = 0) +
-    #     ggtitle(label = ob)
-    # )
 }
 dev.off()
 
-
-pdf("output/STdeconvolve/figures/min_K_correlation.pdf")
+pdf("output/STdeconvolve/figures/all_sample_topics.pdf", height = 3, width = 4)
 for (ob in names(spatial_list)) {
     s_obj <- spatial_list[[ob]]
-    cor_plt <- make_cor_plt(min_lda[[ob]], s_obj)
-
     # get tissue coordinates and adjust so they match the h&e slide
     pos <- GetTissueCoordinates(s_obj)
     colnames(pos) <- c("y", "x")
     pos$y <- -pos$y
-    
     # get beta and theta from model
     beta_theta <-
-        getBetaTheta(min_lda[[ob]], perc.filt = 0.05, betaScale = 1000)
-
-    print(cor_plt)
+        getBetaTheta(kneed_lda[[ob]], perc.filt = 0.05, betaScale = 1000)
     print(
         vizAllTopics(
             beta_theta$theta,
             pos = pos,
-            r = r_vals[[ob]]
-        )
+            r = r_vals[[ob]]) +
+            ggtitle(label = paste(ob, "Deconvolution Topics")) |
+        SpatialDimPlot(s_obj, pt.size.factor = 0) +
+            ggtitle(label = ob)
     )
-    print(SpatialDimPlot(s_obj, pt.size.factor = 0))
 }
 dev.off()
 ```
