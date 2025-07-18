@@ -7,7 +7,7 @@ The most simple way to address what cells are near each other is by using a simp
 ```{r cell-type-correlation}
 for (ob in names(spatial_list)) {
     ann_matrix <- spatial_list[[ob]]@meta.data[ , cell_types]
-    png(paste0("figures/spatial/cell_type_heatmap_", ob, "_level3.png"), height = 800, width = 800)
+    png(paste0("output/figures/spatial/cooccurrence/cell_type_heatmap_", ob, "_level3.png"), height = 800, width = 800)
     pheatmap::pheatmap(cor(ann_matrix),
                        scale = "none",
                        low = "blue",
@@ -20,7 +20,7 @@ for (ob in names(spatial_list)) {
 
 #wanna look at correlation with tumor cells
 for (ob in names(spatial_list)) {
-    png(paste0("figures/spatial/tumor_correlation_", ob, ".png"))
+    png(paste0("output/figures/spatial/cooccurrence/tumor_correlation_", ob, ".png"))
 
     p <- spatial_list[[ob]]@meta.data[ , c(cell_types, "Tumor_Cumulative")] %>%
         select(-c(Tumor_Proliferative,
@@ -53,7 +53,7 @@ ann_mat_list <- lapply(spatial_list, function(x) {
 
 #make one big matrix with deconvolution scores (for correlation purposes)
 full_ann_matrix <- bind_rows(ann_mat_list)
-png("figures/spatial/all_sample_correlation.png", width = 900, height = 900)
+png("output/figures/spatial/cooccurrence/all_sample_correlation.png", width = 900, height = 900)
 pheatmap::pheatmap(cor(full_ann_matrix[, cell_types], method = "spearman"),
                    scale = "none",
                    low = "blue",
@@ -74,7 +74,7 @@ cell_type_heatmaps <- lapply(names(ann_mat_list), function(x) {
                        midpoint = 0,
                        angle_col = 45,
                        fontsize = 16)
-    png(paste0("figures/spatial/cell_type_heatmap_", x, ".png"), width = 900, height = 900)
+    png(paste0("output/figures/spatial/cooccurrence/cell_type_heatmap_", x, ".png"), width = 900, height = 900)
     print(p)
     dev.off()
     return(p)
@@ -116,7 +116,7 @@ for (feat in tumor_types) {
                              mid = "white",
                              midpoint = 0) +
         ggtitle(paste("Cell Type Correlation with", feat, "\n in the Same Spot"))
-    png(paste0("figures/spatial/cell_type_correlation_", feat, "_level2.png"))
+    png(paste0("output/figures/spatial/cooccurrence/cell_type_correlation_", feat, "_level2.png"))
     print(p)
     dev.off()
 }
@@ -140,7 +140,7 @@ for (ob_name in names(spatial_list)) {
     k <- readline("How many clusters?")
     k <- as.numeric(k)
     tmp <- Composition.cluster(tmp, deconv_mat, k = k)
-    png(paste0("figures/spatial/composition_cluster_", ob_name, ".png", width = 600))
+    png(paste0("output/figures/spatial/ISCHIA/composition_cluster_", ob_name, ".png", width = 600))
     print(SpatialDimPlot(tmp,
                          group.by = "CompositionCluster_CC",
                          pt.size.factor = size.factors[[ob_name]],
@@ -152,13 +152,13 @@ for (ob_name in names(spatial_list)) {
                                 function(cc) {
         Composition_cluster_enrichedCelltypes(tmp, cc, deconv_mat)
                                 })
-    png(paste0("figures/spatial/ISCHIA_enriched_cell_types_", ob_name, ".png"),
+    png(paste0("output/figures/spatial/ISCHIA/ISCHIA_enriched_cell_types_", ob_name, ".png"),
         height = 1600,
         width = 2000)
     grid.arrange(grobs = enriched_ct_plots, ncol = 4)
     dev.off()
 
-    png(paste0("figures/spatial/ISCHIA_coocurring_cells_", ob_name, ".png"),
+    png(paste0("output/figures/spatial/ISCHIA/ISCHIA_coocurring_cells_", ob_name, ".png"),
         height = 1600,
         width = 2000)
     co_occur_list <- lapply(as.list(unique(tmp$CompositionCluster_CC)),
@@ -288,7 +288,7 @@ qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level2_annotations.
 
 #Visualize clustering output
 for (ob_name in names(spatial_list)) {
-    png(paste0("figures/spatial/", ob_name, "_banksy_cluster_umap.png"), width = 800)
+    png(paste0("output/figures/spatial/BANKSY/", ob_name, "_banksy_cluster_umap.png"), width = 800)
     print(
         SpatialDimPlot(spatial_list[[ob_name]],
                group = "banksy_clusts",
@@ -317,7 +317,7 @@ for (ob_name in names(spatial_list)) {
     }
     bind_tmp <- bind_cols(tmp)
 
-    png(paste0("figures/spatial/", ob_name, "_banksy_mean_deconv_heatmap.png"))
+    png(paste0("output/figures/spatial/BANKSY/", ob_name, "_banksy_mean_deconv_heatmap.png"))
     print(pheatmap::pheatmap(bind_tmp, scale = "row"))
     dev.off()
 }

@@ -208,7 +208,7 @@ for (ob in names(spatial_list)) {
                              tmp$Proliferative +
                              tmp$Stressed
     
-    pdf(paste0("output/figures/spatial/spacexr_", ob, "_level2.pdf"), height = 4, width = 4)
+    pdf(paste0("output/figures/spatial/spacexr/spacexr_", ob, "_level2.pdf"), height = 4, width = 4)
     print(
         SpatialDimPlot(
             tmp,
