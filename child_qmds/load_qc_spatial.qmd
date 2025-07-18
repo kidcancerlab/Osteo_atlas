@@ -35,15 +35,17 @@ he_plts <- lapply(names(spatial_list), function(x) {
     p <- SpatialDimPlot(spatial_list[[x]], pt.size.factor=0) +
         NoLegend() +
         labs(title = x)
-    png(paste0("figures/spatial/h_and_e_", x, ".png"))
+    png(paste0("output/figures/spatial/h_and_e_", x, ".png"))
     print(p)
     dev.off()
     return(p)
 })
 
-png("figures/spatial/h_and_e_all.png", width = 800, height = 500)
+png("output/figures/spatial/h_and_e_all.png", width = 800, height = 500)
 grid.arrange(grobs = he_plts, ncol = 4)
 dev.off()
+
+qs::qsave(spatial_list, "output/spatial_objects/spatial_list_unannotated.qs")
 ```
 
 ## Label Cell Types Using Spacexr
@@ -84,37 +86,14 @@ spacexr3 <-
         as.factor(patient_mets$Ann_Level3),
         n_max_cells = 2000
     )
-
-level1_types <- unique(patient_mets$Ann_Level1)
 ```
-
 
 ### Run RCTD on Spatial Data
 
+#### Level 1
+
 ```{r}
-#first I'm going to just use spacexr to add scores to each spot for the cell types in our reference
-for (ob_name in names(spatial_list)) {
-    sp_ob <- spatial_list[[ob_name]]
-    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
-        dplyr::rename(x = imagerow, y = imagecol)
-    #convert our object to an rctd object
-    my_data <- spacexr::SpatialRNA(coords,
-                                   GetAssayData(sp_ob, layer = "counts"))
-    rctd_obj <- spacexr::create.RCTD(my_data,
-                                     spacexr_reference,
-                                     max_cores = 6,
-                                     UMI_min = 3,
-                                     counts_MIN = 0, 
-                                     UMI_max = 900000000,
-                                     CELL_MIN_INSTANCE = 0)
-    rctd_out <- spacexr::run.RCTD(rctd_obj, doublet_mode = "full")
-    qs::qsave(rctd_out, paste0("output/spatial_objects/spacexr_", ob_name, ".qs"))
-
-    norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
-    spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
-}
-qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level2_annotations.qs")
-
+spatial_list <- qs::qread("output/spatial_objects/spatial_list_unannotated.qs")
 # do it at level 1
 for (ob_name in names(spatial_list)) {
     sp_ob <- spatial_list[[ob_name]]
@@ -131,17 +110,50 @@ for (ob_name in names(spatial_list)) {
                                      UMI_max = 900000000,
                                      CELL_MIN_INSTANCE = 0)
     rctd_out <- spacexr::run.RCTD(rctd_obj, doublet_mode = "full")
-    qs::qsave(rctd_out, paste0("output/spatial_objects/spacexr_", ob_name, ".qs"))
+    qs::qsave(rctd_out, paste0("output/spacexr/rctd_level1_", ob_name, ".qs"))
 
     norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
     spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
 }
 qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level1_annotations.qs")
+rm("spatial_list")
+```
 
+#### Level 2
 
-# going to do it at level 3, specifying multi mode, though
-rctd_res <- list()
+```{r}
+spatial_list <- qs::qread("output/spatial_objects/spatial_list_unannotated.qs")
+#first I'm going to just use spacexr to add scores to each spot for the cell types in our reference
 for (ob_name in names(spatial_list)) {
+    sp_ob <- spatial_list[[ob_name]]
+    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
+        dplyr::rename(x = imagerow, y = imagecol)
+    #convert our object to an rctd object
+    my_data <- spacexr::SpatialRNA(coords,
+                                   GetAssayData(sp_ob, layer = "counts"))
+    rctd_obj <- spacexr::create.RCTD(my_data,
+                                     spacexr_reference,
+                                     max_cores = 6,
+                                     UMI_min = 3,
+                                     counts_MIN = 0, 
+                                     UMI_max = 900000000,
+                                     CELL_MIN_INSTANCE = 0)
+    rctd_out <- spacexr::run.RCTD(rctd_obj, doublet_mode = "full")
+    qs::qsave(rctd_out, paste0("output/spacexr/rctd_level2_", ob_name, ".qs"))
+
+    norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
+    spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
+}
+qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level2_annotations.qs")
+rm("spatial_list")
+```
+
+#### Level 3
+
+```{r}
+spatial_list <- qs::qread("output/spatial_objects/spatial_list_unannotated.qs")
+# going to do it at level 3, specifying multi mode, though
+spatial_list <- parallel::mclapply(names(spatial_list), function(ob_name) {
     sp_ob <- spatial_list[[ob_name]]
     coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
         dplyr::rename(x = imagerow, y = imagecol)
@@ -161,12 +173,15 @@ for (ob_name in names(spatial_list)) {
         rctd_obj,
         doublet_mode = "doublet"
     )
-    rctd_res[[ob_name]] <- rctd_out
+    qs::qsave(rctd_out, paste0("output/spacexr/rctd_level3_", ob_name, ".qs"))
     norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
-    spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
-}
-qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level3_annotations.qs")
+    return(AddMetaData(sp_ob, norm_weights))
+    },
+    mc.cores = parallelly::availableCores()
+    )
 
+qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level3_annotations.qs")
+rm("spatial_list")
 ```
 
 ## Plot Tumor Cell Scores
@@ -193,7 +208,7 @@ for (ob in names(spatial_list)) {
                              tmp$Proliferative +
                              tmp$Stressed
     
-    pdf(paste0("figures/spatial/spacexr/", ob, "_level2.pdf"), height = 4, width = 4)
+    pdf(paste0("output/figures/spatial/spacexr_", ob, "_level2.pdf"), height = 4, width = 4)
     print(
         SpatialDimPlot(
             tmp,
@@ -219,15 +234,6 @@ for (ob in names(spatial_list)) {
     }
     dev.off()
 }
-
-png("figures/spatial/all_h_and_e_slides.png", height = 600, width = 1000)
-he_list <-lapply(names(spatial_list), function(x) {
-    SpatialDimPlot(spatial_list[[x]], pt.size.factor = 0) +
-        NoLegend() +
-        ggtitle(x)
-})
-grid.arrange(grobs = he_list, nrow = 2)
-dev.off()
 ```
 
 ## STdeconvolve
@@ -284,7 +290,7 @@ for (ob in names(spatial_list)) {
 
 for (ob in names(all_ldas)) {
     tmp_mod <- all_ldas[[ob]]
-    png(paste0("output/STdeconvolve/figures/bias_variance_", ob, ".png"))
+    png(paste0("output/figures/STdeconvolve/bias_variance_", ob, ".png"))
     perplexityPlot(tmp_mod)
     dev.off()
 }
@@ -325,7 +331,7 @@ r_vals <- list(
 # Following along with their vignette,using patient mets instead of mOB
 patient_mets <- qs::qread("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs")
 
-pdf("output/STdeconvolve/figures/all_sample_correlation.pdf")
+pdf("output/figures/spatial/STdeconvolve/all_sample_correlation.pdf")
 for (ob in names(spatial_list)) {
     s_obj <- spatial_list[[ob]]
     cor_plt <- make_cor_plt(kneed_lda[[ob]], s_obj)
@@ -333,7 +339,7 @@ for (ob in names(spatial_list)) {
 }
 dev.off()
 
-pdf("output/STdeconvolve/figures/all_sample_topics.pdf", height = 3, width = 4)
+pdf("output/figures/spatial/STdeconvolve/all_sample_topics.pdf", height = 3, width = 4)
 for (ob in names(spatial_list)) {
     s_obj <- spatial_list[[ob]]
     # get tissue coordinates and adjust so they match the h&e slide
@@ -409,99 +415,3 @@ lapply(kneed_gsea, function(x) {
 ```
 
 I really don't like this method of annotating. Perhaps it's an issue with the data type and the inherent heterogeneity of OS tumor samples, but very few topics get annotated as any particular cell type. Furthermore, I obtain different annotations when I restrict gene sets to the top 200 genes as determined by log2FC
-
-### Look at Cell Types of Interest
-
-I think for the time being, I'm better off sticking with the spacexr results, since they give an actual prediction (maybe?).
-
-Right now I'm interested in module
-
-```{r}
-# read in dataset with fibrogenic tams
-myeloid <- qs::qread(
-    "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/stromal_subtypes/patient_mets_normal_cells/Immune_Myeloid.qs"
-)
-
-
-# get degs for each cell type
-Idents(myeloid) <- myeloid$Ann_Level3
-myeloid_degs <- FindAllMarkers(
-    myeloid,
-    min.pct = 0.1,
-    only.pos = TRUE
-)
-
-myeloid_modules <- 
-    subset(myeloid_degs, avg_log2FC > 1 & p_val_adj < 0.05) %>%
-    group_by(cluster) %>%
-    dplyr::select(gene) %>%
-    split(f = .$cluster)
-myeloid_modules <- lapply(myeloid_modules, function(x) {
-    x$gene
-})
-
-spatial_list <- lapply(
-    spatial_list,
-    AddModuleScore,
-    features = myeloid_modules,
-    name = "myeloid"
-)
-
-# have descriptive names for our modules
-descriptive_modules <- 
-    setNames(paste0("myeloid", 1:13), paste0("mod_score_", names(myeloid_modules)))
-# only include any kind of TAMs
-tam_modules <- descriptive_modules[grep("TAMs", names(descriptive_modules))]
-
-# update names of our metadata columns and make figures
-for (ob in names(spatial_list)) {
-    tmp <- spatial_list[[ob]]
-    tmp@meta.data <- tmp@meta.data %>%
-        rename(any_of(descriptive_modules))
-    plts <- lapply(names(tam_modules), function(mod) {
-        SpatialFeaturePlot(
-            tmp,
-            features = mod,
-            pt.size.factor = size.factors[[ob]],
-            image.alpha = 0
-        )
-    })
-    h_e <- SpatialDimPlot(tmp, pt.size.factor = 0) + NoLegend()
-    plts[["H&E"]] <- h_e
-
-    png(
-        paste0("figures/spatial/module_scores/myeloid_", ob, ".png"),
-        width = 1500,
-        height = 1500,
-    )
-    gridExtra::grid.arrange(grobs = plts, ncol = 3)
-    dev.off()
-}
-
-spatial_list <- lapply(spatial_list, function(ob) {
-    ob@meta.data <- ob@meta.data %>%
-        rename(any_of(descriptive_modules))
-})
-```
-
-```{r}
-# I want to try this, but calculating the degs from the whole object first
-# adding myeloid annotations to patient mets, perhaps we won't see as many 
-patient_mets@meta.data[colnames(myeloid), ]$Ann_Level3 <- myeloid$Ann_Level3
-Idents(patient_mets) <- patient_mets$Ann_Level3
-full_myeloid_mods <- list()
-for (ct in names(tam_modules)) {
-    ct <- str_remove(ct, "mod_score_")
-    print(ct)
-    tmp <- FindMarkers(
-        patient_mets,
-        ident.1 = ct,
-        max.cells.per.ident = 2000,
-        min.pct = 0.1,
-        only.pos = TRUE) %>%
-        subset(p_val_adj < 0.05 & avg_log2FC > 1)
-    full_myeloid_mods[[ct]] <- rownames(tmp)
-}
-
-
-```
