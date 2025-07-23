@@ -52,7 +52,7 @@ qs::qsave(spatial_list, "output/spatial_objects/spatial_list_unannotated.qs")
 
 We'll be using RCTD on full mode to perform cell-type annotation 
 
-### Create Reference Object
+### Read in Atlas Object Object
 
 I need to create a reference object. This object is created using the RCTD constructor function, which requires a counts matrix, cell types, and nUMI
 
@@ -61,23 +61,7 @@ yogi_path <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seur
 
 patient_mets <- qs::qread(paste0(yogi_path, "final_tumor_vs_stroma/patient_mets.qs"))
 
-dimplot_better(patient_mets, group = "Ann_Level2", raster = FALSE)
-
-cell_types <- unique(patient_mets$Ann_Level2)
-
-#Ann_level3 was too granular, going to try using Ann_Level2
-spacexr_reference <-
-    spacexr::Reference(GetAssayData(patient_mets, layer = "counts"),
-                       as.factor(patient_mets$Ann_Level2),
-                       n_max_cells = 2000)
-
-# Create level 1 reference too
-spacexr_level1 <-
-    spacexr::Reference(
-        GetAssayData(patient_mets, layer = "counts"),
-        as.factor(patient_mets$Ann_Level1),
-        n_max_cells = 2000
-    )
+dimplot_better(patient_mets, group = c(paste0("Ann_Level", 1:3)), raster = FALSE)
 ```
 
 ### Run RCTD on Spatial Data
@@ -85,6 +69,13 @@ spacexr_level1 <-
 #### Level 1
 
 ```{r}
+level1_ref <-
+    spacexr::Reference(
+        GetAssayData(patient_mets, layer = "counts"),
+        as.factor(patient_mets$Ann_Level1),
+        n_max_cells = 2000
+    )
+
 spatial_list <- qs::qread("output/spatial_objects/spatial_list_unannotated.qs")
 # do it at level 1
 for (ob_name in names(spatial_list)) {
@@ -114,7 +105,13 @@ rm("spatial_list")
 #### Level 2
 
 ```{r}
-spatial_list <- qs::qread("output/spatial_objects/spatial_list_unannotated.qs")
+level2_ref <- spacexr::Reference(
+        GetAssayData(patient_mets, layer = "counts"),
+        as.factor(patient_mets$Ann_Level2),
+        n_max_cells = 2000
+)
+
+spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
 #first I'm going to just use spacexr to add scores to each spot for the cell types in our reference
 for (ob_name in names(spatial_list)) {
     sp_ob <- spatial_list[[ob_name]]
@@ -124,7 +121,7 @@ for (ob_name in names(spatial_list)) {
     my_data <- spacexr::SpatialRNA(coords,
                                    GetAssayData(sp_ob, layer = "counts"))
     rctd_obj <- spacexr::create.RCTD(my_data,
-                                     spacexr_reference,
+                                     level2_ref,
                                      max_cores = 6,
                                      UMI_min = 3,
                                      counts_MIN = 0, 
@@ -180,6 +177,65 @@ spacexr_res <- parallel::mclapply(names(spatial_list), function(ob_name) {
     mc.preschedule = FALSE
     )
 ```
+
+#### Myeloid and Tumor Focus
+
+This may be cheating... but I'm wondering if we can perform deconvolution with a reference that only has level 3 granularity for the myeloid and tumor populations.
+
+```{r}
+table(patient_mets$Ann_Level1)
+# we'll make a new column in our object called myeloid_tumor
+patient_mets@meta.data <- patient_mets@meta.data %>%
+    mutate(myeloid_tumor = recode(
+        Ann_Level1,
+        "Alv_Macrophages" = "Alv_Macrophages",
+        "Epithelial_Endothelial" = "Epithelial_Endothelial",
+        "Immune_Lymphoid" = "Immune_Lymphoid",
+        "Mesenchymal" = "Mesenchymal",
+        "Immune_Myeloid" = Ann_Level3,
+        "Tumor" = Ann_Level3
+    ))
+
+dimplot_better(patient_mets, group = c("myeloid_tumor", "Ann_Level3"), raster = FALSE)
+
+myeloid_tumor_ref <- spacexr::Reference(
+    GetAssayData(patient_mets, layer = "counts"),
+    as.factor(patient_mets$myeloid_tumor),
+    n_max_cells = 2000
+)
+
+myeloid_tumor <- parallel::mclapply(names(spatial_list), function(ob_name) {
+    sp_ob <- spatial_list[[ob_name]]
+    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
+        dplyr::rename(x = imagerow, y = imagecol)
+    #convert our object to an rctd object
+    my_data <- spacexr::SpatialRNA(coords,
+                                   GetAssayData(sp_ob, layer = "counts"))
+    rctd_obj <- spacexr::create.RCTD(
+        my_data,                     
+        myeloid_tumor_ref,
+        max_cores = 1,
+        UMI_min = 3,
+        counts_MIN = 0, 
+        UMI_max = 900000000,
+        CELL_MIN_INSTANCE = 0
+    )
+    rctd_out <- spacexr::run.RCTD(
+        rctd_obj,
+        doublet_mode = "doublet"
+    )
+    qs::qsave(
+        rctd_out,
+        paste0("output/spacexr/rctd_myeloid_tumor_", ob_name, ".qs")
+    )
+    norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
+    return(AddMetaData(sp_ob, norm_weights))
+    },
+    mc.cores = parallelly::availableCores(),
+    mc.preschedule = FALSE
+    )
+```
+
 
 ## Plot Tumor Cell Scores
 
@@ -240,6 +296,7 @@ I want to make a figure where each column is a tumor type, and each row is a sam
 ### Tumor Panel Plots
 
 ```{r}
+spatial_list <- qs::qread("output/spatial_objects/spatial_list_level3_annotations.qs")
 tumor_types <- c(
     "Basal_Progenitor",
     "Fibrogenic",
@@ -254,17 +311,29 @@ for (ob in names(spatial_list)) {
         NoLegend()
     plts <- list("h_and_e" = hne)
     for (ct in tumor_types) {
-        plts[[ct]] <-
+        max_score = max(spatial_list[[ob]]@meta.data[, ct])
+        # plts[[ct]] <-
             SpatialFeaturePlot(
                 spatial_list[[ob]],
                 features = ct,
                 pt.size.factor = size.factors[[ob]],
                 image.alpha = 0
+            # ) +
+            # ggplot2::scale_fill_continuous(
+            #     low = "#2D577FFF",
+            #     high = "#D43F3AFF",
+            #     # high = "#D43F3AFF"
             )
     }
     grid.arrange(grobs = plts, nrow = 1)
 }
 dev.off()
+
+
+"#D43F3AFF" "#EEA236FF" "#357EBDFF" "#5CB85CFF" "#B8B8B8FF" "#9632B8FF"
+"#46B8DAFF" "#90302DFF" "#A66D04FF" "#2D577FFF" "#3E7E3EFF" "#7D7D7DFF"
+"#6D1D87FF" "#097F9AFF" "#FF6E6AFF" "#FFBB70FF" "#68A4E3FF" "#79D379FF"
+"#CDCDCDFF" "#BF6BE2FF" "#69D1F3FF"
 
 spatial_2 <- qs::qread("output/spatial_objects/spatial_list_level2_annotations.qs")
 pdf("output/figures/spatial/spacexr/tumor_level2.pdf", width = 35)
