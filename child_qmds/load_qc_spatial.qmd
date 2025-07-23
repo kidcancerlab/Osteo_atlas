@@ -78,14 +78,6 @@ spacexr_level1 <-
         as.factor(patient_mets$Ann_Level1),
         n_max_cells = 2000
     )
-
-# level 3 reference
-spacexr3 <-
-    spacexr::Reference(
-        GetAssayData(patient_mets, layer = "counts"),
-        as.factor(patient_mets$Ann_Level3),
-        n_max_cells = 2000
-    )
 ```
 
 ### Run RCTD on Spatial Data
@@ -151,9 +143,16 @@ rm("spatial_list")
 #### Level 3
 
 ```{r}
-spatial_list <- qs::qread("output/spatial_objects/spatial_list_unannotated.qs")
+level3_ref <-
+    spacexr::Reference(
+        GetAssayData(patient_mets, layer = "counts"),
+        as.factor(patient_mets$Ann_Level3),
+        n_max_cells = 2000
+    )
+
+spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
 # going to do it at level 3, specifying multi mode, though
-spatial_list <- parallel::mclapply(names(spatial_list), function(ob_name) {
+spacexr_res <- parallel::mclapply(names(spatial_list), function(ob_name) {
     sp_ob <- spatial_list[[ob_name]]
     coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
         dplyr::rename(x = imagerow, y = imagecol)
@@ -162,8 +161,8 @@ spatial_list <- parallel::mclapply(names(spatial_list), function(ob_name) {
                                    GetAssayData(sp_ob, layer = "counts"))
     rctd_obj <- spacexr::create.RCTD(
         my_data,                     
-        spacexr3,
-        max_cores = 6,
+        level3_ref,
+        max_cores = 1,
         UMI_min = 3,
         counts_MIN = 0, 
         UMI_max = 900000000,
@@ -177,11 +176,9 @@ spatial_list <- parallel::mclapply(names(spatial_list), function(ob_name) {
     norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
     return(AddMetaData(sp_ob, norm_weights))
     },
-    mc.cores = parallelly::availableCores()
+    mc.cores = parallelly::availableCores(),
+    mc.preschedule = FALSE
     )
-
-qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level3_annotations.qs")
-rm("spatial_list")
 ```
 
 ## Plot Tumor Cell Scores
@@ -234,6 +231,86 @@ for (ob in names(spatial_list)) {
     }
     dev.off()
 }
+```
+
+## Make Panel Plots
+
+I want to make a figure where each column is a tumor type, and each row is a sample.
+
+### Tumor Panel Plots
+
+```{r}
+tumor_types <- c(
+    "Basal_Progenitor",
+    "Fibrogenic",
+    "Interactive",
+    "MP_Progenitor",
+    "Proliferative",
+    "Stressed")
+
+pdf("output/figures/spatial/spacexr/tumor_level_3.pdf", width = 35)
+for (ob in names(spatial_list)) {
+    hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
+        NoLegend()
+    plts <- list("h_and_e" = hne)
+    for (ct in tumor_types) {
+        plts[[ct]] <-
+            SpatialFeaturePlot(
+                spatial_list[[ob]],
+                features = ct,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+    }
+    grid.arrange(grobs = plts, nrow = 1)
+}
+dev.off()
+
+spatial_2 <- qs::qread("output/spatial_objects/spatial_list_level2_annotations.qs")
+pdf("output/figures/spatial/spacexr/tumor_level2.pdf", width = 35)
+for (ob in names(spatial_2)) {
+    hne <- SpatialDimPlot(spatial_2[[ob]], pt.size.factor = 0) +
+        NoLegend()
+    plts <- list("h_and_e" = hne)
+    for (ct in tumor_types) {
+        plts[[ct]] <-
+            SpatialFeaturePlot(
+                spatial_2[[ob]],
+                features = ct,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+    }
+    grid.arrange(grobs = plts, nrow = 1)
+}
+dev.off()
+```
+
+
+### TAM Panel Plots
+
+```{r}
+tam_types <- grep("TAM", colnames(spatial_list[[1]]@meta.data), value = TRUE)
+
+pdf("output/figures/spatial/spacexr/tam_subpopulations.pdf", width = 35)
+for (ob in names(spatial_list)) {
+    hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
+        NoLegend()
+    plts <- list("h_and_e" = hne)
+    for (tam in tam_types) {
+        plts[[tam]] <-
+            SpatialFeaturePlot(
+                spatial_list[[ob]],
+                features = tam,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+    }
+    grid.arrange(grobs = plts, nrow = 1)
+}
+dev.off()
+
+
 ```
 
 ## STdeconvolve
