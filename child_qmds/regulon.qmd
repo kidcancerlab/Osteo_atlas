@@ -12,16 +12,17 @@ motifAnnotations_hgnc <- motifAnnotations
 data(list="motifAnnotations_mgi", package="RcisTarget")
 motifAnnotations_mgi <- motifAnnotations
 
+# list of groups to analyze
 object_list <-
     tribble(~group,                         ~res_value, ~org,
-            "patient_prim_cancer_cells",    0.15,        "hgnc",
-            "patient_mets_cancer_cells",    0.15,        "hgnc",
-            "mm_prim_cancer_cells",         0.4,        "mgi",
-            "mm_mets_cancer_cells",         0.25,        "mgi",
+            "patient_prim_cancer_cells",    0.3,        "hgnc",
+            "patient_mets_cancer_cells",    0.35,        "hgnc",
+            "mm_prim_cancer_cells",         0.9,        "mgi",
+            "mm_mets_cancer_cells",         0.7,        "mgi",
             "xeno_prim_human",              0.3,        "hgnc",
-            "xeno_mets_human",              0.15,        "hgnc",
+            "xeno_mets_human",              0.4,        "hgnc",
             "dogs_prim_cancer_cells",       0.2,        "hgnc",
-            "dogs_mets_cancer_cells",       0.1,        "hgnc")
+            "dogs_mets_cancer_cells",       0.45,        "hgnc")
 
 for (i in seq_len(nrow(object_list))) {
     group <- object_list$group[i]
@@ -162,8 +163,7 @@ for (i in seq_len(nrow(object_list))) {
 
 ```
 
-# regulons analysis TAMs
-
+## regulons analysis TAMs
 ```{r regulon_analysis, eval = FALSE}
 #load the motif annotations
 data(list="motifAnnotations_hgnc", package="RcisTarget")

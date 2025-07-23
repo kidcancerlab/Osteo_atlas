@@ -6,12 +6,19 @@ sample.
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.15,
-            "patient_mets_cancer_cells",    0.25)
+            "patient_prim_cancer_cells",    0.3,
+            "patient_mets_cancer_cells",    0.35,
+            "mm_prim_cancer_cells",         0.9,
+            "mm_mets_cancer_cells",         0.7,
+            "xeno_prim_human",              0.3,
+            "xeno_mets_human",              0.4,
+            "dogs_prim_cancer_cells",       0.2,
+            "dogs_mets_cancer_cells",       0.45
+            )
 
 for (i in seq_len(nrow(object_list))) {
     all_sample <- 
-        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         object_list$group[i],
                         ".qs")) %>%
         FindClusters(resolution = object_list$res_value[i])
@@ -64,12 +71,13 @@ for (i in seq_len(nrow(object_list))) {
                         group_by = c("seurat_clusters")) +
                 ggtitle(samples)
 
-        aver_exp1 <- AverageExpression(one_sample,
-                                    layer = "scale.data",
-                                    group.by = "seurat_clusters")$RNA %>%
-                    as.data.frame() %>%
-                    rename_with(~str_replace(., "g", "clust")) %>%
-                    tibble::rownames_to_column(var = "gene")
+        aver_exp1 <- 
+            AverageExpression(one_sample,
+                            layer = "scale.data",
+                            group.by = "seurat_clusters")$RNA %>%
+            as.data.frame() %>%
+            rename_with(~str_replace(., "g", "clust")) %>%
+            tibble::rownames_to_column(var = "gene")
 
         combine_exp <- 
             left_join(aver_exp1, aver_exp2, by = "gene") %>%
@@ -172,12 +180,15 @@ sample.
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.1,
-            "mm_prim_cancer_cells",         0.3,
-            "mm_mets_cancer_cells",         0.3,
-            "xeno_prim_human",              0.15,
-            "xeno_mets_human",              0.1)
+            "patient_prim_cancer_cells",    0.3,
+            "patient_mets_cancer_cells",    0.35,
+            "mm_prim_cancer_cells",         0.9,
+            "mm_mets_cancer_cells",         0.7,
+            "xeno_prim_human",              0.3,
+            "xeno_mets_human",              0.4,
+            "dogs_prim_cancer_cells",       0.2,
+            "dogs_mets_cancer_cells",       0.45
+            )
 
 
 combined_AveExp <- tibble::tibble(gene = character())

@@ -29,6 +29,7 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
         dplyr::full_join(cell_count, by = "celltypes")
 }
 
+
 #title replacement
 title_replacement <- 
     c(patient_prim_cancer_cells = "Primary",
@@ -52,11 +53,7 @@ cols <-
 cols <-
     cols[1: length(celltypes)]
 
-
 names(cols) <- celltypes
-
-
-
 
 ```
 
@@ -76,6 +73,7 @@ object_list <-
             "dogs_prim_cancer_cells",       "dogs_mets_cancer_cells",       "Canine_Patients",
             "xeno_prim_human_cancer_cells",  "xeno_mets_human_cancer_cells", "Human_PDX")
 
+count_prop <- list()
 # Create a list of groups
 for (i in seq_len(nrow(object_list))) {
     group1 <- object_list$group1[i]
@@ -95,6 +93,8 @@ for (i in seq_len(nrow(object_list))) {
             ungroup() %>%
             mutate(group = str_replace_all(group, title_replacement),
                     celltypes = str_replace_all(celltypes, "_", " "))
+    # Add the cell count subset to the list
+    count_prop[[group3]] <- cell_count_subset
 
     # Create a color palette
     sanky_plot_ryan <-
