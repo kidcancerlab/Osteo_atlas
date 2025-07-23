@@ -4,16 +4,60 @@
 
 The most simple way to address what cells are near each other is by using a simple correlation. For each sample I'll create a heatmap of correlations between cell types.
 
+#### Ann_Level2
+
+```{r}
+spatial_list <- qs::qread("output/spatial_objects/spatial_list_level2_annotations.qs")
+cell_types_2 <- unique(patient_mets$Ann_Level2)
+pdf("output/figures/spatial/cooccurrence/level_2_heatmap.pdf")
+for (ob in names(spatial_list)) {
+    ann_matrix <- spatial_list[[ob]]@meta.data[ , cell_types_2]
+    pheatmap::pheatmap(
+        cor(ann_matrix),
+        scale = "none",
+        low = "blue",
+        high = "red",
+        mid = "white",
+        midpoint = 0
+    )
+}
+dev.off()
+
+```
+
+#### Ann_Level3
 ```{r cell-type-correlation}
+spatial_list <- qs::qread("output/spatial_objects/spatial_list_level3_annotations.qs")
+cell_types_3 <- unique(patient_mets$Ann_Level3)
+pdf("output/figures/spatial/cooccurrence/level_3_heatmap.pdf")
+for (ob in names(spatial_list)) {
+    ann_matrix <- spatial_list[[ob]]@meta.data[ , cell_types_3]
+    pheatmap::pheatmap(
+        cor(ann_matrix),
+        scale = "none",
+        low = "blue",
+        high = "red",
+        mid = "white",
+        midpoint = 0
+    )
+}
+dev.off()
+```
+
+```{r}
+
+
 for (ob in names(spatial_list)) {
     ann_matrix <- spatial_list[[ob]]@meta.data[ , cell_types]
     png(paste0("output/figures/spatial/cooccurrence/cell_type_heatmap_", ob, "_level3.png"), height = 800, width = 800)
-    pheatmap::pheatmap(cor(ann_matrix),
-                       scale = "none",
-                       low = "blue",
-                       high = "red",
-                       mid = "white",
-                       midpoint = 0)
+    pheatmap::pheatmap(
+        cor(ann_matrix),
+        scale = "none",
+        low = "blue",
+        high = "red",
+        mid = "white",
+        midpoint = 0
+    )
     dev.off()
 }
 
