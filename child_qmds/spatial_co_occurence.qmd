@@ -45,23 +45,6 @@ dev.off()
 ```
 
 ```{r}
-
-
-for (ob in names(spatial_list)) {
-    ann_matrix <- spatial_list[[ob]]@meta.data[ , cell_types]
-    png(paste0("output/figures/spatial/cooccurrence/cell_type_heatmap_", ob, "_level3.png"), height = 800, width = 800)
-    pheatmap::pheatmap(
-        cor(ann_matrix),
-        scale = "none",
-        low = "blue",
-        high = "red",
-        mid = "white",
-        midpoint = 0
-    )
-    dev.off()
-}
-
-
 #wanna look at correlation with tumor cells
 for (ob in names(spatial_list)) {
     png(paste0("output/figures/spatial/cooccurrence/tumor_correlation_", ob, ".png"))
@@ -124,8 +107,8 @@ cell_type_heatmaps <- lapply(names(ann_mat_list), function(x) {
     return(p)
 })
 
-#Make feature plots for cell types that correlate with each other
-#epithelial and endothelial
+# Make feature plots for cell types that correlate with each other
+# epithelial and endothelial
 plt_list <- lapply(names(spatial_list), function(x) {
     SpatialFeaturePlot(spatial_list[[x]],
                        features = c("Endothelial_cells", "Epithelial_cells"),
