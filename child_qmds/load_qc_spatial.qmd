@@ -176,6 +176,8 @@ spacexr_res <- parallel::mclapply(names(spatial_list), function(ob_name) {
     mc.cores = parallelly::availableCores(),
     mc.preschedule = FALSE
     )
+qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level3_annotations.qs")
+rm("spatial_list")
 ```
 
 #### Myeloid and Tumor Focus
@@ -204,7 +206,7 @@ myeloid_tumor_ref <- spacexr::Reference(
     n_max_cells = 2000
 )
 
-myeloid_tumor <- parallel::mclapply(names(spatial_list), function(ob_name) {
+spatial_list <- parallel::mclapply(names(spatial_list), function(ob_name) {
     sp_ob <- spatial_list[[ob_name]]
     coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
         dplyr::rename(x = imagerow, y = imagecol)
@@ -234,12 +236,17 @@ myeloid_tumor <- parallel::mclapply(names(spatial_list), function(ob_name) {
     mc.cores = parallelly::availableCores(),
     mc.preschedule = FALSE
     )
+
+qs::qsave(spatial_list, "output/spatial_objects/spatial_list_myeloid_tumor.qs")
+rm("spatial_list")
 ```
 
 
-## Plot Tumor Cell Scores
+## Plot Deconvolution Scores
 
 The first sanity check we can perform is looking at how the tumor cell types' feature scores look compared to the H&E slides.
+
+### Ann_Level2
 
 ```{r plot-tumor-scores}
 size.factors <- list("OS1_Seurat" = 1500,
@@ -289,6 +296,107 @@ for (ob in names(spatial_list)) {
 }
 ```
 
+### Ann_Level3
+
+```{r}
+cell_types3 <- unique(patient_mets$Ann_Level3)
+for (ob in names(spatial_list)) {
+    tmp <- spatial_list[[ob]]
+    tmp$Tumor_Cumulative <- tmp$Basal_Progenitor +
+                             tmp$Fibrogenic +
+                             tmp$Interactive +
+                             tmp$MP_Progenitor +
+                             tmp$Proliferative +
+                             tmp$Stressed
+    
+    pdf(paste0("output/figures/spatial/spacexr/spacexr_", ob, "_level3.pdf"), height = 4, width = 4)
+    print(
+        SpatialDimPlot(
+            tmp,
+            pt.size.factor = 0) + NoLegend()
+    )
+    print(
+        SpatialFeaturePlot(
+            tmp,
+            features = "Tumor_Cumulative",
+            pt.size.factor = size.factors[[ob]],
+            image.alpha = 0
+        )
+    )
+    for (ct in cell_types3) {
+        print(
+            SpatialFeaturePlot(
+                tmp,
+                features = ct,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+        )
+    }
+    dev.off()
+}
+```
+
+### Myeloid_Tumor
+
+This is using the deconvolution results from using the myeloid_tumor reference
+
+```{r}
+cell_types_myeloid_tumor <- unique(patient_mets$myeloid_tumor)
+for (ob in names(spatial_list)) {
+    tmp <- spatial_list[[ob]]
+    tmp$Tumor_Cumulative <- tmp$Basal_Progenitor +
+                             tmp$Fibrogenic +
+                             tmp$Interactive +
+                             tmp$MP_Progenitor +
+                             tmp$Proliferative +
+                             tmp$Stressed
+    
+    pdf(paste0("output/figures/spatial/spacexr/spacexr_", ob, "_myeloid_tumor.pdf"), height = 4, width = 4)
+    print(
+        SpatialDimPlot(
+            tmp,
+            pt.size.factor = 0) + NoLegend()
+    )
+    print(
+        SpatialFeaturePlot(
+            tmp,
+            features = "Tumor_Cumulative",
+            pt.size.factor = size.factors[[ob]],
+            image.alpha = 0
+        )
+    )
+    for (ct in sort(cell_types_myeloid_tumor)) {
+        print(
+            SpatialFeaturePlot(
+                tmp,
+                features = ct,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+        )
+    }
+    dev.off()
+}
+
+pdf("output/figures/spatial/spacexr/myeloid_tumor_all_samples.pdf", width = 35)
+for (ct in sort(cell_types_myeloid_tumor)) {
+    plt <- lapply(names(spatial_list), function(ob) {
+        SpatialFeaturePlot(
+            spatial_list[[ob]],
+            features = ct,
+            pt.size.factor = size.factors[[ob]],
+            image.alpha = 0
+        )
+    }
+    )
+    print(
+        gridExtra::grid.arrange(grobs = plt, nrow = 1)
+    )
+}
+dev.off()
+```
+
 ## Make Panel Plots
 
 I want to make a figure where each column is a tumor type, and each row is a sample.
@@ -312,7 +420,7 @@ for (ob in names(spatial_list)) {
     plts <- list("h_and_e" = hne)
     for (ct in tumor_types) {
         max_score = max(spatial_list[[ob]]@meta.data[, ct])
-        # plts[[ct]] <-
+        plts[[ct]] <-
             SpatialFeaturePlot(
                 spatial_list[[ob]],
                 features = ct,
@@ -330,21 +438,36 @@ for (ob in names(spatial_list)) {
 dev.off()
 
 
-"#D43F3AFF" "#EEA236FF" "#357EBDFF" "#5CB85CFF" "#B8B8B8FF" "#9632B8FF"
-"#46B8DAFF" "#90302DFF" "#A66D04FF" "#2D577FFF" "#3E7E3EFF" "#7D7D7DFF"
-"#6D1D87FF" "#097F9AFF" "#FF6E6AFF" "#FFBB70FF" "#68A4E3FF" "#79D379FF"
-"#CDCDCDFF" "#BF6BE2FF" "#69D1F3FF"
-
-spatial_2 <- qs::qread("output/spatial_objects/spatial_list_level2_annotations.qs")
+spatial_list <- qs::qread("output/spatial_objects/spatial_list_level2_annotations.qs")
 pdf("output/figures/spatial/spacexr/tumor_level2.pdf", width = 35)
-for (ob in names(spatial_2)) {
-    hne <- SpatialDimPlot(spatial_2[[ob]], pt.size.factor = 0) +
+for (ob in names(spatial_list)) {
+    hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
         NoLegend()
     plts <- list("h_and_e" = hne)
     for (ct in tumor_types) {
         plts[[ct]] <-
             SpatialFeaturePlot(
-                spatial_2[[ob]],
+                spatial_list[[ob]],
+                features = ct,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+    }
+    grid.arrange(grobs = plts, nrow = 1)
+}
+dev.off()
+
+
+spatial_list <- qs::qread("output/spatial_objects/spatial_list_myeloid_tumor.qs")
+pdf("output/figures/spatial/spacexr/tumor_myeloid_tumor.pdf", width = 35)
+for (ob in names(spatial_list)) {
+    hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
+        NoLegend()
+    plts <- list("h_and_e" = hne)
+    for (ct in tumor_types) {
+        plts[[ct]] <-
+            SpatialFeaturePlot(
+                spatial_list[[ob]],
                 features = ct,
                 pt.size.factor = size.factors[[ob]],
                 image.alpha = 0
@@ -358,10 +481,38 @@ dev.off()
 
 ### TAM Panel Plots
 
+This is using the Ann_Level3 deconvolution results
+
 ```{r}
 tam_types <- grep("TAM", colnames(spatial_list[[1]]@meta.data), value = TRUE)
 
 pdf("output/figures/spatial/spacexr/tam_subpopulations.pdf", width = 35)
+for (ob in names(spatial_list)) {
+    hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
+        NoLegend()
+    plts <- list("h_and_e" = hne)
+    for (tam in tam_types) {
+        plts[[tam]] <-
+            SpatialFeaturePlot(
+                spatial_list[[ob]],
+                features = tam,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+    }
+    grid.arrange(grobs = plts, nrow = 1)
+}
+dev.off()
+
+
+```
+
+This is using the myeloid_tumor deconvolution results
+
+```{r}
+tam_types <- grep("TAM", colnames(spatial_list[[1]]@meta.data), value = TRUE)
+
+pdf("output/figures/spatial/spacexr/tam_subpopulations_myeloid_tumor.pdf", width = 35)
 for (ob in names(spatial_list)) {
     hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
         NoLegend()
