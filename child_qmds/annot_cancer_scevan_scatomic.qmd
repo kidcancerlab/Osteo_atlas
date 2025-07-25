@@ -474,6 +474,11 @@ For human part # reference has "S0170", "S0042" for xenograft hence we will use
 "SJOS013769_X1_human", "X00018_human",
 "S0034_human",          "X00020_human"
 
+Four normal bone samples are
+X00018
+X00019
+X00020
+X00021
 
 random samples for xeno primary validation: 1) S0042 2)SJOS016015_X1
  random samples for xeno mets validation: 1) S0055  2)SJOS001112_X1
@@ -610,12 +615,14 @@ qs::qsave(stroma2,
 # combination of samples for human tumor annotation and reference validation
 
 samples <- c(
-    "SJOS016015_X1_human",  # xeno primary tumor cell with femur head
-    "S0042_human",          # xeno primary tumor cell with femur head
-    "S0055_human",          # xeno mets tumor cell
-    "SJOS001112_X1_human",   # xeno mets tumor cell
-    "X00018_human",
-    "X00020_human"
+    # "SJOS016015_X1_human",  # xeno primary tumor cell with femur head
+    # "S0042_human",          # xeno primary tumor cell with femur head
+    # "S0055_human",          # xeno mets tumor cell
+    # "SJOS001112_X1_human",   # xeno mets tumor cell
+    # "X00018_human",
+    # "X00020_human",
+    "X00021_human",  # xeno primary tumor cell with femur head
+    "X00019_human"   # xeno primary tumor cell with femur head
 )
 # save into the one location for all the validation object
 for (tumor_name in samples) {
@@ -628,6 +635,36 @@ for (tumor_name in samples) {
             str_c("output/seurat_objects/validation/tumor_annotation/",
                 tumor_name, ".qs"))
 }
+
+# make the stroma human primary
+stroma_names <-
+    tribble(~stroma_name1,   ~stroma_name2,   ~name,
+            "X00018_human", "X00019_human",    "prim_stroma1",
+            "X00020_human",  "X00021_human",   "prim_stroma2")
+# combine the stroma and tumor for validation
+for (i in seq_len(nrow(stroma_names))) {
+    stroma_name1 <- stroma_names$stroma_name1[i]
+    stroma_name2 <- stroma_names$stroma_name2[i]
+    stroma_name <- stroma_names$name[i]
+    stroma1_sobject <-
+        qs::qread(str_c("output/seurat_objects/validation/tumor_annotation/",
+                        stroma_name1, ".qs"))
+
+    stroma2_sobject <-
+        qs::qread(str_c("output/seurat_objects/validation/tumor_annotation/",
+                        stroma_name2, ".qs"))
+
+    combined_stroma <-
+        merge(stroma1_sobject, stroma2_sobject,
+              add.cell.ids = c("stroma1", "stroma2")) %>%
+        JoinLayers() %>%
+        process_seurat()
+    
+    qs::qsave(combined_stroma,
+            str_c("output/seurat_objects/validation/tumor_annotation/",
+                stroma_name, ".qs"))
+}
+
 
 # the combination
 samples_to_combine <- 
@@ -1011,6 +1048,22 @@ samples_for_validation <-
       "SJOS001112_X1_human_human_lung_stroma2_combined",
       "S0055_human_human_lung_stroma1_combined")
 
+cols <-
+    list("Tumor" = "#D43F3AFF",
+        "Normal" = "#EEA236FF",
+        "Unknown" = "#357EBDFF",
+        "Host" = "#EEA236FF")
+
+patchwork::wrap_plots(
+    dimplot_better(combine_sobject, group_by = "truth_metadata"),
+    dimplot_better(combine_sobject, group_by = "scatomic_tumor_call"),
+    dimplot_better(combine_sobject, group_by = "scevan_tumor_call"),
+    dimplot_better(combine_sobject, group_by = "copykat_tumor_cal"),
+    dimplot_better(combine_sobject, group_by = "annot_with_tumor_as_whole"),
+    dimplot_better(combine_sobject, group_by = "final_tumor_call"),
+    ncol = 3
+    
+)
 
 for (group in samples_for_validation) {
     combine_sobject <-
@@ -1018,12 +1071,16 @@ for (group in samples_for_validation) {
                         group, "_alldone.qs"))
     combine_sobject$scatomic_tumor_call <-
         ifelse(grepl("Cancer Cell$", combine_sobject$scATOMIC_pred),
-                "tumor",
-                "stroma")
+                "Tumor",
+                "Normal")
     combine_sobject$scevan_tumor_call <-
         ifelse(combine_sobject$scevan_tumor_call == "cancer_cells",
-                "tumor",
-                "stroma")
+                "Tumor",
+                "Normal")
+    combine_sobject$copykat_tumor_cal <-
+        ifelse(combine_sobject$CNV_status == "aneuploid",
+                "Tumor",
+                "Normal")
     #dimplot_better(combine_sobject, group_by = "scATOMIC_pred")
     # give me some kind of metric to see how well do the two annotations match
     metadata <-
@@ -1176,5 +1233,20 @@ for (group in samples_for_validation) {
             str_c("output/seurat_objects/validation/tumor_annotation/anno_",
                 group))
 }
+
+
+sobj <-
+    qs::qread("/home/gdrobertslab/lab/Analysis/MattGust/projects/Roberts_Lab/24_validate_snvs/output/seurat_objects/merged_S0260_61_with_calls.qs")
+
+sobj$final_snv_call <-
+    ifelse(sobj$snv_top_lvl_group_5 == "top_lvl_group0",
+            "Tumor",
+            "Stroma") %>%
+    
+
+
+dimplot_better(sobj,
+            group_by = "final_snv_call") +
+    NoLegend() + ggtitle("SNV calls in S0260 and S0261")
 
 ```

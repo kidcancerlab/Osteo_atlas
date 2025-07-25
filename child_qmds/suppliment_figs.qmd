@@ -169,7 +169,7 @@ for (group in c("patient_prim", "patient_mets",
 cols <-
     list("Tumor" = "#D43F3AFF",
         "Normal" = "#EEA236FF",
-        "unknown" = "#357EBDFF",
+        "Unknown" = "#357EBDFF",
         "Host" = "#EEA236FF")
 # make a sankey plot to show the tumor calling
 for (group in c("patient_prim", "patient_mets",
@@ -180,27 +180,17 @@ for (group in c("patient_prim", "patient_mets",
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
-    patchwork::wrap_plots(dimplot_better(object, group_by = "scatomic_tumor_call"),
-                        dimplot_better(object, group_by = "scevan_tumor_call"),
-                        dimplot_better(object, group_by = "CNV_status"),
-                        ncol = 3)
-
     metadata <- 
         object@meta.data %>%
         as.data.frame() %>%
         rownames_to_column("cell_id") %>%
         select(cell_id,
                scatomic_tumor_call,
-            #    final_snv_call,
-            #    Ann_Level0,
                scevan_tumor_call,
                CNV_status) %>%
-               arrange(
-                    #     Ann_Level0,
-                    #    final_snv_call,
-                       scatomic_tumor_call,
-                       scevan_tumor_call,
-                       CNV_status) %>%
+        arrange(CNV_status,
+                scevan_tumor_call,
+                scatomic_tumor_call) %>%
         mutate(cell_id_number = row_number()) %>%
         mutate(scATOMIC = str_replace_all(scatomic_tumor_call, 
                                         c("normal_cells" = "Normal",
@@ -210,123 +200,38 @@ for (group in c("patient_prim", "patient_mets",
                                         c("normal_cells" = "Normal",
                                         "cancer_cells" = "Tumor",
                                         "Host" = "Normal")),
-            #    SCANBIT = str_replace_all(final_snv_call,
-            #                             c("normal_cells" = "Normal",
-            #                             "cancer_cells" = "Tumor",
-            #                             "Host" = "Normal")),
-            #    FinalCall = str_replace_all(Ann_Level0,
-            #                             c("Host" = "Normal")),
                 CopyKAT = str_replace_all(CNV_status,
                                          c("aneuploid" = "Tumor",
                                          "diploid" = "Normal"))) %>%
         mutate(across(c(scATOMIC, 
                         SCEVAN, 
-                        # SCANBIT, 
-                        # FinalCall,
-                        CopyKAT), ~replace_na(., "unknown"))) %>%
+                        CopyKAT), ~replace_na(., "Unknown"))) %>%
         select(cell_id, 
                 cell_id_number, 
                 scATOMIC, 
                 SCEVAN, 
-                # SCANBIT, 
-                # FinalCall,
                 CopyKAT)
-    # do some statistics to see how different the tumor calling is compared to truth set Ann_Level0
-    # Calculate confusion matrices and agreement statistics for each method vs Ann_Level0
-    comparison <- list()
-    for (method in c("scATOMIC", "SCEVAN", "SCANBIT", "FinalCall")) {
-        tbl <- 
-            table(Truth = metadata$FinalCall,
-                  Prediction = metadata[[method]])
-        # Cohen's kappa (skip for Ann_Level0 vs itself)
-        if (method == "FinalCall") {
-            kappa <- NA
-        } else {
-            kappa <- suppressWarnings(irr::kappa2(data.frame(metadata$FinalCall,
-                                                             metadata[[method]]))$value)
-        }
-        # Accuracy
-        acc <- sum(diag(tbl)) / sum(tbl)
-        comparison[[method]] <- 
-            list(confusion_matrix = tbl,
-                 kappa = kappa,
-                 accuracy = acc)
-    }
-    # Prepare accuracy data frame
-    comparison_df <- 
-        tibble(Method = names(comparison),
-               Accuracy = sapply(comparison, function(x) x$accuracy))
-    comparison_df$Method <- 
-        factor(comparison_df$Method,
-               levels = c("FinalCall", "SCANBIT", "scATOMIC", "SCEVAN"))
-    # Accuracy barplot
-    accuracy_plot <- 
-        ggplot(comparison_df, aes(x = Method, y = Accuracy, fill = Method)) +
-            geom_col(width = 0.7) +
-            geom_text(aes(label = round(Accuracy, 3), y = Accuracy / 2), size = 4, color = "white") +
-            theme_minimal() +
-            scale_fill_manual(values = c("scATOMIC" = "#5CB85CFF",
-                                         "SCEVAN" = "#46B8DAFF",
-                                         "SCANBIT" = "#9632B8FF",
-                                         "FinalCall" = "#D43F3AFF")) +
-            theme(legend.position = "none",
-                  panel.grid = element_blank(),
-                  axis.title.x = element_text(),
-                  axis.title.y = element_text(),
-                  axis.text.y = element_text(face = "bold"),
-                  axis.text.x = element_text(angle = 0, hjust = 0.5, face = "bold")) +
-            labs(x = "Methods", y = "Accuracy")+
-            scale_y_continuous(expand = c(0, 0)) +
-            scale_x_discrete(expand = c(0, 0))
-
-    # Plot confusion matrices for each method vs FinalCall
-    confusion_plots <- list()
-    for (method in c("SCANBIT", "scATOMIC", "SCEVAN")) {
-        tbl <- comparison[[method]]$confusion_matrix
-        acc <- comparison[[method]]$accuracy
-        df_tbl <- as.data.frame(as.table(tbl))
-        confusion_plot <- 
-            ggplot(df_tbl, aes(x = Prediction, y = Truth, fill = Freq)) +
-            geom_tile(color = "white") +
-            geom_text(aes(label = Freq), size = 2.5) +
-            scale_fill_gradient(low = "#F0F0F0", high = "#D43F3AFF") +
-            theme_minimal() +
-            labs(title = paste0("Confusion Matrix: ", method, "\nAccuracy: ", round(acc, 2)),
-                x = "Predicted", 
-                y = "Truth") +
-            theme(panel.grid = element_blank(),
-                plot.title = element_text(hjust = 0.5, size = 6, face = "bold"),
-                legend.position = "none",
-                axis.title.y = element_text(angle = 90),
-                axis.text.y = element_text(angle = 90, vjust = 0.5, hjust = 0.5))
-
-        confusion_plots[[method]] <- confusion_plot
-    }
-    # Combine confusion plots into one figure
-    confusion_combined <- 
-        patchwork::wrap_plots(confusion_plots,
-                                nrow = 1) 
-            
     matadata_mimic <-
         metadata %>%
         pivot_longer(cols = -c(cell_id, cell_id_number),
-                names_to = "method",
-                values_to = "call") %>%
+            names_to = "method",
+            values_to = "call") %>%
         mutate(method = str_replace_all(method, c("scatomic_tumor_call" = "scATOMIC",
-                                                   "final_snv_call" = "SCANBIT",
-                                                   "scevan_tumor_call" = "SCEVAN",
-                                                   "Ann_Level0" = "FinalCall")),
+                                                "scevan_tumor_call" = "SCEVAN",
+                                                "CNV_status" = "CopyKAT")),
                call = str_replace_all(call, c("normal_cells" = "Normal",
-                                              "cancer_cells" = "Tumor",
-                                              "Host" = "Normal"))) %>%
-        replace_na(list(call = "unknown"))
-    
+                              "cancer_cells" = "Tumor",
+                              "Host" = "Normal"))) %>%
+        replace_na(list(call = "Unknown")) %>%
+        mutate(call = factor(call, levels = c("Tumor", "Normal", "Unknown"))) # Tumor last so it appears at bottom
+
     # make a tile plot to show the tumor calling by methods
     tile_plot <-
         ggplot(matadata_mimic %>%
             mutate(method = factor(method,
-                                  levels = c("FinalCall", "SCANBIT", "scATOMIC", "SCEVAN"))),
-            aes(x = method, y = -cell_id_number, fill = call)) +
+              levels = c("CopyKAT", "SCEVAN", "scATOMIC")),
+               call = factor(call, levels = c("Tumor", "Normal", "Unknown"))), # Tumor last
+            aes(x = method, y = cell_id_number, fill = call)) +
         geom_tile() +
         scale_fill_manual(values = unlist(cols)) +
         theme_minimal() +
@@ -336,84 +241,27 @@ for (group in c("patient_prim", "patient_mets",
             axis.text.y = element_blank(),
             plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
             panel.grid = element_blank())
-    # put tile and final_plot together
-    combined_tile_plot <-
-        cowplot::plot_grid(tile_plot, accuracy_plot, confusion_combined,
-                            ncol = 1,
-                            rel_heights = c(1, 0.5, 0.4),
-                            rel_widths = c(1, 1, 1),
-                            align = "v") +
-        patchwork::plot_annotation(title = str_c(group, " Tumor ID by methods")) &
-        theme(plot.title = element_text(size = 20))
-    
+
     if (!dir.exists(str_c("output/figures/Final_Annotations/results1/suppliment/",group))) {
         dir.create(str_c("output/figures/Final_Annotations/results1/suppliment/",group),
                     recursive = T)
     }
-
     ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
-                 group, "/",
-                 "tumor_id_tileplot.pdf"),
-           plot = combined_tile_plot,
+                 group, "_",
+                 "descrep_tileplot.pdf"),
+           plot = tile_plot,
            bg = "white",
-           width = 5,
-           height = 10)
+           width = 4,
+           height = 5)
     ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
-                 group, "/",
-                 "tumor_id_tileplot",
-                 ".png"),
-           plot = combined_tile_plot,
+                 group, "_",
+                 "descrep_tileplot.png"),
+           plot = tile_plot,
            bg = "white",
-           width = 5,
-           height = 10)      # Better color rendering for PNG
+           width = 4,
+           height = 5)      # Better color rendering for PNG
 
 }
-
-
-plot_list <- list()
-# we decided to just make boxplot of descrepencies in tumor calling
-for (group in c("patient_prim", "patient_mets",
-                "mm_prim", "mm_mets",
-                "dogs_prim", "dogs_mets")) {
-    object <-
-        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                        group,
-                        ".qs"))
-    #dimplot_better(object, group_by = "Ann_Level0")
-    # Confusion matrix comparing scevan_tumor_call vs scatomic_tumor_call
-    # Create a three-way confusion matrix for SCEVAN, scATOMIC, and CNV_status
-    # Create a three-way confusion table: SCEVAN vs scATOMIC, faceted by CNV_status
-    df_tbl <- object@meta.data %>%
-        mutate(
-            SCEVAN = str_replace_all(scevan_tumor_call, 
-                                    c("cancer_cells" = "Tumor", "normal_cells" = "Stroma")),
-            scATOMIC = str_replace_all(scatomic_tumor_call, 
-                                      c("cancer_cells" = "Tumor", "normal_cells" = "Stroma")),
-            CopyKAT = str_replace_all(CNV_status, c("aneuploid" = "Tumor", "diploid" = "Stroma"))) %>%
-        count(SCEVAN, scATOMIC, CopyKAT)
-
-    # Plot as a faceted heatmap: each facet is CopyKAT (CNV_status), axes are SCEVAN vs scATOMIC
-    confusion_plot <- 
-        ggplot(df_tbl, aes(x = scATOMIC, y = SCEVAN, fill = n)) +
-            geom_tile(color = "white") +
-            geom_text(aes(label = n), size = 4) +
-            scale_fill_gradient(low = "#F0F0F0", high = "#D43F3AFF") +
-            facet_wrap(~ CopyKAT) +
-            theme_minimal() +
-            labs(title = "Three-way Confusion Matrix: SCEVAN vs scATOMIC by CNV_status",
-                 x = "scATOMIC call", y = "SCEVAN call") +
-            theme(panel.grid = element_blank(),
-                  plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
-                  legend.position = "none",
-                  axis.title.y = element_text(angle = 90, size = 10, face = "bold"),
-                  axis.title.x = element_text(size = 10, face = "bold"),
-                  axis.text.x = element_text(angle = 0, hjust = 0.5, size = 10),
-                  axis.text.y = element_text(angle = 90, vjust = 0.5, hjust = 0.5, size = 10))
-
-    plot_list[[group]] <- confusion_plot
-}
-
-
 
 
 ```
@@ -771,40 +619,40 @@ xeno <-
         Epithelial_Endothelial = Epithelial_Endothelial,
         Immune_Myeloid = Immune_Myeloid)
 
-# Combine all celltype marker lists into one list
-all_celltypes <- list(
-    dogs$Mesenchymal,
-    dogs$Immune_Lymphoid,
-    dogs$Epithelial_Endothelial,
-    dogs$Immune_Myeloid,
-    human$Immune_Myeloid,
-    human$Immune_Lymphoid,
-    human$Epithelial_Endothelial,
-    human$Mesenchymal,
-    mouse$Immune_Myeloid,
-    mouse$Immune_Lymphoid,
-    mouse$Epithelial_Endothelial,
-    mouse$Mesenchymal,
-    xeno$Immune_Myeloid,
-    xeno$Mesenchymal,
-    xeno$Epithelial_Endothelial,
-    xeno$Immune_Lymphoid
-)
+# # Combine all celltype marker lists into one list
+# all_celltypes <- list(
+#     dogs$Mesenchymal,
+#     dogs$Immune_Lymphoid,
+#     dogs$Epithelial_Endothelial,
+#     dogs$Immune_Myeloid,
+#     human$Immune_Myeloid,
+#     human$Immune_Lymphoid,
+#     human$Epithelial_Endothelial,
+#     human$Mesenchymal,
+#     mouse$Immune_Myeloid,
+#     mouse$Immune_Lymphoid,
+#     mouse$Epithelial_Endothelial,
+#     mouse$Mesenchymal,
+#     xeno$Immune_Myeloid,
+#     xeno$Mesenchymal,
+#     xeno$Epithelial_Endothelial,
+#     xeno$Immune_Lymphoid
+# )
 
-# Get all unique celltype names (list names)
-celltype_names <- unique(unlist(lapply(all_celltypes, names)))
+# # Get all unique celltype names (list names)
+# celltype_names <- unique(unlist(lapply(all_celltypes, names)))
 
-celltypes <-
-    celltype_names %>%
-    str_replace("_", " ")
+# celltypes <-
+#     celltype_names %>%
+#     str_replace("_", " ")
 
-cols <- 
-    as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
+# cols <- 
+#     as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
 
-cols <-
-    cols[1: length(celltypes)]
+# cols <-
+#     cols[1: length(celltypes)]
 
-names(cols) <- celltypes
+# names(cols) <- celltypes
 
 object_list <-
     tribble(~group,                         ~res_value,
@@ -824,100 +672,124 @@ for (item in seq_len(nrow(object_list))) {
     dimplot_list <- list()
     for (cell_type in c("Mesenchymal", "Immune_Lymphoid",
                         "Immune_Myeloid", "Epithelial_Endothelial")) {
-        path <- str_c("output/seurat_objects/stromal_subtypes/",
+        all_celltypes <- 
+            list(mouse[[cell_type]],
+                human[[cell_type]],
+                dogs[[cell_type]],
+                xeno[[cell_type]])
+
+        celltype_names <- 
+            unique(unlist(lapply(all_celltypes, names)))
+
+        celltypes <-
+            celltype_names %>%
+            str_replace("_", " ")
+
+        cols <- 
+            as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
+
+        cols <-
+            cols[1: length(celltypes)]
+
+        names(cols) <- celltypes
+    
+        if (cell_type == "Immune_Myeloid") {
+            cols[["TAMs"]] <- "#CDCDCDFF"
+            cols[["Fibrogenic TAMs"]] <- "#FF0060"
+        }
+
+        path <- 
+            str_c("output/seurat_objects/stromal_subtypes/",
                       group, "/",
                       cell_type,
                       ".qs")
-        if (file.exists(path)) {
-            sobj <- qs::qread(path)
-            dimplot_list[[cell_type]] <-
-                dimplot_better(sobj, group_by = "Ann_Level3") + NoLegend()
-            sobj_list[[cell_type]] <- sobj
 
-            sobj$plot_labels <-
-                sobj$Ann_Level3 %>%
-                as.character() %>%
-                gsub("_", " ", .)
+        sobj <- qs::qread(path)
 
-            dimplot <-
-                DimPlot(sobj,
-                        group.by = "plot_labels", # Use the plot_labels for better aesthetics
-                        label.box = T,
-                        label = T,
-                        repel = T,
-                        cols = unlist(cols),
-                        label.size = 5,
-                        raster = F) +
-                    coord_fixed() +
-                    theme(aspect.ratio=1) +
-                    theme_void() +
-                    NoLegend() +
-                    ggtitle(str_c(group, " ", cell_type))
-            if (sobj$unique[1] == "mm_prim" | sobj$unique[1] == "mm_mets") {
-                markers_list <- mouse
-            }
-            if (sobj$unique[1] == "patient_prim" | sobj$unique[1] == "patient_mets") {
-                markers_list <- human
-            }
-            if (sobj$unique[1] == "dogs_prim" | sobj$unique[1] == "dogs_mets") {
-                markers_list <- dogs
-            }
-            if (sobj$unique[1] == "xeno_prim_mouse" | sobj$unique[1] == "xeno_mets_mouse") {
-                markers_list <- xeno
-            }
-            markers_plot <-
-                markers_list[[cell_type]][names(markers_list[[cell_type]]) %in% sobj$Ann_Level3] %>%
-                            unlist() %>%
-                            as.character()
-            dotplot <-
-                DotPlot(sobj,
-                        features = markers_plot,
-                        group.by = "Ann_Level3",
-                        cols = "RdBu") +
-                RotatedAxis() +
-                theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-                scale_y_discrete(labels = function(x) gsub("_", " ", x))
-            
-            dim_dot_plot <-
-                # plot_grid(dimplot + theme(plot.margin = margin(1, 1, 1, 1, "cm")),
-                #         dotplot + theme(plot.margin = margin(1, 1, 1, 1, "cm")),
-                #         ncol = 1,
-                #         rel_heights = c(2, 1),
-                #         align = "v",
-                #         scale = 1) +
-                # patchwork::plot_annotation(title = str_c(group, " ", cell_type),
-                #                             theme = theme(plot.title = element_text(hjust = 0.5)))
-                plot_grid(dimplot + theme(plot.margin = margin(1, 1, 1, 1, "cm")),
-                                dotplot + theme(plot.margin = margin(1, 1, 1, 1, "cm")),
-                                ncol = 1,
-                                rel_heights = c(length(unique(sobj$Ann_Level3))*0.4 + 10,
-                                                length(unique(sobj$Ann_Level3))*0.4 + 3),
-                                rel_widths  = c(length(markers_plot) * 0.1 + 2,
-                                                length(markers_plot) * 0.15 + 2),
-                                align = "v",
-                                scale = 1) +
-                    patchwork::plot_annotation(title = str_c(group, " ", cell_type),
-                                               theme = theme(plot.title = element_text(hjust = 0.5)))
+        sobj$plot_labels <-
+            sobj$Ann_Level3 %>%
+            as.character() %>%
+            gsub("_", " ", .)
 
-            if (!dir.exists("output/figures/Final_Annotations/results3/")) {
-                dir.create("output/figures/Final_Annotations/results3/",
-                            recursive = TRUE)
-            }
-            height <- 7 + length(unique(sobj$Ann_Level3)) * 0.4
-            width <- length(markers_plot) * 0.1 + 6
-            ggsave(str_c("output/figures/Final_Annotations/results3/",
-                        group, cell_type, "_dim_dot.pdf"),
-                    plot = dim_dot_plot,
-                    width = 12,
-                    height =  12,
-                    bg = "white")
-            ggsave(str_c("output/figures/Final_Annotations/results3/",
-                        group, cell_type, "_dim_dot.png"),
-                    plot = dim_dot_plot,
-                    width = 12,
-                    height = 12,
-                    bg = "white")
+        dimplot <-
+            DimPlot(sobj,
+                    group.by = "plot_labels", # Use the plot_labels for better aesthetics
+                    label.box = T,
+                    label = T,
+                    repel = T,
+                    cols = unlist(cols),
+                    label.size = 5,
+                    raster = F) +
+                coord_fixed() +
+                theme(aspect.ratio=1) +
+                theme_void() +
+                NoLegend() +
+                ggtitle(str_c(group, " ", cell_type))
+        if (sobj$unique[1] == "mm_prim" | sobj$unique[1] == "mm_mets") {
+            markers_list <- mouse
         }
+        if (sobj$unique[1] == "patient_prim" | sobj$unique[1] == "patient_mets") {
+            markers_list <- human
+        }
+        if (sobj$unique[1] == "dogs_prim" | sobj$unique[1] == "dogs_mets") {
+            markers_list <- dogs
+        }
+        if (sobj$unique[1] == "xeno_prim_mouse" | sobj$unique[1] == "xeno_mets_mouse") {
+            markers_list <- xeno
+        }
+        markers_plot <-
+            markers_list[[cell_type]][names(markers_list[[cell_type]]) %in% sobj$Ann_Level3] %>%
+                        unlist() %>%
+                        as.character()
+        dotplot <-
+            DotPlot(sobj,
+                    features = markers_plot,
+                    group.by = "Ann_Level3",
+                    cols = "RdBu") +
+            RotatedAxis() +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            scale_y_discrete(labels = function(x) gsub("_", " ", x))
+        
+        dim_dot_plot <-
+            # plot_grid(dimplot + theme(plot.margin = margin(1, 1, 1, 1, "cm")),
+            #         dotplot + theme(plot.margin = margin(1, 1, 1, 1, "cm")),
+            #         ncol = 1,
+            #         rel_heights = c(2, 1),
+            #         align = "v",
+            #         scale = 1) +
+            # patchwork::plot_annotation(title = str_c(group, " ", cell_type),
+            #                             theme = theme(plot.title = element_text(hjust = 0.5)))
+            plot_grid(dimplot + theme(plot.margin = margin(1, 1, 1, 1, "cm")),
+                            dotplot + theme(plot.margin = margin(1, 1, 1, 1, "cm")),
+                            ncol = 1,
+                            rel_heights = c(length(unique(sobj$Ann_Level3))*0.4 + 10,
+                                            length(unique(sobj$Ann_Level3))*0.4 + 3),
+                            rel_widths  = c(length(markers_plot) * 0.1 + 2,
+                                            length(markers_plot) * 0.15 + 2),
+                            align = "v",
+                            scale = 1) +
+                patchwork::plot_annotation(title = str_c(group, " ", cell_type),
+                                            theme = theme(plot.title = element_text(hjust = 0.5)))
+
+        if (!dir.exists("output/figures/Final_Annotations/results3/")) {
+            dir.create("output/figures/Final_Annotations/results3/",
+                        recursive = TRUE)
+        }
+        height <- 7 + length(unique(sobj$Ann_Level3)) * 0.4
+        width <- length(markers_plot) * 0.1 + 6
+        ggsave(str_c("output/figures/Final_Annotations/results3/",
+                    group, cell_type, "_dim_dot.pdf"),
+                plot = dim_dot_plot,
+                width = 12,
+                height =  12,
+                bg = "white")
+        ggsave(str_c("output/figures/Final_Annotations/results3/",
+                    group, cell_type, "_dim_dot.png"),
+                plot = dim_dot_plot,
+                width = 12,
+                height = 12,
+                bg = "white")
+       
     }
 }
 ```

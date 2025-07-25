@@ -2,44 +2,28 @@
 ## Result 3 figures
 This qmd will be used to do TAMs analysis within and across the different groups
 
-```{r, final_macrophage_panel, echo = FALSE}
-
-# make dimplot list
-for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
-                "mm_prim_normal_cells", "mm_mets_normal_cells",
-                "xeno_prim_mouse", "xeno_mets_mouse",
-                "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
-    object <-
-        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                        group,
-                        ".qs"))
-
-    # Subset the object to only include Macrophages and Monocytes and DC or whatever present
-    Idents(object) <- "Ann_Level2"
-    mac_obj <-
-        subset(object,
-               idents = intersect(Idents(object),
-                                c("TAMs", "Monocytes"))) %>%
-        process_seurat()
-
-    harm_mac_obj <-
-        mac_obj %>%
-        RunHarmony(group.by.vars = c("sample_name")) %>%
-        process_seurat(reduction = "harmony")
-    #dimplot_better(harm_mac_obj, group_by = "Ann_Level3")
-
-    if (!dir.exists("output/seurat_objects/TAMs_objects")) {
-        dir.create("output/seurat_objects/TAMs_objects")
-    }
-    qs::qsave(harm_mac_obj, 
-              str_c("output/seurat_objects/TAMs_objects/",
-                    group,
-                    ".qs"))
-}
-```
-
 # make shanky and dimdotplot
 ```{r TAMs_shanky_dim_dotplot, echo = FALSE}
+#prepare the cols
+cols <- list(
+    `Alv Macrophages` = "#D43F3AFF",
+    `Ciliated cells` = "#EEA236FF",
+    DC1 = "#357EBDFF",
+    DC2 = "#5CB85CFF",
+    `Fibrogenic TAMs` = "#FF0060",
+    `IFN TAMs` = "#9632B8FF",
+    `Inflam TAMs` = "#46B8DAFF",
+    `Migratory DC` = "#90302DFF",
+    Monocytes = "#A66D04FF",
+    Neutrophils = "#2D577FFF",
+    `Osteoclast TAMs` = "#3E7E3EFF",
+    pDC = "#7D7D7DFF",
+    `Prolif TAMs` = "#6D1D87FF",
+    `Scar TAMs` = "#097F9AFF",
+    Mast = "#FF6E6AFF",
+    DC = "#FFBB70FF",
+    TAMs = "#CDCDCDFF"
+)
 
 # make the cellcount and cell types table
 TAMs_celltype_list <- list()
@@ -50,9 +34,10 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "xeno_prim_mouse", "xeno_mets_mouse",
                 "dogs_prim_normal_cells", "dogs_mets_normal_cells")) {
     object <-
-        qs::qread(str_c("output/seurat_objects/TAMs_objects/",
-                        group,
-                        ".qs"))
+       qs::qread(str_c("output/seurat_objects/stromal_subtypes/",
+                      group, "/",
+                      "Immune_Myeloid",
+                      ".qs"))
 
     #dimplot_better(object, group_by = "Ann_Level3")
     TAMs_celltype_list[[group]] <- 
@@ -83,20 +68,6 @@ title_replacement <-
         xeno_mets_mouse = "Metastatic",
         dogs_prim_normal_cells = "Primary",
         dogs_mets_normal_cells = "Metastatic")
-# Generate a heatmap of the cell count data
-celltypes <-
-    TAMs_celltype_list %>%
-    unlist() %>%
-    unique() %>%
-    str_replace("_", " ")
-
-cols <- 
-    as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
-
-cols <-
-    cols[1: length(celltypes)]
-
-names(cols) <- celltypes
 
 #plots for TAMs panel
 object_list <-

@@ -64,7 +64,8 @@ for (i in seq_len(nrow(object_list))) {
 
     #save the regulon activity
     if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
-        dir.create(str_c("output/figures/regulon_analysis/", group))
+        dir.create(str_c("output/figures/regulon_analysis/", group),
+                    recursive = TRUE)
     }
     #save the regulon activity
     qs::qsave(regulon_activity_scaled,
@@ -79,7 +80,8 @@ for (i in seq_len(nrow(object_list))) {
     
     #save the heatmap
     if (!dir.exists(str_c("output/figures/regulon_analysis/", group))) {
-        dir.create(str_c("output/figures/regulon_analysis/", group))
+        dir.create(str_c("output/figures/regulon_analysis/", group),
+                    recursive = TRUE)
     }
     #make heatmap to show average regulon activity per cell type or cluster
     average_reg_heatmap <- 
