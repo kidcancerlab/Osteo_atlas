@@ -4,20 +4,13 @@ First we need to read in our objects for this. I'm using the objects from TAMs_o
 
 ```{r}
 yogi_prefix <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/"
-obj_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/final_tumor_vs_stroma/")) %>%
-    grep(pattern = "normal", value = TRUE)
-obj_names <- c(obj_names, "xeno_mets_mouse.qs", "xeno_prim_mouse.qs")
-
-#get only fdl files
-obj_names <- str_replace_all(obj_names,
-                             ".qs",
-                             "")
+obj_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/stromal_subtypes/"))
 
 tam_list <- list()
 for (ob_name in obj_names) {
     tam_list[[ob_name]] <-
-        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/", ob_name, ".qs")) %>%
-        subset(Ann_Level2 %in% c("DC", "Monocytes", "TAMs"))
+        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/stromal_subtypes/", ob_name, "/Immune_Myeloid.qs")) %>%
+        subset(Ann_Level3 %notin% c("DC2", "Neutrophils", "DC1", "Migratory_DC", "pDC", "DC", "Mast", "Alv_Macrophages", "Monocytes"))
         # process_seurat() %>%
         # RunHarmony(group.by.vars = c("sample_name")) %>%
         # process_seurat(reduction = "harmony")
@@ -30,19 +23,11 @@ unlist(ucts) %>% unique()
 ```
 
 ```{r}
-#run fdl
-# parallel::detectCores()
-# tam_list <- parallel::mclapply(tam_list, FUN = run_fdl, mc.cores = (parallel::detectCores() - 8))
-
-qs::qsave(tam_list, "output/seurat_objects/tam_list_05_22.qs")
-
-fdl_plt <- lapply(tam_list, dimplot_better, group = "Ann_Level3", reduction = "fdl")
-
-grid.arrange(grobs = fdl_plt)
-
 # now I'm going to remove the single nucleus cells
 tam_list <- lapply(tam_list, subset, method == "single_cell")
 
+plts <- lapply(tam_list, dimplot_better, group = "Ann_Level3")
+gridExtra::grid.arrange(grobs = plts, ncol = 2)
 ```
 
 Next I need to write off the metadata for these cells. The metadata will be kept in the folder `loom_output/tam_metadata/`
@@ -89,7 +74,25 @@ I'm going to make anndata objects for the TAM datasets and write them off after 
 I'm going to use both the dynamical model and the stochastic
 
 ```{python make-tam-anndata}
-hex_codes = ["#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF", "#9632B8FF", "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF", "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF", "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF", "#00FF00", "#00FFFF", "#FF00FF", "#0000FF", "#FFFF00", "#FF0000"]
+color_mapping = {
+    "Alv_Macrophages": "#D43F3AFF",
+    "Ciliated_cells": "#EEA236FF",
+    "DC1": "#357EBDFF",
+    "DC2": "#5CB85CFF",
+    "Fibrogenic_TAMs": "#FF0060",
+    "IFN_TAMs": "#9632B8FF",
+    "Inflam_TAMs": "#46B8DAFF",
+    "Migratory_DC": "#90302DFF",
+    "Monocytes": "#A66D04FF",
+    "Neutrophils": "#2D577FFF",
+    "Osteoclast_TAMs": "#3E7E3EFF",
+    "pDC": "#7D7D7DFF",
+    "Prolif_TAMs": "#6D1D87FF",
+    "Scar_TAMs": "#097F9AFF",
+    "Mast": "#FF6E6AFF",
+    "DC": "#FFBB70FF",
+    "TAMs": "#CDCDCDFF"
+}
 
 ob_names = os.listdir("loom_output/tam_metadata")
 for ob in ob_names:
@@ -104,24 +107,17 @@ for ob in ob_names:
     print("finished " + ob)
 
 for ob in ob_names:
-    # write_obs(
-    #     ob = ob,
-    #     method = "sc",
-    #     mode = "stochastic",
-    #     out_prefix = "loom_output/tam_anndata/stochastic/",
-    #     metadata_dir = "loom_output/tam_metadata/"
-    # )
-    ad_ob = anndata.read("loom_output/tam_anndata/stochastic/sc/" + ob + ".ad")
+    ad_ob = anndata.read("loom_output/tam_anndata/" + ob + ".ad")
     scv.pl.velocity_embedding_stream(
         ad_ob,
         basis = "umap",
-        color = "Ann_Level2",
+        color = "Ann_Level3",
         show = False,
-        palette = hex_codes,
-        sort_order = False
+        palette = color_mapping,
+        sort_order = False,
+        legend_loc = 'none'
     )
-    pyplot.savefig("figures/scvelo/tams/" + ob + "_umap.svg")
-
+    pyplot.savefig("output/figures/rna_velocity_tams/" + ob + "_umap.svg")
 ```
 
 ### Make Velocity Plots
