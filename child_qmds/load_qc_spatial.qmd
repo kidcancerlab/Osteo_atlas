@@ -85,19 +85,7 @@ spatial_list <- qs::qread("output/spatial_objects/spatial_list_unannotated.qs")
 # do it at level 1
 for (ob_name in names(spatial_list)) {
     sp_ob <- spatial_list[[ob_name]]
-    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
-        dplyr::rename(x = imagerow, y = imagecol)
-    #convert our object to an rctd object
-    my_data <- spacexr::SpatialRNA(coords,
-                                   GetAssayData(sp_ob, layer = "counts"))
-    rctd_obj <- spacexr::create.RCTD(my_data,
-                                     spacexr_level1,
-                                     max_cores = 6,
-                                     UMI_min = 3,
-                                     counts_MIN = 0, 
-                                     UMI_max = 900000000,
-                                     CELL_MIN_INSTANCE = 0)
-    rctd_out <- spacexr::run.RCTD(rctd_obj, doublet_mode = "full")
+    run_rctd(sp_ob, ref = level1_ref)
     qs::qsave(rctd_out, paste0("output/spacexr/rctd_level1_", ob_name, ".qs"))
 
     norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
@@ -120,21 +108,8 @@ spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
 #first I'm going to just use spacexr to add scores to each spot for the cell types in our reference
 for (ob_name in names(spatial_list)) {
     sp_ob <- spatial_list[[ob_name]]
-    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
-        dplyr::rename(x = imagerow, y = imagecol)
-    #convert our object to an rctd object
-    my_data <- spacexr::SpatialRNA(coords,
-                                   GetAssayData(sp_ob, layer = "counts"))
-    rctd_obj <- spacexr::create.RCTD(my_data,
-                                     level2_ref,
-                                     max_cores = 6,
-                                     UMI_min = 3,
-                                     counts_MIN = 0, 
-                                     UMI_max = 900000000,
-                                     CELL_MIN_INSTANCE = 0)
-    rctd_out <- spacexr::run.RCTD(rctd_obj, doublet_mode = "full")
+    rctd_out <- run_rctd(sp_ob, ref = level2_ref)
     qs::qsave(rctd_out, paste0("output/spacexr/rctd_level2_", ob_name, ".qs"))
-
     norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
     spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
 }
@@ -156,24 +131,7 @@ spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
 # going to do it at level 3, specifying multi mode, though
 spacexr_res <- parallel::mclapply(names(spatial_list), function(ob_name) {
     sp_ob <- spatial_list[[ob_name]]
-    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
-        dplyr::rename(x = imagerow, y = imagecol)
-    #convert our object to an rctd object
-    my_data <- spacexr::SpatialRNA(coords,
-                                   GetAssayData(sp_ob, layer = "counts"))
-    rctd_obj <- spacexr::create.RCTD(
-        my_data,                     
-        level3_ref,
-        max_cores = 1,
-        UMI_min = 3,
-        counts_MIN = 0, 
-        UMI_max = 900000000,
-        CELL_MIN_INSTANCE = 0
-    )
-    rctd_out <- spacexr::run.RCTD(
-        rctd_obj,
-        doublet_mode = "doublet"
-    )
+    rctd_out <- run_rctd(sp_ob, ref = level3_ref)
     qs::qsave(rctd_out, paste0("output/spacexr/rctd_level3_", ob_name, ".qs"))
     norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
     return(AddMetaData(sp_ob, norm_weights))
@@ -213,24 +171,7 @@ myeloid_tumor_ref <- spacexr::Reference(
 
 spatial_list <- parallel::mclapply(names(spatial_list), function(ob_name) {
     sp_ob <- spatial_list[[ob_name]]
-    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
-        dplyr::rename(x = imagerow, y = imagecol)
-    #convert our object to an rctd object
-    my_data <- spacexr::SpatialRNA(coords,
-                                   GetAssayData(sp_ob, layer = "counts"))
-    rctd_obj <- spacexr::create.RCTD(
-        my_data,                     
-        myeloid_tumor_ref,
-        max_cores = 1,
-        UMI_min = 3,
-        counts_MIN = 0, 
-        UMI_max = 900000000,
-        CELL_MIN_INSTANCE = 0
-    )
-    rctd_out <- spacexr::run.RCTD(
-        rctd_obj,
-        doublet_mode = "doublet"
-    )
+    rctd_out <- run_rctd(sp_ob, ref = myeloid_tumor_ref)
     qs::qsave(
         rctd_out,
         paste0("output/spacexr/rctd_myeloid_tumor_", ob_name, ".qs")
@@ -407,29 +348,6 @@ dev.off()
 Inspired by the section above using the myeloid_tumor reference, I'm going to repeat this exercise, but keep Ann_Level2 instead of Ann_Level1. Likewise, I'm going to repeat it for each Ann_Level1 compartment
 
 ```{r}
-run_rctd <- function(sp_ob, ref) {
-    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
-        dplyr::rename(x = imagerow, y = imagecol)
-    #convert our object to an rctd object
-    my_data <- spacexr::SpatialRNA(coords,
-                                   GetAssayData(sp_ob, layer = "counts"))
-    rctd_obj <- spacexr::create.RCTD(
-        my_data,                     
-        ref,
-        max_cores = 1,
-        UMI_min = 3,
-        counts_MIN = 0, 
-        UMI_max = 900000000,
-        CELL_MIN_INSTANCE = 0
-    )
-    rctd_out <- spacexr::run.RCTD(
-        rctd_obj,
-        doublet_mode = "doublet"
-    )
-    return(rctd_out)
-}
-
-
 # figure out how many cell types will be in each
 ref_list <- list()
 for (ct in unique(patient_mets$Ann_Level1)) {
@@ -454,7 +372,7 @@ for (ref in names(ref_list)) {
     rctd_res[[ref]] <- mclapply(
         spatial_list,
         run_rctd,
-        ref = ref,
+        ref = ref_list[[ref]],
         mc.cores = parallelly::availableCores(),
         mc.preschedule = FALSE
     )

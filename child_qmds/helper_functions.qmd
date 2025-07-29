@@ -1251,4 +1251,37 @@ make_cor_plt <- function(mod, s_obj) {
         theme(axis.text.x = element_text(angle = 315))
     )
 }
+
+
+#running rctd
+run_rctd <- function(sp_ob, ref) {
+    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
+        dplyr::rename(x = imagerow, y = imagecol)
+    #convert our object to an rctd object
+    my_data <- spacexr::SpatialRNA(coords,
+                                   GetAssayData(sp_ob, layer = "counts"))
+    rctd_obj <- spacexr::create.RCTD(
+        my_data,                     
+        ref,
+        max_cores = 1,
+        UMI_min = 3,
+        counts_MIN = 0, 
+        UMI_max = 900000000,
+        CELL_MIN_INSTANCE = 0
+    )
+    rctd_out <- spacexr::run.RCTD(
+        rctd_obj,
+        doublet_mode = "doublet"
+    )
+    return(rctd_out)
+}
+
 ```
+
+## Negate %in%
+
+```{r}
+`%notin%` <- Negate(`%in%`)
+```
+
+## 
