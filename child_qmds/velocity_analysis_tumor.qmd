@@ -85,102 +85,39 @@ r_make_loom_files(input_table = velo_input,
 
 In order to analyze the data, we need to save a table of cell-level metadata, including barcodes, seurat clusters, and annotations.
 
-First we need to read in our objects for this. I'm using the objects from final_tumor_vs_stroma
+First we need to read in our objects for this. I'm using the objects from final_tumor_vs_stroma.
+
+I'm also going to only write off single-cell reads for my objects. 
 
 ```{r}
 yogi_prefix <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/"
-obj_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/final_tumor_vs_stroma"))
-#get only fdl files
-obj_names <- str_replace_all(obj_names,
-                             ".qs",
-                             "")
+ob_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/final_tumor_vs_stroma"))
+ob_names <- grep("cancer_cells_fdl", ob_names, value = TRUE)
 
-obj_list <- list()
-for (ob_name in obj_names) {
-    obj_list[[ob_name]] <-
-        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/", ob_name, ".qs"))
-}
-
-
-#run fdl
-parallel::detectCores()
-obj_list_fdl <- parallel::mclapply(obj_list, FUN = run_fdl, mc.cores = (parallel::detectCores() - 8))
-
-qs::qsave(obj_list_fdl, "output/seurat_objects/obj_list_04_04_2025.qs")
-```
-
-```{r write-off-md}
-lapply(names(obj_list_fdl), function(obj_name) {
-    write_off_md(sobj = obj_list_fdl[[obj_name]],
-                 id_col = "sample_name",
-                 output_dir = paste0("loom_output/metadata/",
-                                     obj_name),
-                 vars_to_keep = c("sample_name",
-                                  "seurat_clusters",
-                                  "Ann_Level1",
-                                  "Ann_Level2",
-                                  "Ann_Level3"),
-                 handle_n_of_1 = FALSE)
-})
-```
-
-### Write off Metadata for snRNA vs scRNA
-
-I need to do this in order to check how consistent the single nuclei data's velocity estimates are with the single cell data's, since the tool was developed initially for single-cell. In order to not let this get out of hand, I'm going to write off this metadata into a directory in `loom_output/metadata/sn_vs_sc`. Similarly, I'm only going to do this for the objects strictly cancer objects.
-
-```{r}
-ob_names <- c(
-    "patient_mets_cancer_cells_fdl",
-    "patient_prim_cancer_cells_fdl",
-    "mm_mets_cancer_cells_fdl",
-    "mm_prim_cancer_cells_fdl",
-    "dogs_mets_cancer_cells_fdl",
-    "dogs_prim_cancer_cells_fdl",
-    "xeno_mets_human_cancer_cells_fdl",
-    "xeno_prim_human_cancer_cells_fdl"
-)
-
-split_ob_list <- list()
+ob_list <- list()
 for (ob in ob_names) {
-    split_ob_list[[ob]] <- qs::qread(
+    ob_list[[str_remove(ob, "_fdl.qs")]] <- qs::qread(
         paste0(
             yogi_prefix,
             "output/seurat_objects/final_tumor_vs_stroma/",
-            ob,
-            ".qs"
+            ob
         )
     )
 }
 
 # make metadata dir
-dir.create("loom_output/split_metadata/sn/", recursive = TRUE)
-dir.create("loom_output/split_metadata/sc/", recursive = TRUE)
-# now split objects and write metadata
-for (ob in ob_names) {
-    num_sn <- sum(split_ob_list[[ob]]$method == "single_nucleus")
-    num_sc <- sum(split_ob_list[[ob]]$method == "single_cell")
+dir.create("loom_output/tumor_metadata/sc", recursive = TRUE)
+dir.create("loom_output/tumor_metadata/sn", recursive = TRUE)
 
-    if (num_sn > 0) {
-        subset(split_ob_list[[ob]],
-            method == "single_nucleus") %>%
-            write_off_md(id_col = "sample_name",
-                    output_dir = paste0("loom_output/split_metadata/sn/",
-                                        ob),
-                    vars_to_keep = c("sample_name",
-                                    "seurat_clusters",
-                                    "Ann_Level1",
-                                    "Ann_Level2",
-                                    "Ann_Level3",
-                                    "method"),
-                    handle_n_of_1 = FALSE)
-    }
-    
+# now split objects and write metadata
+for (ob in names(ob_list)) {
+    num_sc <- sum(ob_list[[ob]]$method == "single_cell")    
     if (num_sc > 0) {
-        subset(split_ob_list[[ob]],
+        subset(ob_list[[ob]],
            method == "single_cell") %>%
         write_off_md(
             id_col = "sample_name",
-            output_dir = paste0("loom_output/split_metadata/sc/", ob),
+            output_dir = paste0("loom_output/tumor_metadata/sc", ob),
             vars_to_keep = c("sample_name",
                             "seurat_clusters",
                             "Ann_Level1",
@@ -189,6 +126,22 @@ for (ob in ob_names) {
                             "method"),
             handle_n_of_1 = FALSE
         )
+    }
+
+    num_sn <- sum(split_ob_list[[ob]]$method == "single_nucleus")
+    if (num_sn > 0) {
+        subset(split_ob_list[[ob]],
+            method == "single_nucleus") %>%
+            write_off_md(id_col = "sample_name",
+                    output_dir = paste0("loom_output/tumor_metadata/sn/",
+                                        ob),
+                    vars_to_keep = c("sample_name",
+                                    "seurat_clusters",
+                                    "Ann_Level1",
+                                    "Ann_Level2",
+                                    "Ann_Level3",
+                                    "method"),
+                    handle_n_of_1 = FALSE)
     }
 }
 ```
@@ -242,42 +195,42 @@ color_mapping = {
 hex_codes = ["#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF", "#9632B8FF", "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF", "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF", "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF", "#00FF00", "#00FFFF", "#FF00FF", "#0000FF", "#FFFF00", "#FF0000"]
 
 # get names of objects for writing and saving
-sc_obs = os.listdir("loom_output/split_metadata/sc/")
-sn_obs = os.listdir("loom_output/split_metadata/sn/")
+sc_obs = os.listdir("loom_output/tumor_metadata/sc")
+sn_obs = os.listdir("loom_output/tumor_metadata/sn")
 
 # Make directories for loom object output
-os.makedirs("loom_output/split_ad/sc")
-os.makedirs("loom_output/split_ad/sn")
+os.makedirs("loom_output/tumor_anndata/sc")
+os.makedirs("loom_output/tumor_anndata/sn")
 
 # make directories for velocity figures
 os.makedirs("output/figures/rna_velocity/sc")
-os.makedirs("output/figures/rna_velocity/sc")
+os.makedirs("output/figures/rna_velocity/sn")
 
 for snob in sn_obs:
-    python_functions.write_obs(ob = snob, method = "sn")
-    python_functions.save_plots(ob = snob, method = "sn")
+    python_functions.write_obs(ob = snob, method = "sn", mode = "stochastic")
+    python_functions.save_plots(ob = snob, method = "sn", mode = "stochastic")
 
 
 for scob in sc_obs:
-    write_obs(ob = scob, method = "sc")
-    save_plots(ob = scob, method = "sc")
+    write_obs(ob = scob, method = "sc", mode = "stochastic")
+    save_plots(ob = scob, method = "sc", mode = "stochastic")
 
 ```
 
 #### Make objects with Stochastic Model
 
 ```{python}
-sc_obs = os.listdir("loom_output/split_metadata/sc/")
+sc_obs = os.listdir("loom_output/tumor_metadata/")
 for scob in sc_obs:
-    if not os.path.exists("loom_output/split_ad/stochastic/sc/" + scob + ".ad"):
+    if not os.path.exists("loom_output/tumor_anndata/sc/" + scob + ".ad"):
         write_obs(
             ob = scob,
             method = "sc",
             mode = "stochastic",
-            out_prefix = "loom_output/split_ad/stochastic/"
+            out_prefix = "loom_output/tumor_anndata/"
         )
     # ad_ob = calc_velo(scob, mode = "stochastic")
-    save_plots(ob = scob, method = "sc", file_prefix = "output/figures/rna_velocity/stochastic/", ad_prefix = "loom_output/split_ad/stochastic/sc/")
+    save_plots(ob = scob, method = "sc", file_prefix = "output/figures/rna_velocity/stochastic/", ad_prefix = "loom_output/tumor_anndata/sc/")
 
 ```
 
@@ -289,7 +242,7 @@ ob = "mm_mets_cancer_cells_fdl"
 ad_ob = loom_to_an(
     ob,
     loom_dir = "loom_output/samples",
-    metadata_dir = "loom_output/split_metadata/sc"
+    metadata_dir = "loom_output/tumor_metadata"
 )
 
 calc_velo(ad_ob, mode = "stochastic")
