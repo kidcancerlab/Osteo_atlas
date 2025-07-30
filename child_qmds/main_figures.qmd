@@ -9,7 +9,7 @@ cell_count_table <- tibble::tibble(celltypes = character())
 
 for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 "mm_prim_cancer_cells", "mm_mets_cancer_cells",
-                "xeno_prim_human", "xeno_mets_human",
+                "xeno_prim_human_cancer_cells", "xeno_mets_human_cancer_cells",
                 "dogs_prim_cancer_cells", "dogs_mets_cancer_cells")) {
     object <- 
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
@@ -80,8 +80,8 @@ celltypes <-
     unique(cancer_sobj_list$patient_mets_cancer_cells$Ann_Level2),
     unique(cancer_sobj_list$mm_prim_cancer_cells$Ann_Level2),
     unique(cancer_sobj_list$mm_mets_cancer_cells$Ann_Level2),
-    unique(cancer_sobj_list$xeno_prim_human$Ann_Level2),
-    unique(cancer_sobj_list$xeno_mets_human$Ann_Level2),
+    unique(cancer_sobj_list$xeno_prim_human_cancer_cells$Ann_Level2),
+    unique(cancer_sobj_list$xeno_mets_human_cancer_cells$Ann_Level2),
     unique(cancer_sobj_list$dogs_prim_cancer_cells$Ann_Level2),
     unique(cancer_sobj_list$dogs_mets_cancer_cells$Ann_Level2)) %>%
     unique() %>%
@@ -111,7 +111,7 @@ names(method_colors) <- method_unique
 for (group in c(
                 "patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 "mm_prim_cancer_cells", "mm_mets_cancer_cells",
-                "xeno_prim_human", "xeno_mets_human",
+                "xeno_prim_human_cancer_cells", "xeno_mets_human_cancer_cells",
                 "dogs_prim_cancer_cells", "dogs_mets_cancer_cells"
                 )) {
     object <- 

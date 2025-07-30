@@ -174,7 +174,7 @@ cols <-
 # make a sankey plot to show the tumor calling
 for (group in c("patient_prim", "patient_mets",
                 "mm_prim", "mm_mets"
-                #"dogs_prim", "dogs_mets"
+                # "dogs_prim", "dogs_mets"
                 )) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
@@ -211,11 +211,13 @@ for (group in c("patient_prim", "patient_mets",
                 scATOMIC, 
                 SCEVAN, 
                 CopyKAT)
+    # make a metadata mimic to use for the tile plot
+
     matadata_mimic <-
         metadata %>%
         pivot_longer(cols = -c(cell_id, cell_id_number),
-            names_to = "method",
-            values_to = "call") %>%
+                    names_to = "method",
+                    values_to = "call") %>%
         mutate(method = str_replace_all(method, c("scatomic_tumor_call" = "scATOMIC",
                                                 "scevan_tumor_call" = "SCEVAN",
                                                 "CNV_status" = "CopyKAT")),
@@ -225,6 +227,10 @@ for (group in c("patient_prim", "patient_mets",
         replace_na(list(call = "Unknown")) %>%
         mutate(call = factor(call, levels = c("Tumor", "Normal", "Unknown"))) # Tumor last so it appears at bottom
 
+    write_tsv(matadata_mimic,
+              str_c("output/id_tumor/metadata/",
+                    group, "_tumor_calling.tsv"))
+                
     # make a tile plot to show the tumor calling by methods
     tile_plot <-
         ggplot(matadata_mimic %>%
@@ -264,7 +270,104 @@ for (group in c("patient_prim", "patient_mets",
 }
 
 
+
 ```
+
+## Import datasets
+generate correlation matrices for tumor iding across methods
+```{r}
+
+library(irr)
+files <- list.files("output/id_tumor/metadata/", pattern = "*calling.tsv")
+
+calls <- lapply(files, function(f) {
+    df <- read.table(file.path("output/id_tumor/metadata", f), 
+        header = TRUE
+        ) %>%
+        select(-cell_id) %>%
+        pivot_wider(
+            id_cols = cell_id_number, 
+            names_from = method, 
+            values_from = call
+            ) 
+    return(df)   
+})
+
+names(calls) <- sub("_tumor.*", "", files)
+
+for(i in seq_along(calls)) {
+    df <- calls[[i]]
+    print(paste("Performing Interrater Reliability Analysis on", names(calls)[i]))
+    print("Agreement - scATOMIC vs SCEVAN")
+    results <- agree(df[, c("scATOMIC", "SCEVAN")])
+    print(results)
+    print("Agreement - SCEVAN vs CopyKAT")
+    results <- agree(df[, c("SCEVAN", "CopyKAT")])
+    print(results)
+    print("Agreement - scATOMIC vs CopyKAT")
+    results <- agree(df[, c("scATOMIC", "CopyKAT")])
+    print(results)
+    print("Interrater Reliability - Fleiss Kappa")
+    results <- kappam.fleiss(df[, c("scATOMIC", "SCEVAN", "CopyKAT")])
+    print(results)
+}
+
+
+# Store results for plotting
+plot_data <- tibble()
+
+for(i in seq_along(calls)) {
+    df <- calls[[i]]
+    group <- names(calls)[i]
+    
+    # Agreement - scATOMIC vs SCEVAN
+    results1 <- 
+        agree(df[, c("scATOMIC", "SCEVAN")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                 tibble(group = group,
+                        comparison = "scATOMIC vs SCEVAN",
+                        percent_agreement = results1$value))
+    
+    # Agreement - SCEVAN vs CopyKAT
+    results2 <- 
+        agree(df[, c("SCEVAN", "CopyKAT")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                 tibble(group = group,
+                        comparison = "SCEVAN vs CopyKAT",
+                        percent_agreement = results2$value))
+    # Agreement - scATOMIC vs CopyKAT
+    results3 <- 
+        agree(df[, c("scATOMIC", "CopyKAT")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                tibble(group = group,
+                        comparison = "scATOMIC vs CopyKAT",
+                        percent_agreement = results3$value))
+    # Fleiss Kappa
+    results4 <- 
+        kappam.fleiss(df[, c("scATOMIC", "SCEVAN", "CopyKAT")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                tibble(group = group,
+                    comparison = "Fleiss Kappa",
+                    percent_agreement = results4$value))
+}
+
+# Plot percent agreement and Fleiss Kappa
+ggplot(plot_data, 
+        aes(x = group, y = percent_agreement, fill = comparison)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    labs(title = "Interrater Reliability Analysis",
+         y = "Agreement / Kappa Value",
+         x = "Group") +
+    theme_minimal() +
+    scale_fill_brewer(palette = "Set2")
+
+
+```
+
 
 # regulon combined plots heatmap
 ```{r hatmap_regulon, eval = TRUE}

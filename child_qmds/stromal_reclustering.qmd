@@ -2095,7 +2095,6 @@ for (item in seq_len(nrow(object_list))) {
                           "^Epithelial_Endothelial$" = "Host",
                           "^Immune_Lymphoid$" = "Host",
                           "^Mesenchymal$" = "Host"))
-    dimplot_better(stroma_obj, group_by = "Ann_Level0") + NoLegend()
 
     qs::qsave(x = stroma_obj,
               file = str_c("output/seurat_objects/final_tumor_vs_stroma/",
@@ -2373,14 +2372,15 @@ celltype_top6_mesenchymal <- list(
 count <- list()
 for (group in c(
                 "patient_prim", "patient_mets", "mm_prim", "mm_mets",
-                "xeno_prim_human", "xeno_mets_human", "xeno_prim_mouse",
-                "xeno_mets_mouse", "dogs_prim", "dogs_mets",
-                "patient_prim_normal_cells",    "patient_prim_cancer_cells",
-                "mm_prim_normal_cells",         "mm_prim_cancer_cells",
-                "dogs_prim_normal_cells",       "dogs_prim_cancer_cells",
-                "dogs_mets_normal_cells",       "dogs_mets_cancer_cells",
-                "patient_mets_normal_cells",    "patient_mets_cancer_cells",
-                "mm_mets_normal_cells",         "mm_mets_cancer_cells"
+                "xeno_prim_mouse", "xeno_mets_mouse", 
+                "dogs_prim", "dogs_mets"
+                # "xeno_prim_human", "xeno_mets_human", 
+                # "patient_prim_normal_cells",    "patient_prim_cancer_cells",
+                # "mm_prim_normal_cells",         "mm_prim_cancer_cells",
+                # "dogs_prim_normal_cells",       "dogs_prim_cancer_cells",
+                # "dogs_mets_normal_cells",       "dogs_mets_cancer_cells",
+                # "patient_mets_normal_cells",    "patient_mets_cancer_cells",
+                # "mm_mets_normal_cells",         "mm_mets_cancer_cells"
                 )) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",

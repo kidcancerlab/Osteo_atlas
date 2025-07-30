@@ -596,7 +596,7 @@ dimplot_better(lungblood_obj,
 # make first stroma for human lung
 stroma1 <-
     subset(lungblood_obj,
-            cells = sample(colnames(lungblood_obj), 10000)) %>%
+            cells = sample(colnames(lungblood_obj), 20000)) %>%
     process_seurat()
 stroma1$sample_name <- "lungblood_stroma1"
 qs::qsave(stroma1,
@@ -605,7 +605,7 @@ qs::qsave(stroma1,
 # make second stroma for human lung
 stroma2 <-
     subset(lungblood_obj,
-           cells = sample(setdiff(colnames(lungblood_obj), colnames(stroma1)), 10000)) %>%
+           cells = sample(setdiff(colnames(lungblood_obj), colnames(stroma1)), 20000)) %>%
     process_seurat()
 stroma2$sample_name <- "lungblood_stroma2" 
 qs::qsave(stroma2,
@@ -614,22 +614,27 @@ qs::qsave(stroma2,
 
 # combination of samples for human tumor annotation and reference validation
 
-samples <- c(
-    # "SJOS016015_X1_human",  # xeno primary tumor cell with femur head
-    # "S0042_human",          # xeno primary tumor cell with femur head
-    # "S0055_human",          # xeno mets tumor cell
-    # "SJOS001112_X1_human",   # xeno mets tumor cell
-    # "X00018_human",
-    # "X00020_human",
-    "X00021_human",  # xeno primary tumor cell with femur head
-    "X00019_human"   # xeno primary tumor cell with femur head
+samples <- 
+    tribble(~tumor_name,            ~truth_metadata,
+            "SJOS016015_X1_human",   "tumor",       # xeno primary tumor cell with femur head
+            "S0042_human",           "tumor",        # xeno primary tumor cell with femur head
+            "S0055_human",            "tumor",   # xeno mets tumor cell
+            "SJOS001112_X1_human",    "tumor",        # xeno mets tumor cell
+            "X00018_human",            "stroma",
+            "X00020_human",            "stroma",
+            "X00021_human",             "stroma", # xeno primary tumor cell with femur head
+            "X00019_human",            "stroma" # xeno primary tumor cell with femur head
 )
 # save into the one location for all the validation object
-for (tumor_name in samples) {
+for (item in seq_len(ncol(samples))) {
+    tumor_name <- samples$tumor_name[item]
+    truth_metadata <- samples$truth_metadata[item]
     dir <- str_c("output/seurat_objects/sobj_preprocess")
     tumor <-
         qs::qread(str_c(dir, "/", tumor_name, ".qs"))
-    tumor$truth_metadata <- "tumor"
+
+    tumor$sample_name <- tumor_name
+    tumor$truth_metadata <- truth_metadata
     #dimplot_better(tumor, group_by = "truth_metadata")
     qs::qsave(tumor,
             str_c("output/seurat_objects/validation/tumor_annotation/",
@@ -669,8 +674,8 @@ for (i in seq_len(nrow(stroma_names))) {
 # the combination
 samples_to_combine <- 
     tribble(~tumor_name,                ~stroma_name,
-            "SJOS016015_X1_human",    "X00018_human",   #xeno primary tumor cell with femur head
-            "S0042_human",            "X00020_human",   #xeno primary tumor cell with femur head
+            "SJOS016015_X1_human",    "prim_stroma1",   #xeno primary tumor cell with femur head
+            "S0042_human",            "prim_stroma2",   #xeno primary tumor cell with femur head
             "S0055_human",            "human_lung_stroma1",  # xeno mets tumor cell with human lung stroma
             "SJOS001112_X1_human",    "human_lung_stroma2") # xeno mets tumor cell with human lung stroma
 
@@ -695,7 +700,9 @@ for (i in seq_len(nrow(samples_to_combine))) {
         merge(stroma, tumor,
               add.cell.ids = c("stroma", "tumor")) %>%
         JoinLayers() %>%
-        process_seurat()
+        process_seurat() %>%
+        RunHarmony(group.by.vars = "sample_name") %>%
+        process_seurat(reduction = "harmony")
 
     if (!dir.exists("output/seurat_objects/validation/tumor_annotation/")) {
         dir.create("output/seurat_objects/validation/tumor_annotation/", recursive = TRUE)
@@ -707,16 +714,66 @@ for (i in seq_len(nrow(samples_to_combine))) {
 
 }
 
+
+
+clusterbased_annot <- function(s_obj) {
+    Idents(s_obj) <- s_obj$seurat_clusters
+    clust_info <- tibble()
+    for (cluster in unique(s_obj$seurat_clusters)) {
+        set.seed(199820)
+        print(str_c("Reclustering cluster ", cluster))
+        subset_object <- subset(s_obj, ident = cluster) %>%
+            FindVariableFeatures() %>%
+            ScaleData() %>%
+            # don't ask for more PCs than there are cells
+            RunPCA(npcs = min(50,
+                            sum(s_obj$seurat_clusters == cluster) - 1))
+
+        subset_object$re_cluster <- str_c(cluster,
+                                        ".",
+                                        subset_object$seurat_clusters)
+
+        clust_info <- subset_object@meta.data %>%
+                as.data.frame() %>%
+                select(re_cluster) %>%
+                rbind(clust_info)
+    }
+
+    s_obj <- AddMetaData(s_obj, metadata = clust_info)
+    s_obj$new_annot_clust <- s_obj$re_cluster
+
+    cluster_celltypes <-
+        table(s_obj$re_cluster, s_obj$annotations) %>%
+        as.data.frame() %>%
+        group_by(Var1) %>%
+        arrange(desc(Freq), .by_group = TRUE) %>%
+        slice_head(n = 1)
+
+    for (i in seq_len(nrow(cluster_celltypes))) {
+        seurat_clust <- str_c("^", cluster_celltypes$Var1[i], "$") %>%
+            as.character()
+
+        celltype <- cluster_celltypes$Var2[i] %>%
+            as.character()
+
+        s_obj$new_annot_clust <-
+            str_replace_all(string = s_obj$new_annot_clust,
+                            pattern = seurat_clust,
+                            replacement = celltype)
+    }
+    return(s_obj)
+}
 # actual validation parent
 samples_for_validation <- 
     tribble(~names,                                           ~species,
-            "S0260_mouse",                                    "mouse",
-            "S0261_mouse",                                     "mouse",
-            "S0042_human_X00020_human_combined",               "human",
-            "SJOS016015_X1_human_X00018_human_combined",       "human",
+            # "S0260_mouse",                                    "mouse",
+            # "S0261_mouse",                                     "mouse",
+            "S0042_human_prim_stroma2_combined",               "human",
+            "SJOS016015_X1_human_prim_stroma1_combined",       "human",
             "SJOS001112_X1_human_human_lung_stroma2_combined", "human_lung",
             "S0055_human_human_lung_stroma1_combined",          "human_lung"
       )
+
 
 for (item in seq_len(nrow(samples_for_validation))) {
     names <- samples_for_validation$names[item]
@@ -729,12 +786,12 @@ for (item in seq_len(nrow(samples_for_validation))) {
                     group_by = "truth_metadata") +
         NoLegend() + ggtitle("object with known tumor and stroma")
     # Annotation
-    #use tumor before subsetting tumor
-    big_obj_with_tumor <-
-        annotate_celltypes(sobject = combine_sobject,
-                            species = species,
-                            with_tumor = TRUE,
-                            aggr_ref = TRUE)
+    # #use tumor before subsetting tumor
+    # big_obj_with_tumor <-
+    #     annotate_celltypes(sobject = combine_sobject,
+    #                         species = species,
+    #                         with_tumor = TRUE,
+    #                         aggr_ref = TRUE)
 
     # this is my method
     ann_obj <-
@@ -816,8 +873,14 @@ for (item in seq_len(nrow(samples_for_validation))) {
     for (clusters in unique(tumor_cells_sobj$seurat_clusters)) {
         sub_obj <-
             subset(tumor_cells_sobj,
-                   seurat_clusters == clusters) %>%
-            process_seurat(resolution = 0.1)
+                   seurat_clusters == clusters)
+        if (ncol(sub_obj) > 100) {
+            sub_obj <-
+                sub_obj %>%
+                process_seurat(resolution = 0.1)
+        } else {
+            sub_obj <- sub_obj
+        }
         sub_obj <-
             annotate_celltypes(sobject = sub_obj,
                                 species = species,
@@ -876,31 +939,30 @@ for (item in seq_len(nrow(samples_for_validation))) {
         theme_void() +
         ggtitle("truth metadata")
 
-    big_obj_with_tumor$annot_with_tumor_as_whole <-
-        ifelse(big_obj_with_tumor$annotations == "Tumor_cells",
-                "tumor",
-                "stroma")
+    # big_obj_with_tumor$annot_with_tumor_as_whole <-
+    #     ifelse(big_obj_with_tumor$annotations == "Tumor_cells",
+    #             "tumor",
+    #             "stroma")
 
-    # add metadata of the big_obj_with_tumor column annot_with_tumor_as_whole to combine_sobject
-    combine_sobject$annot_with_tumor_as_whole <-
-        big_obj_with_tumor$annot_with_tumor_as_whole[
-            match(colnames(combine_sobject),
-                colnames(big_obj_with_tumor))]
+    # # add metadata of the big_obj_with_tumor column annot_with_tumor_as_whole to combine_sobject
+    # combine_sobject$annot_with_tumor_as_whole <-
+    #     big_obj_with_tumor$annot_with_tumor_as_whole[
+    #         match(colnames(combine_sobject),
+    #             colnames(big_obj_with_tumor))]
 
-    dimplot7 <-
-        DimPlot(combine_sobject,
-                group.by = "annot_with_tumor_as_whole",
-                label = T,
-                cols = c("stroma" = "#EEA236FF", "tumor" = "#D43F3AFF"),
-                label.box = T) +
-        NoLegend() +
-        ggtitle("annotation with tumor in whole object")
+    # dimplot7 <-
+    #     DimPlot(combine_sobject,
+    #             group.by = "annot_with_tumor_as_whole",
+    #             label = T,
+    #             cols = c("stroma" = "#EEA236FF", "tumor" = "#D43F3AFF"),
+    #             label.box = T) +
+    #     NoLegend() +
+    #     ggtitle("annotation with tumor in whole object")
 
     # patchwork the plots
     dimplot_combined <-
         patchwork::wrap_plots(dimplot5,
                             dimplot6,
-                            dimplot7,
                             ncol = 2) +
             patchwork::plot_annotation(title = names)
     directory <-
@@ -920,15 +982,24 @@ for (item in seq_len(nrow(samples_for_validation))) {
                 names, "_validated.qs"))
 }
 
+
 samples_for_validation <- 
     tribble(~names,                                           ~species,
-            "S0260_mouse",                                    "mouse",
-            "S0261_mouse",                                     "mouse",
-            "S0042_human_X00020_human_combined",               "human",
-            "SJOS016015_X1_human_X00018_human_combined",       "human",
+            # "S0260_mouse",                                    "mouse",
+            # "S0261_mouse",                                     "mouse",
             "SJOS001112_X1_human_human_lung_stroma2_combined", "human",
-            "S0055_human_human_lung_stroma1_combined",          "human"
+            "S0055_human_human_lung_stroma1_combined",          "human",
+            "S0042_human_prim_stroma2_combined",               "human",
+            "SJOS016015_X1_human_prim_stroma1_combined",       "human"     #problematic smaple
       )
+
+
+patchwork::wrap_plots(
+    dimplot_better(object, group_by = "truth_metadata"),
+    dimplot_better(object, group_by = "final_tumor_call"),
+    ncol = 2
+)
+
 for (item in seq_len(nrow(samples_for_validation))) {
     group <- samples_for_validation$names[item]
     organism <- samples_for_validation$species[item]
@@ -1043,10 +1114,10 @@ for (item in seq_len(nrow(samples_for_validation))) {
 samples_for_validation <- 
     c("S0260_mouse",
       "S0261_mouse",
-      "S0042_human_X00020_human_combined",
-      "SJOS016015_X1_human_X00018_human_combined",
       "SJOS001112_X1_human_human_lung_stroma2_combined",
-      "S0055_human_human_lung_stroma1_combined")
+      "S0055_human_human_lung_stroma1_combined",
+      "S0042_human_prim_stroma2_combined",
+      "SJOS016015_X1_human_prim_stroma1_combined")
 
 cols <-
     list("Tumor" = "#D43F3AFF",
@@ -1059,7 +1130,6 @@ patchwork::wrap_plots(
     dimplot_better(combine_sobject, group_by = "scatomic_tumor_call"),
     dimplot_better(combine_sobject, group_by = "scevan_tumor_call"),
     dimplot_better(combine_sobject, group_by = "copykat_tumor_cal"),
-    dimplot_better(combine_sobject, group_by = "annot_with_tumor_as_whole"),
     dimplot_better(combine_sobject, group_by = "final_tumor_call"),
     ncol = 3
     
@@ -1077,7 +1147,7 @@ for (group in samples_for_validation) {
         ifelse(combine_sobject$scevan_tumor_call == "cancer_cells",
                 "Tumor",
                 "Normal")
-    combine_sobject$copykat_tumor_cal <-
+    combine_sobject$copykat_tumor_call <-
         ifelse(combine_sobject$CNV_status == "aneuploid",
                 "Tumor",
                 "Normal")
