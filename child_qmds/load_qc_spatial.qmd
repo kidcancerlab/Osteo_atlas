@@ -187,6 +187,49 @@ qs::qsave(spatial_list, "output/spatial_objects/spatial_list_myeloid_tumor.qs")
 rm("spatial_list")
 ```
 
+#### Different Granularities
+
+Inspired by the section above using the myeloid_tumor reference, I'm going to repeat this exercise, but keep Ann_Level2 instead of Ann_Level1. Likewise, I'm going to repeat it for each Ann_Level1 compartment
+
+```{r}
+# make spacex reference objects
+ref_list <- list()
+for (ct in unique(patient_mets$Ann_Level1)) {
+    tmp <- patient_mets
+    tmp$new_anns <- ifelse(
+        patient_mets$Ann_Level1 == ct,
+        patient_mets$Ann_Level3,
+        patient_mets$Ann_Level2
+    )
+    ref_list[[ct]] <- spacexr::Reference(
+        GetAssayData(tmp, layer = "counts"),
+        as.factor(tmp$new_anns),
+        n_max_cells = 2000
+    )
+}
+dir.create("output/spacexr/granular_references/")
+qs::qsave(ref_list, "output/spacexr/granular_references/ref_list.qs")
+
+library(parallel)
+rctd_res <- mclapply(names(ref_list), function(ref) {
+    spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
+    tmp <- mclapply(
+        spatial_list,
+        run_rctd,
+        ref = ref_list[[ref]],
+        mc.cores = 8,
+        mc.preschedule = FALSE
+    )
+    qs::qsave(tmp, paste0("output/spacexr/granular_references/", ref, "_level3_rctd.qs"))
+    return(tmp)
+    },
+    mc.cores = floor(parallelly::availableCores() / 8),
+    mc.preschedule = FALSE
+)
+names(rctd_res) <- names(ref_list)
+qs::qsave(rctd_res, "ouput/spacexr/granular_references/all_granular_results.qs")
+```
+
 
 ## Plot Deconvolution Scores
 
@@ -343,49 +386,6 @@ for (ct in sort(cell_types_myeloid_tumor)) {
 dev.off()
 ```
 
-### Different Granularities
-
-Inspired by the section above using the myeloid_tumor reference, I'm going to repeat this exercise, but keep Ann_Level2 instead of Ann_Level1. Likewise, I'm going to repeat it for each Ann_Level1 compartment
-
-```{r}
-# make spacex reference objects
-ref_list <- list()
-for (ct in unique(patient_mets$Ann_Level1)) {
-    tmp <- patient_mets
-    tmp$new_anns <- ifelse(
-        patient_mets$Ann_Level1 == ct,
-        patient_mets$Ann_Level3,
-        patient_mets$Ann_Level2
-    )
-    ref_list[[ct]] <- spacexr::Reference(
-        GetAssayData(tmp, layer = "counts"),
-        as.factor(tmp$new_anns),
-        n_max_cells = 2000
-    )
-}
-dir.create("output/spacexr/granular_references/")
-qs::qsave(ref_list, "output/spacexr/granular_references/ref_list.qs")
-
-library(parallel)
-rctd_res <- mclapply(names(ref_list), function(ref) {
-    spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
-    tmp <- mclapply(
-        spatial_list,
-        run_rctd,
-        ref = ref_list[[ref]],
-        mc.cores = 8,
-        mc.preschedule = FALSE
-    )
-    return(tmp)
-    qs::qsave(tmp, paste0("output/spacexr/granular_references/", ref, "_level3_rctd.qs"))
-    },
-    mc.cores = floor(parallelly::availableCores() / 8),
-    mc.preschedule = FALSE
-)
-qs::qsave(rctd_res, "ouput/spacexr/granular_references/all_granular_results.qs")
-names(rctd_res) <- names(ref_list)
-```
-
 ## Make Deconvolution Plots
 
 ### For Each Ann Level
@@ -394,11 +394,12 @@ This code will create figures for spatial deconvolution results using just Ann_L
 
 For each annotation level, I'll create a pdf for each object in which each page is a spatial feature plot. I'll also create a cell type correlation heatmap.
 
+#### Ann_Level2
+
 ```{r}
 dir.create("output/figures/spatial/spacexr/level2")
 
 cell_types2 <- unique(patient_mets$Ann_Level2)
-
 for (ob in names(spatial_list)) {
     # make heatmap for just this object
     ann_mat <- spatial_list[[ob]]@meta.data[ , cell_types2]
@@ -457,7 +458,238 @@ for (ob in names(spatial_list)) {
 }
 
 # make cell type correlation heatmap
+ann_mat_list <- lapply(spatial_list, function(x) {
+    x@meta.data[ , cell_types2]
+})
+full_ann_mat <- bind_rows(ann_mat_list)
+pdf(
+    "output/figures/spatial/spacexr/level2/all_ob_cor_heatmap.pdf",
+    width = 900,
+    height = 900
+)
+pheatmap::pheatmap(
+    cor(full_ann_mat[ , cell_types], method = "spearman"),
+    scale = "none",
+    low = "blue",
+    high = "red",
+    mid = "white",
+    midpoint = 0,
+    angle_col = 45,
+    fontsize = 16
+)
+dev.off()
+```
 
+#### Ann_Level3
+
+```{r}
+dir.create("output/figures/spatial/spacexr/level3")
+
+cell_types3 <- unique(patient_mets$Ann_Level3)
+for (ob in names(spatial_list)) {
+    # make heatmap for just this object
+    ann_mat <- spatial_list[[ob]]@meta.data[ , cell_types3]
+    pdf(
+        paste0("output/figures/spatial/spacexr/level3/", ob, "_heatmap.pdf"),
+        width = 900,
+        height = 900
+    )
+    pheatmap::pheatmap(
+        cor(ann_mat, method = "spearman"),
+        scale = "none",
+        low = "blue",
+        high = "red",
+        mid = "white",
+        midpoint = 0,
+        angle_col = 45,
+        fontsize = 16)
+    dev.off()
+
+    # make pdf of all rctd scores w h&e and cumulative tumor score at beginning
+    tmp$Tumor_Cumulative <- tmp$Basal_Progenitor +
+                         tmp$Fibrogenic +
+                         tmp$Interactive +
+                         tmp$MP_Progenitor +
+                         tmp$Proliferative +
+                         tmp$Stressed
+    pdf(
+        paste0("output/figures/spatial/spacexr/level3/", ob, "_scores.pdf"),
+        height = 4,
+        width = 4
+    )
+    print(
+        SpatialDimPlot(
+            tmp,
+            pt.size.factor = 0) + NoLegend()
+    )
+    print(
+        SpatialFeaturePlot(
+            tmp,
+            features = "Tumor_Cumulative",
+            pt.size.factor = size.factors[[ob]],
+            image.alpha = 0
+        )
+    )
+    for (ct in cell_types3) {
+        print(
+            SpatialFeaturePlot(
+                tmp,
+                features = ct,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+        )
+    }
+    dev.off()
+}
+
+# make cell type correlation heatmap
+ann_mat_list <- lapply(spatial_list, function(x) {
+    x@meta.data[ , cell_types3]
+})
+full_ann_mat <- bind_rows(ann_mat_list)
+pdf(
+    "output/figures/spatial/spacexr/level3/all_ob_cor_heatmap.pdf",
+    width = 900,
+    height = 900
+)
+pheatmap::pheatmap(
+    cor(full_ann_mat[ , cell_types], method = "spearman"),
+    scale = "none",
+    low = "blue",
+    high = "red",
+    mid = "white",
+    midpoint = 0,
+    angle_col = 45,
+    fontsize = 16
+)
+dev.off()
+```
+
+### For Different Granularity References
+
+```{r}
+for (ref in names(ref_list)) {
+    # make output directory
+    dir.create(paste0("output/figures/spatial/spacexr/granular_", ref))
+    
+    # read in unannotated object list
+    spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
+
+    # read in rctd results
+    rctd_list <- qs::qread(
+        paste0("output/spacexr/granular_references/", ref, "_level3_rctd.qs")
+    )
+    
+    # need to add names
+    names(rctd_list) <- paste0("OS", c(1:8), "_Seurat")
+    
+    # loop over each sample now
+    for (ob in names(spatial_list)) {
+        # add rctd results to object
+        norm_weights <- spacexr::normalize_weights(rctd_list[[ob]]@results$weight)
+        sp_ob <- AddMetaData(spatial_list[[ob]], norm_weights)
+        # get cell types from reference object
+        ref_cell_types
+        ann_mat <- spatial_list[[ob]]@meta.data[ , ref_cell_types]
+        pdf(
+            paste0(
+                "output/figures/spatial/spacexr/granular_references/",
+                ob,"_heatmap.pdf"),
+            width = 900,
+            height = 900
+        )
+        pheatmap::pheatmap(
+            cor(ann_mat, method = "spearman"),
+            scale = "none",
+            low = "blue",
+            high = "red",
+            mid = "white",
+            midpoint = 0,
+            angle_col = 45,
+            fontsize = 16)
+        dev.off()
+
+    }
+
+    # make heatmap for just this object
+    ann_mat <- spatial_list[[ob]]@meta.data[ , cell_types2]
+    pdf(
+        paste0("output/figures/spatial/spacexr/level2/", ob, "_heatmap.pdf"),
+        width = 900,
+        height = 900
+    )
+    pheatmap::pheatmap(
+        cor(ann_mat, method = "spearman"),
+        scale = "none",
+        low = "blue",
+        high = "red",
+        mid = "white",
+        midpoint = 0,
+        angle_col = 45,
+        fontsize = 16)
+    dev.off()
+
+    # make pdf of all rctd scores w h&e and cumulative tumor score at beginning
+    tmp$Tumor_Cumulative <- tmp$Basal_Progenitor +
+                         tmp$Fibrogenic +
+                         tmp$Interactive +
+                         tmp$MP_Progenitor +
+                         tmp$Proliferative +
+                         tmp$Stressed
+    pdf(
+        paste0("output/figures/spatial/spacexr/level2/", ob, "_scores.pdf"),
+        height = 4,
+        width = 4
+    )
+    print(
+        SpatialDimPlot(
+            tmp,
+            pt.size.factor = 0) + NoLegend()
+    )
+    print(
+        SpatialFeaturePlot(
+            tmp,
+            features = "Tumor_Cumulative",
+            pt.size.factor = size.factors[[ob]],
+            image.alpha = 0
+        )
+    )
+    for (ct in cell_types2) {
+        print(
+            SpatialFeaturePlot(
+                tmp,
+                features = ct,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+        )
+    }
+    dev.off()
+}
+
+# make cell type correlation heatmap
+ann_mat_list <- lapply(spatial_list, function(x) {
+    x@meta.data[ , cell_types2]
+})
+full_ann_mat <- bind_rows(ann_mat_list)
+pdf(
+    "output/figures/spatial/spacexr/level2/all_ob_cor_heatmap.pdf",
+    width = 900,
+    height = 900
+)
+pheatmap::pheatmap(
+    cor(full_ann_mat[ , cell_types], method = "spearman"),
+    scale = "none",
+    low = "blue",
+    high = "red",
+    mid = "white",
+    midpoint = 0,
+    angle_col = 45,
+    fontsize = 16
+)
+dev.off()
+}
 ```
 
 
