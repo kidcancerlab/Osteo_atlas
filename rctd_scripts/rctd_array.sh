@@ -27,4 +27,4 @@ echo Annotating $ob_id with $ref
 # move and rename output to somewhere findable
 mv output/spacexr/${SLURM_JOBID}.txt output/spacexr/granular_references/$ref/${ob_id}_output.txt
 
-Rscript rctd.r $ob_id $ref
+Rscript rctd_scripts/rctd.r $ob_id $ref

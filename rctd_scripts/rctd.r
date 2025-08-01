@@ -38,7 +38,7 @@ size.factors <- list("OS1_Seurat" = 1500,
 
 
 #!/usr/bin/env Rscript
-args = commandArgs(trailingOnly=TRUE)
+args = commandArgs(trailingOnly = TRUE)
 ob_name <- args[1]
 ref_name <- args[2]
 
@@ -69,11 +69,12 @@ qs::qsave(
 )
 
 # add results to object for plotting
-norm_weights <- spacexr::normalize_weights(rctd_res@results$weight)
+norm_weights <- spacexr::normalize_weights(rctd_res@results$weights)
 sp_ob <- AddMetaData(sp_ob, norm_weights)
 
 # get cell types from reference object
-cell_types <- unique(ref@cell_types)
+cell_types <- unique(ref@cell_types) %>%
+    as.character()
 
 # get matrix of deconvolution scores
 ann_mat <- sp_ob@meta.data[ , cell_types]
@@ -86,9 +87,9 @@ pdf(
         "/",
         ob_name,
         "_heatmap.pdf"
-    )
-    width = 900,
-    height = 900
+    ),
+    width = 8,
+    height = 8
 )
 pheatmap::pheatmap(
     cor(ann_mat, method = "spearman"),
@@ -114,7 +115,7 @@ pdf(
     ref_name,
     "/",
     ob_name,
-    "_scores.pdf")
+    "_scores.pdf"),
     height = 4,
     width = 4
 )
