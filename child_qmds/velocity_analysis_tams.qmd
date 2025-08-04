@@ -33,12 +33,14 @@ gridExtra::grid.arrange(grobs = plts, ncol = 2)
 Next I need to write off the metadata for these cells. The metadata will be kept in the folder `loom_output/tam_metadata/`
 
 ```{r write-off-md}
-dir.create("loom_output/tam_metadata")
+dir.create("loom_output/tam_metadata/sc", recursive = TRUE)
+dir.create("loom_output/tam_metadata/sn")
 
 lapply(names(tam_list), function(obj_name) {
+    obj <- subset(tam_list[[obj_name]], method == "single_cell")
     write_off_md(sobj = tam_list[[obj_name]],
                  id_col = "sample_name",
-                 output_dir = paste0("loom_output/tam_metadata/",
+                 output_dir = paste0("loom_output/tam_metadata/sc/",
                                      obj_name),
                  vars_to_keep = c("sample_name",
                                   "seurat_clusters",
@@ -46,6 +48,20 @@ lapply(names(tam_list), function(obj_name) {
                                   "Ann_Level2",
                                   "Ann_Level3"),
                  handle_n_of_1 = FALSE)
+
+    if ("single_nucleus" %in% names(table(tam_list[[obj_name]]$method))) {
+        obj <- subset(tam_list[[obj_name]], method == "single_nucleus")
+        write_off_md(sobj = tam_list[[obj_name]],
+                     id_col = "sample_name",
+                     output_dir = paste0("loom_output/tam_metadata/sn/",
+                                         obj_name),
+                     vars_to_keep = c("sample_name",
+                                      "seurat_clusters",
+                                      "Ann_Level1",
+                                      "Ann_Level2",
+                                      "Ann_Level3"),
+                     handle_n_of_1 = FALSE)
+    }
 })
 ```
 
@@ -94,20 +110,22 @@ color_mapping = {
     "TAMs": "#CDCDCDFF"
 }
 
-ob_names = os.listdir("loom_output/tam_metadata")
+# write off objects and make plots for single cell
+
+ob_names = os.listdir("loom_output/tam_metadata/sc/")
 for ob in ob_names:
     print("starting on " + ob)
     merged_ad = loom_to_an(
         obj_name = ob,
         loom_dir = "loom_output/samples",
-        metadata_dir = "loom_output/tam_metadata")
+        metadata_dir = "loom_output/tam_metadata/sc/")
     print("made " + ob + " , now calculating velocity")
     calc_velo(merged_ad)
-    merged_ad.write(filename = "loom_output/tam_anndata/" + ob + ".ad")
+    merged_ad.write(filename = "loom_output/tam_anndata/sc/" + ob + ".ad")
     print("finished " + ob)
 
 for ob in ob_names:
-    ad_ob = anndata.read("loom_output/tam_anndata/" + ob + ".ad")
+    ad_ob = anndata.read("loom_output/tam_anndata/sc/" + ob + ".ad")
     scv.pl.velocity_embedding_stream(
         ad_ob,
         basis = "umap",
@@ -117,7 +135,37 @@ for ob in ob_names:
         sort_order = False,
         legend_loc = 'none'
     )
-    pyplot.savefig("output/figures/rna_velocity_tams/" + ob + "_umap.svg")
+    pyplot.savefig("output/figures/rna_velocity_tams/sc/" + ob + "_umap.svg")
+
+
+# write off objects and make plots for single nucleus
+
+ob_names = os.listdir("loom_output/tam_metadata/sn/")
+for ob in ob_names:
+    print("starting on " + ob)
+    merged_ad = python_functions.loom_to_an(
+        obj_name = ob,
+        loom_dir = "loom_output/samples",
+        metadata_dir = "loom_output/tam_metadata/sn/")
+    print("made " + ob + " , now calculating velocity")
+    python_functions.calc_velo(merged_ad)
+    merged_ad.write(filename = "loom_output/tam_anndata/sn/" + ob + ".ad")
+    print("finished " + ob)
+
+
+for ob in ob_names:
+    ad_ob = anndata.read("loom_output/tam_anndata/sn/" + ob + ".ad")
+    scv.pl.velocity_embedding_stream(
+        ad_ob,
+        basis = "umap",
+        color = "Ann_Level3",
+        show = False,
+        palette = color_mapping,
+        sort_order = False,
+        legend_loc = 'none'
+    )
+    pyplot.savefig("output/figures/rna_velocity_tams/sn/" + ob + "_umap.svg")
+
 ```
 
 ### Make Velocity Plots
