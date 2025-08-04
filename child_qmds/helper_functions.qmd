@@ -1271,7 +1271,7 @@ run_rctd <- function(sp_ob, ref) {
     )
     rctd_out <- spacexr::run.RCTD(
         rctd_obj,
-        doublet_mode = "multi"
+        doublet_mode = "doublet"
     )
     return(rctd_out)
 }
