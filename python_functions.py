@@ -26,6 +26,7 @@ def loom_to_an(obj_name, loom_dir, metadata_dir):
     for one_md in md_files:
         #get sample id from file name
         sample_id = re.sub("_metadata.csv", "", one_md)
+        print("Reading in " + sample_id)
         #add object to list
         tmp = anndata.read_loom(loom_dir + "/" + sample_id + "/" + sample_id + ".loom")
         #read in metadata file

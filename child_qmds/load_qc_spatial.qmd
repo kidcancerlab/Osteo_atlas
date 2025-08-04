@@ -60,11 +60,6 @@ I need to create a reference object. This object is created using the RCTD const
 yogi_path <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/"
 
 patient_mets <- qs::qread(paste0(yogi_path, "final_tumor_vs_stroma/patient_mets.qs"))
-patient_mets$Ann_Level1 <- ifelse(
-    patient_mets$Ann_Level1 == "Alv_Macrophages",
-    "Immune_Myeloid",
-    patient_mets$Ann_Level1
-)
 
 dimplot_better(patient_mets, group = c(paste0("Ann_Level", 1:3)), raster = FALSE)
 ```
@@ -227,6 +222,32 @@ names(rctd_res) <- names(ref_list)
 qs::qsave(rctd_res, "output/spacexr/granular_references/all_granular_results.qs")
 ```
 
+#### TAM Level3, Else Level2
+
+```{r}
+tam_types <- unique(grep("TAM", patient_mets$Ann_Level3, value = TRUE))
+patient_mets$tam_specific <- ifelse(
+    patient_mets$Ann_Level3 %in% tam_types,
+    patient_mets$Ann_Level3,
+    patient_mets$Ann_Level2
+)
+tam_rctd_ref <- spacexr::Reference(
+    GetAssayData(patient_mets, layer = "counts"),
+    as.factor(patient_mets$tam_specific),
+    n_max_cells = 2000
+)
+
+qs::qsave(tam_rctd_ref, "output/spacexr/tam_specific/rctd_ref.qs")
+
+tam_rctd <- mclapply(
+    spatial_list,
+    run_rctd,
+    ref = tam_rctd_ref,
+    mc.cores = 8,
+    mc.preschedule = FALSE)
+qs::qsave(tam_rctd, "output/spacexr/tam_specific/")
+```
+
 
 ## Plot Deconvolution Scores
 
@@ -243,18 +264,25 @@ size.factors <- list("OS1_Seurat" = 1500,
                      "OS6_Seurat" = 3000,
                      "OS7_Seurat" = 2500,
                      "OS8_Seurat" = 1300)
-
-cell_types2 <- unique(patient_mets$Ann_Level2)
+spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
+cell_types2 <- sort(unique(patient_mets$Ann_Level2))
 for (ob in names(spatial_list)) {
     tmp <- spatial_list[[ob]]
+    rctd_res <- qs::qread(paste0("output/spacexr/Ann_Level2/rctd_level2_", ob, ".qs"))
+    norm_weights <- spacexr::normalize_weights(rctd_res@results$weights)
+    tmp <- AddMetaData(tmp, norm_weights)
+    tmp$COMA <- tmp$Stressed
+
     tmp$Tumor_Cumulative <- tmp$Basal_Progenitor +
                              tmp$Fibrogenic +
                              tmp$Interactive +
                              tmp$MP_Progenitor +
                              tmp$Proliferative +
-                             tmp$Stressed
-    
-    pdf(paste0("output/figures/spatial/spacexr/spacexr_", ob, "_level2.pdf"), height = 4, width = 4)
+                             tmp$COMA
+
+    spatial_list[[ob]] <- tmp
+
+    pdf(paste0("output/figures/spatial/spacexr/Ann_Level2/", ob, "_level2.pdf"), height = 4, width = 4)
     print(
         SpatialDimPlot(
             tmp,
@@ -280,6 +308,67 @@ for (ob in names(spatial_list)) {
     }
     dev.off()
 }
+
+
+pdf("output/figures/spatial/spacexr/Ann_Level2/tumor_panel.pdf", width = 35)
+for (ob in names(spatial_list)) {
+    hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
+        NoLegend()
+    plts <- list("h_and_e" = hne)
+    for (ct in tumor_types) {
+        plts[[ct]] <-
+            SpatialFeaturePlot(
+                spatial_list[[ob]],
+                features = ct,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+    }
+    grid.arrange(grobs = plts, nrow = 1)
+}
+dev.off()
+
+
+# make heatmaps
+ann_list2 <- list()
+for (ob in names(spatial_list)) {
+    ann_mat <- spatial_list[[ob]]@meta.data[, cell_types2]
+    ann_list2[[ob]] <- ann_mat
+    pdf(
+        paste0("output/figures/spatial/spacexr/Ann_Level2/", ob, "_heatmap.pdf"),
+        width = 18,
+        height = 16
+    )
+    pheatmap::pheatmap(
+        cor(ann_mat, method = "spearman"),
+        scale = "none",
+        low = "blue",
+        high = "red",
+        mid = "white",
+        midpoint = 0,
+        angle_col = 45,
+        fontsize = 16
+    )
+    dev.off()
+}
+
+full_ann2 <- bind_rows(ann_list2)
+pdf(
+    "output/figures/spatial/spacexr/Ann_Level2/all_sample_heatmap.pdf",
+    width = 18,
+    height = 16
+)
+pheatmap::pheatmap(
+    cor(full_ann2, method = "spearman"),
+    scale = "none",
+    low = "blue",
+    hight = "red",
+    mid = "white",
+    midpoint = 0,
+    angle_col = 45,
+    fontsize = 16
+)
+dev.off()
 ```
 
 ### Ann_Level3
@@ -288,14 +377,21 @@ for (ob in names(spatial_list)) {
 cell_types3 <- unique(patient_mets$Ann_Level3)
 for (ob in names(spatial_list)) {
     tmp <- spatial_list[[ob]]
+    # read in results and add to object
+    rctd_res <- qs::qread(paste0("output/spacexr/Ann_Level3/rctd_level3_", ob, ".qs"))
+    norm_weights <- spacexr::normalize_weights(rctd_res@results$weights)
+    tmp <- AddMetaData(tmp, norm_weights)
+    tmp$COMA <- tmp$Stressed
+
     tmp$Tumor_Cumulative <- tmp$Basal_Progenitor +
                              tmp$Fibrogenic +
                              tmp$Interactive +
                              tmp$MP_Progenitor +
                              tmp$Proliferative +
-                             tmp$Stressed
+                             tmp$COMA
+    spatial_list[[ob]] <- tmp
     
-    pdf(paste0("output/figures/spatial/spacexr/spacexr_", ob, "_level3.pdf"), height = 4, width = 4)
+    pdf(paste0("output/figures/spatial/spacexr/Ann_Level3/", ob, "_level3.pdf"), height = 4, width = 4)
     print(
         SpatialDimPlot(
             tmp,
@@ -321,6 +417,84 @@ for (ob in names(spatial_list)) {
     }
     dev.off()
 }
+
+pdf("output/figures/spatial/spacexr/Ann_Level3/tumor_panel.pdf", width = 35)
+for (ob in names(spatial_list)) {
+    hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
+        NoLegend()
+    plts <- list("h_and_e" = hne)
+    for (ct in tumor_types) {
+        plts[[ct]] <-
+            SpatialFeaturePlot(
+                spatial_list[[ob]],
+                features = ct,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+    }
+    grid.arrange(grobs = plts, nrow = 1)
+}
+dev.off()
+
+tam_types <- sort(unique(grep("TAM", patient_mets$Ann_Level3, value = TRUE)))
+pdf("output/figures/spatial/spacexr/Ann_Level3/tam_panel.pdf", width = 56, height = 7)
+for (ob in names(spatial_list)) {
+    hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
+        NoLegend()
+    plts <- list("h_and_e" = hne)
+    for (ct in tam_types) {
+        plts[[ct]] <-
+            SpatialFeaturePlot(
+                spatial_list[[ob]],
+                features = ct,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+    }
+    grid.arrange(grobs = plts, nrow = 1)
+}
+dev.off()
+
+# make heatmaps
+ann_list3 <- list()
+for (ob in names(spatial_list)) {
+    ann_mat <- spatial_list[[ob]]@meta.data[, cell_types3]
+    ann_list3[[ob]] <- ann_mat
+    pdf(
+        paste0("output/figures/spatial/spacexr/Ann_Level3/", ob, "_heatmap.pdf"),
+        width = 18,
+        height = 16
+    )
+    pheatmap::pheatmap(
+        cor(ann_mat, method = "spearman"),
+        scale = "none",
+        low = "blue",
+        high = "red",
+        mid = "white",
+        midpoint = 0,
+        angle_col = 45,
+        fontsize = 16
+    )
+    dev.off()
+}
+
+full_ann3 <- bind_rows(ann_list3)
+pdf(
+    "output/figures/spatial/spacexr/Ann_Level3/all_sample_heatmap.pdf",
+    width = 18,
+    height = 16
+)
+pheatmap::pheatmap(
+    cor(full_ann3, method = "spearman"),
+    scale = "none",
+    low = "blue",
+    hight = "red",
+    mid = "white",
+    midpoint = 0,
+    angle_col = 45,
+    fontsize = 16
+)
+dev.off()
 ```
 
 ### Myeloid_Tumor
@@ -579,7 +753,7 @@ tumor_types <- c(
     "Interactive",
     "MP_Progenitor",
     "Proliferative",
-    "Stressed")
+    "COMA")
 
 pdf("output/figures/spatial/spacexr/tumor_level_3.pdf", width = 35)
 for (ob in names(spatial_list)) {
