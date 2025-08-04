@@ -245,7 +245,54 @@ tam_rctd <- mclapply(
     ref = tam_rctd_ref,
     mc.cores = 8,
     mc.preschedule = FALSE)
-qs::qsave(tam_rctd, "output/spacexr/tam_specific/")
+qs::qsave(tam_rctd, "output/spacexr/tam_specific/rctd_res.qs")
+
+# spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
+
+for (ob_name in names(spatial_list)) {
+    save_deconv_plots(spatial_list[[ob_name]], ob_name, tam_rctd[[ob_name]], "output/figures/spacexr/tam_specific/")
+}
+
+save_deconv_plots <- function(ob, ob_name, rctd_res, fig_dir) {
+    norm_weights <- spacexr::normalize_weights(rctd_res@results$weights)
+    ob <- AddMetaData(ob, norm_weights)
+    cell_types <- unique(rctd_res@reference@cell_types)
+    # rename Stressed to COMA if COMA not present
+    if ("COMA" %notin% colnames(ob@meta.data)) {
+        ob$COMA <- ob$Stressed
+    }
+    ob$Tumor_Cumulative <-
+        tmp$Basal_Progenitor +
+        tmp$Fibrogenic +
+        tmp$Interactive +
+        tmp$MP_Progenitor +
+        tmp$Proliferative +
+        tmp$COMA
+    
+    # make figure of all scores
+    pdf(paste0(fig_dir, "/", ob_name, "_rctd_scores.pdf"), height = 4, width = 4)
+    print(SpatialDimPlot(ob, pt.size.factor = 0) + NoLegend())
+    print(
+        SpatialFeaturePlot(
+            ob,
+            features = "Tumor_Cumulative",
+            pt.size.factor = size.factors[[ob_name]],
+            image.alpha = 0
+        )
+    )
+    for (ct in cell_types) {
+        print(SpatialFeaturePlot(
+            ob,
+            features = ct,
+            pt.size.factor = size.factors[[ob_name]],
+            image.alpha = 0
+        )
+    )
+    }
+    dev.off()
+}
+
+
 ```
 
 
