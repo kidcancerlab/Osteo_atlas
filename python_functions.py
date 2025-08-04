@@ -10,6 +10,17 @@ from matplotlib import pyplot
 import scanpy as py
 
 
+color_mapping = {
+    "MP_Progenitor": "#D43F3AFF",
+    "Fibrogenic": "#EEA236FF",
+    "Basal_Progenitor": "#357EBDFF",
+    "Proliferative": "#5CB85CFF",
+    "Interactive": "#B8B8B8FF",
+    "Stressed": "#9632B8FF"
+}
+
+hex_codes = ["#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF", "#9632B8FF", "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF", "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF", "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF", "#00FF00", "#00FFFF", "#FF00FF", "#0000FF", "#FFFF00", "#FF0000"]
+
 ### Python Functions
 
 # `loom_to_an` will take all loom files associated with a seurat object, load them in one-by-one, add in appropriate metadata, and then merge them into a single anndata object
@@ -55,14 +66,14 @@ def loom_to_an(obj_name, loom_dir, metadata_dir):
 
 def calc_velo(ad_ob, mode = "dynamical"):
     scv.pp.filter_and_normalize(ad_ob, n_top_genes = 2000)
-    sc.pp.neighbors(ad_ob, n_pcs = 30, n_neighbors = 30)
+    scv.pp.neighbors(ad_ob, n_pcs = 30, n_neighbors = 30)
     scv.pp.moments(ad_ob)
     if mode == "dynamical":
         scv.tl.recover_dynamics(ad_ob, n_jobs = 30)
     scv.tl.velocity(ad_ob, mode = mode)
     scv.tl.velocity_graph(ad_ob, backend = "threading", n_jobs = 30)
 
-def write_obs(ob, method, mode = "dynamical", out_prefix = "loom_output/split_ad/", metadata_dir = "loom_output/split_metadata/"):
+def write_obs(ob, method, out_prefix, mode = "dynamical", metadata_dir = "loom_output/split_metadata/"):
     # make out_prefix end with a "/"
     if not out_prefix.endswith('/'):
         out_prefix = out_prefix + "/"
