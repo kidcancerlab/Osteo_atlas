@@ -117,7 +117,7 @@ for (ob in names(ob_list)) {
            method == "single_cell") %>%
         write_off_md(
             id_col = "sample_name",
-            output_dir = paste0("loom_output/tumor_metadata/sc", ob),
+            output_dir = paste0("loom_output/tumor_metadata/sc/", ob),
             vars_to_keep = c("sample_name",
                             "seurat_clusters",
                             "Ann_Level1",
@@ -128,9 +128,9 @@ for (ob in names(ob_list)) {
         )
     }
 
-    num_sn <- sum(split_ob_list[[ob]]$method == "single_nucleus")
+    num_sn <- sum(ob_list[[ob]]$method == "single_nucleus")
     if (num_sn > 0) {
-        subset(split_ob_list[[ob]],
+        subset(ob_list[[ob]],
             method == "single_nucleus") %>%
             write_off_md(id_col = "sample_name",
                     output_dir = paste0("loom_output/tumor_metadata/sn/",
@@ -170,7 +170,6 @@ import scanpy as sc
 import os
 import re
 import python_functions
-
 ```
 
 ### Make Objects and Plots
@@ -207,13 +206,23 @@ os.makedirs("output/figures/rna_velocity/sc")
 os.makedirs("output/figures/rna_velocity/sn")
 
 for snob in sn_obs:
-    python_functions.write_obs(ob = snob, method = "sn", mode = "stochastic")
-    python_functions.save_plots(ob = snob, method = "sn", mode = "stochastic")
+    python_functions.write_obs(
+        ob = snob,
+        method = "sn",
+        mode = "stochastic",
+        metadata_dir = "loom_output/tumor_metadata/sn/",
+        out_prefix = "loom_output/tumor_anndata/")
+    python_functions.save_plots(
+        ob = snob,
+        method = "sn",
+        ad_prefix = "loom_output/tumor_anndata/sn/",
+        file_prefix = "output/figures/rna_velocity/"
+        )
 
 
 for scob in sc_obs:
-    write_obs(ob = scob, method = "sc", mode = "stochastic")
-    save_plots(ob = scob, method = "sc", mode = "stochastic")
+    python_functions.write_obs(ob = scob, method = "sc", mode = "stochastic")
+    python_functions.save_plots(ob = scob, method = "sc")
 
 ```
 
@@ -231,6 +240,20 @@ for scob in sc_obs:
         )
     # ad_ob = calc_velo(scob, mode = "stochastic")
     save_plots(ob = scob, method = "sc", file_prefix = "output/figures/rna_velocity/stochastic/", ad_prefix = "loom_output/tumor_anndata/sc/")
+
+
+for snob in sn_obs:
+    if not os.path.exists("loom_output/tumor_anndata/sn/" + snob + ".ad"):
+        python_functions.write_obs(
+            ob = snob,
+            method = "sn",
+            mode = "stochastic",
+            out_prefix = "loom_output/tumor_anndata/",
+            metadata_dir = "loom_output/tumor_metadata/sn"
+        )
+    # ad_ob = calc_velo(scob, mode = "stochastic")
+    python_functions.save_plots(ob = scob, method = "sn", file_prefix = "output/figures/rna_velocity/", ad_prefix = "loom_output/tumor_anndata/sn/")
+
 
 ```
 
