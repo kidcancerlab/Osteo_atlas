@@ -1276,6 +1276,55 @@ run_rctd <- function(sp_ob, ref) {
     return(rctd_out)
 }
 
+save_deconv_plots <- function(ob, ob_name, rctd_res, fig_dir) {
+    norm_weights <- spacexr::normalize_weights(rctd_res@results$weights)
+    ob <- AddMetaData(ob, norm_weights)
+    cell_types <- unique(rctd_res@reference@cell_types)
+    # rename Stressed to COMA if COMA not present
+    if ("COMA" %notin% colnames(ob@meta.data)) {
+        ob$COMA <- ob$Stressed
+    }
+    ob$Tumor_Cumulative <-
+        ob$Basal_Progenitor +
+        ob$Fibrogenic +
+        ob$Interactive +
+        ob$MP_Progenitor +
+        ob$Proliferative +
+        ob$COMA
+    
+    # make figure of all scores
+    pdf(paste0(fig_dir, "/", ob_name, "_rctd_scores.pdf"), height = 4, width = 4)
+    print(SpatialDimPlot(ob, pt.size.factor = 0) + NoLegend())
+    print(
+        SpatialFeaturePlot(
+            ob,
+            features = "Tumor_Cumulative",
+            pt.size.factor = size.factors[[ob_name]],
+            image.alpha = 0
+        )
+    )
+    for (ct in cell_types) {
+        print(SpatialFeaturePlot(
+            ob,
+            features = ct,
+            pt.size.factor = size.factors[[ob_name]],
+            image.alpha = 0
+        )
+    )
+    }
+    dev.off()
+    pdf(paste0(fig_dir, "/", ob_name, "_heatmap.pdf"))
+    pheatmap::pheatmap(
+        cor(norm_weights, method = "spearman"),
+        low = "blue",
+        mid = "white",
+        high = "red",
+        midpoint = 0,
+        angle_col = 45,
+        fontsize = 16
+    )
+    dev.off()
+}
 ```
 
 ## Negate %in%
