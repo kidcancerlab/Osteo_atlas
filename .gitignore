@@ -83,6 +83,7 @@ DoubletFinder/Counts
 DoubletFinder/output
 DoubletFinder/slurm
 DoubletFinder/all_demuxafy_results.qs
+DoubletFinder/pdx_clinical_chimera
 
 figures
 demuxafy_figs
