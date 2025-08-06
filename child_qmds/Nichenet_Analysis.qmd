@@ -1,0 +1,314 @@
+## NicheNet Analysis
+this analysis is to infer the cell to cell communication across tumor and host celltypes.
+It might be great idea to put host celltypes as well as the tumor subpopulations.
+Maybe different tumor subpopulations have different communication patterns with the host cells.
+This might even help elucidate the tumor immuneregulatory features subpopulations.
+
+```{r nichenetr_analysis1, echo=FALSE}
+#' Filter Genes by Percentage Expression
+#'
+#' This function filters genes in a Seurat object based on the percentage of
+#' cells expressing each gene.
+#'
+#' @param sobj A Seurat object containing single-cell RNA-seq data.
+#' @param pct_expr A numeric value indicating the minimum percentage of cells
+#'   that must express a gene for it to be retained.
+#' @return A Seurat object with genes filtered based on the specified percentage
+#'   expression.
+#'
+#' @keywords internal
+filter_genes_by_pct_expr <- function(sobj,
+                                     min_pct_expr = 1) {
+    count_matrix <-
+        Seurat::GetAssayData(sobj, layer = "counts")
+
+    count_matrix_bool <- count_matrix > 0
+
+    keep_genes <-
+        Matrix::rowSums(count_matrix_bool) /
+            ncol(count_matrix) * 100 > min_pct_expr
+
+    sobj <- sobj[keep_genes, ]
+
+    return(sobj)
+}
+
+
+#' Get Upregulated Differentially Expressed Genes
+#'
+#' Identifies significantly upregulated genes between groups within a
+#' specified cell type.
+#'
+#' @param sobj A Seurat object containing single-cell data.
+#' @param receiver_cell A character string indicating the receiver cell type.
+#'   Must match one of the labels in cell_type_column.
+#' @param cell_type_column A character string specifying the cell type column
+#'   in metadata.
+#' @param cell_state_column A character string specifying the cell state column
+#'   in metadata. De will be performed between cell states.
+#' @param base_state_label A character string specifying the base state label.
+#' @param other_state_label A character string specifying the other state label.
+#' @param min_n_cells Numeric specifying the minimum number of cells required
+#'   per cell type for DE to be performed.
+#' @param min_pct_expr Numeric specifying the minimum percentage of cells that
+#'   must express a gene for the gene to be retained.
+#'
+#' @return A character vector of upregulated gene names.
+get_genes_de_up <- function(sobj,
+                            receiver_cell,
+                            cell_type_column,
+                            cell_state_column,
+                            base_state_label = "base state",
+                            other_state_label = "metastasis",
+                            min_n_cells = 20,
+                            min_pct_expr = 1) {
+    sub_sobj <- sobj[, grep(receiver_cell, sobj@meta.data[[cell_type_column]])]
+
+    # Check if receiver_cell has enough cells in both cell states
+    cell_state_count <- table(sub_sobj@meta.data[[cell_state_column]])
+
+    if (min(cell_state_count) < min_n_cells || length(cell_state_count) < 2) {
+        message(paste0(
+            "Not enough cells in a cell state for ",
+            receiver_cell,
+            ".\n",
+            paste(names(cell_state_count), cell_state_count, collapse = ", ")
+        ))
+        return(c())
+    }
+
+    up_gene_names <-
+        sub_sobj |>
+        filter_genes_by_pct_expr(min_pct_expr = min_pct_expr) |>
+        Seurat::FindMarkers(
+            group.by = cell_state_column,
+            ident.1 = base_state_label,
+            ident.2 = other_state_label,
+            verbose = FALSE
+        ) |>
+        # Get significantly upregulated genes in ident_1
+        dplyr::filter(get("p_val_adj") < 0.05 & get("avg_log2FC") > 0) |>
+        tibble::rownames_to_column("gene") |>
+        dplyr::pull(dplyr::all_of("gene"))
+
+    return(up_gene_names)
+}
+
+
+#' Run Nichenet on All Cell Types
+#'
+#' Executes Nichenet analysis across all specified cell types, using each cell
+#' type as a receiver in turn.
+#'
+#' @param sobj A Seurat object containing single-cell data.
+#' @param cell_type_column A character string specifying the cell type
+#'   column in metadata.
+#' @param cell_state_column A character string specifying the cell state
+#'   column in metadata.
+#' @param base_state_label A character string specifying the base state
+#'   label in the cell state column.
+#' @param other_state_label A character string specifying the other state
+#'   label in the cell state column.
+#' @param output_base A character string for the base name of the output
+#'   files.
+#' @param figure_folder A character string specifying the folder to save
+#'   figures.
+#' @param min_n_cells Numeric specifying the minimum number of cells per cell
+#'   type for that cell type to be included.
+#' @param n_downstream_genes Numeric specifying the number of downstream genes.
+#'   This is passed to the rrrSingleCellUtils::find_ligands() n_best argument.
+#' @param downstream_genes_from_nn Logical indicating if downstream genes
+#'   are from Nichenetr output (TRUE) or from the Nichenetr base model (FALSE).
+#'
+#' @return A list containing Nichenet outputs for each receiver cell type.
+#'
+#' @export
+run_nichenetr_on_all_celltypes <- function(sobj,
+                                           cell_type_column,
+                                           cell_state_column,
+                                           base_state_label = "base state",
+                                           other_state_label = "metastasis",
+                                           output_base = "nichenetr_out",
+                                           figure_folder = ".",
+                                           min_n_cells = 20,
+                                           n_downstream_genes = 50,
+                                           downstream_genes_from_nn = TRUE) {
+    cell_types <-
+        sobj@meta.data[[cell_type_column]] |>
+        unique()
+
+    nichenet_out <-
+        parallel::mclapply(
+            cell_types,
+            mc.cores = parallelly::availableCores(),
+            mc.preschedule = FALSE,
+            function(receiver_cell) {
+                keep_cell_types <-
+                    table(sobj@meta.data[[cell_type_column]]) |>
+                    as.data.frame() |>
+                    dplyr::filter(Freq >= min_n_cells) |>
+                    dplyr::pull(Var1) |>
+                    as.character()
+
+                if (!receiver_cell %in% keep_cell_types) {
+                    return(paste0("Not enough ", receiver_cell, " cells"))
+                }
+
+                met_upregulated_genes <-
+                    get_genes_de_up(
+                        sobj = sobj,
+                        receiver_cell = receiver_cell,
+                        cell_type_column = cell_type_column,
+                        cell_state_column = cell_state_column,
+                        base_state_label = base_state_label,
+                        other_state_label = other_state_label,
+                        min_n_cells = 20,
+                        min_pct_expr = 1
+                    )
+
+                if (length(met_upregulated_genes) < 10) {
+                    return("Not enough DE genes")
+                }
+
+                Seurat::Idents(sobj) <- cell_type_column
+
+                nichenet_out_one_celltype <-
+                    try(
+                        rrrSingleCellUtils::find_ligands(
+                            sobj,
+                            stringency = "strict",
+                            gset = met_upregulated_genes,
+                            receiver = receiver_cell,
+                            senders = keep_cell_types[!keep_cell_types %in% receiver_cell],
+                            gset_spec = "human",
+                            rec_spec = "human",
+                            send_spec = "human",
+                            n_best = n_downstream_genes,
+                            show_plots = FALSE
+                        ),
+                        silent = TRUE
+                    )
+                if (inherits(nichenet_out_one_celltype, "try-error")) {
+                    # Return a text string if an error occurred
+                    return("No ligand receptor interactions found")
+                }
+
+             return(nichenet_out_one_celltype)
+            }) |>
+            confirm_mclapply_worked()
+
+    names(nichenet_out) <- cell_types
+
+    nichenet_out <-
+        purrr::keep(nichenet_out, ~ inherits(.x, "list"))
+
+    return(nichenet_out)
+}
+
+
+```
+
+
+Primary tumors:
+goal: comapre the cell to cell interractions betwwen the tumor and the host cells.
+We could use all the tumor subpopulations and host celltypes as a receiver, one at 
+a time and all the other remaining senders.
+
+```{r nichenetr_analysis2, echo=FALSE}
+
+sobj <-
+    qs::qread("output/seurat_objects/Normal_Vs_TumorAsso/patient_mets/Pmets_tumorasso_vs_normal.qs")
+
+dimplot_better(sobj,
+              group_by = "tissue_type") +
+        NoLegend()
+dimplot_better(sobj,
+              group_by = "Comparison_col") +
+        NoLegend()
+
+nichenet_out <-
+    run_nichenetr_on_all_celltypes(
+        sobj,
+        cell_type_column = "Comparison_col",
+        cell_state_column = "tissue_type",
+        base_state_label = "Normal_lung",
+        other_state_label = "Tumor_associated",
+        #figure_folder = "output/figures/nichenetr",
+        min_n_cells = 20,
+        n_downstream_genes = 50
+    )
+
+
+
+plot_complex_heatmap(nichenet_out$NK_cells)
+
+# Define the cutoffs
+cutoff_for_interraction_score <- 0.1
+cutoff_for_sender_percentage <- 10
+cutoff_for_sender_expression_of_ligand <- 0.1
+
+# Extract the interaction scores
+interaction_scores <- nichenet_out$Fibroblasts$ligand_activities
+
+# Filter the interaction scores based on the cutoffs
+filtered_scores <- interaction_scores %>%
+    dplyr::filter(interaction_score > cutoff_for_interraction_score,
+                  sender_percentage > cutoff_for_sender_percentage,
+                  sender_expression_of_ligand > cutoff_for_sender_expression_of_ligand)
+
+# Create a matrix of interaction scores
+interaction_matrix <- filtered_scores %>%
+    dplyr::select(sender, receiver, interaction_score) %>%
+    tidyr::spread(key = receiver, value = interaction_score, fill = 0)
+
+# Plot the heatmap
+ComplexHeatmap::Heatmap(as.matrix(interaction_matrix),
+                        name = "Interaction Score",
+                        col = colorRamp2(c(0, max(interaction_matrix)), c("white", "red")),
+                        cluster_rows = TRUE,
+                        cluster_columns = TRUE,
+                        width = unit(7, "cm"),
+                        height = unit(1, "cm"))
+
+
+
+
+
+# Define the cutoffs
+cutoff_for_interraction_score <- 0.1
+cutoff_for_sender_percentage <- 10
+cutoff_for_sender_expression_of_ligand <- 0.1
+
+# Extract the interaction scores
+interaction_scores <- nichenet_out$Fibroblasts$interaction_scores
+
+# Filter the interaction scores based on the cutoffs
+filtered_scores <- interaction_scores %>%
+    dplyr::filter(interaction_score > cutoff_for_interraction_score,
+                                sender_percentage > cutoff_for_sender_percentage,
+                                sender_expression_of_ligand > cutoff_for_sender_expression_of_ligand)
+
+# Create a matrix of interaction scores
+interaction_matrix <- filtered_scores %>%
+    dplyr::select(sender, receiver, interaction_score) %>%
+    tidyr::spread(key = receiver, value = interaction_score, fill = 0)
+
+# Plot the heatmap
+ComplexHeatmap::Heatmap(as.matrix(interaction_matrix),
+                                                name = "Interaction Score",
+                                                col = colorRamp2(c(0, max(interaction_matrix)), c("white", "red")),
+                                                cluster_rows = TRUE,
+                                                cluster_columns = TRUE)
+
+count how many sende cells have significant interactions scores with the receiver cells.
+From that we can make a square matrix
+
+cutoff_for_interraction_score = 0.1
+cutoff_for_sender_percentage = 10
+cutoff_for_sender_expression_of_ligand = 0.1
+
+look into the plot_complex_heatmap function to see how to plot the heatmap and 
+might be able to combine into a single combined heatmap for the plot we are 
+interested in. 
+
+```

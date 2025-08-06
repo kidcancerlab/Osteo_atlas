@@ -1,0 +1,108 @@
+---
+title: "Untitled"
+format: html
+---
+## Results 1 - stromal_panel_plot
+```{r result1}
+# patchwork
+stromal_combined <-
+    patchwork::wrap_plots(
+    get_plot("stromal_panel_plot"),
+    get_plot("stromal_celltype_heatmap"),
+    heights = c(4, 1),
+    ncol = 1
+)
+
+ggsave(filename = "output/figures/Final_Annotations/stromal_panel_heatmap_plot.png",
+        plot = stromal_combined,
+        width = 14,
+        height = 25,
+        limitsize = FALSE,
+        bg = "white")
+
+# gridExtra
+gridExtra::grid.arrange(
+    grobs = list(
+        get_plot("mpg_disp"),
+        get_plot("mpg_qsec") +
+            theme(legend.position = "none")
+    ),
+    layout_matrix = matrix(c(1,1,1,2), ncol = 1),
+    ncol = 1
+)
+
+```
+
+## Results 2 - figure_cancer_panel
+```{r result2}
+patchwork::wrap_plots(
+    get_plot("tumor_panel_plot"),
+    get_plot("tumor_celltype_heatmap"),
+    heights = c(3, 1),
+    ncol = 1
+)
+
+```
+
+
+# ryans grant
+```{r result3}
+tumor_sub <- c("Tumor_Progenitor", "Tumor_Proliferative", "Tumor_Synthetic")
+patient_prim_cancer <-
+    qs::qread("output_5_29_2025/seurat_objects/final_tumor_vs_stroma/patient_prim_cancer_cells.qs") %>%
+    subset(Ann_Level3 %in% tumor_sub)
+
+patient_mets_cancer <-
+    qs::qread("output_5_29_2025/seurat_objects/final_tumor_vs_stroma/patient_mets_cancer_cells.qs") %>%
+    subset(Ann_Level3 %in% tumor_sub)
+
+comb_sobj <-
+    merge(
+        patient_prim_cancer,
+        patient_mets_cancer,
+        add.cell.ids = c("Primary", "Metastatic"),
+        project = "Combined_Patient_Cells"
+    ) %>%
+    JoinLayers() %>%
+    process_seurat()
+
+Idents(comb_sobj) <- "unique"
+markers <- 
+    FindMarkers(object = comb_sobj,
+                ident.1 = "patient_mets",
+                ident.2 = "patient_prim")
+
+# Load the
+ligand_target_matrix <-
+    readRDS("input/nichenet_analysis/ligand_target_matrix_nsga2r_final.rds")
+
+# load the ligand-receptor network
+lr_network <-
+    readRDS("input/nichenet_analysis/lr_network_human_21122021.rds")
+
+lr_network_strict <-
+    lr_network %>%
+    dplyr::filter(
+        database != "ppi_prediction_go" &
+            database != "ppi_prediction"
+    )
+lr_network_strict[1:10, ]
+
+# load the weighted networks
+weighted_networks <-
+    readRDS("input/nichenet_analysis/weighted_networks_nsga2r_final.rds")
+
+weighted_networks_lr <-
+    weighted_networks$lr_sig %>%
+    inner_join(lr_network_strict %>% distinct(from, to),
+        by = c("from", "to")
+    )
+weighted_networks_lr[1:10, ]
+
+
+
+
+
+
+
+```

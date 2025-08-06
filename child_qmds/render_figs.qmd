@@ -9,7 +9,7 @@ tumor cells are clustering before running harmony, the level of batch effects an
 the level of immune cell infiltration in the tumor samples.
 
 ```{r, before_harmony_figure_panels}
-#| cache.vars: c('preharmony_dimplot_list', 'featureplot1_tumor_list', 'featureplot2_immune_list')
+#| cache.vars: [preharmony_dimplot_list, featureplot1_tumor_list, featureplot2_immune_list]
 
 sample_name_list <- c("patient_prim",
                       "patient_mets",
@@ -75,7 +75,7 @@ tumor cells are clustering after running harmony, how well the batch effect
 has been eliminated for visualization and the level of immune cell infiltration
 in the tumor samples.
 ```{r, after_harmony_figure_panels}
-#| cache.vars: c('postharmony_dimplot_list', 'posth_featureplot1_tumor_list', 'posth_eatureplot2_immune_list', 'force_directed_layout_list')
+#| cache.vars: [postharmony_dimplot_list, posth_featureplot1_tumor_list, posth_eatureplot2_immune_list, force_directed_layout_list]
 
 postharmony_dimplot_list <- list()
 force_directed_layout_list <- list()
@@ -141,7 +141,7 @@ the tumor markers and the third plot is the feature plot of the immune markers.
 This gives a general sense of how the tumor and stroma cells are clustering
 in general and whether the splitting was done correctly. 
 ```{r, split_tumor_stroma}
-#| cache.vars: c('all_dimplots_list', 'alltumor_featureplot_list', 'allimmune_featureplot_list', 'force_directed_plots')
+#| cache.vars: [all_dimplots_list, alltumor_featureplot_list, allimmune_featureplot_list, force_directed_plots]
 
 all_dimplots_list <- list()
 force_directed_plots <- list()
@@ -322,7 +322,7 @@ The AUCell markers for each cell type in each group was generated to show the
 activity of the each genes in each cells to distinguish the celltypes by gene
 activity inference. The markers were obtained from PanglaoDB_markers_27_Mar_2020.
 ```{r, celltype_aucell_plots}
-#| cache.vars: c('stroma_celltype_aucell_plots', 'levels_of_annotations')
+#| cache.vars: [stroma_celltype_aucell_plots, levels_of_annotations]
 all_groups <-
     c("patient_prim_normal_cells",
       "patient_mets_normal_cells",
@@ -371,7 +371,7 @@ to show the correlation between the different cell types and the AUCell scores f
 each cell type. The AUCell scores are a measure of the activity of the each genes
 in each cells to distinguish the celltypes by gene activity inference. 
 ```{r, reclustering_normals_plots}
-#| cache.vars:  'Aucell_plot_list'
+#| cache.vars:  Aucell_plot_list
 all_groups <-
     c("patient_prim_normal_cells",
       "patient_mets_normal_cells",
@@ -514,7 +514,7 @@ cancer cells in each group. The regulon analysis was performed for the following
 groups: patient primary, patient mets, mm primary and mm mets. The regulon analysis
 was performed using the motif annotations for human and mouse.
 ```{r, regulon_analysis_plots}
-#| cache.vars: c('Regulon_heatmap_list', 'binarized_heatmap_list')
+#| cache.vars: [Regulon_heatmap_list, binarized_heatmap_list]
 all_groups <-
     c("patient_prim_cancer_cells",
       "patient_mets_cancer_cells",

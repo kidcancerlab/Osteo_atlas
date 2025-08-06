@@ -1,0 +1,1136 @@
+---
+title: "Main Analysis File"
+author: "Matthew Gust"
+format:
+    html:
+        toc: true
+        toc_float: true
+        toc_depth: 5
+        number_sections: false
+        code-fold: true
+        code-link: true
+        df-print: kable
+        embed-resources: true
+        self-contained: true
+execute:
+    cache: true
+knitr:
+    opts_chunk:
+        cache.lazy: false
+        warning: false
+        comment: false
+---
+
+# load in libraries
+```{r setup}
+library(rrrSingleCellUtils)
+library(Seurat)
+library(ggrepel)
+library(tidyverse)
+library(stringr)
+library(harmony)
+library(cowplot)
+library(clustree)
+library(data.table)
+library(hdf5r)
+library(Rmagic)
+library(scATOMIC)
+library(SCEVAN)
+library(knitr)
+```
+
+# load in functions as a child document
+```{r, child='function_atlas.Rmd'}
+```
+
+# setup
+```{r setup2, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE,
+                      cache.lazy = FALSE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+## Read metadata
+This metadata is has information on sample and all the details on methods used,
+source, organism, unique identifier per group, QC, and other relevant information
+```{r, cache.vars="all_samples_csv"}
+all_samples_csv <- 
+    read_tsv("allsample_details.txt")
+
+all_samples_csv$sp_pattern <-
+    str_replace_all(all_samples_csv$sp_pattern, "nothing", "")
+
+# #for the sake of presentation, I will just have patient data
+# all_samples_csv <- filter(all_samples_csv,
+#                           unique == "patient_prim" | unique =="patient_mets")
+```
+
+# Count before the QC
+Count the number of cells per sample before the QC
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
+single_sobjs <- 
+    list.files(path = "output/seurat_objects/sobj_preprocess/",
+               full.names = FALSE)
+counts <- tibble()
+for (item in single_sobjs){
+    sobj <- qs::qread(str_c("output/seurat_objects/sobj_preprocess/",
+                            item))
+    sobj$ncount_median_before <- median(sobj$nCount_RNA)
+    unique <- sobj@meta.data$unique %>%
+        head(n=1)
+    Hmeta_data <- sobj@meta.data %>%
+        as.data.table %>%
+        group_by(sample_name, unique) %>%
+        summarize(ncount_median_before = median(nCount_RNA),
+                  N_cells_before = n(),
+                  .groups = "drop")
+
+    counts <- Hmeta_data %>%
+        select("sample_name", "unique", "ncount_median_before", "N_cells_before") %>%
+        rbind(counts) %>% 
+        arrange(unique)
+}
+```
+
+# Count post QC
+some of the samples are discarded as the ncountmin was set 500 and number of 
+cells limit was set to 200 cells and above per sample. The upper cutoff was set 
+as 5000 max cells per sample for similar dataset representation 
+```{r, fig.width = 10, fig.height = 10, fig.align = "center"}
+counts_afterQC <- tibble()
+
+for (group in unique(all_samples_csv$unique)) {
+    object <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                              group,
+                              ".qs"))
+    #DimPlot(object)
+    #extract meta data
+    Hmeta_data <- object@meta.data %>%
+        as.data.table %>%
+        group_by(sample_name, unique) %>% 
+        summarise(ncount_median_after = median(nCount_RNA),
+                  N_cells_after = n(),
+                  .groups = "drop")
+
+    counts_afterQC <- Hmeta_data %>% 
+        select("N_cells_after", "sample_name", "unique", "ncount_median_after") %>%
+        rbind(counts_afterQC) %>%
+        arrange(unique)
+}
+
+combined_table <- 
+    dplyr::full_join(counts, counts_afterQC, by = c("sample_name", "unique")) %>%
+    select("sample_name", "unique", "ncount_median_before", "ncount_median_after", "N_cells_before", "N_cells_after")
+
+DT::datatable(arrange(combined_table, unique, desc(N_cells_before)))
+```
+
+# Data Integration DimPlots {.tabset}
+This is the dimplot of the integrated data. The data is integrated using harmony.
+The plots will be in order of before and after integration for each group in
+tabset. The plots are grouped by sample name, method, and data source
+```{r, fig.width = 10, fig.height = 10, fig.align = "center", echo = FALSE}
+before_integration <- list()
+after_integration <- list()
+
+for (group in unique(all_samples_csv$unique)){
+    before_harmo_obj <- qs::qread(str_c("output/seurat_objects/comb_sobjs/",
+                                        group,
+                                        ".qs"))
+    before_integration[[group]] <- plot_my_stuff(before_harmo_obj, 
+                                          what = c("sample_name", "method", "data_source"))
+
+    harmo_obj <- qs::qread(str_c("output/seurat_objects/harmony_sobjs/",
+                                group,
+                                ".qs"))
+    #optimize resolution, silhouette score does not work for large dataset
+    after_integration[[group]] <- plot_my_stuff(harmo_obj,
+                                          what = c("sample_name", "method", "data_source"))
+}
+
+#plotting
+qreport::maketabs(before_integration)
+qreport::maketabs(after_integration)
+
+```
+
+
+```{r}
+
+clotting_features <-
+    c("F2", "F3", "F7", "F10", "F12", "F2R", "F2RL1", "TFPI", "THBD", "MMP2", "ITGB1", "ITGB2", "IL8", "CXCL1")
+ 
+for (group in c("patient_prim", "patient_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                        group,
+                        ".qs"))
+    dimplot2 <-
+        dimplot_better(object,
+                    group_by = "new_annot_clust") +
+            NoLegend()
+    dimplot3 <-
+        dimplot_better(object,
+                    group_by = "celltype_tumor_call") +
+            NoLegend()
+ 
+  FeaturePlot(object,
+                features = clotting_features,
+                ncol = 3)
+ 
+    combined_plots <-
+        patchwork::wrap_plots(dimplot2,
+                            dimplot3)
+   
+}
+ 
+
+seurat <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets_normal_cells.qs")
+
+samples <- levels(seurat@meta.data$sample)
+clusters <- levels(seurat@meta.data$seurat_clusters)
+color_assignments <- setNames(
+  c(custom_colors$discrete[1:length(samples)], custom_colors$discrete[1:length(clusters)]),
+  c(samples,clusters)
+)
+data <- seurat@meta.data %>%
+  dplyr::group_by(sample_name ,seurat_clusters) %>%
+  tally() %>%
+  ungroup() %>%
+  ggforce::gather_set_data(1:2) %>%
+  dplyr::mutate(
+    x = factor(x, levels = unique(x)),
+    y = factor(y, levels = unique(y))
+  )
+
+## percent of cell expressing the gene expression
+## of the cells that expree the gene what is the average expresion
+
+data_labels <- tibble(
+    group = c(
+      rep('sample', length(samples)),
+      rep('seurat_clusters', length(clusters))
+    )
+ ) %>%
+  mutate(
+    hjust = ifelse(group == 'sample', 1, 0),
+    nudge_x = ifelse(group == 'sample', -0.1, 0.1)
+  )
+
+ggplot(data, aes(x, id = id, split = y, value = n)) +
+  ggforce::geom_parallel_sets(aes(fill = seurat_clusters), alpha = 0.75, axis.width = 0.15) +
+  ggforce::geom_parallel_sets_axes(aes(fill = y), color = 'black', axis.width = 0.1) +
+  geom_text(
+    aes(y = n, split = y), stat = 'parallel_sets_axes', fontface = 'bold',
+    hjust = data_labels$hjust, nudge_x = data_labels$nudge_x
+  ) +
+  scale_x_discrete(labels = c('Sample','Cluster')) +
+  scale_fill_manual(values = color_assignments) +
+  theme_bw() +
+  theme(
+    legend.position = 'none',
+    axis.title = element_blank(),
+    axis.text.x = element_text(face = 'bold', colour = 'black', size = 15),
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank()
+  )
+
+
+metadata <- obj1@meta.data
+
+# Example where you have 'seurat_clusters' and a 'cell_type' column
+sankey_data <- metadata %>%
+  select(cluster = seurat_clusters, cell_type = Ann_Level2) %>%
+  group_by(cluster, cell_type) %>%
+  summarise(count = n()) %>%
+  ungroup()
+
+ggplot(sankey_data,
+       aes(axis1 = cluster, axis2 = cell_type, y = count)) +
+  geom_alluvium(aes(fill = cluster)) +
+  geom_stratum(aes(fill = cluster), axis=1) +
+  geom_stratum(aes(fill = cell_type), axis = 2) +
+  geom_text(stat = "stratum", aes(label = after_stat(stratum))) +
+  scale_x_discrete(limits = c("Cluster", "Cell Type")) +
+  labs(title = "Sankey Plot of Clusters to Cell Types",
+       x = "Cluster/Cell Type",
+       y = "Number of Cells") +
+  theme_minimal()
+
+
+sankey_plot(obj1,
+            group_by = c("Ann_Level3", "Ann_Level2", "Ann_Level1"),
+            ncol = 3)
+
+dittoBarPlot(obj1, 
+             var = "Ann_Level2", 
+             group.by = "sample_name") +
+    scale_fill_manual(values = c(plot_cols, sample(rainbow(1000))))
+
+```
+
+
+## CHarles plots for paper
+```{r}
+# Extract expression data
+#CXhange the TFPI-1 to TFPI_1 to avoid issues with the hyphen if it exists
+harmony_sobj1 <- harmony_sobj
+
+DotPlot(harmony_sobj1,
+        features = c("F2", "F3", "F7", "F10", "F12", "F2R", "F2RL1", "TFPI", "THBD", "MMP2", "ITGB1", "ITGB2", "CXCL1", "TFPI-1", "TFPI-2", "SRSF1", "SRSF2", "SRSF5", "SRSF6"),
+        group.by = c("unique"),
+        cols = c("lightgrey","darkred"),
+        scale = FALSE) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+## percent of cell expressing the gene expression
+
+
+## of the cells that expree the gene what is the average expresion
+
+# Extract expression data
+df <- FetchData(harmony_sobj, vars = c("unique", "F3"))
+
+# Rename columns
+colnames(df) <- c("unique", "Expression")
+
+real_genes <- c("F3", "F10", "F2RL1", "F2R", "F2R", "FGA", "FGB")
+
+split1 <-
+    DotPlot(harmony_sobj,
+    features = c("F3"),
+    group.by = c("unique"),
+    split.by = "method",
+    scale = FALSE) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_y_discrete(labels = function(x) gsub("_", " ", x))
+
+df <- FetchData(harmony_sobj, vars = c("unique", "F2", "F3", "F7", "F10", "F12", "F2R", "F2RL1", "TFPI", "THBD", "MMP2", "ITGB1", "ITGB2", "CXCL1", "TFPI-1", "TFPI-2", "SRSF1", "SRSF2", "SRSF5", "SRSF6"))
+
+# Rename columns
+colnames(df) <- c("unique", "Expression")
+
+df <- df %>%
+    pivot_longer(cols = -unique, names_to = "gene", values_to = "Expression")
+
+
+# Generate the boxplot
+ggplot(df, aes(x = unique, y = log2(Expression), fill = unique)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.6) +  # Boxplot without outliers
+    geom_jitter(width = 0.2, size = 0, alpha = 0.5) +  # Scatter points for distribution
+    labs(title = paste("Expression by group"),
+             x = "Group", y = "log 2 Expression Level") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    facet_wrap(~ gene, scales = "free_y")
+
+
+
+ggplot(df, aes(x = unique, y = log2(Expression), fill = unique)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6) +  # Boxplot without outliers
+  geom_jitter(width = 0.2, size = 0, alpha = 0.5) +  # Scatter points for distribution
+  labs(title = paste("Expression by group"),
+       x = "Group", y = "log 2 Expression Level") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+
+
+
+real_genes <- c("F3", "F10", "F2RL1", "F2R", "F2R", "FGA", "FGB")
+
+
+patient_prim <- 
+        subset(harmony_sobj,
+                unique == "patient_prim")
+
+num_cells <- ncol(patient_prim)
+num_cells_expressed1 <-
+        rowSums(GetAssayData(patient_prim,
+                            layer = "counts") > 0) %>%
+        as.data.frame() %>%
+        rownames_to_column("gene") %>% 
+        dplyr::rename(value = ".") %>%
+        arrange(desc(value)) %>%
+        mutate(percent = value / num_cells) %>%
+        select(gene, percent) %>%
+        filter(gene == "F10") %>%
+        pull(percent)
+
+
+cells_expressed <-
+    GetAssayData(patient_prim,
+                layer = "counts")["F3", ] > 0
+
+
+patient_mets <- 
+        subset(harmony_sobj,
+                unique == "patient_mets")
+
+num_cells <- ncol(patient_mets)
+num_cells_expressed <-
+        rowSums(GetAssayData(patient_mets,
+                            layer = "counts") > 0) %>%
+        as.data.frame() %>%
+        rownames_to_column("gene") %>% 
+        dplyr::rename(value = ".") %>%
+        arrange(desc(value)) %>%
+        mutate(percent = value / num_cells) %>%
+        select(gene, percent) %>%
+        filter(gene == "F3") %>%
+        pull(percent)
+
+
+
+
+# here harmony_sobj is the object with the integrated data that has both patient_prim and patient_mets
+lists <- list()
+for (groups in unique(harmony_sobj$unique)) {
+    subset_F3 <- 
+        subset(harmony_sobj,
+                unique == groups)
+    for (methods in unique(harmony_sobj$method)) {
+        subset_F3_method <- 
+            subset(subset_F3,
+                    method == methods)
+
+        num_cells <- ncol(subset_F3_method)
+        num_cells_expressed <-
+            rowSums(GetAssayData(subset_F3_method,
+                                layer = "counts") > 0) %>%
+            as.data.frame() %>%
+            rownames_to_column("gene") %>% 
+            dplyr::rename(value = ".") %>%
+            arrange(desc(value)) %>%
+            mutate(percent = value / num_cells) %>%
+            select(gene, percent) %>%
+            filter(gene == "F10") %>%
+            pull(percent)
+     lists[[groups]][[methods]] <- round(num_cells_expressed *100)
+    }
+}
+
+lists_df <- do.call(rbind, lapply(names(lists), function(group) {
+    do.call(rbind, lapply(names(lists[[group]]), function(method) {
+        data.frame(Group = group, Method = method, Percent = lists[[group]][[method]])
+    }))
+}))
+
+lists_df
+
+# subset the cells that express the F3 gene
+subset_F3_ob <-
+    subset(harmony_sobj,
+           subset = F10 > 0,
+           slot = "counts")
+
+VlnPlot(subset_F3_ob,
+    features = c("F10"),
+    group.by = c("unique"),
+    pt.size = 0.01,
+    split.by = "method",
+    raster =F) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_y_continuous(name = "Level of Expression") +
+    scale_x_discrete(labels = function(x) gsub("_", " ", x), limits = c("patient_prim", "patient_mets"))
+
+DotPlot(harmony_sobj,
+    features = c("F3"),
+    group.by = "unique",
+    split.by = "method",
+    scale = FALSE) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_y_discrete(labels = function(x) gsub("_", " ", x))
+
+subset_F3 <- 
+        subset(harmony_sobj,
+                unique == "patient_prim")
+
+VlnPlot(harmony_sobj,
+    features = c("F3"),
+    group.by = c("unique"),
+    pt.size = 0.01,
+    split.by = "method",
+    raster =F) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_y_continuous(name = "Level of Expression") +
+    scale_x_discrete(labels = function(x) gsub("_", " ", x), limits = c("patient_prim", "patient_mets"))
+```
+
+
+### charles pseudobulk by patient
+```{r}
+pseudobulk <-
+    harmony_sobj %>%
+    Seurat::AggregateExpression(
+            group.by = c("unique"),
+            slot = "counts",
+            assay = "RNA")
+
+
+pseudobulk_new <- pseudobulk[[1]]
+
+pseudobulk_new <- pseudobulk_new %>%
+    t() %>%
+    as.data.frame()
+
+entire_matrix <- pseudobulk_new %>%
+                tibble::rownames_to_column(var = "groups")
+
+# Rename TFPI-1 to TFPI_1 to avoid issues with the hyphen if it exists
+entire_matrix$TFPI_1 <- entire_matrix$TFPI-1
+
+runx2_matrix <- entire_matrix[ , c("groups", "F2", "F3", "F7", "F10", "F12", "F2R", "F2RL1", "TFPI", "THBD", "MMP2", "ITGB1", "ITGB2", "CXCL1", "TFPI_1", "TFPI_2", "SRSF1", "SRSF2", "SRSF5", "SRSF6")]
+
+
+runx2_matrix$tumor_type <- runx2_matrix$groups %>%
+    str_split("_") %>%
+    map_chr(2) %>%
+    str_replace_all("-", "_")
+
+# runx2_matrix <- runx2_matrix %>%
+#     mutate(RUNX2 = scale(RUNX2))
+
+# Pivot the data to long format for ggplot
+runx2_matrix_long <- runx2_matrix %>%
+    pivot_longer(cols = c(F2, F3, F7, F10, F12, F2R, F2RL1, TFPI,
+                            THBD, MMP2, ITGB1, ITGB2, CXCL1, TFPI, TFPI_1, TFPI_2, SRSF1, SRSF2, SRSF5, SRSF6),
+                names_to = "gene",
+                values_to = "expression")
+
+# Create the violin plot
+gene_violin_plot <- 
+    ggplot(runx2_matrix_long,
+        aes(x = tumor_type,
+            y = log2(expression),
+            fill = tumor_type)) +
+        geom_violin() +
+        geom_point(position = position_jitter(width = 0.2), size = 2) +
+        theme_minimal() +
+        labs(title = "Violin plot of gene expression in tumor cells",
+             x = "Tumor Type",
+             y = "log2(Expression)") +
+        facet_wrap(~ gene, scales = "free_y")
+
+# Save the plot
+ggsave(filename = "output/extras/charles/tumor_plot.png",
+       plot = gene_violin_plot,
+       width = 20,
+       height = 20,
+       limitsize = FALSE)
+
+gene_dot_plot <- 
+    ggplot(runx2_matrix_long,
+        aes(x = tumor_type,
+            y = gene,
+            size = log2(expression),
+            color = tumor_type)) +
+        geom_point() +
+        theme_minimal() +
+        labs(title = "Dot plot of gene expression in tumor cells",
+                x = "Tumor Type",
+                y = "Gene",
+                size = "log2(Expression)") +
+        scale_size_continuous(range = c(1, 10))
+
+# Save the plot
+ggsave(filename = "output/extras/charles/tumor_dot_plot.png",
+        plot = gene_dot_plot,
+        width = 20,
+        height = 20,
+        limitsize = FALSE)
+
+FeaturePlot(object,
+                features = clotting_features,
+                split.by = "tumor_type",
+                ncol = 3)
+
+dimplot_better(harm_obj2,
+            group_by = c("tumor_type", "new_annot_clust", "data_source", "method", "sample_name"),
+            ncol=3) + NoLegend()
+
+#get assay data
+runx2_subset <-
+    subset(harm_obj2,
+           features = "RUNX2") %>%
+    GetAssayData(layer = "data")
+ 
+
+entire_matrix <- GetAssayData(harm_obj2,
+                              layer="data") %>%
+                t() %>%
+                as.data.frame()
+ 
+entire_matrix <- entire_matrix %>%
+                tibble::rownames_to_column(var = "cell_ids")
+ 
+ 
+runx2_matrix <- entire_matrix[ , c("cell_ids", "RUNX2")]
+ 
+runx2_matrix$tumor_type <- combine_sobj2$tumor_type
+runx2_matrix$method <- combine_sobj2$method
+runx2_matrix$patient <- combine_sobj2$sample_name
+runx2_matrix$data_source <- combine_sobj2$data_source
+ 
+#save as a csv file
+write_tsv(runx2_matrix,
+          "output/metadata/RUNX2_expression.csv")
+ 
+overall <-
+    ggplot(runx2_matrix,
+        aes(x = tumor_type,
+            y = RUNX2,
+            fill = tumor_type)) +
+        geom_violin() +
+        stat_summary(fun.y=median,
+                     geom="point",
+                     size=2,
+                     color="red") +
+        geom_boxplot(width=0.1)
+ 
+patient_based <-
+    ggplot(runx2_matrix,
+        aes(x = patient,
+            y = RUNX2,
+            fill = tumor_type)) +
+        geom_violin()
+ 
+patient_tumor_type_based <-
+    ggplot(runx2_matrix,
+        aes(x = patient,
+            y = RUNX2,
+            fill = interaction(tumor_type, method))) +
+        geom_violin()
+ 
+plots_new <-
+    patchwork::wrap_plots(overall,
+                            patient_based,
+                            patient_tumor_type_based,
+                            ncol = 1)
+ 
+ggsave(filename = "output/figures/RUNX2_expression_ggplot.png",
+        plot = plots_new,
+        width = 14,
+        height = 35,
+        limitsize = FALSE)
+
+
+
+# this is the ridgeplot 
+obj <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs") 
+
+patient <-
+    subset(obj,
+           unique == "patient_prim" | unique == "patient_mets")
+
+dimplot_better(patient,
+            group_by = "Ann_Level3", split_by = "unique") + NoLegend()
+
+charles_data<-
+    FetchData(patient, vars = c("F3", "unique", "method")) %>%
+    as.data.frame() %>%
+    rownames_to_column("cell_ids") 
+    library(ggplot2)
+
+charles_data$unique <- 
+    factor(charles_data$unique, 
+    levels = c("patient_prim", setdiff(unique(charles_data$unique), "patient_prim")))
+
+charles1<-
+    ggplot(charles_data, aes(x = log10(F3+0.0001), fill = method)) +
+    geom_histogram(alpha = 1, bins = 50) +
+    facet_wrap(~unique + method, scales = "free_y") +
+    theme_minimal() +
+    labs(title = "Histogram of F3 split by unique and method",
+                x = "F3 Expression",
+                y = "Cell Count")
+
+ggsave(filename = "output/figures/charles_histogram1_F3.png",
+        plot = charles1,
+        width = 10,
+        height = 10,
+        limitsize = FALSE,
+        bg="white")
+
+charless <-
+    ggplot(charles_data, aes(x = log10(F3+ 0.0001), fill = unique)) +
+    geom_histogram(alpha = 1, bins = 50) +
+    facet_wrap(~ unique, scales = "free_y") +
+    theme_minimal() +
+    labs(title = "Histogram of F3 split by unique",
+         x = "F3 Expression",
+         y = "Cell Count")
+
+ggsave(filename = "output/figures/charles_histogram_F3.png",
+        plot = charless,
+        width = 10,
+        height = 10,
+        limitsize = FALSE,
+        bg="white")
+
+```
+
+
+## Stroma Charlie
+
+```{r}
+
+obj3 <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets_normal_cells.qs")
+
+obj3$tumor_type <- "patient_mets"
+
+obj4 <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim_normal_cells.qs")
+obj4$tumor_type <- "patient_prim"
+
+combine_sobj_stroma <-
+    merge(x = obj3,
+          y = obj4) %>%
+    JoinLayers() %>%
+    process_seurat()
+
+ 
+harm_obj_stroma <- combine_sobj_stroma %>%
+    RunHarmony(group.by.vars = c("data_source", "tumor_type")) %>%
+    process_seurat(reduction = "harmony")
+
+
+# could split vby celltypes for violin plots
+macrophages_sub <-
+    subset(harm_obj_stroma,
+           Ann_Level2 == "Macrophages") %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = c("data_source", "tumor_type")) %>%
+    process_seurat(reduction = "harmony")
+
+Endothelial_sub <-
+    subset(harm_obj_stroma,
+           Ann_Level2 == "Endothelial_cells") %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = c("data_source", "tumor_type")) %>%
+    process_seurat(reduction = "harmony")
+
+dimplot_better(Endothelial_sub,
+            group_by = c("tumor_type", "Ann_Level3"),
+            ncol=2) + NoLegend()
+
+pseudobulk <- macrophages_sub %>%
+        Seurat::AggregateExpression(
+            group.by = c("sample_name", "tumor_type"),
+            slot = "counts",
+            assay = "RNA")
+
+pseudobulk_new <- pseudobulk[[1]]
+
+pseudobulk_new <- pseudobulk_new %>%
+    t() %>%
+    as.data.frame()
+
+entire_matrix <- pseudobulk_new %>%
+                tibble::rownames_to_column(var = "groups")
+
+# Rename TFPI-1 to TFPI_1 to avoid issues with the hyphen if it exists
+entire_matrix$TFPI_1 <- entire_matrix$TFPI-1
+entire_matrix$TFPI_2 <- entire_matrix$TFPI-2
+
+runx2_matrix <- entire_matrix[ , c("groups", "F2", "F3", "F7", "F10", "F12", "F2R", "F2RL1", "TFPI", "THBD", "MMP2", "ITGB1", "ITGB2", "CXCL1", "TFPI_1", "TFPI_2", "SRSF1", "SRSF2", "SRSF5", "SRSF6")]
+
+runx2_matrix$tumor_type <- runx2_matrix$groups %>%
+    str_split("_") %>%
+    map_chr(2) %>%
+    str_replace_all("-", "_")
+
+# runx2_matrix <- runx2_matrix %>%
+#     mutate(RUNX2 = scale(RUNX2))
+
+# Pivot the data to long format for ggplot
+runx2_matrix_long <- runx2_matrix %>%
+    pivot_longer(cols = c(F2, F3, F7, F10, F12, F2R, F2RL1, TFPI,
+                            THBD, MMP2, ITGB1, ITGB2, CXCL1, TFPI, TFPI_1, TFPI_2, SRSF1, SRSF2, SRSF5, SRSF6),
+                names_to = "gene",
+                values_to = "expression")
+
+# Create the violin plot
+gene_violin_plot <- 
+    ggplot(runx2_matrix_long,
+        aes(x = tumor_type,
+            y = log2(expression),
+            fill = tumor_type)) +
+        geom_violin() +
+        geom_point(position = position_jitter(width = 0.2), size = 2) +
+        theme_minimal() +
+        labs(title = "Violin plot of gene expression in stroma Macs cells",
+             x = "Tumor Type",
+             y = "log2(Expression)") +
+        facet_wrap(~ gene, scales = "free_y")
+
+# Save the plot
+ggsave(filename = "output/extras/charles/macs.png",
+       plot = gene_violin_plot,
+       width = 20,
+       height = 20,
+       limitsize = FALSE,
+       bg = "white")
+
+```
+
+## Create some plots to save
+```{r make_some_plots_stash}
+library(stashPlot)
+library(ggplot2)
+#devtools::install_github("kidcancerlab/stashPlot")
+plot_stuff <-
+    ggplot(mtcars, aes(x = mpg, y = wt)) +
+    geom_point()
+
+stash_plot(
+    plot_stuff,
+    plot_name = "mpg_wt"
+)
+
+plot_other_stuff <-
+    ggplot(mtcars, aes(x = mpg, y = qsec)) +
+    geom_point()
+
+stash_plot(
+    plot_other_stuff,
+    plot_name = "mpg_qsec"
+)
+
+plot_more_stuff <-
+    ggplot(mtcars, aes(x = mpg, y = disp)) +
+    geom_point()
+
+stash_plot(
+    plot_more_stuff,
+    plot_name = "mpg_disp"
+)
+
+list_plots()
+get_plot("mpg_wt")
+
+gridExtra::grid.arrange(
+    get_plot("mpg_wt", verbose = FALSE),
+    get_plot("mpg_qsec", verbose = FALSE),
+    get_plot("mpg_disp", verbose = FALSE),
+    ncol = 2
+)
+
+gridExtra::grid.arrange(
+    get_plot("mpg_wt", verbose = FALSE) +
+        labs(
+            title = "Miles per gallon vs weight",
+            x = "Amazing!",
+            y = "Much Science!",
+            caption = "meh"
+            ) +
+        theme_dark(),
+
+    get_plot("mpg_qsec", verbose = FALSE) +
+        theme(axis.text = element_text(size = 20)),
+
+    get_plot("mpg_disp", verbose = FALSE) +
+        theme_bw(),
+
+    ncol = 2
+)
+```
+
+```{r}
+obj0 <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim.qs")
+
+obj1 <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim_cancer_cells.qs")
+
+dimplot_better(obj1,
+            group_by = c("seurat_clusters"))
+
+patient_prim <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim_cancer_cells.qs")
+
+
+
+snv_tumor_call <-
+    dimplot_better(patient_prim, group_by = "final_snv_call") + 
+    ggtitle("Single Nucleotide Variation")
+ggsave(filename = "output/figures/heather/snv_tumor_call.svg",
+    plot = snv_tumor_call,
+    width = 6,
+    height = 6,
+    limitsize = FALSE)
+
+scatomic_tumor_call <-
+    dimplot_better(patient_prim, group_by = "scatomic_tumor_call") +
+    ggtitle("scATOMIC")
+
+ggsave(filename = "output/figures/heather/scatomic_tumor_call.svg",
+    plot = scatomic_tumor_call,
+    width = 6,
+    height = 6,
+    limitsize = FALSE)
+
+scevan_tumor_call <-
+    dimplot_better(patient_prim, group_by = "scevan_tumor_call")  +
+    ggtitle("SCEVAN")
+ggsave(filename = "output/figures/heather/scevan_tumor_call.svg",
+    plot = scevan_tumor_call,
+    width = 6,
+    height = 6,
+    limitsize = FALSE)
+
+using_cellculture_tumorcell_in_singler<-
+    dimplot_better(patient_prim, group_by = "celltype_tumor_call") +
+    ggtitle("Cell Culture")
+ggsave(filename = "output/figures/heather/cell_culture_tumor_call.svg",
+    plot = using_cellculture_tumorcell_in_singler,
+    width = 6,
+    height = 6,
+    limitsize = FALSE)
+
+dimplot_better(obj1,
+            group_by = c("scatomic_tumor_call",
+                            "final_snv_call",
+                            "celltype_tumor_call",
+                            "pan_cancer_cluster",
+                            "scevan_tumor_call",
+                            "CNV_status"),
+            ncol=2) + NoLegend()
+
+obj2 <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim_normal_cells.qs")
+dimplot_better(obj2,
+            group_by = c("scatomic_tumor_call")),
+                            "final_snv_call",
+                            "pan_cancer_cluster",
+                            "scevan_tumor_call",
+                            "CNV_status"),
+            ncol=2) + NoLegend()
+
+dimplot_better(obj1, group_by = "annotations") + NoLegend()
+
+tumor_cells <- 
+    subset(obj1, 
+           scevan_tumor_call == "cancer_cells") %>%
+    process_seurat()
+dimplot_better(tumor_cells, group_by = "sample_name") + NoLegend()
+harm_tumor <-
+    tumor_cells %>%
+    RunHarmony(group.by.vars = patient_prim$group_by,
+                theta = patient_prim$theta,
+                lambda = patient_prim$lambda) %>%
+    process_seurat(reduction = "harmony")
+
+dimplot_better(harm_tumor, group_by = "sample_name") + NoLegend()
+
+
+normal_cells <- 
+    subset(obj2, 
+           scevan_tumor_call != "cancer_cells")
+
+dimplot_better(normal_cells, group_by = "scatomic_tumor_call") + NoLegend()
+
+
+xeno_prim <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/xeno_prim_human.qs")
+
+xeno_mets <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/xeno_mets_human.qs")
+
+dimplot_better(xeno_prim, group_by = "Ann_Level3") + NoLegend()
+dimplot_better(xeno_mets, group_by = "annotations") + NoLegend()
+
+normal_cells  <-
+    subset(obj2,
+           Ann_Level2 == "Macrophages")
+
+hpca <- celldex::HumanPrimaryCellAtlasData()
+huim <- celldex::MonacoImmuneData()
+hpca$Ann_Level2 <- "normal_cells"
+huim$Ann_Level2 <- "immune_cells"
+
+ref <- 
+    SingleR::SingleR(test = as.SingleCellExperiment(obj1),
+                    ref = list(SeuratObject::GetAssayData(xeno_prim),
+                                hpca, huim),
+                    labels = list(xeno_prim$Ann_Level2,
+                                hpca$Ann_Level2,
+                                huim$Ann_Level2),
+                    aggr.ref = TRUE)
+
+obj1$Ann <- ref$labels
+
+dimplot_better(obj1, group_by = "Ann") + NoLegend()
+
+
+
+object <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets_cancer_cells.qs")
+
+no_harm <-
+    process_seurat(object)
+
+combinedplot1 <-
+        dimplot_better(object,
+                        group_by = "scatomic_tumor_call") +
+            NoLegend() +
+            theme(plot.title = element_text(size = 7))
+
+combineplot2 <-
+    dimplot_better(object,
+                    group_by = "scevan_tumor_call") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7))
+combineplot3 <-
+    dimplot_better(object,
+                    group_by = "final_snv_call") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7))
+combineplot4 <-
+    dimplot_better(object,
+                    group_by = "celltype_tumor_call") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7))
+combineplot5 <-
+    dimplot_better(object,
+                    group_by = "Ann_Level3") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7))
+combineplot6 <-
+    dimplot_better(object,
+                    group_by = "sample_name") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7))
+
+combined_plots <- 
+        patchwork::wrap_plots(combinedplot1,
+                            combineplot2,
+                            combineplot3,
+                            combineplot4,
+                            combineplot5,
+                            combineplot6,
+                            ncol = 3,
+                            widths = 21,
+                            heights = 14) +
+            patchwork::plot_annotation(title = "Patient Mets") +
+            theme(plot.title = element_text(size = 10))
+
+ggsave(filename = "output/figures/presentation_biweekly/patient_mets_stroma_id.png",
+        plot = combined_plots,
+        width = 21,
+        height = 14,
+        limitsize = FALSE)
+
+get_plot("patient_prim_plots_with_tumorcell_identification")
+
+
+
+presentations
+
+
+dim1 <-
+    dimplot_better(no_harm,
+                    group_by = "seurat_clusters") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Consolidated Clusters")
+
+dim2 <-
+    dimplot_better(no_harm,
+                    group_by = "sample_name") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Unique Patients")
+
+dim3 <-
+    dimplot_better(no_harm,
+                    group_by = "method") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Unique Methods")
+
+dim4 <-
+    dimplot_better(no_harm,
+                    group_by = "data_source") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Unique Institutions")
+
+com_plots <- 
+    patchwork::wrap_plots(dim1,
+                        dim2,
+                        dim3,
+                        dim4,
+                        ncol = 2,
+                        widths = 14,
+                        heights = 14) +
+        patchwork::plot_annotation(title = "Patient Primary") +
+        theme(plot.title = element_text(size = 10))
+
+stash_plot(
+    com_plots,
+    plot_name = "patient_prim_plots_with_cluster_identification"
+)
+
+
+
+dimple1 <-
+    dimplot_better(object,
+                    group_by = "Ann_Level0") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Annotation Level 0")
+
+dimple2 <-
+    dimplot_better(object,
+                    group_by = "Ann_Level1") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Annotation Level 1")
+
+dimple3 <-
+    dimplot_better(object,
+                    group_by = "Ann_Level2") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Annotation Level 2")
+
+dimple4 <-
+    dimplot_better(object,
+                    group_by = "Ann_Level3") +
+        NoLegend() +
+        theme(plot.title = element_text(size = 7)) +
+        ggtitle("Annotation Level 3")
+
+dimple_comb <-
+    patchwork::wrap_plots(dimple1,
+                        dimple2,
+                        dimple3,
+                        dimple4,
+                        ncol = 4,
+                        widths = 28,
+                        heights = 7) +
+        patchwork::plot_annotation(title = "Patient Primary") +
+        theme(plot.title = element_text(size = 10))
+
+stash_plot(
+    dimple_comb,
+    plot_name = "patient_prim_plots_with_annotation_identification"
+)
+
+
+library(magick)
+
+convert output/figures/for_ryan/yogesh_velo_figs_04_29/patient_mets_cancer_cells_umap_annotations.svg output/figures/for_ryan/yogesh_velo_figs_04_29/patient_mets_cancer_cells_umap_annotations.pdf
+```
+

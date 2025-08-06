@@ -1,6 +1,4 @@
 
-
-
 ## Validation of clustering and harmony
 Testing the clustering and harmony of the data using the heatmap for each 
 sample.
@@ -8,12 +6,19 @@ sample.
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.1)
+            # "patient_prim_cancer_cells",    0.3,
+            # "patient_mets_cancer_cells",    0.35,
+            # "mm_prim_cancer_cells",         0.9,
+            # "mm_mets_cancer_cells",         0.7,
+            "xeno_prim_human_cancer_cells",              0.3,
+            "xeno_mets_human_cancer_cells",              0.4,
+            "dogs_prim_cancer_cells",       0.2,
+            "dogs_mets_cancer_cells",       0.45
+            )
 
 for (i in seq_len(nrow(object_list))) {
     all_sample <- 
-        qs::qread(str_c("output/seurat_objects/tumor_vs_stroma/",
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         object_list$group[i],
                         ".qs")) %>%
         FindClusters(resolution = object_list$res_value[i])
@@ -21,7 +26,7 @@ for (i in seq_len(nrow(object_list))) {
     all_sample <- all_sample %>%
         FindVariableFeatures(nfeatures = 5000) %>%
         ScaleData()
-    
+
     dimplot_main <-
         dimplot_better(all_sample,
                       group_by = c("seurat_clusters")) +
@@ -32,7 +37,7 @@ for (i in seq_len(nrow(object_list))) {
                         group.by = "seurat_clusters")$RNA %>%
         as.data.frame() %>%
         tibble::rownames_to_column(var = "gene")
-    
+
     combined_corr <- tibble::tibble()
 
     for (samples in unique(all_sample$sample_name)) {
@@ -66,12 +71,13 @@ for (i in seq_len(nrow(object_list))) {
                         group_by = c("seurat_clusters")) +
                 ggtitle(samples)
 
-        aver_exp1 <- AverageExpression(one_sample,
-                                    layer = "scale.data",
-                                    group.by = "seurat_clusters")$RNA %>%
-                    as.data.frame() %>%
-                    rename_with(~str_replace(., "g", "clust")) %>%
-                    tibble::rownames_to_column(var = "gene")
+        aver_exp1 <- 
+            AverageExpression(one_sample,
+                            layer = "scale.data",
+                            group.by = "seurat_clusters")$RNA %>%
+            as.data.frame() %>%
+            rename_with(~str_replace(., "g", "clust")) %>%
+            tibble::rownames_to_column(var = "gene")
 
         combine_exp <- 
             left_join(aver_exp1, aver_exp2, by = "gene") %>%
@@ -113,14 +119,18 @@ for (i in seq_len(nrow(object_list))) {
                                 fontsize_col = 8,
                                 breaks = c(-1, -0.5, -0.1, 0.1, 0.5, 1),
                                 silent = TRUE,
-                                color = rev(RColorBrewer::brewer.pal(5, name = "PiYG")))
-        
+                                color = rev(RColorBrewer::brewer.pal(5, name = "RdBu")))
+
         combine_plot <-
             cowplot::plot_grid(dimplot_main,
                                 dimplot_subset,
                                 ggplotify::as.ggplot(correlation),
                                 ncol = 1)
-
+        if (!dir.exists(str_c("output/figures/validation/integration_validation/",
+                    object_list$group[i]))) {
+            dir.create(str_c("output/figures/validation/integration_validation/",
+                            object_list$group[i]), recursive = TRUE)
+        }
         ggsave(str_c("output/figures/validation/integration_validation/",
                     object_list$group[i],
                     "/",
@@ -135,28 +145,51 @@ for (i in seq_len(nrow(object_list))) {
     }
     combined_corr_plot <-
         combined_corr %>%
-        mutate(cluster = str_remove(small_cluster, ".+_"),
-                sample_name = str_remove(small_cluster, "_clust.+")) %>%
-        ggplot(aes(x = cluster,
-                    y = sample_name,
-                    fill = corr_val)) +
-        geom_tile() +
-        geom_text(aes(label = str_c(big_cluster, "=", round(corr_val, 2))),
-                size = 3) +
-        theme(axis.text.x = element_text(angle = 0, size = 20),
-              axis.text.y = element_text(angle = 0, size = 20)) +
-        scale_fill_gradient2(low = "blue", mid = "white", high = "red") +
-        theme_bw()
+            mutate(
+                cluster = str_remove(small_cluster, ".+_"),
+                sample_name = str_remove(small_cluster, "_clust.+"),
+                big_cluster_label = str_c(big_cluster, "\n", "r=", round(corr_val, 2))
+            ) %>%
+            ggplot(aes(x = cluster, y = sample_name, fill = corr_val)) +
+            geom_tile(color = "grey80", linewidth = 0.5) +
+            geom_text(aes(label = big_cluster_label), size = 4, fontface = "bold") +
+            scale_fill_gradient2(
+                low = "blue", mid = "white", high = "red") +
+            labs(x = "Cluster (Subset)",
+                y = "Sample Name",
+                title = "Cluster Correlation Heatmap"
+            ) +
+            theme_minimal(base_size = 16) +
+            theme(
+                axis.text.x = element_text(angle = 45, hjust = 1, size = 14, face = "bold"),
+                axis.text.y = element_text(size = 14, face = "bold"),
+                plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+                legend.position = "right",
+                panel.grid = element_blank())
+    
+    height <- length(unique(all_sample$sample_name)) *0.5 + 2
+    width <- unique(combined_corr$small_cluster) %>%
+            str_remove_all("^.+_") %>%
+            unique() %>% length() *2 + 2
 
     ggsave(str_c("output/figures/validation/integration_validation/",
                 object_list$group[i],
                 "/",
                 "All_combined_heatmap.png"),
         plot = combined_corr_plot,
-        width = 12,
-        height = 10,
+        width = width,
+        height = height,
+        bg = "white")
+     ggsave(str_c("output/figures/validation/integration_validation/",
+                object_list$group[i],
+                "_",
+                "All_combined_heatmap.pdf"),
+        plot = combined_corr_plot,
+        width = width,
+        height = height,
         bg = "white")
 }
+
 
 
 ```
@@ -169,12 +202,15 @@ sample.
 
 object_list <-
     tribble(~group,                         ~res_value,
-            "patient_prim_cancer_cells",    0.1,
-            "patient_mets_cancer_cells",    0.1,
-            "mm_prim_cancer_cells",         0.3,
-            "mm_mets_cancer_cells",         0.3,
-            "xeno_prim_human",              0.15,
-            "xeno_mets_human",              0.1)
+            "patient_prim_cancer_cells",    0.3,
+            "patient_mets_cancer_cells",    0.35,
+            "mm_prim_cancer_cells",         0.9,
+            "mm_mets_cancer_cells",         0.7,
+            "xeno_prim_human",              0.3,
+            "xeno_mets_human",              0.4,
+            "dogs_prim_cancer_cells",       0.2,
+            "dogs_mets_cancer_cells",       0.45
+            )
 
 
 combined_AveExp <- tibble::tibble(gene = character())
