@@ -181,9 +181,8 @@ ob_names <- c(
     "mm_prim",
     "patient_mets",
     "patient_prim",
-    "xeno_mets_human_cancer_cells",
+    "patient_xeno_prim_mets_cancer_cells",
     "xeno_mets_mouse",
-    "xeno_prim_human_cancer_cells",
     "xeno_prim_mouse"
 )
 
@@ -246,6 +245,9 @@ for (ob in ob_names) {
     }
 }
 
+cancer_obs[["patient_xeno_mets"]] <- subset(cancer_obs[["patient_xeno_prim_mets_cancer_cells"]], tumor_type == "metastatic")
+cancer_obs[["patient_xeno_prim"]] <- subset(cancer_obs[["patient_xeno_prim_mets_cancer_cells"]], tumor_type == "primary")
+
 dir.create("output/figures/demuxafy/dimplots/", recursive = TRUE)
 
 for (ob in names(cancer_obs)) {
@@ -301,6 +303,46 @@ tumor_demux <- lapply(obj_list, function(x) {
     subset(x@meta.data, Ann_Level1 == "Tumor") %>%
         dplyr::select(MajoritySinglet_DropletType, object, Ann_Level3)
 })
+all_tumor_demux <- bind_rows(tumor_demux)
+
+group_by(all_tumor_demux, Ann_Level3, object) %>%
+    mutate(
+        num_cells = n(),
+        perc_doublet = sum(MajoritySinglet_DropletType == "doublet") / num_cells * 100
+    ) %>%
+    dplyr::select(Ann_Level3, perc_doublet, object) %>%
+    unique() %>%
+    ggplot(aes(x = object, y = Ann_Level3, fill = perc_doublet)) +
+    geom_tile() + 
+    geom_label(aes(label = round(perc_doublet, 3)), fill = "white")
+
+
+
+for (ob in names(tumor_demux)) {
+    res <- tumor_demux[[ob]]
+    if (nrow(res) > 0) {
+        group_by(res, Ann_Level3) %>%
+            mutate(
+                num_cells = n(),
+                perc_doublet = sum(MajoritySinglet_DropletType == "doublet") / num_cells * 100
+            ) %>%
+            dplyr::select(Ann_Level3, perc_doublet, object) %>%
+            unique() %>%
+            ggplot(aes(x = object, y = Ann_Level3, fill = perc_doublet)) +
+            geom_tile() + 
+            geom_label(aes(label = round(perc_doublet, 3)), fill = "white")
+    }
+}
+
+
+stroma_demux <- lapply(obj_list, function(x) {
+    subset(x@meta.data, Ann_Level1 != "Tumor") %>%
+        dplyr::select(MajoritySinglet_DropletType, object, Ann_Level3)
+})
+
+
+
+
 all_demux <- lapply(obj_list, function(x) {
     dplyr::select(x@meta.data, MajoritySinglet_DropletType, object, Ann_Level3)
 })
@@ -317,17 +359,6 @@ merged_demux %>%
     # dplyr::select(-`NA`) %>%
     ggplot(aes(x = object, y = Ann_Level3, fill = perc_doublet)) +
     geom_tile()
-
-
-
-
-
-
-
-
-
-
-
 
 
 qc_doublet_heatmaps <- lapply(all_demux, function(x) {
@@ -559,7 +590,9 @@ bind_rows(sanity_check) %>%
 We'll merge human cells from a pdx and human stromal cells from a patient sample and merge into one object. I'll then run demuxafy on this object to see if the doublet callers call anything new a doublet. This will give an idea of how much it overcalls.
 
 ```{r}
-human_pdx <- qs::qread("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/xeno_mets_human_cancer_cells.qs")
+human_pdx <- qs::qread("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs")
+# we only want metastatic
+human_pdx <- subset(human_pdx, tumor_type == "metastatic")
 
 hpdx_cts <- GetAssayData(human_pdx, layer = "counts")
 
@@ -568,16 +601,16 @@ human_stroma <- qs::qread("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRef
 hstrom_cts <- GetAssayData(human_stroma, layer = "counts")
 
 chimera <- merge(human_pdx, human_stroma)
-chimera <- JoinLayers(chimera)
-chimera_counts <- GetAssayData(chimera, layer = "counts")
-
-#Downsample to speed things up
-set.seed(17)
-down_samp_chimera <- chimera_counts[, sample(colnames(chimera_counts), size = 50000, replace = FALSE)]
+# chimera <- JoinLayers(chimera)
+Idents(chimera) <- chimera$Ann_Level3
+# downsample to a max of 2000 cells per ann_level3
+down_chi <- subset(chimera, downsample = 2000)
+down_chi <- JoinLayers(down_chi)
+chimera_counts <- GetAssayData(down_chi, layer = "counts")
 
 library(DropletUtils)
 write10xCounts(path = "DoubletFinder/pdx_clinical_chimera/",
-               x = down_samp_chimera)
+               x = chimera_counts)
 ```
 
 #### Run Demuxafy on Chimera Object
