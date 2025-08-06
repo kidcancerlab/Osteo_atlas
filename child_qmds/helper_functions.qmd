@@ -7,7 +7,7 @@ dimplot_better <- function(object,
                            group_by = NULL,
                            cols,
                            ncol = 1,
-                           label.size = 4,
+                           label.size = 5,
                            split_by = NULL,
                            shuffle,
                            ...) {
@@ -26,7 +26,8 @@ dimplot_better <- function(object,
             ...) +
         coord_fixed() +
         theme(aspect.ratio=1) +
-        theme_void()
+        theme_void() +
+        theme(plot.title = element_text(hjust = 0.5))
 }
 
 # cluster based annotation
@@ -1198,10 +1199,10 @@ make_panel_plot <- function(sobj,
                 display_numbers = TRUE,
                 silent = TRUE,
                 main = paste0(cat_expl),
-                fontsize_row = 7,
-                fontsize_number = 7,
+                fontsize_row = 8,
+                fontsize_number = 8,
                 cluster_cols = FALSE,
-                cluster_rows = FALSE
+                cluster_rows = TRUE
             )
         }
     }
@@ -1210,8 +1211,8 @@ make_panel_plot <- function(sobj,
 
     panel_plots[[label]] <-
         patchwork::wrap_plots(
-            dimplot,
-            circle_plot_out,
+            # dimplot,
+            # circle_plot_out,
             ggplotify::as.ggplot(heatmap_plots$Hallmark_paths),
             ggplotify::as.ggplot(heatmap_plots$KEGG),
             #ggplotify::as.ggplot(heatmap_plots$Oncogenic_signature),
@@ -1229,13 +1230,20 @@ make_panel_plot <- function(sobj,
     ggsave(
         paste0("output/figures/gsea/", group, "/", label, "_six_panels.png"),
         width = 30,
-        height = 70,
+        height = 40,
         limitsize = FALSE,
         plot = panel_plots[[label]])
 
-    #save as qs
-    qs::qsave(panel_plots[[label]],
-              file = paste0("output/figures/gsea/", group, "/", label, "_six_panels.qs"))
+    ggsave(
+        paste0("output/figures/gsea/", group, "/", label, "_six_panels.pdf"),
+        width = 30,
+        height = 40,
+        limitsize = FALSE,
+        plot = panel_plots[[label]])
+
+    # #save as qs
+    # qs::qsave(panel_plots[[label]],
+    #           file = paste0("output/figures/gsea/", group, "/", label, "_six_panels.qs"))
 }
 
 
@@ -1355,6 +1363,7 @@ def save_velo_plots(ad_ob, ob_name):
 #| cache.vars: Run_GRA
 Run_GRA <- function(sobject,
                     idents,
+                    group = group,
                     org,      #organism "mgi" for mouse, "hgnc" for human
                     subset = "no",          #yes or no
                     subset_cell_number = NA) {
@@ -1366,7 +1375,8 @@ Run_GRA <- function(sobject,
     } else {
         sobject <- sobject
     }
-    sobject <- JoinLayers(sobject)
+    sobject <- 
+        JoinLayers(sobject)
     exprMat <- SeuratObject::GetAssayData(sobject, assay = 'RNA', slot= 'counts') %>%
         as.matrix()
     Idents(sobject) <- idents
@@ -1376,13 +1386,16 @@ Run_GRA <- function(sobject,
     } else {
         cellInfo <- data.frame(CellType=Idents(sobject))
     }
-    saveRDS(cellInfo, file="input/downloads/SCENIC/cellInfo.Rds")
+    if (!dir.exists("input/downloads/SCENIC")) {
+        dir.create("input/downloads/SCENIC", recursive = TRUE)
+    }
+    saveRDS(cellInfo, file= str_c("input/downloads/SCENIC/", group, "cellInfo.Rds"))
     cols <- c(plot_cols, sample(rainbow(1000)))
     CellType <- cols[1:length(unique(cellInfo$CellType))]
     names(CellType) <- unique(cellInfo$CellType)
     colVars <- list()
     colVars$CellType <- CellType
-    saveRDS(colVars, file="input/downloads/SCENIC/colVars.Rds")
+    saveRDS(colVars, file= str_c("input/downloads/SCENIC/", group, "colVars.Rds"))
 
     #Running SCENIC begins
     scenicOptions <- SCENIC::initializeScenic(org = org,
@@ -1391,8 +1404,8 @@ Run_GRA <- function(sobject,
                                               datasetTitle = "SCENIC tutorial",
                                               nCores = parallelly::availableCores())
 
-    scenicOptions@inputDatasetInfo$cellInfo <- "input/downloads/SCENIC/cellInfo.Rds"
-    scenicOptions@inputDatasetInfo$colVars <- "input/downloads/SCENIC/colVars.Rds"
+    scenicOptions@inputDatasetInfo$cellInfo <- str_c("input/downloads/SCENIC/", group, "cellInfo.Rds")
+    scenicOptions@inputDatasetInfo$colVars <- str_c("input/downloads/SCENIC/", group, "colVars.Rds")
 
     ##### III: Co-expression network
     ### 1. Gene filter/selection
@@ -1421,7 +1434,7 @@ Run_GRA <- function(sobject,
 
     # 2. Get regulons (with RcisTarget: TF motif analysis)
     scenicOptions <- SCENIC::runSCENIC_2_createRegulons(scenicOptions,
-                                                coexMethod=c("top5perTarget"))
+                                                coexMethods=c("top5perTarget"))
 
     ### Identify cell states:
     # 3. Score GRN (regulons) in the cells (with AUCell)
@@ -1429,16 +1442,17 @@ Run_GRA <- function(sobject,
 
     scenicOptions <- SCENIC::runSCENIC_3_scoreCells(scenicOptions, exprMat_log)
 
-    # 4.2 Binarize the network activity (regulon on/off)
+    # # 4.2 Binarize the network activity (regulon on/off)
     scenicOptions@settings$devType = "png"
-    scenicOptions <- SCENIC::runSCENIC_4_aucell_binarize(scenicOptions,
-                                                         exprMat = exprMat_log)
+    # scenicOptions <- SCENIC::runSCENIC_4_aucell_binarize(scenicOptions,
+    #                                                      exprMat = exprMat_log)
 
     return(list(scenicOptions= scenicOptions,
                 cellInfo = cellInfo,
                 colVars = colVars,
                 exprMat_log = exprMat_log))
 }
+
 ```
 
 

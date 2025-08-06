@@ -2139,9 +2139,8 @@ for (group in c(
                         group,
                         ".qs"))
 
-    # object$Ann_Level1[object$Ann_Level2 == "Neuronal"] <- "Mesenchymal"
-    # object$Ann_Level1[object$Ann_Level2 == "Basal"] <- "Mesenchymal"
-    # object$Ann_Level1[object$Ann_Level2 == "Progenitor"] <- "Mesenchymal"
+    object$Ann_Level3[object$Ann_Level3 == "Stressed"] <- "COMA"
+    object$Ann_Level2[object$Ann_Level2 == "Stressed"] <- "COMA"
     
     # object$Ann_Level0 <-
     #     str_replace_all(object$Ann_Level1,

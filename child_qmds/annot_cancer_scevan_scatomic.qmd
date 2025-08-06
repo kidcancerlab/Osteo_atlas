@@ -561,7 +561,6 @@ tumor_clusters <-
     names(which(cluster_counts[, "TRUE"] == max(cluster_counts[, "TRUE"])))
 # Assign "tumor" to cells in those clusters, "stroma" otherwise
 mouse_sobj$truth_metadata <-
-
     ifelse(mouse_sobj$seurat_clusters %in% tumor_clusters, "tumor", "stroma")
 
 dimplot_better(mouse_sobj, group_by= "truth_metadata")
@@ -701,8 +700,12 @@ for (i in seq_len(nrow(samples_to_combine))) {
               add.cell.ids = c("stroma", "tumor")) %>%
         JoinLayers() %>%
         process_seurat() %>%
-        RunHarmony(group.by.vars = "sample_name") %>%
+        RunHarmony(group.by.vars = "sample_name",
+                    theta = 7) %>%
         process_seurat(reduction = "harmony")
+
+    dimplot_better(combine_sobject,
+                group_by = "truth_metadata")
 
     if (!dir.exists("output/seurat_objects/validation/tumor_annotation/")) {
         dir.create("output/seurat_objects/validation/tumor_annotation/", recursive = TRUE)
@@ -768,10 +771,20 @@ samples_for_validation <-
     tribble(~names,                                           ~species,
             # "S0260_mouse",                                    "mouse",
             # "S0261_mouse",                                     "mouse",
-            "S0042_human_prim_stroma2_combined",               "human",
-            "SJOS016015_X1_human_prim_stroma1_combined",       "human",
-            "SJOS001112_X1_human_human_lung_stroma2_combined", "human_lung",
-            "S0055_human_human_lung_stroma1_combined",          "human_lung"
+            # "S0042_human_prim_stroma2_combined",               "human",
+            # "SJOS016015_X1_human_prim_stroma1_combined",       "human",
+            # "SJOS001112_X1_human_human_lung_stroma2_combined", "human_lung",
+            # "S0055_human_human_lung_stroma1_combined",          "human_lung",
+            "SJOS016015_X1_human_femur_nonunion_exchange_nailing_combined",  "human",
+            "S0042_human_femur_nonunion_exchange_nailing_combined",  "human",
+            "S0042_human_femur_non_union_01162020_combined",  "human",
+            "SJOS016015_X1_human_Femur_NonUnion_Fresh_02062020_combined",  "human",
+            "S0042_human_Femur_NonUnion_Fresh_02062020_combined",  "human",
+            "S0055_human_2020_10_IPF_LL_replicate_6_combined",  "human_lung",
+            "S0055_human_10194_IPF_LL_replicate_5_combined",  "human_lung",
+            "SJOS001112_X1_human_10183_IPF_LL_replicate_4_combined",  "human_lung",
+            "SJOS016015_X1_human_femur_non_union_01142020_combined",  "human",
+            "SJOS001112_X1_human_10172_IPF_LL_replicate_3_combined",  "human_lung"
       )
 
 
@@ -987,10 +1000,11 @@ samples_for_validation <-
     tribble(~names,                                           ~species,
             # "S0260_mouse",                                    "mouse",
             # "S0261_mouse",                                     "mouse",
-            "SJOS001112_X1_human_human_lung_stroma2_combined", "human",
-            "S0055_human_human_lung_stroma1_combined",          "human",
-            "S0042_human_prim_stroma2_combined",               "human",
-            "SJOS016015_X1_human_prim_stroma1_combined",       "human"     #problematic smaple
+            "S0042_human_prim_arthritis",                        "human"
+            # "SJOS001112_X1_human_human_lung_stroma2_combined", "human",
+            # "S0055_human_human_lung_stroma1_combined",          "human",
+            # "S0042_human_prim_stroma2_combined",               "human",
+            # "SJOS016015_X1_human_prim_stroma1_combined",       "human"     #problematic smaple
       )
 
 
@@ -999,6 +1013,7 @@ patchwork::wrap_plots(
     dimplot_better(object, group_by = "final_tumor_call"),
     ncol = 2
 )
+
 
 for (item in seq_len(nrow(samples_for_validation))) {
     group <- samples_for_validation$names[item]
@@ -1129,7 +1144,7 @@ patchwork::wrap_plots(
     dimplot_better(combine_sobject, group_by = "truth_metadata"),
     dimplot_better(combine_sobject, group_by = "scatomic_tumor_call"),
     dimplot_better(combine_sobject, group_by = "scevan_tumor_call"),
-    dimplot_better(combine_sobject, group_by = "copykat_tumor_cal"),
+    dimplot_better(combine_sobject, group_by = "copykat_tumor_call"),
     dimplot_better(combine_sobject, group_by = "final_tumor_call"),
     ncol = 3
     
@@ -1141,32 +1156,32 @@ for (group in samples_for_validation) {
                         group, "_alldone.qs"))
     combine_sobject$scatomic_tumor_call <-
         ifelse(grepl("Cancer Cell$", combine_sobject$scATOMIC_pred),
-                "Tumor",
-                "Normal")
+                "tumor",
+                "stroma")
     combine_sobject$scevan_tumor_call <-
         ifelse(combine_sobject$scevan_tumor_call == "cancer_cells",
-                "Tumor",
-                "Normal")
+                "tumor",
+                "stroma")
     combine_sobject$copykat_tumor_call <-
         ifelse(combine_sobject$CNV_status == "aneuploid",
-                "Tumor",
-                "Normal")
+                "tumor",
+                "stroma")
     #dimplot_better(combine_sobject, group_by = "scATOMIC_pred")
     # give me some kind of metric to see how well do the two annotations match
     metadata <-
         combine_sobject@meta.data %>%
-        select(annot_with_tumor_as_whole, final_tumor_call,
-                truth_metadata, scevan_tumor_call, scatomic_tumor_call) %>%
+        select(final_tumor_call, truth_metadata,
+                copykat_tumor_call, scevan_tumor_call, scatomic_tumor_call) %>%
         rownames_to_column("cell_id") %>%
         arrange(truth_metadata,
                 final_tumor_call,
-                annot_with_tumor_as_whole,
+                copykat_tumor_call,
                 scevan_tumor_call,
                 scatomic_tumor_call) %>%
         mutate(cell_id_number = row_number()) %>%
         rename(Truth = truth_metadata,
                 FinalCall = final_tumor_call,
-                CallAsWhole = annot_with_tumor_as_whole,
+                CopyKAT = copykat_tumor_call,
                 SCEVAN = scevan_tumor_call,
                 scATOMIC = scatomic_tumor_call)
 
@@ -1179,7 +1194,7 @@ for (group in samples_for_validation) {
         # Set factor levels for method and call to control order in plot
     prepared_metadata$method <-
         factor(prepared_metadata$method,
-                levels = c("Truth", "FinalCall", "CallAsWhole", "SCEVAN", "scATOMIC"))
+                levels = c("Truth", "FinalCall", "CopyKAT", "SCEVAN", "scATOMIC"))
     prepared_metadata$call <-
         factor(prepared_metadata$call,
               levels = c("tumor", "stroma"))
@@ -1210,20 +1225,18 @@ for (group in samples_for_validation) {
     # Confusion matrices and accuracy
     # Confusion matrices and accuracy for FinalCall, CallAsWhole, SCEVAN, scATOMIC
     confusion_matrix_final <- table(metadata$Truth, metadata$FinalCall)
-    confusion_matrix_whole <- table(metadata$Truth, metadata$CallAsWhole)
     confusion_matrix_scevan <- table(metadata$Truth, metadata$SCEVAN)
     confusion_matrix_scatomic <- table(metadata$Truth, metadata$scATOMIC)
 
     accuracy_final <- sum(diag(confusion_matrix_final)) / sum(confusion_matrix_final)
-    accuracy_whole <- sum(diag(confusion_matrix_whole)) / sum(confusion_matrix_whole)
     accuracy_scevan <- sum(diag(confusion_matrix_scevan)) / sum(confusion_matrix_scevan)
     accuracy_scatomic <- sum(diag(confusion_matrix_scatomic)) / sum(confusion_matrix_scatomic)
 
     # Accuracy barplot
     accuracy_df <- data.frame(
-        Method = factor(c("Truth", "FinalCall", "CallAsWhole", "SCEVAN", "scATOMIC"),
-                        levels = c("Truth", "FinalCall", "CallAsWhole", "SCEVAN", "scATOMIC")),
-        Accuracy = c(1, accuracy_final, accuracy_whole, accuracy_scevan, accuracy_scatomic)
+        Method = factor(c("Truth", "FinalCall", "SCEVAN", "scATOMIC"),
+                        levels = c("Truth", "FinalCall", "SCEVAN", "scATOMIC")),
+        Accuracy = c(1, accuracy_final, accuracy_scevan, accuracy_scatomic)
     )
     accuracy_barplot <-
         ggplot(accuracy_df, aes(x = Method, y = Accuracy, fill = Method)) +
@@ -1243,7 +1256,6 @@ for (group in samples_for_validation) {
     # Confusion matrix plots
     confusion_list <- list(
         FinalCall = list(tbl = confusion_matrix_final, acc = accuracy_final),
-        CallAsWhole = list(tbl = confusion_matrix_whole, acc = accuracy_whole),
         SCEVAN = list(tbl = confusion_matrix_scevan, acc = accuracy_scevan),
         scATOMIC = list(tbl = confusion_matrix_scatomic, acc = accuracy_scatomic)
     )
@@ -1318,5 +1330,885 @@ sobj$final_snv_call <-
 dimplot_better(sobj,
             group_by = "final_snv_call") +
     NoLegend() + ggtitle("SNV calls in S0260 and S0261")
+
+```
+
+## downloaded for validations
+```{r downloaded_sobj}
+# arthritis data
+arthritis <-
+    readRDS("input/downloads/seurat_objects/arthritis_sobj.RDS")
+
+# List all .h5 files in the directory GSE217792_RAW
+h5_files <- list.files(
+    "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/seurat_objects/GSE217792_RAW/",
+    pattern = "\\.h5$",
+    full.names = TRUE
+)
+
+
+# make tribble for qc_plts
+cutoff_qc <-
+    tribble(~sample_name,                           ~max_count,        ~percent_mt,
+        "femur_nonunion_013119",                 70000,              20,
+        "control_femur_reaming_09052019",        70000,              20,
+        "Control_Femur_Canal_10292019",          30000,              20,
+        "Control_femur_ICT_12032019",            30000,              20,
+        "IMN_canal_020119",                      50000,              20,
+        "femur_nonunion_exchange_nailing",      40000,              20,
+        "Femur_non_union_01142020",             40000,              20,
+        "Femur_non_union_01162020",              60000,              20,
+        "Femur_NonUnion_Fresh_02062020",           50000,              20)
+
+# Read each h5 file and create a Seurat object
+seurat_objects <- lapply(h5_files, function(f) {
+    obj <- 
+        Seurat::Read10X_h5(f)
+    seurat_obj <- 
+        Seurat::CreateSeuratObject(counts = obj)
+    seurat_obj$percent.mt <- 
+        PercentageFeatureSet(seurat_obj, pattern = "^MT-") # Adjust pattern for mitochondrial genes if 
+    seurat_obj$sample_name <- 
+        basename(f) %>%
+        str_replace("^[^_]+_", "") %>%           # Remove everything before first underscore
+        str_replace("_filtered.*$", "") %>%         # Remove everything after _filtered %>%
+        str_replace("-", "_") # Replace underscores with dashes for better readability
+    max_ncount <-
+        cutoff_qc$max_count[cutoff_qc$sample_name == seurat_obj$sample_name[1]]
+    seurat_obj <-
+        seurat_obj %>%
+        subset(subset = nCount_RNA < max_ncount & percent.mt < 20) %>%
+        process_seurat()
+    seurat_obj$truth_metadata <- "stroma"
+    return(seurat_obj)
+})
+
+# Optionally, name the list by file
+names(seurat_objects) <- 
+    basename(h5_files) %>%
+        str_replace("^[^_]+_", "") %>%           # Remove everything before first underscore
+        str_replace("_filtered.*$", "") %>%         # Remove everything after _filtered
+        str_replace("-", "_")
+# Save each Seurat object in the specified directory
+output_dir <- "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/seurat_objects/GSE217792_Sobjs/"
+if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+
+for (obj_name in names(seurat_objects)) {
+    qs::qsave(
+        seurat_objects[[obj_name]],
+        file = file.path(output_dir, paste0(obj_name, ".qs"))
+    )
+}
+#combine the samples
+combined_all1 <-
+    merge(x = seurat_objects[[1]],
+            y = seurat_objects[-1],
+            add.cell.ids = names(seurat_objects),
+            project = "GSE217792_All_Samples") %>%
+    JoinLayers() %>%
+    process_seurat()
+dimplot_better(combined_all, group_by = "sample_name") +
+    NoLegend() + ggtitle("Combined GSE217792_Sobj Samples")
+
+qs::qsave(combined_all,
+        file = "input/downloads/seurat_objects/GSE217792_Sobjs/GSE217792_All_Samples.qs")
+
+
+# make the seurat object from the GSE283885
+# List all .txt.gz files in the directory
+txt_files <- list.files(
+    "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/seurat_objects/GSE283885_RAW/",
+    pattern = "\\.txt\\.gz$",
+    full.names = TRUE
+)
+
+sample_qcs <-
+    tribble(~ sample_name,                           ~max_count,        ~percent_mt,
+        "20095_Healthy_replicate_1",                  12000,            20,  
+        "20132_Healthy_replicate_2",                  6000,           20,    
+        "20160_Healthy_replicate_3",                   4000,           20,
+        "20108_Healthy_replicate_4",                     15000,           20,
+        "20116_Healthy_replicate_5",                     15000,           20,
+        "20126_Healthy_replicate_6",                     10000,           20,
+        "20141_Healthy_replicate_7",                      30000,           20,
+        "20150_Healthy_replicate_8",                      40000,           20,
+        "20166_Healthy_replicate_9",                       20000,           20,
+        "10160_IPF_LL_replicate_1",                        10000,           20,
+        "101601_IPF_LL_replicate_2",                        10000,           20,
+        "10172_IPF_LL_replicate_3",                         40000,           20,
+        "10183_IPF_LL_replicate_4",                         15000,           20,
+        "10194_IPF_LL_replicate_5",                         20000,           20,
+        "2020_10_IPF_LL_replicate_6",                     15000,           20)
+
+feature_hist(seurat_obj,
+    features = c("nCount_RNA", "nFeature_RNA", "percent.mt"))
+
+# Read each txt.gz file and create a Seurat object
+seurat_objects_gse283885 <- lapply(txt_files, function(f) {
+    Sys.setenv(VROOM_CONNECTION_SIZE = 131072 * 10)
+    counts <- readr::read_tsv(f)
+    # Assume first column is gene names, set as rownames
+    mat <- as.matrix(counts[,-1])
+    rownames(mat) <- counts[[1]]
+    seurat_obj <- 
+        Seurat::CreateSeuratObject(counts = mat)
+    seurat_obj$percent.mt <- 
+        PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+    seurat_obj$sample_name <- 
+        basename(f) %>%
+        stringr::str_extract("(?<=counts_).*(?=\\.txt\\.gz)")
+    max_ncount <-
+        sample_qcs$max_count[sample_qcs$sample_name == seurat_obj$sample_name[1]]
+    seurat_obj <-
+        seurat_obj %>%
+        subset(subset = nCount_RNA < max_ncount & percent.mt < 20) %>%
+        process_seurat()
+    # Add truth metadata
+    seurat_obj$truth_metadata <- "stroma"
+    return(seurat_obj)
+})
+
+# Optionally, name the list by file
+names(seurat_objects_gse283885) <- basename(txt_files) %>%
+    stringr::str_extract("(?<=counts_).*(?=\\.txt\\.gz)")
+
+# Save each Seurat object in the specified directory
+output_dir_gse283885 <- 
+    "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/seurat_objects/GSE283885_Sobjs/"
+if (!dir.exists(output_dir_gse283885)) dir.create(output_dir_gse283885, recursive = TRUE)
+
+for (obj_name in names(seurat_objects_gse283885)) {
+    qs::qsave(
+        seurat_objects_gse283885[[obj_name]],
+        file = file.path(output_dir_gse283885, paste0(obj_name, ".qs"))
+    )
+}
+
+combine_all <-
+    merge(x = seurat_objects_gse283885[[1]],
+            y = seurat_objects_gse283885[-1],
+            add.cell.ids = names(seurat_objects_gse283885),
+            project = "GSE283885_All_Samples") %>%
+    JoinLayers() %>%
+    process_seurat()
+
+qs::qsave(combine_all,
+        file = "input/downloads/seurat_objects/GSE283885_Sobjs/GSE283885_All_Samples.qs")
+dimplot_better(combine_all, group_by = "sample_name") +
+    NoLegend() + ggtitle("Combined GSE283885 Samples")
+
+```
+
+
+# make new synthetic objects from the downloaded objects
+```{r make_synthetic_from_downloaded}
+
+samples_to_combine <- 
+    tribble(~primary,                               ~metastatic,                   
+            "SJOS016015_X1_human",                  "S0055_human",              #tumor
+            "S0042_human",                          "SJOS001112_X1_human",       #tumor
+            "Femur_NonUnion_Fresh_02062020",        "2020_10_IPF_LL_replicate_6", #stroma  
+            "Femur_non_union_01162020",             "10172_IPF_LL_replicate_3",  #stroma
+            "Femur_non_union_01142020",             "10194_IPF_LL_replicate_5",   #stroma
+            "femur_nonunion_exchange_nailing",      "10183_IPF_LL_replicate_4")   #stroma
+
+
+primary_list <- list()
+metastatic_list <- list()
+
+# combine and prepare the stroma and tumor for validation
+for (i in seq_len(nrow(samples_to_combine))) {
+    primary <- samples_to_combine$primary[i]
+    metastatic <- samples_to_combine$metastatic[i]
+
+    dir1 <- str_c("output/seurat_objects/validation/tumor_annotation/")
+    dir2 <- str_c("input/downloads/seurat_objects/GSE283885_Sobjs/")
+    dir3 <- str_c("input/downloads/seurat_objects/GSE217792_Sobjs/")
+    if (file.exists(file.path(dir1, paste0(primary, ".qs")))) {
+        dir <- dir1
+    } else if (file.exists(file.path(dir2, paste0(primary, ".qs")))) {
+        dir <- dir2
+    } else {
+        dir <- dir3
+    }
+    primary_sobj <-
+        qs::qread(str_c(dir, "/", primary, ".qs"))
+    primary_list[[i]] <- primary_sobj
+
+    # check if the object already exists
+    if (file.exists(str_c(dir1, "/", metastatic, ".qs"))) {
+        dir <- dir1
+    } else if (file.exists(str_c(dir2, "/", metastatic, ".qs"))) {
+        dir <- dir2
+    } else {
+        dir <- dir3
+    }
+    metastatic_sobj <-
+        qs::qread(str_c(dir, "/", metastatic, ".qs"))
+    metastatic_list[[i]] <- metastatic_sobj
+}
+
+# combine the primary and metastatic objects
+primary_synthetic <-
+    merge(x = primary_list[[1]],
+            y = primary_list[-1],
+            add.cell.ids = samples_to_combine$primary,
+            project = "Primary_Synthetic") %>%
+    JoinLayers() %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = "sample_name",
+                theta = 7) %>%
+    process_seurat(reduction = "harmony")
+qs::qsave(primary_synthetic,
+        str_c("output/seurat_objects/validation/tumor_annotation/primary_synthetic.qs"))
+
+metastatic_synthetic <-
+    merge(x = metastatic_list[[1]],
+            y = metastatic_list[-1],
+            add.cell.ids = samples_to_combine$metastatic,
+            project = "Metastatic_Synthetic") %>%
+    JoinLayers() %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = "sample_name",
+                theta = 7) %>%
+    process_seurat(reduction = "harmony")
+qs::qsave(metastatic_synthetic,
+        str_c("output/seurat_objects/validation/tumor_annotation/metastatic_synthetic.qs"))
+
+# mosue object
+S0260_mouse <-
+    qs::qread("output/seurat_objects/validation/tumor_annotation/S0260_mouse.qs")
+S0261_mouse <-
+    qs::qread("output/seurat_objects/validation/tumor_annotation/S0261_mouse.qs")
+S0260_61_mouse <-
+    merge(x = S0260_mouse,
+            y = S0261_mouse,
+            add.cell.ids = c("S0260", "S0261"),
+            project = "S0260_61_mouse") %>%
+    JoinLayers() %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = "sample_name",
+                theta = 7) %>%
+    process_seurat(reduction = "harmony")
+S0260_61_mouse$species <- "mouse"
+qs::qsave(S0260_61_mouse,
+        str_c("output/seurat_objects/validation/tumor_annotation/S0260_61_mouse.qs"))
+
+# run scevan on the synthetic objects
+min_cells <- 500
+
+# run the SCEVAN pipeline
+for (group in c(
+                # "primary_synthetic", 
+                #  "metastatic_synthetic",
+                 "S0260_61_mouse")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/validation/tumor_annotation/",
+                        group,
+                        ".qs"))
+    organism <-
+        object$organism[1]
+
+    # SCEVAN results listed into an output for each seurat object
+    result_list <-
+        parallel::mclapply(unique(object$sample_name),
+                            mc.preschedule = FALSE,
+                            mc.cores = 1,
+                            function(x) {
+            # If we have too few cells SCEVAN errors out
+            # dim(x) must have a positive length
+
+            count_matrix <-
+                object %>%
+                subset(sample_name == x) %>%
+                GetAssayData(layer = "counts")
+
+            if (ncol(count_matrix) > min_cells) {
+                # output <-
+                #     SCEVAN::pipelineCNA(count_mtx = count_mtx_list[[x]],
+                #                         sample = x,
+                #                         organism = organism,
+                #                         par_cores = parallelly::availableCores(),
+                #                         SUBCLONES = FALSE)
+
+                output <-
+                    tryCatch(
+                        {
+                            SCEVAN::pipelineCNA(count_mtx = count_matrix,
+                                                sample = x,
+                                                organism = organism,
+                                                par_cores = parallelly::availableCores(),
+                                                SUBCLONES = FALSE)
+                        },
+                        error = function(e) {
+                            message("SCEVAN failed for ",group, " ", x, " with error: ", e)
+                        })
+
+                 # SCEVAN writes a bunch of files to ./output/ so we need to move them
+                system(paste0("mv output/",
+                            x,
+                            "* output/id_tumor/SCEVAN/"))
+                # Two of the files have spaces in their names :-|
+                system(paste0("mv output/' ",
+                              x,
+                              " vega_output' output/id_tumor/SCEVAN/"))
+                system(paste0("mv output/' ",
+                            x,
+                            "onlytumor vega_output' output/id_tumor/SCEVAN/"))
+
+                return(output)
+            }
+        })
+
+    directory <-
+        "output/id_tumor/SCEVAN/"
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+
+    bind_rows(result_list) %>%
+        mutate(scevan_tumor_call = if_else(class == "tumor",
+                                           "cancer_cells",
+                                           "normal_cells")) %>%
+        rownames_to_column("cell") %>%
+        write_tsv(str_c("output/id_tumor/SCEVAN/",
+                        group,
+                        "_metadata.tsv"))
+}
+
+# run scatomic on the synthetic objects
+for (group in c(
+                "primary_synthetic", 
+                 "metastatic_synthetic",
+                 "S0260_61_mouse")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/validation/tumor_annotation/",
+                        group,
+                        ".qs"))
+    dimplot_better(object, group_by = "organism") +
+        NoLegend() + ggtitle(str_c(group, " before scATOMIC"))
+
+    organism <-
+        object$organism[1]
+
+    #use the function to convert dog to human genes and make new seurat object
+    if (organism == "mouse") {
+        object <-
+            mouse_to_human_setup(object,
+                                harm_vars = c("sample_name"),
+                                theta = c(7))
+        organism <- "human"
+    }
+
+    min_count_per_gene <- 10
+    count_mtx_list <- object %>%
+        SplitObject(split.by = "sample_name") %>%
+        lapply(FUN = function(x) {
+            temp_data <- GetAssayData(x, layer = "counts")
+            temp_data <- temp_data[rowSums(temp_data) > min_count_per_gene, ]
+        })
+
+    result_list <-
+        parallel::mclapply(names(count_mtx_list),
+                           mc.cores = parallelly::availableCores(),
+                           mc.preschedule = FALSE,
+                           function(x) {
+            cell_predictions <-
+                scATOMIC::run_scATOMIC(
+                    rna_counts = count_mtx_list[[x]],
+                    mc.cores = parallelly::availableCores()
+                )
+            scATOMIC_results <-
+                tryCatch(
+                    {
+                        scATOMIC::create_summary_matrix(
+                            prediction_list = cell_predictions,
+                            use_CNVs = T,
+                            modify_results = T,
+                            mc.cores = parallelly::availableCores(),
+                            raw_counts = count_mtx_list[[x]],
+                            min_prop = 0.5
+                        ) %>%
+                        select(starts_with("layer_"),
+                               any_of(c("scATOMIC_pred",
+                                      "classification_confidence",
+                                      "CNV_status",
+                                      "pan_cancer_cluster")))
+                },
+                error = function(e) {
+                    message("scATOMIC failed for ",group, " ", x, " with error: ", e)
+                    scATOMIC::create_summary_matrix(
+                        prediction_list = cell_predictions,
+                        modify_results = T,
+                        mc.cores = parallelly::availableCores(),
+                        raw_counts = count_mtx_list[[x]],
+                        min_prop = 0.5
+                    ) %>%
+                    select(starts_with("layer_"),
+                               any_of(c("scATOMIC_pred",
+                                      "classification_confidence",
+                                      "CNV_status")))
+                })
+
+            return(scATOMIC_results)
+        })
+
+    directory <-
+        "output/id_tumor/scATOMIC/"
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+
+    dplyr::bind_rows(result_list) %>%
+    mutate(scatomic_tumor_call = if_else(grepl("Cancer Cell$", scATOMIC_pred),
+                                         "cancer_cells",
+                                         "normal_cells")) %>%
+    rownames_to_column("cell") %>%
+    write_tsv(str_c("output/id_tumor/scATOMIC/",
+                    group,
+                    "_metadata.tsv"))
+}
+
+
+# run my methods on the synthetic objects
+samples_for_validation <- 
+    tribble(~names,                                           ~species,
+            # "primary_synthetic",                              "human",
+            # "metastatic_synthetic",                           "human_lung",
+            "S0260_61_mouse",                                "mouse_lung")
+
+for (item in seq_len(nrow(samples_for_validation))) {
+    names <- samples_for_validation$names[item]
+    species <- samples_for_validation$species[item]
+    combine_sobject <-
+        qs::qread(str_c("output/seurat_objects/validation/tumor_annotation/",
+                        names, ".qs"))
+    dimplot1 <-
+        dimplot_better(combine_sobject,
+                    group_by = "truth_metadata") +
+        NoLegend() + ggtitle("object with known tumor and stroma")
+
+    # this is my method
+    ann_obj <-
+        annotate_celltypes(sobject = combine_sobject,
+                            species = species,
+                            with_tumor = FALSE,
+                            aggr_ref = TRUE)
+
+    ann_obj <-
+        clusterbased_annot(s_obj = ann_obj)
+ 
+    ann_obj$just_stroma_annot <- ann_obj$new_annot_clust
+    dimplot2 <-
+        dimplot_better(ann_obj,
+                    group_by = "just_stroma_annot") +
+        NoLegend() + ggtitle("Annotation with stroma referece")
+
+    # identify the potential tumor cells using the aucell with osteosarcoma markers
+    osteosarcoma_markers <- c("RUNX2", "COL1A1", "COL1A2", "SATB2")
+    potential_tumor_cells_list <- list()
+    genelist <- osteosarcoma_markers
+    if (species == "mouse" | species == "mouse_lung") {
+        genelist <-
+            nichenetr::convert_human_to_mouse_symbols(genelist) %>%
+            na.omit() %>%
+            unique()
+    }
+    # prepare the matrix
+    entire_matrix <-
+        ann_obj@assays$RNA$counts
+
+    # run AUcell
+    genelist_present <- 
+        genelist[genelist %in% rownames(entire_matrix)]
+
+    cell_ranks <-
+        AUCell::AUCell_run(exprMat = entire_matrix,
+                           geneSets = genelist)
+
+    ann_obj$AUC_OsteoMarkers <- AUCell::getAUC(cell_ranks)[1,]
+
+    bulk_score_per_cluster <-
+        ann_obj@meta.data %>%
+        dplyr::select(AUC_OsteoMarkers, just_stroma_annot) %>%
+        dplyr::group_by(just_stroma_annot) %>%
+        dplyr::summarise(median = median(AUC_OsteoMarkers, na.rm = TRUE)) %>%
+        dplyr::arrange(desc(median))
+    tumor_cells <-
+        bulk_score_per_cluster %>%
+        dplyr::filter(median > 0.3) %>%
+        dplyr::pull(just_stroma_annot)
+
+    stroma_cells <-
+        bulk_score_per_cluster %>%
+        dplyr::filter(median <= 0.3) %>%
+        dplyr::pull(just_stroma_annot)
+    # subset the object
+    stroma_cells_sobj <-
+        subset(ann_obj,
+                just_stroma_annot %in% stroma_cells)
+    tumor_cells_sobj <-
+        subset(ann_obj,
+                just_stroma_annot %in% tumor_cells) %>%
+        process_seurat(resolution = 0.1)
+
+    dimplot3 <-
+        dimplot_better(tumor_cells_sobj,
+                    group_by = "just_stroma_annot") +
+        NoLegend() + ggtitle("Potential tumor cells")
+
+    dimplot4 <-
+        dimplot_better(tumor_cells_sobj,
+                    group_by = "seurat_clusters") +
+        NoLegend() + ggtitle("Potential tumor cells")
+
+    Idents(tumor_cells_sobj) <- tumor_cells_sobj$seurat_clusters
+    stromal_metadata <- list()
+    tumor_metadata <- list()
+    for (clusters in unique(tumor_cells_sobj$seurat_clusters)) {
+        sub_obj <-
+            subset(tumor_cells_sobj,
+                   seurat_clusters == clusters)
+        if (ncol(sub_obj) > 100) {
+            sub_obj <-
+                sub_obj %>%
+                process_seurat(resolution = 0.1)
+        } else {
+            sub_obj <- sub_obj
+        }
+        sub_obj <-
+            annotate_celltypes(sobject = sub_obj,
+                                species = species,
+                                with_tumor = TRUE,
+                                aggr_ref = TRUE)
+        sub_obj <-
+            clusterbased_annot(s_obj = sub_obj)
+
+        sub_obj$annot_with_tumor <- sub_obj$annotations
+
+    # save the ids
+        normal_ids <-
+            sub_obj@meta.data %>%
+            filter(annot_with_tumor != "Tumor_cells") %>%
+            rownames_to_column("cell_ids") %>%
+            select(cell_ids)
+
+        tumor_ids <-
+            sub_obj@meta.data %>%
+            filter(annot_with_tumor == "Tumor_cells") %>%
+            rownames_to_column("cell_ids") %>%
+            select(cell_ids)
+
+        # save the metadata
+        if (length(normal_ids$cell_ids) > 0) {
+            stromal_metadata[[clusters]] <- normal_ids
+        }
+        if (length(tumor_ids$cell_ids) > 0) {
+            tumor_metadata[[clusters]] <- tumor_ids
+        }
+    }
+    # save the metadata
+    stromal_cells_id <- bind_rows(stromal_metadata)
+    tumor_cells_id <- bind_rows(tumor_metadata)
+
+    combine_sobject$final_tumor_call <-
+        ifelse(colnames(combine_sobject) %in% tumor_cells_id$cell_ids,
+                "tumor",
+                "stroma")
+    combine_sobject <-
+        AddMetaData(combine_sobject,
+                    ann_obj@meta.data %>% select(c("annotations", "just_stroma_annot")))
+
+    dimplot5 <-
+        DimPlot(combine_sobject,
+            group.by = "final_tumor_call",
+            label = T,
+            cols = c("stroma" = "#EEA236FF", "tumor" = "#D43F3AFF"),
+            label.box = T) +
+        NoLegend() +
+        theme_void() +
+        ggtitle("Final tumor call")
+    dimplot6 <-
+        DimPlot(combine_sobject,
+                group.by = "truth_metadata",
+                label = T,
+                cols = c("stroma" = "#EEA236FF", "tumor" = "#D43F3AFF"),
+                label.box = T) +
+        NoLegend() +
+        theme_void() +
+        ggtitle("truth metadata")
+
+    # patchwork the plots
+    dimplot_combined <-
+        patchwork::wrap_plots(dimplot5,
+                            dimplot6,
+                            ncol = 2) +
+            patchwork::plot_annotation(title = names)
+    directory <-
+        str_c("output/figures/validation/tumor_annotation_method/", names)
+
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+    ggsave(str_c(directory, "/",
+                names, "_dimplot.png"),
+            plot = dimplot_combined,
+            width = 14,
+            height = 14)
+    # save the combined object
+    qs::qsave(combine_sobject,
+            str_c("output/seurat_objects/validation/tumor_annotation/",
+                names, "_validated.qs"))
+}
+
+# Make plots
+
+patchwork::wrap_plots(
+    dimplot_better(combine_sobject, group_by = "truth_metadata"),
+    dimplot_better(combine_sobject, group_by = "final_tumor_call"),
+    dimplot_better(combine_sobject, group_by = "scevan_tumor_call"),
+    dimplot_better(combine_sobject,  group_by = "scatomic_tumor_call"),
+    dimplot_better(combine_sobject, group_by = "CNV_status"),
+    dimplot_better(combine_sobject, group_by = "just_stroma_annot"),
+    ncol = 3
+) 
+samples_for_validation <- 
+    tribble(~names,                                           ~species,
+            "primary_synthetic",                              "human",
+            "metastatic_synthetic",                           "human_lung"
+            # "S0260_61_mouse",                                "mouse_lung"
+            )
+
+#scanbit results for the mouse object
+mouse_scanbit <-
+    qs::qread("/gpfs0/home2/gdrobertslab/lab/Analysis/Matt/24_Osteo_atlas/output/id_tumor/snvs/S0260_S0261_scanbit_sobj.qs")
+
+mouse_scanbit$scanbit_tumor_call <-
+    ifelse(mouse_scanbit$snv_top_lvl_group_5 == "top_lvl_group0",
+            "tumor",
+            "stroma")
+scanbit_metadata <-
+    mouse_scanbit@meta.data %>%
+    select(scanbit_tumor_call) %>%
+    rownames_to_column("cell") %>%
+    mutate(cell = case_when(
+        grepl("^S0260", cell) ~ paste0(cell, "_1"),
+        grepl("^S0261", cell) ~ paste0(cell, "_2"),
+        TRUE ~ cell
+    ))
+
+
+for (item in seq_len(nrow(samples_for_validation))) {
+    names <- samples_for_validation$names[item]
+    species <- samples_for_validation$species[item]
+    combine_sobject <-
+        qs::qread(str_c("output/seurat_objects/validation/tumor_annotation/",
+                        names, "_validated.qs"))
+    # add the scanbit metadata for mouse_obj
+    if (names == "S0260_61_mouse") {
+        combine_sobject <-
+            combine_sobject %>%
+            AddMetaData(metadata = scanbit_metadata %>%
+                        filter(cell %in% colnames(combine_sobject)) %>%
+                        distinct(cell, .keep_all = TRUE))
+    }
+    SCEVAN_metadata <-
+        read_tsv(str_c("output/id_tumor/SCEVAN/",
+                        names,
+                        "_metadata.tsv")) %>%
+        dplyr::filter(cell %in% colnames(combine_sobject)) %>%
+        dplyr::distinct(cell, .keep_all = TRUE) %>%
+        tibble::column_to_rownames("cell")
+    combine_sobject <-
+        combine_sobject %>%
+        AddMetaData(metadata = SCEVAN_metadata)
+
+    scATOMIC_metadata <-
+        read_tsv(str_c("output/id_tumor/scATOMIC/",
+                        names,
+                        "_metadata.tsv")) %>%
+        dplyr::filter(cell %in% colnames(combine_sobject)) %>%
+        dplyr::distinct(cell, .keep_all = TRUE) %>%
+        tibble::column_to_rownames("cell")
+
+    combine_sobject <-
+        combine_sobject %>%
+        AddMetaData(metadata = scATOMIC_metadata)
+
+    combine_sobject$scatomic_tumor_call <-
+        ifelse(grepl("Cancer Cell$", combine_sobject$scATOMIC_pred),
+                "tumor",
+                "stroma")
+    combine_sobject$scevan_tumor_call <-
+        ifelse(combine_sobject$scevan_tumor_call == "cancer_cells",
+                "tumor",
+                "stroma")
+    combine_sobject$copykat_tumor_call <-
+        ifelse(combine_sobject$CNV_status == "aneuploid",
+                "tumor",
+                "stroma")
+    #dimplot_better(combine_sobject, group_by = "scATOMIC_pred")
+    # give me some kind of metric to see how well do the two annotations match
+    metadata <-
+        combine_sobject@meta.data %>%
+        select(final_tumor_call, truth_metadata, #scanbit_tumor_call,
+                copykat_tumor_call, scevan_tumor_call, scatomic_tumor_call) %>%
+        rownames_to_column("cell_id") %>%
+        arrange(truth_metadata,
+                final_tumor_call,
+                #scanbit_tumor_call,
+                copykat_tumor_call,
+                scevan_tumor_call,
+                scatomic_tumor_call) %>%
+        mutate(cell_id_number = row_number()) %>%
+        rename(Truth = truth_metadata,
+                AtlasCall = final_tumor_call,
+                #ScanBit = scanbit_tumor_call,
+                CopyKAT = copykat_tumor_call,
+                SCEVAN = scevan_tumor_call,
+                scATOMIC = scatomic_tumor_call) %>%
+        mutate(across(c(Truth,
+                        AtlasCall,
+                        #ScanBit,
+                        scATOMIC, 
+                        SCEVAN, 
+                        CopyKAT), ~replace_na(., "unknown")))
+
+    # make tile plot of the metadata
+    prepared_metadata <-
+        metadata %>%
+        pivot_longer(cols = -c(cell_id, cell_id_number),
+                names_to = "method",
+                values_to = "call")
+    # Set factor levels for method and call to control order in plot
+    prepared_metadata$method <-
+        factor(prepared_metadata$method,
+                levels = c("Truth", "AtlasCall", "CopyKAT", "SCEVAN", "scATOMIC"))
+    prepared_metadata$call <-
+        factor(prepared_metadata$call,
+              levels = c("tumor", "stroma", "unknown"))
+    tile_plot <-
+        ggplot(prepared_metadata, aes(x = method, y = cell_id_number, fill = call)) +
+            geom_tile() +
+            scale_fill_manual(values = c("stroma" = "#EEA236FF",
+                                        "tumor" = "#D43F3AFF",
+                                        "unknown" = "#357EBDFF")) +
+            theme_minimal() +
+            labs(title = "Tumor annotation comparison",
+                 x = "Annotation Method",
+                 y = "Cell Index") +
+            theme(
+                axis.text.x = element_text(angle = 0, hjust = 0.5, face = "bold"),
+                axis.text.y = element_blank(),
+                axis.ticks.y = element_blank(),
+                panel.grid = element_blank(),
+                plot.margin = margin(0, 0, 0, 0), # Remove extra space around plot
+                plot.background = element_rect(fill = NA, color = NA),
+                panel.spacing = unit(0, "pt"),
+                panel.border = element_blank()
+            ) +
+            scale_y_reverse(expand = c(0, 0)) +
+            scale_x_discrete(expand = c(0, 0)) +
+            coord_cartesian(clip = "on")
+
+    # Confusion matrices and accuracy
+    # Confusion matrices and accuracy for FinalCall, CallAsWhole, SCEVAN, scATOMIC
+    confusion_matrix_final <- table(metadata$Truth, metadata$AtlasCall)
+    confusion_matrix_scevan <- table(metadata$Truth, metadata$SCEVAN)
+    confusion_matrix_scatomic <- table(metadata$Truth, metadata$scATOMIC)
+    confusion_matrix_copykat <- table(metadata$Truth, metadata$CopyKAT)
+    #confusion_matrix_scanbit <- table(metadata$Truth, metadata$ScanBit)
+
+    accuracy_final <- sum(diag(confusion_matrix_final)) / sum(confusion_matrix_final)
+    accuracy_scevan <- sum(diag(confusion_matrix_scevan)) / sum(confusion_matrix_scevan)
+    accuracy_scatomic <- sum(diag(confusion_matrix_scatomic)) / sum(confusion_matrix_scatomic)
+    accuracy_copykat <- sum(diag(confusion_matrix_copykat)) / sum(confusion_matrix_copykat)
+    #accuracy_scanbit <- sum(diag(confusion_matrix_scanbit)) / sum(confusion_matrix_scanbit)
+
+    # Accuracy barplot
+    accuracy_df <- data.frame(
+        Method = factor(c("Truth", "AtlasCall", "CopyKAT", "SCEVAN", "scATOMIC"),
+                        levels = c("Truth", "AtlasCall","CopyKAT", "SCEVAN", "scATOMIC")),
+        Accuracy = c(1, accuracy_final, accuracy_copykat, accuracy_scevan, accuracy_scatomic)
+    )
+    accuracy_barplot <-
+        ggplot(accuracy_df, aes(x = Method, y = Accuracy, fill = Method)) +
+            geom_bar(stat = "identity", width = 0.7, show.legend = FALSE) +
+            geom_text(aes(label = round(Accuracy, 3), y = Accuracy/2), color = "white", size = 4) +
+            labs(title = "Accuracy of Tumor Calls", x = "Methods", y = "Accuracy") +
+            theme_minimal() +
+            theme(axis.text.x = element_text(angle = 0, hjust = 0.5, face = "bold"),
+              axis.text.y = element_text(face = "bold"),
+              panel.grid = element_blank(),
+              panel.border = element_blank()) +
+            scale_fill_manual(values = c("Truth" = "#A0522D", 
+                         "AtlasCall" = "#D43F3AFF", 
+                         "CopyKAT" = "#0072B2FF", 
+                         "SCEVAN" = "#377EB8", 
+                         "scATOMIC" = "#4DAF4A")) +
+            ylim(0, 1.05) +
+            scale_y_continuous(expand = c(0, 0)) +
+            scale_x_discrete(expand = c(0, 0))
+
+    # Confusion matrix plots
+    confusion_list <- list(
+        AtlasCall = list(tbl = confusion_matrix_final, acc = accuracy_final),
+        #ScanBit = list(tbl = confusion_matrix_scanbit, acc = accuracy_scanbit),
+        CopyKAT = list(tbl = confusion_matrix_copykat, acc = accuracy_copykat),
+        SCEVAN = list(tbl = confusion_matrix_scevan, acc = accuracy_scevan),
+        scATOMIC = list(tbl = confusion_matrix_scatomic, acc = accuracy_scatomic)
+    )
+    confusion_plots <-
+        lapply(names(confusion_list), function(method) {
+            tbl <- confusion_list[[method]]$tbl
+            acc <- confusion_list[[method]]$acc
+            df_tbl <- as.data.frame(as.table(tbl))
+            colnames(df_tbl) <- c("Truth", "Prediction", "Freq")
+            ggplot(df_tbl, aes(x = Prediction, y = Truth, fill = Freq)) +
+                geom_tile(color = "white") +
+                geom_text(aes(label = Freq), size = 2.5) +
+                scale_fill_gradient(low = "#F0F0F0", high = "#D43F3AFF") +
+                theme_minimal() +
+                labs(title = paste0("Confusion Matrix: ", method,
+                                   "\nAccuracy: ", round(acc, 3)),
+                     x = "Predicted", y = "Truth") +
+                theme(panel.grid = element_blank(),
+                      plot.title = element_text(hjust = 0.5, size = 6, face = "bold"),
+                      legend.position = "none",
+                      axis.title.y = element_text(angle = 90),
+                      axis.text.y = element_text(angle = 90, vjust = 0.5, hjust = 0.5))
+        })
+    confusion_combined <-
+        patchwork::wrap_plots(confusion_plots, nrow = 1)
+
+    # save the plot_grid
+    all_plot <-
+        cowplot::plot_grid(tile_plot,
+                            #accuracy_barplot,
+                            confusion_combined,
+                            ncol = 1,
+                            rel_heights = c(0.5, 0.2),
+                            align = "v") +
+            patchwork::plot_annotation(title = str_c(names, " Tumor ID by methods")) &
+            theme(plot.title = element_text(size = 10))
+
+    # save the confusion matrix plot
+    if (!dir.exists("output/figures/validation/tumor_annotation_method/")) {
+        dir.create("output/figures/validation/tumor_annotation_method/", recursive = TRUE)
+    }
+    ggsave(str_c("output/figures/validation/tumor_annotation_method/",
+                names, "_tumor_annotation_method.png"),
+            plot = all_plot,
+            width = 7,
+            height = 8)
+    ggsave(str_c("output/figures/validation/tumor_annotation_method/",
+                names, "_tumor_annotation_method.pdf"),
+            plot = all_plot,
+            width = 7,
+            height = 8)
+
+}
+
+
 
 ```
