@@ -5,27 +5,27 @@ library(tidyverse)
 library(spacexr)
 
 # functions
-# run_rctd <- function(sp_ob, ref) {
-#     coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
-#         dplyr::rename(x = imagerow, y = imagecol)
-#     #convert our object to an rctd object
-#     my_data <- spacexr::SpatialRNA(coords,
-#                                    GetAssayData(sp_ob, layer = "counts"))
-#     rctd_obj <- spacexr::create.RCTD(
-#         my_data,
-#         ref,
-#         max_cores = 1,
-#         UMI_min = 3,
-#         counts_MIN = 0,
-#         UMI_max = 900000000,
-#         CELL_MIN_INSTANCE = 0
-#     )
-#     rctd_out <- spacexr::run.RCTD(
-#         rctd_obj,
-#         doublet_mode = "doublet"
-#     )
-#     return(rctd_out)
-# }
+run_rctd <- function(sp_ob, ref) {
+    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
+        dplyr::rename(x = imagerow, y = imagecol)
+    #convert our object to an rctd object
+    my_data <- spacexr::SpatialRNA(coords,
+                                   GetAssayData(sp_ob, layer = "counts"))
+    rctd_obj <- spacexr::create.RCTD(
+        my_data,
+        ref,
+        max_cores = 1,
+        UMI_min = 3,
+        counts_MIN = 0,
+        UMI_max = 900000000,
+        CELL_MIN_INSTANCE = 0
+    )
+    rctd_out <- spacexr::run.RCTD(
+        rctd_obj,
+        doublet_mode = "doublet"
+    )
+    return(rctd_out)
+}
 
 size.factors <- list("OS1_Seurat" = 1500,
                      "OS2_Seurat" = 1400,
@@ -53,21 +53,12 @@ sp_ob <- spatial_list[[ob_name]]
 ref_list <- qs::qread("output/spacexr/granular_references/ref_list.qs")
 ref <- ref_list[[ref_name]]
 
-# # Run rctd
-# rctd_res <- run_rctd(sp_ob = sp_ob, ref = ref)
+# Run rctd
+rctd_res <- run_rctd(sp_ob = sp_ob, ref = ref)
 
-# # save results
-# qs::qsave(
-#     rctd_res,
-#     paste0(
-#         "output/spacexr/granular_references/",
-#         ref_name,
-#         "/",
-#         ob_name,
-#         ".qs"
-#     )
-# )
-rctd_res <- qs::qread(
+# save results
+qs::qsave(
+    rctd_res,
     paste0(
         "output/spacexr/granular_references/",
         ref_name,
@@ -76,88 +67,97 @@ rctd_res <- qs::qread(
         ".qs"
     )
 )
+# rctd_res <- qs::qread(
+#     paste0(
+#         "output/spacexr/granular_references/",
+#         ref_name,
+#         "/",
+#         ob_name,
+#         ".qs"
+#     )
+# )
 
-# add results to object for plotting
-norm_weights <- spacexr::normalize_weights(rctd_res@results$weights)
-sp_ob <- AddMetaData(sp_ob, norm_weights)
-sp_ob$COMA <- sp_ob$Stressed
+# # add results to object for plotting
+# norm_weights <- spacexr::normalize_weights(rctd_res@results$weights)
+# sp_ob <- AddMetaData(sp_ob, norm_weights)
+# sp_ob$COMA <- sp_ob$Stressed
 
 
-# get cell types from reference object
-cell_types <- unique(ref@cell_types) %>%
-    as.character()
-# replace Stressed with COMA
-scell_types <- sort(c(cell_types[cell_types != "Stressed"], "COMA"))
+# # get cell types from reference object
+# cell_types <- unique(ref@cell_types) %>%
+#     as.character()
+# # replace Stressed with COMA
+# scell_types <- sort(c(cell_types[cell_types != "Stressed"], "COMA"))
 
-# get matrix of deconvolution scores
-ann_mat <- sp_ob@meta.data[ , cell_types]
+# # get matrix of deconvolution scores
+# ann_mat <- sp_ob@meta.data[ , cell_types]
 
-# plot heatmap of deconvolution score correlation between all cell types
-pdf(
-    paste0(
-        "output/figures/spatial/spacexr/granular_",
-        ref_name,
-        "/",
-        ob_name,
-        "_heatmap.pdf"
-    ),
-    width = 10,
-    height = 8
-)
-pheatmap::pheatmap(
-    cor(ann_mat, method = "spearman"),
-    scale = "none",
-    low = "blue",
-    high = "red",
-    mid = "white",
-    midpoint = 0,
-    angle_col = 45,
-    fontsize = 14)
-dev.off()
+# # plot heatmap of deconvolution score correlation between all cell types
+# pdf(
+#     paste0(
+#         "output/figures/spatial/spacexr/granular_",
+#         ref_name,
+#         "/",
+#         ob_name,
+#         "_heatmap.pdf"
+#     ),
+#     width = 10,
+#     height = 8
+# )
+# pheatmap::pheatmap(
+#     cor(ann_mat, method = "spearman"),
+#     scale = "none",
+#     low = "blue",
+#     high = "red",
+#     mid = "white",
+#     midpoint = 0,
+#     angle_col = 45,
+#     fontsize = 14)
+# dev.off()
 
-# make pdf of all rctd scores w h&e and cumulative tumor score at the start
-sp_ob$Tumor_Cumulative <-
-    sp_ob$Basal_Progenitor +
-    sp_ob$Fibrogenic +
-    sp_ob$Interactive +
-    sp_ob$MP_Progenitor +
-    sp_ob$Proliferative +
-    sp_ob$Stressed
-pdf(
-    paste0("output/figures/spatial/spacexr/granular_",
-    ref_name,
-    "/",
-    ob_name,
-    "_scores.pdf"),
-    height = 4,
-    width = 4
-)
-# H&E first
-print(
-    SpatialDimPlot(
-        sp_ob,
-        pt.size.factor = 0) + NoLegend()
-)
+# # make pdf of all rctd scores w h&e and cumulative tumor score at the start
+# sp_ob$Tumor_Cumulative <-
+#     sp_ob$Basal_Progenitor +
+#     sp_ob$Fibrogenic +
+#     sp_ob$Interactive +
+#     sp_ob$MP_Progenitor +
+#     sp_ob$Proliferative +
+#     sp_ob$Stressed
+# pdf(
+#     paste0("output/figures/spatial/spacexr/granular_",
+#     ref_name,
+#     "/",
+#     ob_name,
+#     "_scores.pdf"),
+#     height = 4,
+#     width = 4
+# )
+# # H&E first
+# print(
+#     SpatialDimPlot(
+#         sp_ob,
+#         pt.size.factor = 0) + NoLegend()
+# )
 
-# Now Tumor Cumulative
-print(
-    SpatialFeaturePlot(
-        sp_ob,
-        features = "Tumor_Cumulative",
-        pt.size.factor = size.factors[[ob_name]],
-        image.alpha = 0
-    )
-)
+# # Now Tumor Cumulative
+# print(
+#     SpatialFeaturePlot(
+#         sp_ob,
+#         features = "Tumor_Cumulative",
+#         pt.size.factor = size.factors[[ob_name]],
+#         image.alpha = 0
+#     )
+# )
 
-# now all cell type scores
-for (ct in cell_types) {
-    print(
-        SpatialFeaturePlot(
-            sp_ob,
-            features = ct,
-            pt.size.factor = size.factors[[ob_name]],
-            image.alpha = 0
-        )
-    )
-}
-dev.off()
+# # now all cell type scores
+# for (ct in cell_types) {
+#     print(
+#         SpatialFeaturePlot(
+#             sp_ob,
+#             features = ct,
+#             pt.size.factor = size.factors[[ob_name]],
+#             image.alpha = 0
+#         )
+#     )
+# }
+# dev.off()
