@@ -242,35 +242,38 @@ for (ob in ob_names) {
     } else if (str_detect(ob, "cancer_cells")) {
         cancer_obs[[ob]] <- obj_list[[ob]]
     } else {
-        cancer_obs[[ob]] <- obj_list[[ob]]
+        stroma_obs[[ob]] <- obj_list[[ob]]
     }
 }
 
+dir.create("output/figures/demuxafy/dimplots/", recursive = TRUE)
+
 for (ob in names(cancer_obs)) {
-    png(paste0("demuxafy_figs/results_by_annotation_cancer_", ob, ".png"),
-        width = 2000,
-        height = 800)
+    pdf(paste0("output/figures/demuxafy/dimplots/", ob, "_cancer.pdf"),
+        width = 20,
+        height = 8)
     print(
         dimplot_better(
             cancer_obs[[ob]],
             group = c("Ann_Level3", "MajoritySinglet_DropletType"),
             ncol = 2,
-            coord.fixed = TRUE
+            raster = FALSE
         )
     )
     dev.off()
 }
 
 for (ob in names(stroma_obs)) {
-    png(paste0("demuxafy_figs/results_by_annotation_stroma_", ob, ".png"),
-        width = 2000,
-        height = 800)
+        pdf(paste0("output/figures/demuxafy/dimplots/", ob, "_stroma.pdf"),
+        width = 20,
+        height = 8)
     print(
         dimplot_better(
             stroma_obs[[ob]],
             group = c("Ann_Level3",
             "MajoritySinglet_DropletType"),
-            ncol = 2
+            ncol = 2,
+            raster = FALSE
         )
     )
     dev.off()
@@ -284,7 +287,7 @@ I'm going to look for patterns in if particular cell types are called doublets a
 ```{r}
 for (ob in names(obj_list)) {
     png(
-        paste0("demuxafy_figs/heatmaps/", ob, ".png"),
+        paste0("output/demuxafy/heatmaps/", ob, ".png"),
         width = 480,
         height = 1200
     )
@@ -293,6 +296,11 @@ for (ob in names(obj_list)) {
 
 }
 
+
+tumor_demux <- lapply(obj_list, function(x) {
+    subset(x@meta.data, Ann_Level1 == "Tumor") %>%
+        dplyr::select(MajoritySinglet_DropletType, object, Ann_Level3)
+})
 all_demux <- lapply(obj_list, function(x) {
     dplyr::select(x@meta.data, MajoritySinglet_DropletType, object, Ann_Level3)
 })
@@ -548,28 +556,27 @@ bind_rows(sanity_check) %>%
 
 ### Merge PDX Tumor Cells with Patient Stromal Cells
 
-We'll human cells from a pdx and human stromal cells from a patient sample and merge into one object. I'll then run demuxafy on this object to see if the doublet callers call anything new a doublet. This will give an idea of how much it overcalls.
+We'll merge human cells from a pdx and human stromal cells from a patient sample and merge into one object. I'll then run demuxafy on this object to see if the doublet callers call anything new a doublet. This will give an idea of how much it overcalls.
 
 ```{r}
-human_pdx <- obj_list[["xeno_mets_human"]]
+human_pdx <- qs::qread("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/xeno_mets_human_cancer_cells.qs")
 
 hpdx_cts <- GetAssayData(human_pdx, layer = "counts")
 
-human_stroma <- obj_list[["patient_mets_normal_cells"]]
-human_stroma <- reconstruct_cell_types(human_stroma)
+human_stroma <- qs::qread("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/patient_mets_normal_cells.qs")
 
 hstrom_cts <- GetAssayData(human_stroma, layer = "counts")
 
 chimera <- merge(human_pdx, human_stroma)
 chimera <- JoinLayers(chimera)
-chimera <- process_seurat(chimera)
 chimera_counts <- GetAssayData(chimera, layer = "counts")
 
 #Downsample to speed things up
 set.seed(17)
 down_samp_chimera <- chimera_counts[, sample(colnames(chimera_counts), size = 50000, replace = FALSE)]
 
-write10xCounts(path = "pdx_clinical_chimera/",
+library(DropletUtils)
+write10xCounts(path = "DoubletFinder/pdx_clinical_chimera/",
                x = down_samp_chimera)
 ```
 
@@ -581,7 +588,7 @@ ml HDF5/1.10.6
 
 mkdir -p DoubletFinder/output/pdx_clinical_chimera/DoubletDetection
 singularity exec --env NUMBA_CACHE_DIR=/tmp \
-    -B pdx_clinical_chimera:/input,DoubletFinder/output/pdx_clinical_chimera/DoubletDetection/:/out,/home/gdrobertslab/mjg015/annoying_stuff:/home \
+    -B DoubletFinder/pdx_clinical_chimera:/input,DoubletFinder/output/pdx_clinical_chimera/DoubletDetection/:/out,/home/gdrobertslab/mjg015/annoying_stuff:/home \
     --no-home \
     /home/gdrobertslab/lab/Tools/Demuxafy.sif \
     DoubletDetection.py \
@@ -592,7 +599,7 @@ singularity exec --env NUMBA_CACHE_DIR=/tmp \
 
 mkdir DoubletFinder/output/pdx_clinical_chimera/scDblFinder
 singularity exec --env NUMBA_CACHE_DIR=/tmp \
-    -B pdx_clinical_chimera/:/input,DoubletFinder/output/pdx_clinical_chimera/scDblFinder/:/out,/home/gdrobertslab/mjg015/annoying_stuff:/home \
+    -B DoubletFinder/pdx_clinical_chimera/:/input,DoubletFinder/output/pdx_clinical_chimera/scDblFinder/:/out,/home/gdrobertslab/mjg015/annoying_stuff:/home \
     --no-home \
     /home/gdrobertslab/lab/Tools/Demuxafy.sif \
     scDblFinder.R \
@@ -601,7 +608,7 @@ singularity exec --env NUMBA_CACHE_DIR=/tmp \
 
 mkdir DoubletFinder/output/pdx_clinical_chimera/scds
 singularity exec --env NUMBA_CACHE_DIR=/tmp \
-    -B pdx_clinical_chimera/:/input,DoubletFinder/output/pdx_clinical_chimera/scds/:/out,/home/gdrobertslab/mjg015/annoying_stuff:/home \
+    -B DoubletFinder/pdx_clinical_chimera/:/input,DoubletFinder/output/pdx_clinical_chimera/scds/:/out,/home/gdrobertslab/mjg015/annoying_stuff:/home \
     --no-home /home/gdrobertslab/lab/Tools/Demuxafy.sif \
     scds.R \
         -t /input \
