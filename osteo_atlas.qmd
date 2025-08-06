@@ -43,6 +43,10 @@ library(copykat)
 library(SCENIC)
 library(stashPlot)
 library(ggalluvial)
+library(CellChat)
+library(RColorBrewer)
+library(gridExtra)
+library(DoubletFinder)
 
 knitr::purl("child_qmds/helper_functions.qmd", "helpers.R")
 source("helpers.R")
@@ -65,10 +69,6 @@ source("helpers.R")
 # main_figures.qmd
 # TAMs_analysis.qmd
 
-library(CellChat)
-library(RColorBrewer)
-library(gridExtra)
-library(DoubletFinder)
 ```
 
 # Load in functions

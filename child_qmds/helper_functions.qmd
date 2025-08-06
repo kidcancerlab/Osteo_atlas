@@ -1947,7 +1947,7 @@ make_cor_plt <- function(mod, s_obj) {
 
 
 #running rctd
-run_rctd <- function(sp_ob, ref) {
+run_rctd <- function(sp_ob, ref, doublet_mode = "doublet") {
     coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
         dplyr::rename(x = imagerow, y = imagecol)
     #convert our object to an rctd object
@@ -1964,7 +1964,7 @@ run_rctd <- function(sp_ob, ref) {
     )
     rctd_out <- spacexr::run.RCTD(
         rctd_obj,
-        doublet_mode = "doublet"
+        doublet_mode = doublet_mode
     )
     return(rctd_out)
 }
