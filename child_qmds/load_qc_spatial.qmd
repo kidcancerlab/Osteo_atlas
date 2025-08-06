@@ -166,8 +166,6 @@ patient_mets@meta.data <- patient_mets@meta.data %>%
         "Tumor" = Ann_Level3
     ))
 
-dimplot_better(patient_mets, group = c("myeloid_tumor", "Ann_Level3"), raster = FALSE)
-
 myeloid_tumor_ref <- spacexr::Reference(
     GetAssayData(patient_mets, layer = "counts"),
     as.factor(patient_mets$myeloid_tumor),
@@ -406,8 +404,9 @@ dev.off()
 
 
 spatial_list <- qs::qread("output/spatial_objects/spatial_list_myeloid_tumor.qs")
-pdf("output/figures/spatial/spacexr/tumor_myeloid_tumor.pdf", width = 35)
+pdf("output/figures/spatial/spacexr/myeloid_tumor/tumor_panel.pdf", width = 35)
 for (ob in names(spatial_list)) {
+    spatial_list[[ob]]$COMA <- spatial_list[[ob]]$Stressed
     hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
         NoLegend()
     plts <- list("h_and_e" = hne)
@@ -428,7 +427,7 @@ dev.off()
 
 ### TAM Panel Plots
 
-This is using the Ann_Level3 deconvolution results
+#### Ann_Level3
 
 ```{r}
 tam_types <- grep("TAM", colnames(spatial_list[[1]]@meta.data), value = TRUE)
@@ -452,20 +451,49 @@ for (ob in names(spatial_list)) {
 dev.off()
 ```
 
-This is using the myeloid_tumor deconvolution results
+#### myeloid_tumor
 
 ```{r}
-tam_types <- grep("TAM", colnames(spatial_list[[1]]@meta.data), value = TRUE)
+spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
+tam_types <- unique(grep("TAM", patient_mets$Ann_Level3, value = TRUE))
 
-pdf("output/figures/spatial/spacexr/tam_subpopulations_myeloid_tumor.pdf", width = 35)
+pdf("output/figures/spatial/spacexr/myeloid_tumor/tam_panel.pdf", width = 35)
 for (ob in names(spatial_list)) {
-    hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
+    res <- qs::qread(paste0("output/spacexr/myeloid_tumor/rctd_myeloid_tumor_", ob, ".qs"))
+    res <- spacexr::normalize_weights(res@results$weights)
+    tmp <- AddMetaData(spatial_list[[ob]], res)
+    hne <- SpatialDimPlot(tmp, pt.size.factor = 0) +
         NoLegend()
     plts <- list("h_and_e" = hne)
     for (tam in tam_types) {
         plts[[tam]] <-
             SpatialFeaturePlot(
-                spatial_list[[ob]],
+                tmp,
+                features = tam,
+                pt.size.factor = size.factors[[ob]],
+                image.alpha = 0
+            )
+    }
+    grid.arrange(grobs = plts, nrow = 1)
+}
+dev.off()
+```
+
+#### tam_specific
+
+```{r}
+tam_rctd <- qs::qread("output/spacexr/tam_specific/rctd_res.qs")
+pdf("output/figures/spatial/spacexr/tam_specific/tam_panel.pdf", width = 35)
+for (ob in names(spatial_list)) {
+    tmp_res <- spacexr::normalize_weights(tam_rctd[[ob]]@results$weights)
+    tmp_ob <- AddMetaData(spatial_list[[ob]], tmp_res)
+    hne <- SpatialDimPlot(tmp_ob, pt.size.factor = 0) +
+        NoLegend()
+    plts <- list("h_and_e" = hne)
+    for (tam in tam_types) {
+        plts[[tam]] <-
+            SpatialFeaturePlot(
+                tmp_ob,
                 features = tam,
                 pt.size.factor = size.factors[[ob]],
                 image.alpha = 0
