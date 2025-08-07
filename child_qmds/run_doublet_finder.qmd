@@ -173,6 +173,7 @@ singularity exec --bind /home/gdrobertslab/lab/Analysis/MattGust/projects/Robert
 ### Add Results to Seurat Objects
 
 ```{r overlay-demuxafy-results}
+tumor_stroma_path <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/"
 #we'll be using the objects from final_tumor_vs_stroma
 ob_names <- c(
     "dogs_mets",
@@ -181,7 +182,8 @@ ob_names <- c(
     "mm_prim",
     "patient_mets",
     "patient_prim",
-    "patient_xeno_prim_mets_cancer_cells",
+    "xeno_mets_human_cancer_cells",
+    "xeno_prim_human_cancer_cells",
     "xeno_mets_mouse",
     "xeno_prim_mouse"
 )
@@ -209,7 +211,7 @@ for (ob_name in ob_names) {
             mutate(Barcode = paste(sid, Barcode, sep = "_")) %>%
             column_to_rownames("Barcode")
         if (sid %in% c("SJOS013768_X3", "SJOS063824_X1")) {
-            demuxafy_res[[sid]]$ <- "N/A"
+            demuxafy_res[[sid]]$scds_DropletType <- "N/A"
         }
         demuxafy_res[[sid]] <- dplyr::select(demuxafy_res[[sid]],
                                              DoubletDetection_DropletType,
@@ -238,17 +240,24 @@ cancer_obs <- list()
 stroma_obs <- list()
 for (ob in ob_names) {
     if (!str_detect(ob, "xeno")) {
-        cancer_obs[[ob]] <- subset(obj_list[[ob]], Ann_Level1 == "Tumor")
-        stroma_obs[[ob]] <- subset(obj_list[[ob]], Ann_Level1 != "Tumor")
-    } else if (str_detect(ob, "cancer_cells")) {
+        cancer_obs[[ob]] <- qs::qread(paste0(tumor_stroma_path, ob, "_cancer_cells.qs"))
+        stroma_obs[[ob]] <- qs::qread(paste0(tumor_stroma_path, ob, "_normal_cells.qs"))
+        # add demuxafy results
+        cancer_obs[[ob]] <- AddMetaData(
+            cancer_obs[[ob]],
+            all_demux[[ob]]
+        )
+        stroma_obs[[ob]] <- AddMetaData(
+            stroma_obs[[ob]],
+            all_demux[[ob]]
+        )
+
+    } else if (str_detect(ob, "cancer_cells")) { # add xeno human directly to cancer list
         cancer_obs[[ob]] <- obj_list[[ob]]
-    } else {
-        stroma_obs[[ob]] <- obj_list[[ob]]
+    } else { # add xeno mouse directly to stroma list
+        stroma_obs[[ob]] <- obj_list[[ob]] 
     }
 }
-
-cancer_obs[["patient_xeno_mets"]] <- subset(cancer_obs[["patient_xeno_prim_mets_cancer_cells"]], tumor_type == "metastatic")
-cancer_obs[["patient_xeno_prim"]] <- subset(cancer_obs[["patient_xeno_prim_mets_cancer_cells"]], tumor_type == "primary")
 
 dir.create("output/figures/demuxafy/dimplots/", recursive = TRUE)
 
@@ -260,8 +269,7 @@ for (ob in names(cancer_obs)) {
         dimplot_better(
             cancer_obs[[ob]],
             group = c("Ann_Level3", "MajoritySinglet_DropletType"),
-            ncol = 2,
-            raster = FALSE
+            ncol = 2
         )
     )
     dev.off()
@@ -276,8 +284,7 @@ for (ob in names(stroma_obs)) {
             stroma_obs[[ob]],
             group = c("Ann_Level3",
             "MajoritySinglet_DropletType"),
-            ncol = 2,
-            raster = FALSE
+            ncol = 2
         )
     )
     dev.off()
@@ -572,7 +579,7 @@ for (i in seq_len(nrow(pdx_details))) {
 head(mixed_bcs[[1]])
 
 #for each bc, determine whether or not it was called a doublet
-sanity_check <- lapply(names(mixed_bcs), function(sid) {
+mixed_read_results <- lapply(names(mixed_bcs), function(sid) {
     #only keep cells with > 200 reads
     x <- mixed_bcs[[sid]]
     x <- subset(x, num_reads > 200)
@@ -583,7 +590,7 @@ sanity_check <- lapply(names(mixed_bcs), function(sid) {
              "num_cells" = as.integer(nrow(x)),
              "proportion_doublets" = round(mean(tmp == "doublet"), 3)))
 })
-bind_rows(sanity_check) %>%
+bind_rows(mixed_read_results) %>%
     ggplot(aes(x = sample, y = proportion_doublets)) +
     geom_tile()
 ```
@@ -593,21 +600,22 @@ bind_rows(sanity_check) %>%
 We'll merge human cells from a pdx and human stromal cells from a patient sample and merge into one object. I'll then run demuxafy on this object to see if the doublet callers call anything new a doublet. This will give an idea of how much it overcalls.
 
 ```{r}
-human_pdx <- qs::qread("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/xeno_mets_human_cancer_cells.qs")
-# we only want metastatic
-human_pdx <- subset(human_pdx, tumor_type == "metastatic")
+human_pdx <- cancer_obs[["xeno_mets_human_cancer_cells"]]
 
-human_stroma <- qs::qread("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/patient_mets_normal_cells.qs")
-
-hstrom_cts <- GetAssayData(human_stroma, layer = "counts")
+human_stroma <- stroma_obs[["patient_mets"]]
 
 chimera <- merge(human_pdx, human_stroma)
-# chimera <- JoinLayers(chimera)
+# rename demuxafy result metadata columns
+chimera$original_majority <- chimera$MajoritySinglet_DropletType
+chimera <- JoinLayers(chimera) %>%
+    process_seurat()
+qs::qsave(chimera, "output/seurat_objects/human_pdx_stroma_chimera.qs")
+
 Idents(chimera) <- chimera$Ann_Level3
 # downsample to a max of 2000 cells per ann_level3
 down_chi <- subset(chimera, downsample = 2000)
 table(down_chi$Ann_Level3)
-down_chi <- JoinLayers(down_chi)
+
 chimera_counts <- GetAssayData(down_chi, layer = "counts")
 
 library(DropletUtils)
@@ -661,18 +669,10 @@ singularity exec -B DoubletFinder/output/pdx_clinical_chimera:/out \
 
 ```
 
-#### Analyze Chimera Sample
+#### Analyze Chimera Sample + Make Figures
 
 ```{r add-results-to-chimera}
-#show calls for human_stroma
-df_result_heatmaps[["patient_mets_normal_cells"]] |
-dimplot_better(human_stroma, group = c("Ann_Level2", "MajoritySinglet_DropletType"))
-
-#subset chimera object to downsampled cells
-chimera$bc <- colnames(chimera)
-downsampled_names <- colnames(down_samp_chimera)
-chimera_small <- subset(chimera, bc %in% downsampled_names)
-r_dim_plot(chimera_small, group = "Ann_Level1")
+dimplot_better(chimera, group = "Ann_Level1") | dimplot_better(down_chi, group = "Ann_Level1")
 
 #read in demuxafy results
 chimera_demux <- read.table("DoubletFinder/output/pdx_clinical_chimera/combined/combined_doublets_w_combined_assignments.tsv", header = TRUE) %>%
@@ -682,10 +682,95 @@ chimera_demux <- read.table("DoubletFinder/output/pdx_clinical_chimera/combined/
                   scds_DropletType,
                   MajoritySinglet_DropletType)
 
-chimera_small$new_demux_call <-
-    chimera_demux$MajoritySinglet_DropletType[match(colnames(chimera_small),
+down_chi$new_demux_call <-
+    chimera_demux$MajoritySinglet_DropletType[match(colnames(down_chi),
                                                              rownames(chimera_demux))]
 
-dimplot_better(chimera_small, group = c("MajoritySinglet_DropletType",
-                                        "new_demux_call"))
+down_chi$old_demux_call <- down_chi$MajoritySinglet_DropletType
+qs::qsave(down_chi, "output/seurat_objects/downsampled_xeno_tumor_patient_stroma.qs")
+
+
+# confusion matrix
+pdf("output/figures/demuxafy/pdx_tumor_patient_stroma_confusion_matrix.pdf")
+conf_mat <- table(down_chi$old_demux_call, down_chi$new_demux_call)
+conf_df <- as.data.frame(conf_mat)
+colnames(conf_df) <- c("Old Call", "New Call", "Count")
+ggplot(conf_df, aes(x = `Old Call`, y = `New Call`, fill = Count)) +
+    geom_tile(color = "white") +
+    geom_label(aes(label = Count), size = 6, fill = "white")
+dev.off()
+
+# dimplot grouped by first and second call
+down_chi$comb_call <-
+    paste0("Old: ", down_chi$old_demux_call, "\n New:", down_chi$new_demux_call)
+
+pdf("output/figures/demuxafy/combined_old_new_calls.pdf")
+dimplot_better(
+    down_chi,
+    group = "comb_call"
+) +
+    NoLegend()
+dev.off()
+
+# making colored bar plot
+tmp_ob <- down_chi
+metadata <-
+        tmp_ob@meta.data %>%
+        as.data.frame() %>%
+        rownames_to_column("cell_id") %>%
+        select(
+            # DoubletDetection_DropletType,
+            #    scDblFinder_DropletType,
+            #    MajoritySinglet_DropletType,
+            #    scds_DropletType,
+                object,
+                new_demux_call,
+                old_demux_call,
+                cell_id) %>%
+        arrange(
+            # DoubletDetection_DropletType,
+            # scDblFinder_DropletType,
+            # scds_DropletType,
+            # MajoritySinglet_DropletType
+            old_demux_call,
+            new_demux_call
+        )  %>%
+        mutate(cell_id_number = row_number())
+        # rename(DoubletDetection = DoubletDetection_DropletType,
+            #    scDblFinder = scDblFinder_DropletType,
+            #    scds = scds_DropletType,
+            #    Majority = MajoritySinglet_DropletType)
+        # mutate(across(everything(), ~ifelse(. == "", "unknown", .)))
+
+matadata_mimic <-
+            metadata %>%
+            # rownames_to_column("cell_id") %>%
+            # select(cell_id, DoubletDetection, scDblFinder, scds) %>%
+            mutate(cell_id_number = row_number()) %>%
+            pivot_longer(cols = -c(cell_id, cell_id_number, object),
+                        names_to = "method",
+                        values_to = "call")
+
+doublet_cols <- c("singlet" = "#D43F3AFF", "doublet" = "#EEA236FF")
+
+pdf("output/figures/demuxafy/pdx_tumor_patient_stroma_doublet_calls.pdf")
+matadata_mimic %>%
+    mutate(
+        method = factor(method,
+        levels = c("old_demux_call", "new_demux_call")),
+        call = factor(call, levels = c("singlet", "doublet"))
+    ) %>%
+    ggplot(aes(x = method, y = cell_id_number, fill = call)) +
+    geom_tile() +
+    scale_fill_manual(values = doublet_cols) +
+    theme_minimal() +
+    theme(
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_text(size = 10, face = "bold"),
+        axis.text.y = element_blank(),
+        plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
+        panel.grid = element_blank()
+    )
+dev.off()
 ```

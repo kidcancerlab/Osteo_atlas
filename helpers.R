@@ -1,0 +1,1992 @@
+## ----dimplot_better_function--------------------------------------------------
+#| cache.vars: [dimplot_better, clusterbased_annot]
+
+dimplot_better <- function(object,
+                           group_by = NULL,
+                           cols,
+                           ncol = 1,
+                           label.size = 5,
+                           split_by = NULL,
+                           shuffle,
+                           ...) {
+    DimPlot(object,
+            group.by = group_by,
+            split.by = split_by,
+            ncol = ncol,
+            label.size = label.size,
+            label = TRUE,
+            raster = FALSE,
+            repel = TRUE,
+            shuffle = TRUE,
+            label.box = TRUE,
+            #raster.dpi = c(500, 500),
+            cols = c(plot_cols, sample(rainbow(100))),
+            ...) +
+        coord_fixed() +
+        theme(aspect.ratio=1) +
+        theme_void() +
+        theme(plot.title = element_text(hjust = 0.5))
+}
+
+# cluster based annotation
+clusterbased_annot <- function(s_obj) {
+    Idents(s_obj) <- s_obj$seurat_clusters
+    clust_info <- tibble()
+    for (cluster in unique(s_obj$seurat_clusters)) {
+        set.seed(199820)
+        print(str_c("Reclustering cluster ", cluster))
+        subset_object <- subset(s_obj, ident = cluster) %>%
+            FindVariableFeatures() %>%
+            ScaleData() %>%
+            # don't ask for more PCs than there are cells
+            RunPCA(npcs = min(50,
+                            sum(s_obj$seurat_clusters == cluster) - 1))
+
+        #dimplot_better(s_obj, group_by = "sample_name") 
+        if (length(unique(subset_object$sample_name)) > 1 &&
+            ncol(subset_object) > 50) {
+            subset_object <- RunHarmony(subset_object,
+                                        group.by.vars = "sample_name") %>%
+                process_seurat(reduction = "harmony")
+        } else {
+            subset_object <- subset_object
+        }
+
+        subset_object$re_cluster <- str_c(cluster,
+                                        ".",
+                                        subset_object$seurat_clusters)
+
+        clust_info <- subset_object@meta.data %>%
+                as.data.frame() %>%
+                select(re_cluster) %>%
+                rbind(clust_info)
+    }
+
+    s_obj <- AddMetaData(s_obj, metadata = clust_info)
+    s_obj$new_annot_clust <- s_obj$re_cluster
+
+    cluster_celltypes <-
+        table(s_obj$re_cluster, s_obj$annotations) %>%
+        as.data.frame() %>%
+        group_by(Var1) %>%
+        arrange(desc(Freq), .by_group = TRUE) %>%
+        slice_head(n = 1)
+
+    for (i in seq_len(nrow(cluster_celltypes))) {
+        seurat_clust <- str_c("^", cluster_celltypes$Var1[i], "$") %>%
+            as.character()
+
+        celltype <- cluster_celltypes$Var2[i] %>%
+            as.character()
+
+        s_obj$new_annot_clust <-
+            str_replace_all(string = s_obj$new_annot_clust,
+                            pattern = seurat_clust,
+                            replacement = celltype)
+    }
+    return(s_obj)
+}
+
+
+
+## ----make_human_and_mouse_tumor_cell_refs-------------------------------------
+
+# # make the mouse
+# # make a reference for all tumor cells, using cell culture data documantation
+# mouse_tumor_cell <-
+#     qs::qread("output/seurat_objects/comb_sobjs/mm_prim.qs") %>%
+#     subset(sample_name %in% c("S0200", "S0201"))
+
+# #create a column with the cell type
+# mouse_tumor_cell$CellType <- "Tumor_cells"
+
+# if (!dir.exists("input/downloads")) {
+#     dir.create("input/downloads", recursive = TRUE)
+# }
+# #save the object
+# qs::qsave(mouse_tumor_cell,
+#           file = "input/downloads/mm_tumor_cellculture.qs")
+
+
+# #make human tumor cell reference except for the 
+# # randomily select the samples for later validation, two for primary and two for metastasis
+# xeno_prim_human <-
+#     qs::qread("output/seurat_objects/comb_sobjs/xeno_prim_human.qs")
+# random_two_prim_over_500_cells <-
+#     table(xeno_prim_human$sample_name) %>%
+#     as.data.frame() %>%
+#     filter(Freq > 5000) %>%
+#     pull(Var1)
+# set.seed(199820)
+# randomly_select_samples_prim <-
+#     sample(random_two_prim_over_500_cells, 2) %>%
+#     as.vector()
+# #samples selected: 1) S0042 2)SJOS016015_X1
+# # make the reference without the randomly selected samples
+# xeno_prim_human_ref <-
+#     xeno_prim_human %>%
+#     subset(sample_name %in% setdiff(unique(xeno_prim_human$sample_name), randomly_select_samples_prim))
+
+# # Randomly sample 500 cells from the remaining object
+# set.seed(199822)
+# xeno_prim_human_ref_ds <-
+#     xeno_prim_human_ref %>%
+#     subset(cells = unlist(
+#         split(Cells(.), .$sample_name) %>%
+#             lapply(function(cells) sample(cells, min(500, length(cells)))) %>%
+#             unname()))
+
+# # do same for xeno_mets_human
+# xeno_mets_human <-
+#     qs::qread("output/seurat_objects/comb_sobjs/xeno_mets_human.qs")
+
+# random_two_mets_over_5000_cells <-
+#     table(xeno_mets_human$sample_name) %>%
+#     as.data.frame() %>%
+#     filter(Freq > 5000) %>%
+#     pull(Var1)
+# set.seed(199821)
+# randomly_select_samples_mets <-
+#     sample(random_two_mets_over_5000_cells, 2) %>%
+#     as.vector()
+# # selected samples: 1) S0055  2)SJOS001112_X1
+
+# # remove the randomly selected samples from the metastasis object
+# xeno_mets_human_ref <-
+#     xeno_mets_human %>%
+#     subset(sample_name %in% setdiff(unique(xeno_mets_human$sample_name), randomly_select_samples_mets))
+
+# # Randomly sample 500 cells from the remaining object
+# set.seed(199823)
+# xeno_mets_human_ref_ds <-
+#     xeno_mets_human_ref %>%
+#     subset(cells = unlist(
+#         split(Cells(.), .$sample_name) %>%
+#             lapply(function(cells) sample(cells, min(500, length(cells)))) %>%
+#             unname()))
+
+# # comebine the two and make a reference
+# xeno_human_tumor_ref <-
+#     merge(xeno_prim_human_ref_ds,
+#           xeno_mets_human_ref_ds,
+#           add.cell.ids = c("xeno_prim", "xeno_mets"),
+#           project = "tumor_ref") %>%
+#     JoinLayers() %>%
+#     process_seurat() %>%
+#     RunHarmony(group.by.vars = c("sample_name", "data_source"),
+#                 theta = c(7, 7)) %>%
+#     process_seurat(reduction = "harmony")
+
+# #dimplot_better(xeno_human_tumor_ref, group_by = "sample_name")
+
+# qs::qsave(xeno_human_tumor_ref,
+#           file = "input/downloads/tumor_ref_from_xenograft.qs")
+
+
+## ----celltype_annotation_data-------------------------------------------------
+#| cache.vars: [human_lung_ref, mouse_lung_ref, human_tumor_cell, mouse_tumor_cell]
+
+#reference for annotating mets
+human_lung_ref <-
+    qs::qread("input/downloads/ds_human_lung_atlas.qs")
+human_lung_ref$free_annotation <-
+    human_lung_ref$free_annotation %>%
+    str_replace_all(c("Lymphatic_EC_differentiating" = "Lymphatic_EC",
+                     "Lymphatic_EC_mature" = "Lymphatic_EC"))
+
+human_lung_ref$free_annotation <-
+    str_replace_all(human_lung_ref$free_annotation, c("/" = "_",
+                                                  "\\+" = "_plus"))
+
+human_lung_ref$free_annotation <-
+    str_replace_all(human_lung_ref$free_annotation, c(" " = "_"))
+
+#load the object
+human_tumor_cell <- 
+    qs::qread("input/downloads/tumor_ref_from_xenograft.qs")
+human_tumor_cell$CellType <- "Tumor_cells"
+
+#mouse lung normal cells reference
+mouse_lung_ref <- qs::qread("input/downloads/normal_mouselung.qs")
+
+mouse_lung_ref$CellType <-
+            str_replace_all(mouse_lung_ref$free_annotation,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_",
+                              " " = "_"))
+
+mouse_lung_ref$CellType <-
+    str_replace_all(mouse_lung_ref$CellType,
+                    c("^Col14a1_plus fibroblast$" = "Col14a1_Fibroblasts",
+                      "^Col13a1_plus fibroblast$" = "Col13a1_Fibroblasts",
+                      "^AT1$" = "AlvEpithelial_T1",
+                      "^AT2 1$" = "AlvEpithelial_T2",
+                      "^AT2 2$" = "AlvEpithelial_T2",
+                      "^B cells$" = "B_cells",
+                      "^Cap_a$" = "Capillary_Aerocytes", #capillary endothelial
+                      "^CD4$" = "CD4T_cells",
+                      "^CD4 T cell 2$" = "CD4T_cells",
+                      "^CD8$" = "CD8T_cells",
+                      "^CD8 T cell 2$" = "CD8T_cells",
+                      "^DC1$" = "Dendritic_cells1",
+                      "^DC2$" = "Dendritic_cells2",
+                      "^gd T cell$" = "Tgd_cells",
+                      "^Tgd$" = "Tgd_cells",
+                      "^Neut 1$" = "Neutrophils",
+                      "^Neut 2$" = "Neutrophils",
+                      "^NK cells$" = "NK_cells",
+                      "^Pericyte 1$" = "Pericyte1",
+                      "^Pericyte 2$" = "Pericyte12",
+                      "^Mast Ba2$" = "Basophil_Mast",
+                      "^Mono$" = "Monocytes",
+                      "^Alv Mf$" = "Alv_Macrophages",
+                      "^Int Mf$" = "Int_Macrophages",
+                      "^B cells$" = "B_cells",
+                      "^AT$" = "AlvEpithelial_cells",
+                      "^Endothelial cells$" = "Endothelial_cells",
+                      "^SMC$" = "Mural_cells",
+                      "^ILC2$" = "Lymphoid_cells",
+                      "^Dendritic cells$" = "Dendritic_cells",
+                      "^Cap$" = "Capillary_cells",
+                      "^Lymph$" = "Lymph_cells",
+                      "^Art$" = "Artery_cells",
+                      "^Vein$" = "Vein_cells",
+                      "^Myofibroblast$" = "Myo_Fibroblasts",
+                      "^Club$" = "Club_cells",
+                      "^Ionocyte$" = "Ionocyte",
+                      "^Ciliated$" = "Ciliated_cells",
+                      "^Pericytes$" = "Pericyte",
+                      "^Mesothelial$" = "Mesothelial_cells",
+                      "^Capillary$" = "Capillary_cells",
+                      "^Mast_Basophils$" = "Basophil_Mast",
+                      "^CD8_plus_T$" = "CD8T_cells",
+                      "^CD4_plus_T$" = "CD4T_cells"))
+
+
+#load the object S0200 and S0201 combined cell culture mouse tumor cells
+mouse_tumor_cell <- 
+    qs::qread("input/downloads/mm_tumor_cellculture.qs")
+
+
+
+## ----annotate_function--------------------------------------------------------
+#| cache.vars: [annotate_celltypes, hpca, huim, mord, moim]
+#| dependson: celltype_annotation_data
+hpca <- celldex::HumanPrimaryCellAtlasData()
+huim <- celldex::MonacoImmuneData()
+ref4 <- SeuratObject::GetAssayData(human_tumor_cell)
+#dimplot_better(human_tumor_cell, group_by = "free_annotation") + NoLegend()
+hpca$label.main <-
+            str_replace_all(hpca$label.main,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_"))
+hpca$label.fine <-
+            str_replace_all(hpca$label.fine,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_",
+                              " " = "_",
+                              ":" = "_",
+                              "\\(" = "_",
+                              "\\)" = "_",
+                              "," = "_"))
+hpca$label.main <-
+            stringr::str_replace_all(hpca$label.main,
+                                     c("^T_cells$" = "T_cells",
+                                       "^B_cell$" = "B_cells",
+                                       "^NK_cell$" = "NK_cells",
+                                       "^Monocyte$" = "Monocytes",
+                                       "^DC$" = "Dendritic_cells",
+                                       "^Pre_B_cell_CD34_$" = "CD34_minusB_cells",
+                                       "^Pro_B_cell_CD34_plus$" = "CD34_plusB_cells",
+                                       "^BM$" = "Bone_marrow",
+                                       "^HSC_CD34_plus$" = "Hematopoietic_stem_cells",
+                                       "^Pro_Myelocyte$" = "Myelocyte",
+                                       "^MEP$" = "MEP_progenitors",
+                                       "^GMP$" = "GMP_Progenitors",
+                                       "^CMP$" = "CMP_Progenitors",
+                                       "^BM & Prog.$" = "Bone_marrow",
+                                       "^Macrophage$" = "Macrophages",
+                                       "^Capillary$" = "Capillary_cells"))
+
+huim$label.main <-
+            str_replace_all(huim$label.main,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_"))
+huim$label.main <-
+    stringr::str_replace_all(huim$label.main,
+                                c("^B cells$" = "B_cells",
+                                "^Dendritic cells$" = "Dendritic_cells",
+                                "^NK cells$" = "NK_cells",
+                                "^T cells$" = "T_cells",
+                                "^CD8_plus T cells$" = "CD8T_cells",
+                                "^CD4_plus T cells$" = "CD4T_cells",
+                                "^Progenitors$" = "Progenitor_cells",
+                                "^Macrophage$" = "Macrophages",
+                                "^Basophils$" = "Basophil_Mast",
+                                "^Capillary$" = "Capillary_cells"))
+
+mord <- celldex::MouseRNAseqData()
+moim <- celldex::ImmGenData()
+
+mord$label.main <-
+    stringr::str_replace_all(mord$label.main,
+                            c("^T cells$" = "T_cells",
+                                "^B cells$" = "B_cells",
+                                "^NK cells$" = "NK_cells",
+                                "^Epithelial cells$" = "Epithelial_cells",
+                                "^Dendritic cells$" = "Dendritic_cells",
+                                "^Endothelial cells$" = "Endothelial_cells",
+                                "^Progenitors$" = "Progenitor_cells",
+                                "^Airway Smooth Muscle$" = "Airway_SMC",
+                                "^Proximal Ciliated$" = "Ciliated_cells",
+                                "^Myofibroblast$" = "Myo_Fibroblasts",
+                                "^Club$" = "Club_cells",
+                                "^Ionocyte$" = "Ionocyte",
+                                "^Ciliated$" = "Ciliated_cells",
+                                "^Microglia$" = "Macrophages",
+                                "^Pericytes$" = "Pericytes",
+                                "^Capillary$" = "Capillary_cells"))
+moim$label.main <-
+    stringr::str_replace_all(moim$label.main,
+                            c("^B cells, pro$" = "B_cells",
+                            "^DC$" = "Dendritic_cells",
+                            "^NK cells$" = "NK_cells",
+                            "^T cells$" = "T_cells",
+                            "^Epithelial cells$" = "Epithelial_cells",
+                            "^Endothelial cells$" = "Endothelial_cells",
+                            "^B cells$" = "B_cells",
+                            "^Stem cells$" = "Stem_cells",
+                            "^Stromal cells$" = "Stromal_cells",
+                            "^Mast cells$" = "Basophil_Mast",
+                            "^NKT$" = "NKT_cells",
+                            "^Tgd$" = "Tgd_cells",
+                            "^ILC$" = "Lymphoid_cells",
+                            "^Microglia$" = "Macrophages",
+                            "^Capillary$" = "Capillary_cells"))
+
+moim$label.fine <-
+            str_replace_all(moim$label.fine,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_",
+                              " " = "_",
+                              ":" = "_",
+                              "\\(" = "_",
+                              "\\)" = "_",
+                              "," = "_",
+                              "\\." = "_"))
+
+mord$label.fine <-
+            str_replace_all(mord$label.fine,
+                            c("/" = "_",
+                              "\\+" = "_plus",
+                              "-" = "_",
+                              " " = "_",
+                              ":" = "_",
+                              "\\(" = "_",
+                              "\\)" = "_",
+                              "," = "_",
+                              "\\." = "_"))
+
+#function to annotate celltypes
+annotate_celltypes <- function(sobject,
+                               species = "",
+                               with_tumor = FALSE,
+                               ref,
+                               labels,
+                               aggr_ref = FALSE,
+                               label_type = "label.main",
+                               ...) {
+    if (grepl("human", species) || grepl("canine", species)) {
+        ref <- list(hpca,
+                    huim)
+        labels <- list(hpca[[label_type]],
+                       huim[[label_type]])
+        if (with_tumor == TRUE) {
+            ref <- list(hpca,
+                        huim,
+                        SeuratObject::GetAssayData(human_tumor_cell))
+            labels <- list(hpca[[label_type]],
+                           huim[[label_type]],
+                           human_tumor_cell$CellType)
+        }
+        if (species == "human_lung" || species == "canine_lung") {
+            ref <- list(hpca,
+                        huim,
+                        SeuratObject::GetAssayData(human_lung_ref))
+            labels <- list(hpca[[label_type]],
+                           huim[[label_type]],
+                           human_lung_ref$free_annotation)
+        }
+        if (species == "human_lung" && with_tumor == TRUE) {
+            ref <- list(hpca,
+                        huim,
+                        SeuratObject::GetAssayData(human_tumor_cell),
+                        SeuratObject::GetAssayData(human_lung_ref))
+            labels <- list(hpca[[label_type]],
+                           huim[[label_type]],
+                           human_tumor_cell$CellType,
+                           human_lung_ref$free_annotation)
+        }
+    } else if (grepl("mouse", species)) {
+        ref <- list(mord,
+                    moim)
+        labels <- list(mord[[label_type]],
+                       moim[[label_type]])
+        if (with_tumor == TRUE) {
+            ref <- list(mord,
+                        moim,
+                        SeuratObject::GetAssayData(mouse_tumor_cell))
+            labels <- list(mord[[label_type]],
+                           moim[[label_type]],
+                           mouse_tumor_cell$CellType)
+        }
+        if (species == "mouse_lung") {
+            ref <- list(mord,
+                        moim,
+                        SeuratObject::GetAssayData(mouse_lung_ref))
+            labels <- list(mord[[label_type]],
+                           moim[[label_type]],
+                           mouse_lung_ref$CellType)
+        }
+        if (species == "mouse_lung" && with_tumor == TRUE) {
+            ref <- list(mord,
+                        moim,
+                        SeuratObject::GetAssayData(mouse_tumor_cell),
+                        SeuratObject::GetAssayData(mouse_lung_ref))
+            labels <- list(mord[[label_type]],
+                           moim[[label_type]],
+                           mouse_tumor_cell$CellType,
+                           mouse_lung_ref$CellType)
+        }
+    }
+    annotation <-
+        SingleR::SingleR(test = Seurat::as.SingleCellExperiment(sobject),
+                         ref = ref,
+                         labels = labels,
+                         aggr.ref = aggr_ref,
+                         ...)
+    sobject$annotations <- annotation$labels
+    sobject$cell_scores <-
+        apply(X = annotation$scores,
+              MARGIN = 1,
+              function(x) max(x, na.rm = TRUE))
+    return(sobject)
+}
+
+#Function for adding metadata for Ann_Level0, 1, and 2 from 3
+reconstruct_cell_types <- function(obj) {
+    obj$Ann_Level2 <- 
+        str_replace_all(obj$Ann_Level3,
+                        c("^Angio_TAMs$" = "Macrophages",
+                          "^CAF$" = "Fibroblasts",
+                          "^CD4_T$" = "T_cells",
+                          "^CD8_T$" = "T_cells",
+                          "^EC_Blood$" = "Endothelial_cells",
+                          "^EC_Lymphatic$" = "Endothelial_cells",
+                          "^IFN_TAMs$" = "Macrophages",
+                          "^Inflam_TAMs$" = "Macrophages",
+                          "^Memory_B$" = "B_cells",
+                          "^Naive_T$" = "T_cells",
+                          "^Normal_Fibroblasts$" = "Fibroblasts",
+                          "^Osteoblasts$" = "Osteoblasts",
+                          "^Osteoclast_TAMs$" = "Macrophages",
+                          "^Plasma_B$" = "B_cells",
+                          "^Plasmocytoid_DC$" = "DC",
+                          "^Prolif_TAMs$" = "Macrophages",
+                          "^Regulatory_T$" = "T_cells",
+                          "^Proliferating_T$" = "T_cells",
+                          "^TAMs$" = "Macrophages",
+                          "^Alv_EpithelialT1$" = "Epithelial_cells",
+                          "^Alv_EpithelialT2$" = "Epithelial_cells",
+                          "^Alv_Fibroblasts$" = "Fibroblasts",
+                          "^Alv_Macrophages$" = "Macrophages",
+                          "^Int_Macrophages$" = "Macrophages",
+                          "^PreDC$" = "DC",
+                          "^Scar_TAMs$" = "Macrophages",
+                          "^Transitional_Epithelial$" = "Epithelial_cells",
+                          "^preDC$" = "DC",
+                          "^Proli_TAMs$" = "Macrophages",
+                          "^Myofibroblasts$" = "Fibroblasts"))
+
+
+
+    obj$Ann_Level1 <- 
+        str_replace_all(obj$Ann_Level2,
+                        c("^B_cells$" = "Immune_Myeloid",
+                          "^Ciliated_cells$" = "Epithelial_Endothelial",
+                          "^Club_cells$" = "Epithelial_Endothelial",
+                          "^DC$" = "Immune_Myeloid",
+                          "^Endothelial_cells$" = "Epithelial_Endothelial",
+                          "^Epithelial_cells$" = "Epithelial_Endothelial",
+                          "^Fibroblasts$" = "Mesenchymal",
+                          "^Macrophages$" = "Immune_Myeloid",
+                          "^Monocytes$" = "Immune_Myeloid",
+                          "^Neutrophils$" = "Immune_Myeloid",
+                          "^NK_cells$" = "Immune_Lymphoid",
+                          "^Pericytes$" = "Mesenchymal",
+                          "^T_cells$" = "Immune_Lymphoid",
+                          "^Osteoblasts$" = "Mesenchymal",
+                          "^Smooth_muscle$" = "Mesenchymal",
+                          "^Cardiomyocytes$" = "Mesenchymal",
+                          "^Neurons$" = "Mesenchymal",
+                          "^Adipocytes$" = "Mesenchymal",
+                          "^Erythrocytes$" = "Immune_Myeloid",
+                          "^Tuft_cells$" = "Epithelial_Endothelial",
+                          "^Stromal_cells$" = "Mesenchymal",
+                          "^Mast$" = "Immune_Myeloid"))
+
+    obj$Ann_Level0 <- 
+        str_replace_all(obj$Ann_Level1,
+                        c("^Immune_Myeloid$" = "Host",
+                          "^Epithelial_Endothelial$" = "Host",
+                          "^Immune_Lymphoid$" = "Host",
+                          "^Mesenchymal$" = "Host"))
+
+    return(obj)
+}
+
+
+
+## ----run_degs_function--------------------------------------------------------
+#| cache.vars: [all_samples_csv, run_degs, degs_cutoff_percent, gene_cell_percent_calc]
+all_samples_csv <- read_tsv("misc/allsample_details.txt",
+                            show_col_types = FALSE)
+
+gene_cell_percent_calc <- function(sobj,
+                                   cluster_no,
+                                   target_col_name) {
+    # get the cluster number
+    sub_obj <-
+        sobj %>%
+        subset(seurat_clusters %in% cluster_no)
+
+    # get the number of cells in the cluster
+    num_cells <- ncol(sub_obj)
+
+
+    # get the number of cells in the cluster that express each geneskept
+    num_cells_expressed <-
+        rowSums(GetAssayData(sub_obj,
+                            layer = "counts") > 0) %>%
+        as.data.frame() %>%
+        rownames_to_column("gene") %>%
+        dplyr::rename(value = ".") %>%
+        arrange(desc(value)) %>%
+        mutate(percent = value / num_cells) %>%
+        select(gene, percent) %>%
+        rename({{target_col_name}} := "percent")
+
+    return(num_cells_expressed)
+}
+
+
+degs_cutoff_percent <- function(sobj,
+                                target_cluster_no) {
+    non_target_cluster_no <-
+        unique(sobj$seurat_clusters) %>%
+        setdiff(target_cluster_no)
+
+    # get the number of cells in the cluster
+    output_target <-
+        gene_cell_percent_calc(sobj,
+         target_cluster_no,
+         target_col_name = "percent_target_degs")
+
+    output_non_target <-
+        gene_cell_percent_calc(sobj,
+                               non_target_cluster_no,
+                               target_col_name = "percent_non_target_degs")
+
+    # combine the two dataframes
+    output_merged <-
+        merge(output_target,
+            output_non_target,
+            by = "gene")
+
+    # return the output
+    return(output_merged)
+}
+
+
+
+#function to run DEGs
+run_degs <- function(sobject,
+                     aggregate_by,
+                     comparison_col,
+                     organism_col = "organism",
+                     subset = FALSE,
+                     batch_var) {
+
+    # aggregate the data
+    pseudobulk <- sobject %>%
+        Seurat::AggregateExpression(
+            group.by = aggregate_by,
+            slot = "counts",
+            assay = "RNA"
+        )
+    pseudobulk <- pseudobulk[[1]]
+
+    # run deseq2
+    #for (cluster_no in unique(object$seurat_clusters)) {
+    degs_output <-
+        parallel::mclapply(unique(sobject@meta.data[[comparison_col]]),
+                           mc.cores = parallelly::availableCores(),
+                           mc.preschedule = FALSE,
+                           function(cluster_no) {
+
+        batch_df <-
+            data.frame(sample_name = colnames(pseudobulk))
+
+        batch_df_new <-
+            tibble(col_label = colnames(pseudobulk),
+                   sample_name = colnames(pseudobulk) %>%
+                        sub("_.*", "", .),
+                   cluster_no = str_remove(colnames(pseudobulk), ".+_")) %>%
+            left_join(batch_df) %>%
+            mutate(sample_name = str_replace_all(sample_name, "-", "_")) %>%
+            mutate(organism = sobject@meta.data[[organism_col]][[1]]) %>%
+            mutate(cluster_no = str_replace_all(cluster_no, "-", "_"))
+        #add the datasource and method as batch in batch_df_new from all_samples_csv for each sample_name
+        new_all_samples_csv <-
+            all_samples_csv %>%
+            filter(sample_name %in% unique(sobject$sample_name)) %>%
+            select(sample_name, method, data_source, model, location, organism)
+
+        if (unique(sobject[[organism_col]][[1]]) == "mouse") {
+            batch_df_new2 <- left_join(batch_df_new,
+                                    new_all_samples_csv,
+                                    by = c("sample_name", "organism")) %>%
+                select(-sample_name, -method, -location, -data_source, -organism)
+        } else {
+            batch_df_new2 <- left_join(batch_df_new,
+                                    new_all_samples_csv,
+                                    by = c("sample_name", "organism")) %>%
+                select(col_label, cluster_no, dplyr::all_of(batch_var))
+        }
+
+        all(colnames(pseudobulk) == batch_df_new$col_label)
+
+        batch_df_new2$group <- "other"
+        batch_df_new2$group[batch_df_new2$cluster_no == cluster_no] <- "target"
+        batch_df_new2$group <- factor(batch_df_new2$group)
+
+        for (columns in colnames(batch_df_new2)) {
+            if (unique(batch_df_new2[[columns]]) %>% length() == 1) {
+                batch_df_new2[[columns]] <- NULL
+            }
+        }
+        design <-
+            as.formula(
+                paste0(
+                    "~",
+                    paste(colnames(batch_df_new2)[c(-1, -2)], collapse = " + ")
+                )
+            )
+
+        # run DESeq2
+        return(
+            DESeq2::DESeqDataSetFromMatrix(countData = pseudobulk + 1,
+                                           colData = batch_df_new2,
+                                           design = design) %>%
+            DESeq2::DESeq(quiet = TRUE) %>%
+            DESeq2::results() %>%
+            as.data.frame() %>%
+            dplyr::arrange(dplyr::desc(log2FoldChange)) %>%
+            tibble::rownames_to_column("gene") %>%
+            na.omit() #%>%
+            # left_join(
+            #     degs_cutoff_percent(sobject, cluster_no),
+            #     by = "gene"
+            # ) %>%
+            # filter(percent_target_degs > 0.05 |
+            #       percent_non_target_degs > 0.05)
+        )
+    })
+    # subset and name the degs_output by the group_by variables
+    names(degs_output) <- unique(sobject@meta.data[[comparison_col]])
+
+    return(degs_output)
+}
+
+# y <-
+#     x %>%
+#     filter(percent_target_degs > 0.1) %>%
+#     filter(percent_non_target_degs > 0.1)
+# ggplot(data = x,
+#         mapping = aes(x = log10(percent_target_degs),
+#                      y = log10(percent_non_target_degs))) +
+#     geom_point()
+
+
+# plot1 <-
+#     hist(log10(x$percent_target_degs),
+#         main = "Histogram of Data",
+#         xlab = "Values",
+#         ylab = "Frequency",
+#         col = "skyblue",
+#         border = "black")
+# plot2 <-
+#     hist(log10(x$percent_non_target_degs),
+#         main = "Histogram of Data",
+#         xlab = "Values",
+#         ylab = "Frequency",
+#         col = "skyblue",
+#         border = "black")
+
+# ggplot(data = x,
+#         mapping = aes(x = log10(percent_target_degs),
+#                      y = log10(percent_non_target_degs))) +
+#     geom_point()
+
+
+
+
+
+## ----gsea_function------------------------------------------------------------
+#| cache.vars: run_gsea
+run_gsea <- function(degs_result,
+                     category = "",
+                     subcategory = "",
+                     species = "") {
+    gsea_ref <- msigdbr::msigdbr(species = species,
+                                 category = category,
+                                 subcategory = subcategory) %>%
+        split(x = .$gene_symbol, f = .$gs_name)
+    gsea_output <- list()
+    #for (item in names(degs_result)) {
+    gsea_output <-
+        parallel::mclapply(names(degs_result),
+                           mc.cores = parallelly::availableCores(),
+                           mc.preschedule = FALSE,
+                           function(item) {
+            gsea_input <- as.vector(degs_result[[item]]$log2FoldChange)
+            names(gsea_input) <- degs_result[[item]]$gene
+
+            set.seed(199820)
+            output <- fgsea::fgseaMultilevel(gsea_ref,
+                                            gsea_input,
+                                            minSize = 10,
+                                            maxSize = 500,
+                                            nPermSimple = 10000)
+            gsea_output[[item]] <-
+                output %>%
+                dplyr::arrange(desc(NES)) %>%
+                filter(padj < 0.05) %>%
+                group_by(pathway) %>%
+                mutate(leadingEdge = unlist(leadingEdge) %>%
+                            str_c(collapse = ", ")) %>%
+                ungroup() %>%
+                na.omit()
+        })
+    names(gsea_output) <- names(degs_result)
+
+    return(gsea_output)
+}
+
+
+
+## -----------------------------------------------------------------------------
+#| cache.vars: [gsea_dotplot, gsea_barplot]
+gsea_dotplot <- function(data, x_col = "z_score") {
+    lab4plot <-
+        tibble(y = c(-2.5, 2.5),
+               x = c(0.2, 0.2),
+               label = c("Downregulated", "Upregulated"))
+
+    plot_name <-
+        ggplot() +
+        geom_point(data = data,
+                 aes(x = -1 * order,
+                     y = get(x_col),
+                     color = -log10(padj),
+                     size = size),
+                 stat = "identity",
+                 alpha = 0.8) +
+        coord_flip() +
+        geom_text(data = data,                #text for pathways names
+                    aes(x = -1 * order,
+                        y = get(x_col) + (y_pos *5),
+                        hjust = justify_y,
+                        label = pathway),
+                        size = 2,
+                        fontface = "bold") +
+        geom_text(data = lab4plot,    #text for upregulated/downregulated
+                  aes(x = x,
+                      y = y,
+                      label = label),
+                  fontface = "bold",
+                  size = 2.5) +
+        scale_fill_manual(values = plot_cols,
+                          name = paste0(x_col, " > 0")) +
+        theme(strip.background = element_rect(color = "white",
+                                              fill = "white"),
+              #legend.position = "none",
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              panel.border = element_blank(),
+              axis.line.x = element_line(color = "black"),
+              axis.line.y = element_blank(),
+              axis.title.x = element_text(size = 7),
+              axis.ticks.y = element_blank(),
+              plot.title = element_text(size = 7, face = "bold"),
+              axis.text.y = element_blank(),
+              axis.text.x = element_text(size = 7),
+              legend.title = element_text(size = 7,
+                                          face = "bold")) +
+        labs(title = data$sample[1],
+             y = "NES",
+             x = "") +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        ylim(-6, 6) +
+        scale_color_gradient(low = plot_cols[2],
+                             high =plot_cols[1])
+
+    return(plot_name)
+}
+
+
+gsea_barplot <- function(data, x_col = "z_score") {
+    lab4plot <-
+        tibble(y = c(-3, 3),
+               x = c(0.2, 0.2),
+               label = c("Downregulated", "Upregulated"))
+
+    plot_name <-
+        ggplot() +
+        geom_bar(data = data,
+                 aes(x = -1 * order,
+                     y = get(x_col),
+                     fill = get(x_col) > 0),
+                 stat = "identity",
+                 alpha = 0.8) +
+        coord_flip() +
+        geom_hline(yintercept = 0,
+                    color = "black",
+                    linewidth = 0.5) +
+        geom_text(data = data,                #text for pathways names
+                    aes(x = -1 * order,
+                        y = y_pos,
+                        hjust = justify_y,
+                        label = pathway),
+                        size = 2,
+                        fontface = "bold") +
+        geom_text(data = lab4plot,    #text for upregulated/downregulated
+                  aes(x = x,
+                      y = y,
+                      label = label),
+                  fontface = "bold",
+                  size = 2.5) +
+        scale_fill_manual(values = plot_cols,
+                          name = paste0(x_col, " > 0")) +
+        theme(strip.background = element_rect(color = "white",
+                                              fill = "white"),
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              panel.border = element_blank(),
+              axis.line.x = element_line(color = "black"),
+              axis.line.y = element_blank(),
+              axis.title.x = element_text(size = 7),
+              axis.ticks.y = element_blank(),
+              plot.title = element_text(size = 7, face = "bold"),
+              axis.text.y = element_blank(),
+              axis.text.x = element_text(size = 7),
+              legend.title = element_text(size = 7,
+                                          face = "bold")) +
+        labs(title = data$sample[1],
+             y = "NES",
+             x = "") +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        ylim(-6, 6)
+
+    return(plot_name)
+}
+
+
+## ----circle_plot_function-----------------------------------------------------
+#| cache.vars: circle_plot
+circle_plot <- function(sobj,
+                        comparison_col,
+                        features) {
+    avg_expr <-
+        AverageExpression(
+            sobj,
+            assay = "RNA",
+            layer = "scale.data",
+            features = features,
+            group.by = comparison_col
+        ) %>%
+        as.data.frame() %>%
+        rownames_to_column("gene") %>%
+        as_tibble() %>%
+        pivot_longer(
+            cols = -gene,
+            names_to = "cluster",
+            values_to = "expression"
+        ) %>%
+        mutate(cluster = str_replace(cluster, "RNA.g", "Cluster "))
+
+    clusters <-
+        sobj[[comparison_col]] %>%
+        unlist() %>%
+        unique() %>%
+        as.character()
+
+    perc_expressed <-
+        lapply(clusters,
+            function(x) {
+                binarized <-
+                    sobj[, sobj[[comparison_col]] == x] %>%
+                    GetAssayData(slot = "data")
+                binarized <- binarized[features, ]
+                binarized <- binarized == 0
+                perc_expressed <- 1 - rowSums(binarized) / ncol(binarized)
+                return(
+                    enframe(
+                        perc_expressed,
+                        name = "gene",
+                        value = "perc_expressed"
+                    ) %>%
+                    mutate(cluster = paste0("Cluster ", x))
+                )
+            }) %>%
+        bind_rows()
+
+    ############### Use hclust to group genes and clusters
+    # Calculate the distance matrix
+
+    gene_tree <-
+        avg_expr %>%
+        pivot_wider(
+            names_from = cluster,
+            values_from = expression
+        ) %>%
+        column_to_rownames("gene") %>%
+        dist() %>%
+        hclust()
+
+    left_join(avg_expr, perc_expressed, by = c("gene", "cluster")) %>%
+        mutate(cluster_no = as.numeric(str_remove(cluster, "Cluster "))) %>%
+        mutate(gene = factor(gene, levels = gene_tree$label[gene_tree$order]),
+               cluster = factor(cluster) %>% fct_reorder(cluster_no)) %>%
+        ggplot(
+            aes(
+                x = cluster,
+                y = gene,
+                fill = expression
+            )
+        ) +
+        geom_tile() +
+        #coord_equal() +
+        geom_point(aes(size = perc_expressed), shape = 1, color = "white") +
+        scale_fill_gradient(
+            low = "lightgray",
+            high = "darkblue",
+            name = "Scaled\nExpression"
+        ) +
+        scale_size_continuous(name = "Percent\nExpressed") +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 10),
+              axis.text.y = element_text(size = 10),
+              legend.key = element_rect(fill = "lightgray")) +
+        labs(x = NULL, y = NULL)
+}
+
+
+## ----panel_plot_function------------------------------------------------------
+#| cache.vars: [make_panel_plot, cat_tib]
+
+#GSEA Miltilevel
+cat_tib <- dplyr::tribble(
+    ~category, ~subcategory,   ~cat_expl,
+    "H",        "NA",          "Hallmark_paths",
+    "C2",       "CP:KEGG",     "KEGG",
+    # "C3",       "TFT:GTRD",    "Transcription_factor_targets",
+    # "C6",       "NA",          "Oncogenic_signature",
+    "C5",       "GO:BP",       "Biological_processes",
+    "C2",       "CP:REACTOME", "Reactome")
+
+make_panel_plot <- function(sobj,
+                            comparison_col = "seurat_clusters",
+                            label = "seurat_clusters",
+                            group,
+                            aggregate_by = c("sample_name", "seurat_clusters"),
+                            organism_col = "organism",
+                            subset = FALSE,
+                            batch_var = "data_source") {
+    volc_plots <- list()
+    gsea_plots <- list()
+    gsea_results <- list()
+    heatmap_plots <- list()
+
+    colors_use <-
+        colorRampPalette(rev(RColorBrewer::brewer.pal(n = 7, name = "RdYlBu")))(100)
+
+    colors_use <- c(colors_use[1:48], rep("gray", 4), colors_use[52:100])
+
+    dimplot <- dimplot_better(sobj, group_by = comparison_col)
+
+    degs_result <-
+        run_degs(sobject = sobj,
+                comparison_col = comparison_col,
+                aggregate_by = aggregate_by,
+                organism_col = organism_col,
+                subset = subset,
+                batch_var = batch_var)
+
+    if (dir.exists(paste0("output/degs/", label))) {
+        unlink(paste0("output/degs/", label), recursive = TRUE)
+    }
+    # Calculate the differentially expressed genes
+    for (cluster_name in names(degs_result)) {
+        if (!dir.exists(paste0("output/degs/", group, "/", label))) {
+            dir.create(paste0("output/degs/", group, "/", label), recursive = TRUE)
+        }
+        write_tsv(
+            degs_result[[cluster_name]],
+            paste0("output/degs/", group, "/", label, "/", cluster_name, "_degs.tsv")
+        )
+
+        logfc_cutoff <- 0.6
+        degs_result[[cluster_name]] <-
+            degs_result[[cluster_name]] %>%
+            mutate(
+                diffexpressed = if_else(
+                    log2FoldChange > logfc_cutoff & padj < 0.05,
+                    "Upregulated",
+                    if_else(
+                        log2FoldChange < -1 * logfc_cutoff & padj < 0.05,
+                        "Downregulated",
+                        "Not Significant"
+                    )
+                )
+            )
+
+        #make the volcano plot
+        volc_plots[[cluster_name]] <-
+            ggplot(
+                degs_result[[cluster_name]],
+                aes(
+                    x = log2FoldChange,
+                    y = -log10(pvalue),
+                    color = diffexpressed
+                )
+            ) +
+            geom_vline(xintercept = c(-1 * logfc_cutoff, logfc_cutoff),
+                      col = "gray",
+                      linetype = "dashed") +
+            geom_hline(yintercept = c(0.05),
+                      col = "gray",
+                      linetype = "dashed") +
+            geom_point(size = 2) +
+            scale_color_manual(values = c(plot_cols[1], "grey", plot_cols[2]),
+                               name = "") +
+            geom_text_repel(aes(label = gene))
+
+        # save the volcano plot
+        directory <-
+            paste0("output/figures/degs/", group)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
+        ggsave(
+            paste0("output/figures/degs/", group, "/",
+                   cluster_name, "_volcano_plot.png"),
+            width = 15,
+            height = 15,
+            plot = volc_plots[[cluster_name]]
+        )
+    }
+
+    marker_genes <-
+        sapply(
+            names(degs_result),
+            simplify = FALSE,
+            function(x) {
+                x <- as.character(x)
+                degs_result[[x]] %>%
+                    mutate(cluster = paste0("Cluster ", x)) %>%
+                    select(-baseMean, -lfcSE, -stat) %>%
+                    filter(diffexpressed == "Upregulated") %>%
+                    arrange(desc(log2FoldChange)) %>%
+                    slice_head(n = 7)
+        }) %>%
+        bind_rows() %>%
+        pull(gene)
+
+    if (length(marker_genes) != 0) {
+        circle_plot_out <-
+            circle_plot(
+                sobj,
+                comparison_col = comparison_col,
+                features = marker_genes)
+    } else {
+        circle_plot_out <-
+            ggplot(data = NULL) +
+                   aes(x = as.factor(1), y = as.factor(1)) +
+                   geom_text(aes(label = str_c("No marker genes for ", label)))
+    }
+
+    # GSEA analysis
+    if (dir.exists(paste0("output/gsea/", label))) {
+        unlink(paste0("output/gsea/", label), recursive = TRUE)
+    }
+
+    #if dogs conver the genes for human orthologs for gsea
+    if (sobj$organism[1] == "dog") {
+        degs_result <- lapply(degs_result, function(cluster_result) {
+            cluster_result$gene <-
+                orthologs$human_gene_ortholog[match(cluster_result$gene, orthologs$dog_gene_name)]
+            cluster_result <-
+                cluster_result[!is.na(cluster_result$gene), ]
+            return(cluster_result)
+        })
+    }
+
+    for (i in seq_len(nrow(cat_tib))){
+        category <- cat_tib$category[i]
+        subcategory <- cat_tib$subcategory[i]
+        cat_expl <- cat_tib$cat_expl[i]
+        species <- sobj$organism[1]
+        if (sobj$organism[1] == "dog") {
+            species <- "human"
+        }
+        if (subcategory == "NA") {
+            gsea_result <-
+                run_gsea(degs_result = degs_result,
+                        category = category,
+                        species = species)
+        } else {
+            gsea_result <-
+                run_gsea(degs_result = degs_result,
+                        category = category,
+                        subcategory = subcategory,
+                        species = species)
+        }
+
+            #test if directory to save the results exists
+        if (!dir.exists(paste0("output/gsea/", group, "/", label))) {
+            dir.create(paste0("output/gsea/", group, "/", label), recursive = TRUE)
+        }
+
+        gsea_result <-
+            sapply(names(gsea_result),
+                    simplify = FALSE,
+                    function(x) {
+                gsea_result[[x]] %>%
+                    mutate(cluster = paste("Cluster", x),
+                            pathway_group = cat_expl)
+            })
+
+        directory <-
+            paste0("output/gsea/", group, "/", label)
+        if (!dir.exists(directory)) {
+            dir.create(directory, recursive = TRUE)
+        }
+
+        for (item in names(gsea_result)) {
+                #save the results
+            write_tsv(
+                gsea_result[[item]],
+                paste0(
+                    "output/gsea/", group, "/", label, "/",
+                    cat_expl, "_cluster_", item, "_gsea.tsv"
+                )
+            )
+        }
+
+    #########################################################
+    # Drop in code to make heatmap here
+        n_paths_per_cluster <- 20
+
+        use_pathways <-
+            gsea_result %>%
+            bind_rows() %>%
+            group_by(cluster) %>%
+            mutate(abs_NES = abs(NES)) %>%
+            slice_max(order_by = abs_NES, n = n_paths_per_cluster) %>%
+            pull(pathway) %>%
+            unique()
+
+        if (length(use_pathways) == 0) {
+            heatmap_plots[[cat_expl]] <-
+                ggplot(data = NULL) +
+                aes(x = as.factor(1), y = as.factor(1)) +
+                geom_text(aes(label = "No significant pathways"))
+        } else {
+        max_abs_nes <-
+            gsea_result %>%
+            bind_rows() %>%
+            pull(NES) %>%
+            max() %>%
+            ceiling()
+
+        breaks_use <-
+            seq(-max_abs_nes, max_abs_nes, length.out = 101)
+
+        heatmap_plots[[cat_expl]] <-
+            gsea_result %>%
+            bind_rows() %>%
+            filter(pathway %in% use_pathways) %>%
+            select(
+                -padj,
+                -log2err,
+                -ES,
+                -size,
+                -leadingEdge,
+                -pval,
+                -pathway_group) %>%
+            arrange(cluster) %>%
+            mutate(cluster_no = as.numeric(str_remove(cluster, "Cluster "))) %>%
+            arrange(cluster_no) %>%
+            select(-cluster_no) %>%
+            pivot_wider(
+                names_from = cluster,
+                values_from = NES,
+                values_fill = 0
+            ) %>%
+            column_to_rownames("pathway") %>%
+            pheatmap::pheatmap(
+                color = colors_use,
+                breaks = breaks_use,
+                display_numbers = TRUE,
+                silent = TRUE,
+                main = paste0(cat_expl),
+                fontsize_row = 8,
+                fontsize_number = 8,
+                cluster_cols = FALSE,
+                cluster_rows = TRUE
+            )
+        }
+    }
+
+    panel_plots <- list()
+
+    panel_plots[[label]] <-
+        patchwork::wrap_plots(
+            # dimplot,
+            # circle_plot_out,
+            ggplotify::as.ggplot(heatmap_plots$Hallmark_paths),
+            ggplotify::as.ggplot(heatmap_plots$KEGG),
+            #ggplotify::as.ggplot(heatmap_plots$Oncogenic_signature),
+            #ggplotify::as.ggplot(heatmap_plots$Transcription_factor_targets),
+            ggplotify::as.ggplot(heatmap_plots$Biological_processes),
+            ggplotify::as.ggplot(heatmap_plots$Reactome),
+            ncol = 2) +
+        patchwork::plot_annotation(title = label)
+
+    directory <-
+        paste0("output/figures/gsea/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+    ggsave(
+        paste0("output/figures/gsea/", group, "/", label, "_six_panels.png"),
+        width = 30,
+        height = 40,
+        limitsize = FALSE,
+        plot = panel_plots[[label]])
+
+    ggsave(
+        paste0("output/figures/gsea/", group, "/", label, "_six_panels.pdf"),
+        width = 30,
+        height = 40,
+        limitsize = FALSE,
+        plot = panel_plots[[label]])
+
+    # #save as qs
+    # qs::qsave(panel_plots[[label]],
+    #           file = paste0("output/figures/gsea/", group, "/", label, "_six_panels.qs"))
+}
+
+
+
+
+## ----get-plot-list------------------------------------------------------------
+get_plot_list <- function(ob_name) {
+    plt_paths <- paste0("figures/",
+                        list.files("figures")[grep(ob_name,
+                                                   list.files("figures"))]) %>%
+        as.list()
+    plts <- lapply(plt_paths, function(x) {
+        tmp <- magick::image_read(x)
+        tmp_gg <- magick::image_ggplot(tmp)
+        return(tmp_gg)
+    })
+    names(plts) <- str_remove(plt_paths,
+                              pattern = paste0("figures/scvelo_",
+                                               ob_name,
+                                               "_")) %>%
+        str_remove(pattern = ".png")
+    return(plts)
+}
+
+
+## ----scenic_function----------------------------------------------------------
+#| cache.vars: Run_GRA
+Run_GRA <- function(sobject,
+                    idents,
+                    group = group,
+                    org,      #organism "mgi" for mouse, "hgnc" for human
+                    subset = "no",          #yes or no
+                    subset_cell_number = NA) {
+    #if you want to quickly run a small subset of cells, set subset = "yes" and provide the subset_cell_number for number of cells
+    if (subset == "yes") {
+        sobject <- subset(x = sobject,
+                          cells = sample(Cells(sobject),
+                                min(subset_cell_number, length(Cells(sobject)))))
+    } else {
+        sobject <- sobject
+    }
+    sobject <- 
+        JoinLayers(sobject)
+    exprMat <- SeuratObject::GetAssayData(sobject, assay = 'RNA', slot= 'counts') %>%
+        as.matrix()
+    Idents(sobject) <- idents
+    if (idents == "seurat_clusters") {
+        cellInfo <- data.frame(CellType=Idents(sobject)) %>%
+            dplyr::arrange(CellType)
+    } else {
+        cellInfo <- data.frame(CellType=Idents(sobject))
+    }
+    if (!dir.exists("input/downloads/SCENIC")) {
+        dir.create("input/downloads/SCENIC", recursive = TRUE)
+    }
+    saveRDS(cellInfo, file= str_c("input/downloads/SCENIC/", group, "cellInfo.Rds"))
+    cols <- c(plot_cols, sample(rainbow(1000)))
+    CellType <- cols[1:length(unique(cellInfo$CellType))]
+    names(CellType) <- unique(cellInfo$CellType)
+    colVars <- list()
+    colVars$CellType <- CellType
+    saveRDS(colVars, file= str_c("input/downloads/SCENIC/", group, "colVars.Rds"))
+
+    #Running SCENIC begins
+    scenicOptions <- SCENIC::initializeScenic(org = org,
+                                              dbDir = "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/SCENIC",
+                                              dbs = SCENIC::defaultDbNames[[org]],
+                                              datasetTitle = "SCENIC tutorial",
+                                              nCores = parallelly::availableCores())
+
+    scenicOptions@inputDatasetInfo$cellInfo <- str_c("input/downloads/SCENIC/", group, "cellInfo.Rds")
+    scenicOptions@inputDatasetInfo$colVars <- str_c("input/downloads/SCENIC/", group, "colVars.Rds")
+
+    ##### III: Co-expression network
+    ### 1. Gene filter/selection
+    genesKept <- SCENIC::geneFiltering(exprMat,
+                                       scenicOptions=scenicOptions,
+                                       minCountsPerGene=3*.01*ncol(exprMat),
+                                       minSamples=ncol(exprMat)*.01)
+
+    # filter the expression matrix to contain only these genes from geneskept.
+    exprMat_filtered <- exprMat[genesKept, ]
+
+    ### 2. Correlation: positive means TF could upregulate the target gene and viceversa
+    SCENIC::runCorrelation(exprMat_filtered, scenicOptions)
+
+    ### 3. Run GENIE3 to infer potential transcription factor targets
+    # Optional: add log (if it is not logged/normalized already)
+    exprMat_filtered <- log2(exprMat_filtered+1)
+
+    # Run GENIE3 and find potential TF targets
+    SCENIC::runGenie3(exprMat_filtered, scenicOptions)
+
+    ###### IV: Build the gene regulatory network & Identify cell states:
+    ### Build the gene regulatory network:
+    # 1. Get co-expression modules
+    scenicOptions <- SCENIC::runSCENIC_1_coexNetwork2modules(scenicOptions)
+
+    # 2. Get regulons (with RcisTarget: TF motif analysis)
+    scenicOptions <- SCENIC::runSCENIC_2_createRegulons(scenicOptions,
+                                                coexMethods=c("top5perTarget"))
+
+    ### Identify cell states:
+    # 3. Score GRN (regulons) in the cells (with AUCell)
+    exprMat_log <- log2(exprMat+1)
+
+    scenicOptions <- SCENIC::runSCENIC_3_scoreCells(scenicOptions, exprMat_log)
+
+    # # 4.2 Binarize the network activity (regulon on/off)
+    scenicOptions@settings$devType = "png"
+    # scenicOptions <- SCENIC::runSCENIC_4_aucell_binarize(scenicOptions,
+    #                                                      exprMat = exprMat_log)
+
+    return(list(scenicOptions= scenicOptions,
+                cellInfo = cellInfo,
+                colVars = colVars,
+                exprMat_log = exprMat_log))
+}
+
+
+
+## ----dog_human_orthologs_function---------------------------------------------
+# load the tsv for human_dog gene orthologs
+#| cache.vars: [orthologs, dog_to_human_setup, mouse_to_human_setup]
+
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
+
+#| cache.vars: dog_to_human_setup
+dog_to_human_setup <- function(object,
+                               run_harmony = TRUE,
+                               harm_vars = c("sample_name",
+                                              "data_source",
+                                              "location"),
+                                theta = c(7, 7, 7)) {
+    raw_counts <-
+        GetAssayData(object,
+                     layer = "counts")
+
+    number_of_ENSEMBL_genes <-
+        sum(str_detect(rownames(raw_counts), "^ENSCAFG"))
+
+    raw_counts_new <-
+        raw_counts[rownames(raw_counts) %in% orthologs$dog_gene_name, ]
+    rownames(raw_counts_new) <-
+        orthologs$human_gene_ortholog[match(rownames(raw_counts_new), orthologs$dog_gene_name)]
+    new_seurat_object <-
+        CreateSeuratObject(counts = raw_counts_new) %>%
+        AddMetaData(metadata = object@meta.data)
+    object <-
+        new_seurat_object %>%
+        process_seurat()
+
+    if (length(unique(object$sample_name)) > 1 && ncol(object) > 50 && run_harmony) {
+        object <-
+            RunHarmony(object,
+                        group.by.vars = harm_vars,
+                        theta = theta) %>%
+            process_seurat(reduction = "harmony")
+    } else {
+            object <- object
+    }
+
+    return(object)
+}
+
+
+#mouse to human orthologs object
+mouse_to_human_setup <- function(object,
+                                 harm_vars,
+                                 theta) {
+    raw_counts <-
+        GetAssayData(object,
+                     slot = "counts")
+
+    human_genes <-
+        object %>%
+        rownames() %>%
+        nichenetr::convert_mouse_to_human_symbols() %>%
+        as.character()
+    new_raw_counts <-
+        raw_counts
+
+    rownames(new_raw_counts) <- human_genes
+
+    new_raw_counts <-
+        new_raw_counts[!is.na(rownames(new_raw_counts)), ]
+
+    new_raw_counts <-
+        new_raw_counts[!duplicated(rownames(new_raw_counts)), ]
+
+    new_seurat_object <-
+        CreateSeuratObject(counts = new_raw_counts) %>%
+        AddMetaData(metadata = object@meta.data)
+
+    object <-
+        new_seurat_object %>%
+        process_seurat()
+
+    object <-
+        RunHarmony(object,
+                    group.by.vars = harm_vars,
+                    theta = theta) %>%
+        process_seurat(reduction = "harmony")
+
+    return(object)
+}
+
+
+## ----dotplot_panel_plot-------------------------------------------------------
+
+# function to make dotplot_panel
+dotplot_better <- function(object,
+                                cell_markers,
+                                group_by) {
+
+    Idents(object) <- group_by
+
+    object[[group_by]] <- 
+        as.character(object[[group_by]]) %>%
+        as.character() %>%
+        gsub("_", " ", .)
+
+    # order_features <- 
+    #     cell_markers %>%
+    #     unlist() %>%
+    #     unique()
+
+    order_celltypes <-
+        cell_markers %>%
+        names() %>%
+        unique()
+
+    unique_cells <-
+        unique(object[[group_by]])[[1]]
+
+
+    # if (group %in% c("xeno_prim_human", "xeno_mets_human")) {
+    #     tumor_features_cells <- xeno_markers
+    # } else {
+    #     tumor_features_cells <- humanP_mice_markers
+    # }
+    dotplot_markers <-
+        cell_markers[unique_cells] %>%
+        unlist() %>%
+        as.vector()
+
+    species <- 
+        object$organism[1]
+    
+    # Convert macrophage_features to mouse genes if species is mouse
+    if (species == "mouse") {
+        dotplot_markers <- 
+            nichenetr::convert_human_to_mouse_symbols(dotplot_markers) %>%
+            na.omit() %>%
+            as.character()
+        order_features <- 
+            nichenetr::convert_human_to_mouse_symbols(order_features) %>%
+            na.omit() %>%
+            unique()
+    }
+
+    # Filter for features present in the group
+    present_features <- 
+        intersect(dotplot_markers, rownames(object))
+
+    # Filter for features present in the group
+    order_cell_subset <-
+        intersect(order_celltypes, unique(object[[group_by]])[[1]])
+
+
+    dotplot <-
+        DotPlot(object,
+                features = present_features,
+                group.by = group_by,
+                cols = "RdBu",
+                dot.scale = 7,
+                col.max = 1.5)+
+        scale_y_discrete(limits = rev(order_cell_subset), 
+                        labels = function(x) gsub("_", " ", x)) +
+        scale_x_discrete(limits = intersect(order_features, present_features)) +
+        theme(axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = 0.5)) +
+        coord_fixed() + 
+        labs(x = NULL, y = NULL) +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            axis.text.y = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 25),
+            panel.grid = element_blank()) +
+        ggtitle(title_replacement[group][1])
+    return(dotplot)
+}
+
+
+
+
+## ----helper_confirm_mclapply_worked-------------------------------------------
+#| cache.vars: confirm_mclapply_worked
+#' Confirm mclapply Worked And Dump Error Messages If Not
+#'
+#' This function checks if the `mclapply` function executed successfully on the provided input list.
+#'
+#' @param input_list A list that was processed by `mclapply`.
+#' @return The input list if `mclapply` was successful or the error messages if it failed.
+confirm_mclapply_worked <- function(input_list) {
+    if (length(input_list) == 0) {
+        stop("Empty input list")
+    }
+
+    has_error <- FALSE
+    for (item in input_list) {
+        if (inherits(item, "try-error")) {
+                warning(
+                    "mclapply failed with error: ",
+                    item[[1]],
+                    immediate. = TRUE
+                )
+            has_error <- TRUE
+        }
+    }
+
+    if (has_error) {
+        stop("mclapply failed")
+    } else {
+        return(input_list)
+    }
+}
+
+
+## ----Sankey_and_DimDotplot_functions------------------------------------------
+make_cellcount_sankey <- function(cell_count_table,
+                                   group1,
+                                   group2) {    
+    #subset the cell_count_table
+    cell_count_subset <-
+        cell_count_table %>%
+            select(celltypes, !!group1, !!group2) %>%
+            pivot_longer(cols = -celltypes,
+                    names_to = "group",
+                    values_to = "count") %>%
+            filter(count > 0) %>%
+            group_by(group) %>%
+            mutate(percent = count / sum(count) * 100) %>%
+            ungroup() %>%
+            mutate(group = str_replace_all(group, title_replacement),
+                    celltypes = str_remove_all(celltypes, "Tumor_"),
+                    celltypes = str_replace_all(celltypes, c("_" = " ")))
+
+     # Create a color palette
+    sankey_plot <-
+        ggplot(data = cell_count_subset %>% 
+               mutate(group = factor(group, 
+                                    levels = c("Primary", "Metastatic"))), 
+               aes(fill = celltypes,
+               x = group,
+               y = percent)) +
+        ggalluvial::geom_alluvium(aes(alluvium = celltypes),
+                        width = 1/2, 
+                        color = "white") +
+        geom_col(width = 1/2,
+            color = "white") +
+        scale_fill_manual(values = unlist(cols)) +
+        scale_y_continuous(expand = c(0, 0)) +
+        scale_x_discrete(expand = c(0, 0)) +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            axis.text.y = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 25),
+            panel.grid = element_blank())
+    
+    return(sankey_plot)
+}
+
+make_dim_dot_plot <- function(object,
+                              group_by,
+                              title,
+                              cell_markers,
+                              cols) {
+    # Set the order of the cell types
+    object$plot_labels <- 
+        object[[group_by]][, 1] %>%
+        gsub("_", " ", .) %>%
+        str_replace_all("Endothelial cells", "Endothelial") %>%
+        str_replace_all("Epithelial cells", "Epithelial")
+    
+    # Create a new column for plot labels
+    dimplot <-
+        DimPlot(object,
+                group.by = "plot_labels", # Use the plot_labels for better aesthetics
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = unlist(cols),
+                label.size = 5,
+                raster=F) +
+            coord_fixed() +
+            theme(aspect.ratio=1) +
+            theme_void() +
+            NoLegend() +
+            ggtitle(title)
+    
+    unique_cells <-
+        unique(object$plot_labels) 
+
+    order_celtypes <-
+        cell_markers %>%
+        names() %>%
+        str_remove_all("_")
+
+    order_features <- 
+        cell_markers %>%
+        unlist() %>%
+        as.character()
+
+    dotplot_markers <-
+        cell_markers[unique_cells] %>%
+        unlist() %>%
+        as.vector()
+
+    species <- 
+        object$organism[1]
+    
+    # Convert macrophage_features to mouse genes if species is mouse
+    if (species == "mouse") {
+        dotplot_markers <- 
+            nichenetr::convert_human_to_mouse_symbols(dotplot_markers) %>%
+            na.omit() %>%
+            as.character()
+        order_features <- 
+            nichenetr::convert_human_to_mouse_symbols(order_features) %>%
+            na.omit() %>%
+            unique()
+    }
+
+    # Filter for features present in the group
+    present_features <- 
+        intersect(dotplot_markers, rownames(object))
+
+    # Filter for features present in the group
+
+    order_stroma_subset <-
+        intersect(order_celtypes, unique(object$plot_labels))
+
+    dotplot <-
+        DotPlot(object,
+            features = present_features,
+            group.by = "plot_labels",
+            cols = "RdBu",
+            dot.scale = 7,
+            col.max = 1.5) +
+            scale_y_discrete(limits = rev(order_stroma_subset)) +
+            scale_x_discrete(limits = intersect(order_features, present_features)) +
+            ggtitle(title) +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+            coord_fixed() + 
+            labs(x = NULL, y = NULL)
+
+    dim_dot_plot <-
+        plot_grid(dimplot + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                dotplot + theme(plot.margin = unit(c(0, 0, 0, 0), "cm")),
+                ncol = 1,
+                rel_heights = c(2, 1),
+                align = "v",
+                scale = 1) +
+        theme(plot.margin = margin(t = 1, r = 0, b = 0.5, l = 1.5, unit = "cm")) +
+        patchwork::plot_annotation(title = title,
+                                    theme = theme(plot.title = element_text(hjust = 0.5)))
+    return(dim_dot_plot)
+}
+
+
+
+## ----optimize_harmony---------------------------------------------------------
+
+
+optimize_harmony <- function(s_obj, 
+                            group_by = c("sample_name", "model"),
+                            theta_combo = c(2, 5, 7, 12),
+                            lambda_combo = c(0.1, 0.5, 0.7),
+                            dimplot_col = "sample_name",
+                            output_dir = "output/figures/harmony_optimization",
+                            output_folder = "mm_mets") {
+    # generate all combinations of theta and lambda vectors of length equal to group_by
+    theta_combos <- asplit(expand.grid(rep(list(theta_combo), length(group_by))), 1)
+    lambda_combos <- asplit(expand.grid(rep(list(lambda_combo), length(group_by))), 1)
+    # create a data frame with all combinations of group_by, theta vector, and lambda vector
+    hopts <- tidyr::crossing(
+        group_by = list(group_by),
+        theta = theta_combos,
+        lambda = lambda_combos
+    ) %>%
+        tibble::as_tibble()
+
+    # run harmony for each combination of theta and lambda
+    # parallel::mclapply is used to run the harmony optimization in parallel
+    # results <- parallel::mclapply(1:nrow(hopts), function(i) {
+    results <- list()
+    for (i in seq_len(nrow(hopts))) {
+        theta <- as.vector(hopts$theta[i][[1]])
+        lambda <- as.vector(hopts$lambda[i][[1]])
+        s_obj <-
+            s_obj %>%
+            RunHarmony(
+                group.by.vars = hopts$group_by[i][[1]],
+                dims.use = 1:50,
+                theta = theta,
+                lambda = lambda) %>%
+            RunUMAP(dims = 1:50, reduction = "harmony") %>%
+            FindNeighbors(reduction = "harmony") %>%
+            FindClusters(resolution = 0.4)
+        dimplot <- 
+            DimPlot(object,
+                    group.by = dimplot_col,
+                    label.size = 4,
+                    label = T,
+                    raster = F,
+                    repel = T,
+                    shuffle = T,
+                    label.box = T,
+                    cols = c(plot_cols, sample(rainbow(50)))) +
+        coord_fixed() +
+        theme(aspect.ratio=1) +
+        theme_void() +
+        ggtitle(paste0(
+                paste("Theta:", paste(theta, collapse = ","),
+                " Lambda:", paste(lambda, collapse = ",")))) +
+        theme(plot.title = element_text(size = 8)) +
+        NoLegend()
+        results[[i]] <- dimplot
+    }
+    # , mc.cores = parallelly::availableCores(),
+    #    mc.preschedule = FALSE)
+    # return(results)
+    # Get the name of the object for directory naming
+    # Ensure output_dir/output_folder exists
+    full_output_dir <- 
+        str_c(output_dir, "/", output_folder)
+    if (!dir.exists(full_output_dir)) {
+        dir.create(full_output_dir, recursive = TRUE)
+    }
+    # Save the plots 24 at a time based on the length of results
+    plots_per_page <- 16
+    n_results <- length(results)
+    n_pages <- ceiling(n_results / plots_per_page)
+    for (page in seq_len(n_pages)) {
+        start_idx <- (page - 1) * plots_per_page + 1
+        end_idx <- min(page * plots_per_page, n_results)
+        plot_page <-
+            patchwork::wrap_plots(results[start_idx:end_idx], ncol = 2) +
+            patchwork::plot_annotation(title = paste0(names(s_obj), " (plots ", start_idx, "-", end_idx, ")")) +
+            theme(plot.title = element_text(size = 10))
+        ggsave(str_c(full_output_dir,
+                 "/",
+                 "HO_", start_idx, "_", end_idx, ".png"),
+               plot = plot_page,
+               width = 14,
+               height = 56,
+               limitsize = FALSE,
+               bg = "white")
+    }
+}
+
+
+
+## ----spatial-plotting-fxns----------------------------------------------------
+make_cor_plt <- function(mod, s_obj) {
+    ### Make beta and theta matrices for reference dataset
+    #get counts
+    counts <- GetAssayData(patient_mets, layer = "counts")
+    # store the annotations as a factor
+    annot <- as.factor(patient_mets$Ann_Level2)
+    # create a de facto theta matrix for the single cell data
+    ref_proxy_theta <- model.matrix(~ 0 + annot)
+    rownames(ref_proxy_theta) <- names(annot)
+    # create a de facto gene expression deconvolution matrix for our reference
+    ref_proxy_gex <- counts %*% ref_proxy_theta
+
+
+    # get tissue coordinates and rename columns
+    pos <- GetTissueCoordinates(s_obj)
+    colnames(pos) <- c("y", "x")
+    pos$y <- -pos$y
+
+    # Get beta and theta values 
+    beta_theta <- getBetaTheta(mod)
+
+    # calculate correlation matrix
+    cor <- 
+        getCorrMtx(
+            m1 = as.matrix(beta_theta$beta),
+            m2 = t(as.matrix(ref_proxy_gex)),
+            type = "b"
+        )
+    rownames(cor) <- paste0("decon_", rownames(cor))
+    # remove "annot" from the front of cell types
+    colnames(cor) = str_remove(colnames(cor), "annot")
+
+    return(
+        correlationPlot(
+            mat = cor,
+            colLabs = "Deconvolved cell topics",
+            rowLabs = "Atlas cell types",
+            title = paste("Transcriptional Correlation in", ob)
+        ) +
+        theme(axis.text.x = element_text(angle = 315))
+    )
+}
+
+
+#running rctd
+run_rctd <- function(sp_ob, ref, doublet_mode = "doublet") {
+    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
+        dplyr::rename(x = imagerow, y = imagecol)
+    #convert our object to an rctd object
+    my_data <- spacexr::SpatialRNA(coords,
+                                   GetAssayData(sp_ob, layer = "counts"))
+    rctd_obj <- spacexr::create.RCTD(
+        my_data,                     
+        ref,
+        max_cores = 1,
+        UMI_min = 3,
+        counts_MIN = 0, 
+        UMI_max = 900000000,
+        CELL_MIN_INSTANCE = 0
+    )
+    rctd_out <- spacexr::run.RCTD(
+        rctd_obj,
+        doublet_mode = doublet_mode
+    )
+    return(rctd_out)
+}
+
+save_deconv_plots <- function(ob, ob_name, rctd_res, fig_dir) {
+    norm_weights <- spacexr::normalize_weights(rctd_res@results$weights)
+    ob <- AddMetaData(ob, norm_weights)
+    cell_types <- unique(rctd_res@reference@cell_types)
+    # rename Stressed to COMA if COMA not present
+    if ("COMA" %notin% colnames(ob@meta.data)) {
+        ob$COMA <- ob$Stressed
+    }
+    ob$Tumor_Cumulative <-
+        ob$Basal_Progenitor +
+        ob$Fibrogenic +
+        ob$Interactive +
+        ob$MP_Progenitor +
+        ob$Proliferative +
+        ob$COMA
+    
+    # make figure of all scores
+    pdf(paste0(fig_dir, "/", ob_name, "_rctd_scores.pdf"), height = 4, width = 4)
+    print(SpatialDimPlot(ob, pt.size.factor = 0) + NoLegend())
+    print(
+        SpatialFeaturePlot(
+            ob,
+            features = "Tumor_Cumulative",
+            pt.size.factor = size.factors[[ob_name]],
+            image.alpha = 0
+        )
+    )
+    for (ct in cell_types) {
+        print(SpatialFeaturePlot(
+            ob,
+            features = ct,
+            pt.size.factor = size.factors[[ob_name]],
+            image.alpha = 0
+        )
+    )
+    }
+    dev.off()
+    pdf(paste0(fig_dir, "/", ob_name, "_heatmap.pdf"))
+    pheatmap::pheatmap(
+        cor(norm_weights, method = "spearman"),
+        low = "blue",
+        mid = "white",
+        high = "red",
+        midpoint = 0,
+        angle_col = 45,
+        fontsize = 16
+    )
+    dev.off()
+}
+
+
+## -----------------------------------------------------------------------------
+`%notin%` <- Negate(`%in%`)
+
