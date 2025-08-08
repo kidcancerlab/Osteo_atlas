@@ -70,6 +70,8 @@ for (ob_name in names(spatial_list)) {
     sp_ob <- spatial_list[[ob_name]]
     rctd_out <- run_rctd(sp_ob, ref = level2_ref)
     qs::qsave(rctd_out, paste0("output/spacexr/Ann_Level2/", ob_name, ".qs"))
+    rctd_multi <- run_rctd(sp_ob, ref = level2_ref, doublet_mode = "multi")
+    qs::qsave(rctd_out, paste0("output/spacexr/Ann_Level2/rctd_level2_", ob_name, "_multi.qs"))
     norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
     spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
 }
@@ -106,6 +108,8 @@ spacexr_res <- parallel::mclapply(names(spatial_list), function(ob_name) {
     sp_ob <- spatial_list[[ob_name]]
     rctd_out <- run_rctd(sp_ob, ref = level3_ref)
     qs::qsave(rctd_out, paste0("output/spacexr/Ann_Level3/rctd_level3_", ob_name, ".qs"))
+    rctd_multi <- run_rctd(sp_ob, ref = level3_ref, doublet_mode = "multi")
+    qs::qsave(rctd_out, paste0("output/spacexr/Ann_Level3/rctd_level3_", ob_name, "_multi.qs"))
     norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
     return(AddMetaData(sp_ob, norm_weights))
     },

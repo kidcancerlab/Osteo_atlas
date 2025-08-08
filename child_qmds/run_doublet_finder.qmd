@@ -1,4 +1,4 @@
-## Run DoubletFinder
+## Run Demuxafy
 
 This markdown is a way for me (Matty G) to keep track of my progress with running DoubletFinder on all our samples.
 
@@ -304,7 +304,6 @@ for (ob in names(obj_list)) {
     )
     all_demux[[ob]] %>%
         dplyr::select(MajoritySinglet_DropletType) %>%
-
 }
 
 
@@ -387,77 +386,6 @@ qc_doublet_heatmaps <- lapply(all_demux, function(x) {
 })
 ```
 
-### Make dim plots and heatmaps with doublet finder results
-
-The dimplots will give us an idea of if the doublet callers exhibit a bias towards a particular phenotype or not.
-
-```{r visualize-demuxafy-results}
-df_result_plts <- list()
-df_result_heatmaps <- list()
-
-for (ob_name in names(obj_list)) {
-    plt_titles <- paste0(c("MajoritySinglet",
-                           "DoubletDetection",
-                           "scDblFinder",
-                           "scds"),
-                         "_DropletType")
-    names(plt_titles) <- plt_titles
-    plt_list <- lapply(as.list(plt_titles), function(x) {
-        dimplot_better(obj_list[[ob_name]],
-                       group_by =  x,
-                       order = FALSE,
-                       pt.size = 0.5) +
-            theme(title = element_text(size = 10))
-    })
-    df_result_plts[[ob_name]] <-
-        (plt_list[[1]] | plt_list[[2]]) / (plt_list[[3]] | plt_list[[4]]) +
-            patchwork::plot_annotation(title = ob_name,
-                                       theme = theme(plot.title = element_text(size = 24,
-                                                                               face = "bold",
-                                                                               hjust = 0.5)))
-
-    df_result_heatmaps[[ob_name]] <- obj_list[[ob_name]]@meta.data %>%
-        dplyr::select(MajoritySinglet_DropletType,
-                      Ann_Level2) %>%
-        group_by(Ann_Level2) %>%
-        mutate(group_total = sum(n())) %>%
-        group_by(Ann_Level2, MajoritySinglet_DropletType) %>%
-        mutate(prop = sum(n()) / group_total) %>%
-        unique() %>%
-        ggplot(aes(x = MajoritySinglet_DropletType,
-                          y = Ann_Level2,
-                          fill = prop)) +
-            geom_tile() +
-            geom_label(aes(label = round(prop, 3)), fill = "white") +
-            theme(axis.text.y = element_text(size = 15, face = "bold"),
-                  axis.text.x = element_text(size = 15, face = "bold"),
-                  axis.title.y = element_blank(),
-                  axis.title.x = element_blank(),
-                  panel.background = element_blank(),
-                  plot.title = element_text(size = 20, face = "bold")) +
-            ggtitle(ob_name)
-}
-
-#Make cancer dimplots
-for (name in names(cancer_obs)) {
-    png(paste0("demuxafy_figs/cancer_dimplot_", name, ".png"))
-    print(dimplot_better(
-        cancer_obs[[name]],
-        group = c("Ann_Level3","MajoritySinglet_DropletType")),
-        ncol = 2
-    )
-    dev.off()
-}
-
-
-dim_list <- lapply(cancer_obs, function(ob) {
-    dimplot_better(ob, group = c("Ann_Level1", "MajoritySinglet_DropletType"))
-})
-
-png(paste0("demuxafy_figs/tumor_cell_doublet_call_heatmap.png"), height = 1000, width = 3000)
-gridExtra::grid.arrange(grobs = dim_list, nrow = 2)
-dev.off()
-```
 
 ### Compare Doublet Calls in QC'd Cells
 
