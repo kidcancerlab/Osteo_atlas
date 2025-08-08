@@ -1985,8 +1985,8 @@ mouse_scanbit <-
 
 mouse_scanbit$scanbit_tumor_call <-
     ifelse(mouse_scanbit$snv_top_lvl_group_5 == "top_lvl_group0",
-            "tumor",
-            "stroma")
+            "Tumor",
+            "Normal")
 scanbit_metadata <-
     mouse_scanbit@meta.data %>%
     select(scanbit_tumor_call) %>%
@@ -1997,13 +1997,65 @@ scanbit_metadata <-
         TRUE ~ cell
     ))
 
+plot_cols_new <- list(
+    Tumor = "#D43F3AFF",
+    Normal = "#EEA236FF",
+    Unknown = "#357EBDFF",
+    B_cells = "#B8B8B8FF",
+    Basophil_Mast = "#9632B8FF",
+    CD34_plusB_cells = "#46B8DAFF",
+    CMP_Progenitors = "#90302DFF",
+    Chondrocytes = "#A66D04FF",
+    Dendritic_cells = "#2D577FFF",
+    Endothelial_cells = "#3E7E3EFF",
+    Epithelial_cells = "#7D7D7DFF",
+    Erythroblast = "#6D1D87FF",
+    GMP_Progenitors = "#097F9AFF",
+    MEP_progenitors = "#FF6E6AFF",
+    MSC = "#FFBB70FF",
+    Macrophages = "#68A4E3FF",
+    Monocytes = "#79D379FF",
+    Myelocyte = "#CDCDCDFF",
+    NK_cells = "#0038FF",
+    Smooth_muscle_cells = "#70FF00",
+    T_cells = "#FF3D00",
+    Tissue_stem_cells = "#80FF00",
+    AT1 = "#B8B8B8FF",
+    AT2 = "#9632B8FF",
+    Adventitial_fibroblasts = "#46B8DAFF",
+    Alveolar_fibroblasts = "#90302DFF",
+    Alveolar_macrophages = "#A66D04FF",
+    Basal_resting = "#3E7E3EFF",
+    CD4T_cells = "#7D7D7DFF",
+    DC1 = "#6D1D87FF",
+    EC_aerocyte_capillary = "#FF6E6AFF",
+    EC_arterial = "#FFBB70FF",
+    EC_general_capillary = "#68A4E3FF",
+    EC_venous_pulmonary = "#79D379FF",
+    Goblet = "#CDCDCDFF",
+    Lymphatic_EC = "#FF005C",
+    Macrophages2 = "#000AFF",
+    Mast_cells = "#0066FF",
+    Migratory_DCs = "#CC00FF",
+    Monocytes2 = "#0038FF",
+    Multiciliated = "#00FF85",
+    Myofibroblasts = "#FF007A",
+    NK_cells2 = "#FF0F00",
+    Neutrophils = "#3300FF",
+    Non_classical_monocytes = "#FF008A",
+    Osteoblasts = "#00FF47",
+    Pericytes = "#FF002E",
+    Plasma_cells = "#00A3FF",
+    SM_activated_stress_response = "#00FF0A"
+)
 
 for (item in seq_len(nrow(samples_for_validation))) {
     names <- samples_for_validation$names[item]
     species <- samples_for_validation$species[item]
     combine_sobject <-
         qs::qread(str_c("output/seurat_objects/validation/tumor_annotation/",
-                        names, "_validated.qs"))
+                        names, "_validated.qs")) %>%
+        process_seurat()
     # add the scanbit metadata for mouse_obj
     if (names == "S0260_61_mouse") {
         combine_sobject <-
@@ -2037,46 +2089,137 @@ for (item in seq_len(nrow(samples_for_validation))) {
 
     combine_sobject$scatomic_tumor_call <-
         ifelse(grepl("Cancer Cell$", combine_sobject$scATOMIC_pred),
-                "tumor",
-                "stroma")
+                "Tumor",
+                "Normal")
     combine_sobject$scevan_tumor_call <-
         ifelse(combine_sobject$scevan_tumor_call == "cancer_cells",
-                "tumor",
-                "stroma")
+                "Tumor",
+                "Normal")
     combine_sobject$copykat_tumor_call <-
-        ifelse(combine_sobject$CNV_status == "aneuploid",
-                "tumor",
-                "stroma")
+        ifelse(is.na(combine_sobject$CNV_status), "Unknown",
+            ifelse(combine_sobject$CNV_status == "aneuploid", "Tumor", "Normal"))
+
+    combine_sobject$truth_metadata <-
+        ifelse(combine_sobject$truth_metadata == "tumor",
+                "Tumor",
+                "Normal")
+    combine_sobject$final_tumor_call <-
+        ifelse(combine_sobject$final_tumor_call == "tumor",
+                "Tumor",
+                "Normal")
+    diplot_list <- list()
+    for (col in c("final_tumor_call","copykat_tumor_call","scevan_tumor_call",
+                "scatomic_tumor_call","truth_metadata")) {
+        diplot_list[[col]] <-
+            DimPlot(combine_sobject,
+                group.by = col,
+                label = T,
+                cols = c("Tumor" = "#D43F3AFF", "Normal" = "#EEA236FF",
+                        "Unknown" = "#357EBDFF"),
+                label.box = T) +
+            coord_fixed() +
+        theme(aspect.ratio=1) +
+        theme_void() +
+        theme(plot.title = element_text(hjust = 0.5))
+    }
+    panel_dim <-
+        patchwork::wrap_plots(diplot_list$final_tumor_call,
+                            diplot_list$copykat_tumor_call,
+                            diplot_list$scevan_tumor_call,
+                            diplot_list$scatomic_tumor_call,
+                            diplot_list$truth_metadata,
+                            ncol = 2) +
+            patchwork::plot_annotation(title = names) +
+        theme(plot.title = element_text(size = 15)) &
+        theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 1))
+    ggsave(str_c("output/figures/validation/tumor_annotation_method/",
+                names, "_dimplot_celltypes.png"),
+            plot = panel_dim,
+            width = 14,
+            height = 21)
+
+    combine_sobject$just_stroma_annot <-
+        ifelse(combine_sobject$truth_metadata == "Tumor", "Tumor", combine_sobject$just_stroma_annot)
     #dimplot_better(combine_sobject, group_by = "scATOMIC_pred")
     # give me some kind of metric to see how well do the two annotations match
     metadata <-
         combine_sobject@meta.data %>%
         select(final_tumor_call, truth_metadata, #scanbit_tumor_call,
-                copykat_tumor_call, scevan_tumor_call, scatomic_tumor_call) %>%
+                copykat_tumor_call, scevan_tumor_call, scatomic_tumor_call,
+                just_stroma_annot) %>%
         rownames_to_column("cell_id") %>%
         arrange(truth_metadata,
+                just_stroma_annot,
                 final_tumor_call,
-                #scanbit_tumor_call,
                 copykat_tumor_call,
                 scevan_tumor_call,
                 scatomic_tumor_call) %>%
         mutate(cell_id_number = row_number()) %>%
         rename(Truth = truth_metadata,
                 AtlasCall = final_tumor_call,
-                #ScanBit = scanbit_tumor_call,
+                CellTypes = just_stroma_annot,
                 CopyKAT = copykat_tumor_call,
                 SCEVAN = scevan_tumor_call,
                 scATOMIC = scatomic_tumor_call) %>%
         mutate(across(c(Truth,
                         AtlasCall,
-                        #ScanBit,
+                        CellTypes,
                         scATOMIC, 
                         SCEVAN, 
-                        CopyKAT), ~replace_na(., "unknown")))
+                        CopyKAT), ~replace_na(., "Unknown")))
+    
+    # with new celltypes 
+    prep_metadata <-
+        metadata %>%
+        pivot_longer(cols = -c(cell_id, cell_id_number),
+                names_to = "method",
+                values_to = "call")
+    # Set factor levels for method and call to control order in plot
+    prep_metadata$method <-
+        factor(prep_metadata$method,
+                levels = c("Truth", "AtlasCall", "CopyKAT", "SCEVAN", "scATOMIC", "CellTypes"))
+    # Automatically make levels from prep_metadata$call, preserving order and uniqueness
+    levels_all <- prep_metadata %>% filter(method == "CellTypes") %>% pull(call) %>% unique()
+    prep_metadata$call <-
+        factor(prep_metadata$call,
+              levels = c(levels_all, "Normal", "Unknown"))
+
+    tile_plot_new <-
+        ggplot(prep_metadata, aes(x = method, y = cell_id_number, fill = call)) +
+            geom_tile() +
+            scale_fill_manual(values = plot_cols_new) +
+            theme_minimal() +
+            labs(title = "Tumor annotation comparison",
+                 x = "Annotation Method",
+                 y = "Cell Index") +
+            theme(
+                axis.text.x = element_text(angle = 0, hjust = 0.5, face = "bold"),
+                axis.text.y = element_blank(),
+                axis.ticks.y = element_blank(),
+                panel.grid = element_blank(),
+                plot.margin = margin(0, 0, 0, 0), # Remove extra space around plot
+                plot.background = element_rect(fill = NA, color = NA),
+                panel.spacing = unit(0, "pt"),
+                panel.border = element_blank()
+            ) +
+            scale_y_reverse(expand = c(0, 0)) +
+            scale_x_discrete(expand = c(0, 0)) +
+            coord_cartesian(clip = "on")
+    ggsave(str_c("output/figures/validation/tumor_annotation_method/",
+                names, "_tumor_w_celltypes.pdf"),
+            plot = tile_plot_new,
+            width = 14,
+            height = 8)
 
     # make tile plot of the metadata
     prepared_metadata <-
         metadata %>%
+         arrange(truth_metadata,
+                final_tumor_call,
+                copykat_tumor_call,
+                scevan_tumor_call,
+                scatomic_tumor_call) %>%
+        select(cell_id, cell_id_number, Truth, AtlasCall, CopyKAT, SCEVAN, scATOMIC) %>%
         pivot_longer(cols = -c(cell_id, cell_id_number),
                 names_to = "method",
                 values_to = "call")
@@ -2086,13 +2229,13 @@ for (item in seq_len(nrow(samples_for_validation))) {
                 levels = c("Truth", "AtlasCall", "CopyKAT", "SCEVAN", "scATOMIC"))
     prepared_metadata$call <-
         factor(prepared_metadata$call,
-              levels = c("tumor", "stroma", "unknown"))
+              levels = c("Tumor", "Normal", "Unknown"))
     tile_plot <-
         ggplot(prepared_metadata, aes(x = method, y = cell_id_number, fill = call)) +
             geom_tile() +
-            scale_fill_manual(values = c("stroma" = "#EEA236FF",
-                                        "tumor" = "#D43F3AFF",
-                                        "unknown" = "#357EBDFF")) +
+            scale_fill_manual(values = c("Normal" = "#EEA236FF",
+                                        "Tumor" = "#D43F3AFF",
+                                        "Unknown" = "#357EBDFF")) +
             theme_minimal() +
             labs(title = "Tumor annotation comparison",
                  x = "Annotation Method",

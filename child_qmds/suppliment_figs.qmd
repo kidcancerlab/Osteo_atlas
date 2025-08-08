@@ -1,3 +1,5 @@
+
+
 ## Result 1
 Suppliment 1A
 ```{r r1_suppliment_figs, eval = FALSE}
@@ -86,6 +88,7 @@ tumor_features <-
 
 featureplot_list <- list()
 
+
 for (group in c("patient_prim", "patient_mets",
                 "mm_prim", "mm_mets",
                 "dogs_prim", "dogs_mets")) {
@@ -166,31 +169,70 @@ for (group in c("patient_prim", "patient_mets",
 
 
 # another way to show that there was descrepancy in tumor cell calling is using sanky plots and heatmaps
-cols <-
-    list("Tumor" = "#D43F3AFF",
-        "Normal" = "#EEA236FF",
-        "Unknown" = "#357EBDFF",
-        "Host" = "#EEA236FF")
+cell_cols <- list(
+    "Tumor" = "#D43F3AFF",
+    "Normal" = "#EEA236FF",
+    "Unknown" = "#357EBDFF",
+    "Host" = "#EEA236FF",
+    "CAFs" = "#5CB85CFF",
+    "Osteoblasts" = "#B8B8B8FF",
+    "Pericytes" = "#9632B8FF",
+    "Neuronal" = "#46B8DAFF",
+    "Chondrocytes" = "#90302DFF",
+    "T_cells" = "#A66D04FF",
+    "B_cells" = "#2D577FFF",
+    "NK_cells" = "#3E7E3EFF",
+    "TAMs" = "#7D7D7DFF",
+    "DC" = "#6D1D87FF",
+    "Mast" = "#097F9AFF",
+    "Monocytes" = "#FF6E6AFF",
+    "Endothelial_cells" = "#FFBB70FF",
+    "MP_Progenitor" = "#68A4E3FF",
+    "Fibrogenic" = "#79D379FF",
+    "Basal_Progenitor" = "#CDCDCDFF",
+    "Proliferative" = "#BF6BE2FF",
+    "Interactive" = "#69D1F3FF",
+    "COMA" = "#DB00FF",
+    "Fibroblasts" = "#FA00FF",
+    "Alv_Macrophages" = "#00FFD1",
+    "Epithelial_cells" = "#0029FF",
+    "Neutrophils" = "#FF00D6",
+    "Smooth_muscle" = "#00FF47",
+    "Erythrocytes" = "#00FFE0"
+)
+
+sobj_list <- list()
 # make a sankey plot to show the tumor calling
-for (group in c("patient_prim", "patient_mets",
-                "mm_prim", "mm_mets"
-                # "dogs_prim", "dogs_mets"
+for (group in c(
+                "patient_prim", "patient_mets",
+                "mm_prim", "mm_mets",
+                "dogs_prim", "dogs_mets"
                 )) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
+    object$AtlasCall <-
+        ifelse(object$celltype_tumor_call == "cancer_cells", "Tumor", "Normal")
+    object$Ann_Level2 <-
+        ifelse(object$AtlasCall == "Tumor", "Tumor", object$Ann_Level2)
+
     metadata <- 
         object@meta.data %>%
         as.data.frame() %>%
         rownames_to_column("cell_id") %>%
         select(cell_id,
+                AtlasCall,
                scatomic_tumor_call,
                scevan_tumor_call,
-               CNV_status) %>%
-        arrange(CNV_status,
+               CNV_status,
+                Ann_Level2) %>%
+        arrange(AtlasCall,
+                Ann_Level2,
+                CNV_status,
                 scevan_tumor_call,
                 scatomic_tumor_call) %>%
+        rename(CellTypes = Ann_Level2) %>%
         mutate(cell_id_number = row_number()) %>%
         mutate(scATOMIC = str_replace_all(scatomic_tumor_call, 
                                         c("normal_cells" = "Normal",
@@ -208,13 +250,65 @@ for (group in c("patient_prim", "patient_mets",
                         CopyKAT), ~replace_na(., "Unknown"))) %>%
         select(cell_id, 
                 cell_id_number, 
+                AtlasCall,
                 scATOMIC, 
                 SCEVAN, 
-                CopyKAT)
-    # make a metadata mimic to use for the tile plot
+                CopyKAT,
+                CellTypes)
+    # tileplot with celltype annotation
+    # with new celltypes 
+    prep_metadata <-
+        metadata %>%
+        pivot_longer(cols = -c(cell_id, cell_id_number),
+                names_to = "method",
+                values_to = "call")
+    # Set factor levels for method and call to control order in plot
+    prep_metadata$method <-
+        factor(prep_metadata$method,
+                levels = c("AtlasCall", "CopyKAT", "SCEVAN", "scATOMIC", "CellTypes"))
+    # Automatically make levels from prep_metadata$call, preserving order and uniqueness
+    levels_all <- prep_metadata %>% filter(method == "CellTypes") %>% pull(call) %>% unique()
+    prep_metadata$call <-
+        factor(prep_metadata$call,
+              levels = c(levels_all, "Normal", "Unknown"))
 
+    tile_plot_new <-
+        ggplot(prep_metadata, aes(x = method, y = cell_id_number, fill = call)) +
+            geom_tile() +
+            scale_fill_manual(values = unlist(cell_cols)) +
+            theme_minimal() +
+            labs(title = "Tumor annotation comparison",
+                 x = "Annotation Method",
+                 y = "Cell Index") +
+            theme(
+                axis.text.x = element_text(angle = 0, hjust = 0.5, face = "bold"),
+                axis.text.y = element_blank(),
+                axis.ticks.y = element_blank(),
+                panel.grid = element_blank(),
+                plot.margin = margin(0, 0, 0, 0), # Remove extra space around plot
+                plot.background = element_rect(fill = NA, color = NA),
+                panel.spacing = unit(0, "pt"),
+                panel.border = element_blank()
+            ) +
+            scale_y_reverse(expand = c(0, 0)) +
+            scale_x_discrete(expand = c(0, 0)) +
+            coord_cartesian(clip = "on")
+    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
+                 group, "_",
+                 "descrep_celltypes.pdf"),
+           plot = tile_plot_new,
+           bg = "white",
+           width = 6,
+           height = 6)}
+    
+    # make a metadata mimic to use for the tile plot
     matadata_mimic <-
         metadata %>%
+        select(cell_id, cell_id_number,
+                    scATOMIC, SCEVAN, CopyKAT) %>%
+        arrange(CNV_status,
+                scevan_tumor_call,
+                scatomic_tumor_call) %>%
         pivot_longer(cols = -c(cell_id, cell_id_number),
                     names_to = "method",
                     values_to = "call") %>%
@@ -921,16 +1015,18 @@ for (ob_name in ob_names) {
         rownames_to_column("cell_id") %>%
         select(DoubletDetection_DropletType,
                scDblFinder_DropletType,
-               #MajoritySinglet_DropletType,
+               MajoritySinglet_DropletType,
                scds_DropletType,
                cell_id) %>%
         arrange(DoubletDetection_DropletType,
                 scDblFinder_DropletType,
-                scds_DropletType)  %>%
+                scds_DropletType,
+                MajoritySinglet_DropletType)  %>%
         mutate(cell_id_number = row_number())  %>%
         rename(DoubletDetection = DoubletDetection_DropletType,
                scDblFinder = scDblFinder_DropletType,
-               scds = scds_DropletType) %>%
+               scds = scds_DropletType,
+               Majority = MajoritySinglet_DropletType) %>%
         mutate(across(everything(), ~ifelse(. == "", "unknown", .)))
     
     # make dimplot_list
@@ -949,7 +1045,8 @@ for (ob_name in ob_names) {
             qs::qread(tumor_path)
         new_metadata <-
             metadata %>%
-            filter(cell_id %in% colnames(tumor))
+            filter(cell_id %in% colnames(tumor)) %>%
+            column_to_rownames("cell_id")
         tumor <-
             AddMetaData(tumor, metadata = new_metadata)
         dimplot1 <-
@@ -960,6 +1057,9 @@ for (ob_name in ob_names) {
             dimplot_better(tumor, group_by = "scDblFinder", cols = doublet_cols) + NoLegend()
         dimplot4 <-
             dimplot_better(tumor, group_by = "scds", cols = doublet_cols) + NoLegend()
+        dimplot5 <-
+            dimplot_better(tumor, group_by = "Majority", cols = doublet_cols) + NoLegend()
+
         panel <-
             patchwork::wrap_plots(dimplot1, dimplot2, dimplot3, dimplot4,
                     ncol = 2) +
@@ -967,13 +1067,17 @@ for (ob_name in ob_names) {
                             theme = theme(plot.title = element_text(hjust = 0.5)))
         matadata_mimic <-
             new_metadata %>%
+            rownames_to_column("cell_id") %>%
+            select(cell_id, DoubletDetection, scDblFinder, scds) %>%
             mutate(cell_id_number = row_number()) %>%
             pivot_longer(cols = -c(cell_id, cell_id_number),
                         names_to = "method",
                         values_to = "call")
     } else {
         tmp_ob <-
-            AddMetaData(tmp_ob, metadata = metadata)
+            AddMetaData(tmp_ob, metadata = metadata %>%
+                                            filter(cell_id %in% colnames(tumor)) %>%
+                                            column_to_rownames("cell_id"))
         dimplot1 <-
             dimplot_better(tmp_ob, group_by = "Ann_Level2") + NoLegend()
         dimplot2 <-
@@ -990,6 +1094,7 @@ for (ob_name in ob_names) {
                         theme = theme(plot.title = element_text(hjust = 0.5)))
         matadata_mimic <-
             metadata %>%
+            select(cell_id, DoubletDetection, scDblFinder, scds) %>%
             mutate(cell_id_number = row_number()) %>%
             pivot_longer(cols = -c(cell_id, cell_id_number),
                         names_to = "method",
@@ -1088,7 +1193,6 @@ for(i in seq_along(calls)) {
     plot_data <- tibble()
     df <- calls[[i]]
     group <- names(calls)[i]
-    
     # Agreement - DoubletDetection vs scDblFinder
     results1 <- 
         agree(df[, c("DoubletDetection", "scDblFinder")])
@@ -1097,7 +1201,6 @@ for(i in seq_along(calls)) {
                  tibble(group = group,
                         comparison = "DoubletDetection vs scDblFinder",
                         percent_agreement = results1$value))
-    
     # Agreement - scDblFinder vs scds
     results2 <- 
         agree(df[, c("scDblFinder", "scds")])
@@ -1134,13 +1237,10 @@ for(i in seq_along(calls)) {
               axis.ticks = element_line(),
               axis.text.x = element_text(margin = margin(t = 0)),
               axis.text.y = element_text(margin = margin(r = 0)))
-
-    
     # Fleiss Kappa
     results4 <- 
         kappam.fleiss(df[, c("DoubletDetection", "scDblFinder", "scds")])
     kappa_value <- results4$value
-
     final_plot <- 
         concordance +
         labs( title = paste(
@@ -1148,14 +1248,12 @@ for(i in seq_along(calls)) {
             round(kappa_value, 2)),
             y = "Agreement / Kappa Value",
             x = "Group")
-
     ggsave(str_c("output/figures/Final_Annotations/results2/doubletfinder/",
                 group, "_concordance_plot.pdf"),
             plot = final_plot,
             width = 5,
             height = 4,
             bg = "white")
-
 }
 
 
