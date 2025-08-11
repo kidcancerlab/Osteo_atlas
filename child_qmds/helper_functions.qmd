@@ -7,7 +7,7 @@ dimplot_better <- function(object,
                            group_by = NULL,
                            cols,
                            ncol = 1,
-                           label.size = 4,
+                           label.size = 5,
                            split_by = NULL,
                            shuffle,
                            ...) {
@@ -26,7 +26,8 @@ dimplot_better <- function(object,
             ...) +
         coord_fixed() +
         theme(aspect.ratio=1) +
-        theme_void()
+        theme_void() +
+        theme(plot.title = element_text(hjust = 0.5))
 }
 
 # cluster based annotation
@@ -35,6 +36,7 @@ clusterbased_annot <- function(s_obj) {
     clust_info <- tibble()
     for (cluster in unique(s_obj$seurat_clusters)) {
         set.seed(199820)
+        print(str_c("Reclustering cluster ", cluster))
         subset_object <- subset(s_obj, ident = cluster) %>%
             FindVariableFeatures() %>%
             ScaleData() %>%
@@ -42,6 +44,7 @@ clusterbased_annot <- function(s_obj) {
             RunPCA(npcs = min(50,
                             sum(s_obj$seurat_clusters == cluster) - 1))
 
+        #dimplot_better(s_obj, group_by = "sample_name") 
         if (length(unique(subset_object$sample_name)) > 1 &&
             ncol(subset_object) > 50) {
             subset_object <- RunHarmony(subset_object,
@@ -487,6 +490,79 @@ annotate_celltypes <- function(sobject,
               function(x) max(x, na.rm = TRUE))
     return(sobject)
 }
+
+#Function for adding metadata for Ann_Level0, 1, and 2 from 3
+reconstruct_cell_types <- function(obj) {
+    obj$Ann_Level2 <- 
+        str_replace_all(obj$Ann_Level3,
+                        c("^Angio_TAMs$" = "Macrophages",
+                          "^CAF$" = "Fibroblasts",
+                          "^CD4_T$" = "T_cells",
+                          "^CD8_T$" = "T_cells",
+                          "^EC_Blood$" = "Endothelial_cells",
+                          "^EC_Lymphatic$" = "Endothelial_cells",
+                          "^IFN_TAMs$" = "Macrophages",
+                          "^Inflam_TAMs$" = "Macrophages",
+                          "^Memory_B$" = "B_cells",
+                          "^Naive_T$" = "T_cells",
+                          "^Normal_Fibroblasts$" = "Fibroblasts",
+                          "^Osteoblasts$" = "Osteoblasts",
+                          "^Osteoclast_TAMs$" = "Macrophages",
+                          "^Plasma_B$" = "B_cells",
+                          "^Plasmocytoid_DC$" = "DC",
+                          "^Prolif_TAMs$" = "Macrophages",
+                          "^Regulatory_T$" = "T_cells",
+                          "^Proliferating_T$" = "T_cells",
+                          "^TAMs$" = "Macrophages",
+                          "^Alv_EpithelialT1$" = "Epithelial_cells",
+                          "^Alv_EpithelialT2$" = "Epithelial_cells",
+                          "^Alv_Fibroblasts$" = "Fibroblasts",
+                          "^Alv_Macrophages$" = "Macrophages",
+                          "^Int_Macrophages$" = "Macrophages",
+                          "^PreDC$" = "DC",
+                          "^Scar_TAMs$" = "Macrophages",
+                          "^Transitional_Epithelial$" = "Epithelial_cells",
+                          "^preDC$" = "DC",
+                          "^Proli_TAMs$" = "Macrophages",
+                          "^Myofibroblasts$" = "Fibroblasts"))
+
+
+
+    obj$Ann_Level1 <- 
+        str_replace_all(obj$Ann_Level2,
+                        c("^B_cells$" = "Immune_Myeloid",
+                          "^Ciliated_cells$" = "Epithelial_Endothelial",
+                          "^Club_cells$" = "Epithelial_Endothelial",
+                          "^DC$" = "Immune_Myeloid",
+                          "^Endothelial_cells$" = "Epithelial_Endothelial",
+                          "^Epithelial_cells$" = "Epithelial_Endothelial",
+                          "^Fibroblasts$" = "Mesenchymal",
+                          "^Macrophages$" = "Immune_Myeloid",
+                          "^Monocytes$" = "Immune_Myeloid",
+                          "^Neutrophils$" = "Immune_Myeloid",
+                          "^NK_cells$" = "Immune_Lymphoid",
+                          "^Pericytes$" = "Mesenchymal",
+                          "^T_cells$" = "Immune_Lymphoid",
+                          "^Osteoblasts$" = "Mesenchymal",
+                          "^Smooth_muscle$" = "Mesenchymal",
+                          "^Cardiomyocytes$" = "Mesenchymal",
+                          "^Neurons$" = "Mesenchymal",
+                          "^Adipocytes$" = "Mesenchymal",
+                          "^Erythrocytes$" = "Immune_Myeloid",
+                          "^Tuft_cells$" = "Epithelial_Endothelial",
+                          "^Stromal_cells$" = "Mesenchymal",
+                          "^Mast$" = "Immune_Myeloid"))
+
+    obj$Ann_Level0 <- 
+        str_replace_all(obj$Ann_Level1,
+                        c("^Immune_Myeloid$" = "Host",
+                          "^Epithelial_Endothelial$" = "Host",
+                          "^Immune_Lymphoid$" = "Host",
+                          "^Mesenchymal$" = "Host"))
+
+    return(obj)
+}
+
 ```
 
 ## RUN differential expression analysis on a Seurat object
@@ -1196,10 +1272,10 @@ make_panel_plot <- function(sobj,
                 display_numbers = TRUE,
                 silent = TRUE,
                 main = paste0(cat_expl),
-                fontsize_row = 7,
-                fontsize_number = 7,
+                fontsize_row = 8,
+                fontsize_number = 8,
                 cluster_cols = FALSE,
-                cluster_rows = FALSE
+                cluster_rows = TRUE
             )
         }
     }
@@ -1208,8 +1284,8 @@ make_panel_plot <- function(sobj,
 
     panel_plots[[label]] <-
         patchwork::wrap_plots(
-            dimplot,
-            circle_plot_out,
+            # dimplot,
+            # circle_plot_out,
             ggplotify::as.ggplot(heatmap_plots$Hallmark_paths),
             ggplotify::as.ggplot(heatmap_plots$KEGG),
             #ggplotify::as.ggplot(heatmap_plots$Oncogenic_signature),
@@ -1227,19 +1303,25 @@ make_panel_plot <- function(sobj,
     ggsave(
         paste0("output/figures/gsea/", group, "/", label, "_six_panels.png"),
         width = 30,
-        height = 70,
+        height = 40,
         limitsize = FALSE,
         plot = panel_plots[[label]])
 
-    #save as qs
-    qs::qsave(panel_plots[[label]],
-              file = paste0("output/figures/gsea/", group, "/", label, "_six_panels.qs"))
+    ggsave(
+        paste0("output/figures/gsea/", group, "/", label, "_six_panels.pdf"),
+        width = 30,
+        height = 40,
+        limitsize = FALSE,
+        plot = panel_plots[[label]])
+
+    # #save as qs
+    # qs::qsave(panel_plots[[label]],
+    #           file = paste0("output/figures/gsea/", group, "/", label, "_six_panels.qs"))
 }
 
 
 ```
 
-## Velocity Analysis Functions
 
 ### get_plot_list
 
@@ -1265,94 +1347,12 @@ get_plot_list <- function(ob_name) {
 }
 ```
 
-### Python Functions
-
-`loom_to_an` will take all loom files associated with a seurat object, load them in one-by-one, add in appropriate metadata, and then merge them into a single anndata object
-`calc_velo` will calculate the rna velocity information from our loom files
-`make_plots` will create the velocity analysis plots. Currently 4 plots are output by this:
-    a velocity stream plot colored by seurat clusters in umap space
-    a velocity embedding plot
-    a velocity stream plot showing cell cycle phases in umap space
-    a velocity stream plot colored by seurat clusters in fdl space
-
-```{python rna-velo-py-functions}
-def loom_to_an(loom_path, metadata_path):
-    #Get sample id's from metadata files
-    md_files=os.listdir(metadata_path)
-    #initialize list to hold anndata objects
-    ad_obs = []
-    for one_md in md_files:
-        #get sample id from file name
-        sample_id = re.sub("_metadata.csv", "", one_md)
-        #add object to list
-        tmp = anndata.read_loom(loom_path + "/" + sample_id + ".loom")
-        #read in metadata file
-        md_path = metadata_path + "/" + one_md
-        metadata = pd.read_csv(md_path, index_col = "bc")
-        #Subset anndata to only barcodes in metadata folder
-        tmp = tmp[metadata.index]
-        tmp.obs = metadata.filter(regex = '^(?!umap_|PC_|fdl_|harmony_).*$').reindex(tmp.obs.index)
-        #Add pca embeddings
-        tmp.obsm["X_pca"] = metadata.filter(regex = "PC_").reindex(tmp.obs.index).to_numpy()
-        #Add umap embeddings
-        tmp.obsm["X_umap"] = metadata.filter(regex = "umap_").reindex(tmp.obs.index).to_numpy()
-        #add fdl embeddings
-        tmp.obsm["X_fdl"] = metadata.filter(regex = "fdl_").reindex(tmp.obs.index).to_numpy()
-        #add harmony embeddings
-        tmp.obsm["X_harmony"] = metadata.filter(regex = "harmony_").reindex(tmp.obs.index).to_numpy ()
-        #make var names unique (this step is necessary to merge anndata list)
-        tmp.var_names_make_unique()
-        #add object to list
-        ad_obs.append(tmp)
-    #merge anndata list
-    merged_anndata = anndata.concat(ad_obs)
-    #return merged anndata
-    return merged_anndata
-
-
-def calc_velo(ad_ob, mode = "stochastic", group = "seurat_clusters"):
-    sc.pp.neighbors(ad_ob, n_pcs = 30, n_neighbors = 30)
-    scv.pp.moments(ad_ob)
-    scv.tl.velocity(ad_ob, mode = mode)
-
-def make_plots(ad_ob):
-    scv.tl.velocity_graph(ad_ob, backend = "threading")
-    scv.pl.velocity_embedding_stream(ad_ob, basis = "umap", color = "seurat_clusters")
-    scv.pl.velocity_embedding(ad_ob, basis = "umap", color = "seurat_clusters")
-    scv.pl.velocity_embedding_stream(ad_ob, basis = "umap", color = "Phase")
-    scv.pl.velocity_embedding_stream(ad_ob, basis = "fdl", color = "seurat_clusters")
-
-def save_velo_plots(ad_ob, ob_name):
-    #by default it saves the figures to a directory called ./figures/
-    scv.tl.velocity_graph(ad_ob, backend = "threading")
-    plotdict = {
-        "umap_clusters": ["umap", "seurat_clusters"],
-        "umap_cc": ["umap", "Phase"],
-        "fdl_clusters": ["fdl", "seurat_clusters"]
-    }
-    for plt_name, plt_type in plotdict.items():
-        file_end = ob_name + "_" + plt_name + ".png"
-        scv.pl.velocity_embedding_stream(ad_ob,
-                                         basis = plt_type[0],
-                                         color = plt_type[1],
-                                         show = False,
-                                         save = file_end,
-                                         dpi = 300)
-    file_end = ob_name + "_embedding.png"
-    scv.pl.velocity_embedding(ad_ob,
-                              basis = "umap",
-                              color = "seurat_clusters",
-                              show = False,
-                              save = file_end,
-                              dpi = 300)
-
-```
-
 ## Scenic plus regulon analysis function
 ```{r scenic_function}
 #| cache.vars: Run_GRA
 Run_GRA <- function(sobject,
                     idents,
+                    group = group,
                     org,      #organism "mgi" for mouse, "hgnc" for human
                     subset = "no",          #yes or no
                     subset_cell_number = NA) {
@@ -1364,7 +1364,8 @@ Run_GRA <- function(sobject,
     } else {
         sobject <- sobject
     }
-    sobject <- JoinLayers(sobject)
+    sobject <- 
+        JoinLayers(sobject)
     exprMat <- SeuratObject::GetAssayData(sobject, assay = 'RNA', slot= 'counts') %>%
         as.matrix()
     Idents(sobject) <- idents
@@ -1374,13 +1375,16 @@ Run_GRA <- function(sobject,
     } else {
         cellInfo <- data.frame(CellType=Idents(sobject))
     }
-    saveRDS(cellInfo, file="input/downloads/SCENIC/cellInfo.Rds")
+    if (!dir.exists("input/downloads/SCENIC")) {
+        dir.create("input/downloads/SCENIC", recursive = TRUE)
+    }
+    saveRDS(cellInfo, file= str_c("input/downloads/SCENIC/", group, "cellInfo.Rds"))
     cols <- c(plot_cols, sample(rainbow(1000)))
     CellType <- cols[1:length(unique(cellInfo$CellType))]
     names(CellType) <- unique(cellInfo$CellType)
     colVars <- list()
     colVars$CellType <- CellType
-    saveRDS(colVars, file="input/downloads/SCENIC/colVars.Rds")
+    saveRDS(colVars, file= str_c("input/downloads/SCENIC/", group, "colVars.Rds"))
 
     #Running SCENIC begins
     scenicOptions <- SCENIC::initializeScenic(org = org,
@@ -1389,8 +1393,8 @@ Run_GRA <- function(sobject,
                                               datasetTitle = "SCENIC tutorial",
                                               nCores = parallelly::availableCores())
 
-    scenicOptions@inputDatasetInfo$cellInfo <- "input/downloads/SCENIC/cellInfo.Rds"
-    scenicOptions@inputDatasetInfo$colVars <- "input/downloads/SCENIC/colVars.Rds"
+    scenicOptions@inputDatasetInfo$cellInfo <- str_c("input/downloads/SCENIC/", group, "cellInfo.Rds")
+    scenicOptions@inputDatasetInfo$colVars <- str_c("input/downloads/SCENIC/", group, "colVars.Rds")
 
     ##### III: Co-expression network
     ### 1. Gene filter/selection
@@ -1419,7 +1423,7 @@ Run_GRA <- function(sobject,
 
     # 2. Get regulons (with RcisTarget: TF motif analysis)
     scenicOptions <- SCENIC::runSCENIC_2_createRegulons(scenicOptions,
-                                                coexMethod=c("top5perTarget"))
+                                                coexMethods=c("top5perTarget"))
 
     ### Identify cell states:
     # 3. Score GRN (regulons) in the cells (with AUCell)
@@ -1427,16 +1431,17 @@ Run_GRA <- function(sobject,
 
     scenicOptions <- SCENIC::runSCENIC_3_scoreCells(scenicOptions, exprMat_log)
 
-    # 4.2 Binarize the network activity (regulon on/off)
+    # # 4.2 Binarize the network activity (regulon on/off)
     scenicOptions@settings$devType = "png"
-    scenicOptions <- SCENIC::runSCENIC_4_aucell_binarize(scenicOptions,
-                                                         exprMat = exprMat_log)
+    # scenicOptions <- SCENIC::runSCENIC_4_aucell_binarize(scenicOptions,
+    #                                                      exprMat = exprMat_log)
 
     return(list(scenicOptions= scenicOptions,
                 cellInfo = cellInfo,
                 colVars = colVars,
                 exprMat_log = exprMat_log))
 }
+
 ```
 
 
@@ -1894,3 +1899,131 @@ optimize_harmony <- function(s_obj,
 
 
 
+
+
+```{r spatial-plotting-fxns}
+make_cor_plt <- function(mod, s_obj) {
+    ### Make beta and theta matrices for reference dataset
+    #get counts
+    counts <- GetAssayData(patient_mets, layer = "counts")
+    # store the annotations as a factor
+    annot <- as.factor(patient_mets$Ann_Level2)
+    # create a de facto theta matrix for the single cell data
+    ref_proxy_theta <- model.matrix(~ 0 + annot)
+    rownames(ref_proxy_theta) <- names(annot)
+    # create a de facto gene expression deconvolution matrix for our reference
+    ref_proxy_gex <- counts %*% ref_proxy_theta
+
+
+    # get tissue coordinates and rename columns
+    pos <- GetTissueCoordinates(s_obj)
+    colnames(pos) <- c("y", "x")
+    pos$y <- -pos$y
+
+    # Get beta and theta values 
+    beta_theta <- getBetaTheta(mod)
+
+    # calculate correlation matrix
+    cor <- 
+        getCorrMtx(
+            m1 = as.matrix(beta_theta$beta),
+            m2 = t(as.matrix(ref_proxy_gex)),
+            type = "b"
+        )
+    rownames(cor) <- paste0("decon_", rownames(cor))
+    # remove "annot" from the front of cell types
+    colnames(cor) = str_remove(colnames(cor), "annot")
+
+    return(
+        correlationPlot(
+            mat = cor,
+            colLabs = "Deconvolved cell topics",
+            rowLabs = "Atlas cell types",
+            title = paste("Transcriptional Correlation in", ob)
+        ) +
+        theme(axis.text.x = element_text(angle = 315))
+    )
+}
+
+
+#running rctd
+run_rctd <- function(sp_ob, ref, doublet_mode = "doublet") {
+    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
+        dplyr::rename(x = imagerow, y = imagecol)
+    #convert our object to an rctd object
+    my_data <- spacexr::SpatialRNA(coords,
+                                   GetAssayData(sp_ob, layer = "counts"))
+    rctd_obj <- spacexr::create.RCTD(
+        my_data,                     
+        ref,
+        max_cores = 1,
+        UMI_min = 3,
+        counts_MIN = 0, 
+        UMI_max = 900000000,
+        CELL_MIN_INSTANCE = 0
+    )
+    rctd_out <- spacexr::run.RCTD(
+        rctd_obj,
+        doublet_mode = doublet_mode
+    )
+    return(rctd_out)
+}
+
+save_deconv_plots <- function(ob, ob_name, rctd_res, fig_dir) {
+    norm_weights <- spacexr::normalize_weights(rctd_res@results$weights)
+    ob <- AddMetaData(ob, norm_weights)
+    cell_types <- unique(rctd_res@reference@cell_types)
+    # rename Stressed to COMA if COMA not present
+    if ("COMA" %notin% colnames(ob@meta.data)) {
+        ob$COMA <- ob$Stressed
+    }
+    ob$Tumor_Cumulative <-
+        ob$Basal_Progenitor +
+        ob$Fibrogenic +
+        ob$Interactive +
+        ob$MP_Progenitor +
+        ob$Proliferative +
+        ob$COMA
+    
+    # make figure of all scores
+    pdf(paste0(fig_dir, "/", ob_name, "_rctd_scores.pdf"), height = 4, width = 4)
+    print(SpatialDimPlot(ob, pt.size.factor = 0) + NoLegend())
+    print(
+        SpatialFeaturePlot(
+            ob,
+            features = "Tumor_Cumulative",
+            pt.size.factor = size.factors[[ob_name]],
+            image.alpha = 0
+        )
+    )
+    for (ct in cell_types) {
+        print(SpatialFeaturePlot(
+            ob,
+            features = ct,
+            pt.size.factor = size.factors[[ob_name]],
+            image.alpha = 0
+        )
+    )
+    }
+    dev.off()
+    pdf(paste0(fig_dir, "/", ob_name, "_heatmap.pdf"))
+    pheatmap::pheatmap(
+        cor(norm_weights, method = "spearman"),
+        low = "blue",
+        mid = "white",
+        high = "red",
+        midpoint = 0,
+        angle_col = 45,
+        fontsize = 16
+    )
+    dev.off()
+}
+```
+
+## Negate %in%
+
+```{r}
+`%notin%` <- Negate(`%in%`)
+```
+
+## 

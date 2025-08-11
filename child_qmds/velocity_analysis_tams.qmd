@@ -1,0 +1,282 @@
+In order to analyze the data, we need to save a table of cell-level metadata, including barcodes, seurat clusters, and annotations. We also need to subset to just TAMs in order to analyze them individually.
+
+First we need to read in our objects for this. I'm using the objects from TAMs_objects.
+
+```{r}
+yogi_prefix <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/"
+obj_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/stromal_subtypes/"))
+
+tam_list <- list()
+for (ob_name in obj_names) {
+    tam_list[[ob_name]] <-
+        qs::qread(paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/stromal_subtypes/", ob_name, "/Immune_Myeloid.qs")) %>%
+        subset(Ann_Level3 %notin% c("DC2", "Neutrophils", "DC1", "Migratory_DC", "pDC", "DC", "Mast", "Alv_Macrophages", "Monocytes"))
+        # process_seurat() %>%
+        # RunHarmony(group.by.vars = c("sample_name")) %>%
+        # process_seurat(reduction = "harmony")
+}
+
+ucts <- lapply(tam_list, function(x) {
+    unique(x$Ann_Level3)
+})
+unlist(ucts) %>% unique()
+```
+
+```{r}
+# now I'm going to remove the single nucleus cells
+tam_list <- lapply(tam_list, subset, method == "single_cell")
+
+plts <- lapply(tam_list, dimplot_better, group = "Ann_Level3")
+gridExtra::grid.arrange(grobs = plts, ncol = 2)
+```
+
+Next I need to write off the metadata for these cells. The metadata will be kept in the folder `loom_output/tam_metadata/`
+
+```{r write-off-md}
+dir.create("loom_output/tam_metadata/sc", recursive = TRUE)
+dir.create("loom_output/tam_metadata/sn")
+
+lapply(names(tam_list), function(obj_name) {
+    obj <- subset(tam_list[[obj_name]], method == "single_cell")
+    write_off_md(sobj = tam_list[[obj_name]],
+                 id_col = "sample_name",
+                 output_dir = paste0("loom_output/tam_metadata/sc/",
+                                     obj_name),
+                 vars_to_keep = c("sample_name",
+                                  "seurat_clusters",
+                                  "Ann_Level1",
+                                  "Ann_Level2",
+                                  "Ann_Level3"),
+                 handle_n_of_1 = FALSE)
+
+    if ("single_nucleus" %in% names(table(tam_list[[obj_name]]$method))) {
+        obj <- subset(tam_list[[obj_name]], method == "single_nucleus")
+        write_off_md(sobj = tam_list[[obj_name]],
+                     id_col = "sample_name",
+                     output_dir = paste0("loom_output/tam_metadata/sn/",
+                                         obj_name),
+                     vars_to_keep = c("sample_name",
+                                      "seurat_clusters",
+                                      "Ann_Level1",
+                                      "Ann_Level2",
+                                      "Ann_Level3"),
+                     handle_n_of_1 = FALSE)
+    }
+})
+```
+
+## Analyze Velocity in TAMs
+
+```{python}
+#import libraries
+import anndata
+import scvelo as scv
+import pandas as pd
+import numpy as np
+import matplotlib as plt
+import igraph
+plt.use('Agg')
+from matplotlib import pyplot
+from matplotlib.colors import ListedColormap
+import scanpy as sc
+import os
+import re
+```
+
+### Make AnnData Objects
+
+I'm going to make anndata objects for the TAM datasets and write them off after calculating velocity so I don't have to re-run that.
+
+I'm going to use both the dynamical model and the stochastic
+
+```{python make-tam-anndata}
+color_mapping = {
+    "Alv_Macrophages": "#D43F3AFF",
+    "Ciliated_cells": "#EEA236FF",
+    "DC1": "#357EBDFF",
+    "DC2": "#5CB85CFF",
+    "Fibrogenic_TAMs": "#FF0060",
+    "IFN_TAMs": "#9632B8FF",
+    "Inflam_TAMs": "#46B8DAFF",
+    "Migratory_DC": "#90302DFF",
+    "Monocytes": "#A66D04FF",
+    "Neutrophils": "#2D577FFF",
+    "Osteoclast_TAMs": "#3E7E3EFF",
+    "pDC": "#7D7D7DFF",
+    "Prolif_TAMs": "#6D1D87FF",
+    "Scar_TAMs": "#097F9AFF",
+    "Mast": "#FF6E6AFF",
+    "DC": "#FFBB70FF",
+    "TAMs": "#CDCDCDFF"
+}
+
+# write off objects and make plots for single cell
+
+ob_names = os.listdir("loom_output/tam_metadata/sc/")
+for ob in ob_names:
+    print("starting on " + ob)
+    merged_ad = loom_to_an(
+        obj_name = ob,
+        loom_dir = "loom_output/samples",
+        metadata_dir = "loom_output/tam_metadata/sc/")
+    print("made " + ob + " , now calculating velocity")
+    calc_velo(merged_ad)
+    merged_ad.write(filename = "loom_output/tam_anndata/sc/" + ob + ".ad")
+    print("finished " + ob)
+
+for ob in ob_names:
+    ad_ob = anndata.read("loom_output/tam_anndata/sc/" + ob + ".ad")
+    scv.pl.velocity_embedding_stream(
+        ad_ob,
+        basis = "umap",
+        color = "Ann_Level3",
+        show = False,
+        palette = color_mapping,
+        sort_order = False,
+        legend_loc = 'none'
+    )
+    pyplot.savefig("output/figures/rna_velocity_tams/sc/" + ob + "_umap.svg")
+
+
+# write off objects and make plots for single nucleus
+
+ob_names = os.listdir("loom_output/tam_metadata/sn/")
+for ob in ob_names:
+    print("starting on " + ob)
+    merged_ad = python_functions.loom_to_an(
+        obj_name = ob,
+        loom_dir = "loom_output/samples",
+        metadata_dir = "loom_output/tam_metadata/sn/")
+    print("made " + ob + " , now calculating velocity")
+    python_functions.calc_velo(merged_ad)
+    merged_ad.write(filename = "loom_output/tam_anndata/sn/" + ob + ".ad")
+    print("finished " + ob)
+
+
+for ob in ob_names:
+    ad_ob = anndata.read("loom_output/tam_anndata/sn/" + ob + ".ad")
+    scv.pl.velocity_embedding_stream(
+        ad_ob,
+        basis = "umap",
+        color = "Ann_Level3",
+        show = False,
+        palette = color_mapping,
+        sort_order = False,
+        legend_loc = 'none'
+    )
+    pyplot.savefig("output/figures/rna_velocity_tams/sn/" + ob + "_umap.svg")
+
+```
+
+### Make Velocity Plots
+
+```{python}
+# color_mapping = {"Osteoclast_TAMs": "#D43F3AFF",
+#                  "TAMs": "#EEA236FF",
+#                  "Scar_TAMs": "#357EBDFF",
+#                  "Inflam_TAMs": "#5CB85CFF",
+#                  "Prolif_TAMs": "#B8B8B8FF",
+#                  "IFN_TAMs": "#9632B8FF",
+#                  "Monocytes": "#46B8DAFF",
+#                  "Alv_TAMs": "#90302DFF",
+#                  "DC": "#A66D04FF",
+#                  "pDC",
+#                  "DC1",
+#                  "DC2",
+#                  "Migratory_DC",
+#                  "cMonocytes",
+#                  "ncMonocytes"}
+
+
+for ob in ob_names:
+    ad_ob = anndata.read("loom_output/tam_anndata/" + ob + ".ad")
+    scv.pl.velocity_embedding_stream(
+        ad_ob,
+        basis = "umap",
+        color = "Ann_Level3",
+        show = False,
+        palette = hex_codes,
+        sort_order = False)
+    pyplot.savefig("figures/scvelo/tams/" + ob + "_umap.png")
+    scv.pl.velocity_embedding_stream(
+        ad_ob,
+        basis = "fdl",
+        color = "Ann_Level3",
+        show = False,
+        palette = hex_codes,
+        sort_order = False)
+    pyplot.savefig("figures/scvelo/tams/" + ob + "_fdl.png")
+
+```
+
+## Get Velocity Driving Genes
+
+```{python}
+tam_velo_genes = dict()
+tam_ob_dict = dict()
+for ob in ob_names:
+    tmp = anndata.read("loom_output/tam_anndata/stochastic/sc/" + ob + ".ad")
+    tam_ob_dict[ob] = tmp
+    scv.tl.rank_velocity_genes(tmp, groupby = "Ann_Level3", min_corr = 0.3, min_counts = 10)
+    rank_genes = tmp.uns["rank_velocity_genes"]
+    df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
+    tam_velo_genes[ob] = df
+
+#also going to store genes by cell type
+tam_genes = dict()
+#initialize num_rows
+num_rows = 1000
+for ob in ob_names:
+    tam_genes[ob] = pd.DataFrame()
+    tmp_df = tam_velo_genes[ob]
+    #get smallest number of rows for any one df so we're not coercing NAs
+    tmp_n = len(tmp_df)
+    if tmp_n < num_rows:
+        num_rows = tmp_n
+    
+    col_names = tmp_df.columns
+    for cell_type in col_names:
+        tam_genes[ob] = tam_genes[ob].iloc[0:num_rows]
+        tam_genes[ob][cell_type] = tmp_df.iloc[0:num_rows][cell_type]
+        # scar_tam_genes[ob] = tam_velo_genes[ob].iloc[0:50][cell_type]
+
+
+tam_genes = dict()
+col_names = color_mapping.keys()
+for cell_type in col_names:
+    num_rows = 1000
+    tam_genes[cell_type] = pd.DataFrame()
+    for ob in ob_names:
+        tmp_df = tam_velo_genes[ob]
+        if len(tmp_df) < num_rows:
+            num_rows = len(df)
+        if cell_type in tmp_df.columns:
+            tam_genes[cell_type][ob] = tmp_df.iloc[0:num_rows][cell_type]
+
+
+```
+
+Weirdly, even with increasing the minimum number of gene counts required for a gene to be included in the rank_genes results, there are still a significant amount of human genes in our results...
+
+I realized that this is because it's constructing the anndata object from the loom file, which was created from the bam containing ALL reads from this run. For now, I'm going to ditch the xenograft objects
+
+## Infer Trajectory
+
+```{python}
+# ob_names = list(filter(lambda x: "xeno" not in x, ob_names))
+
+for ob in ob_names:
+    tmp = tam_ob_dict[ob]
+    tmp.uns['neighbors']['distances'] = tmp.obsp['distances']
+    tmp.uns['neighbors']['connectivities'] = tmp.obsp['connectivities']
+    scv.tl.paga(tmp, groups='Ann_Level2')
+    tam_ob_dict[ob] = tmp
+
+trajectory_res = dict()
+for ob in ob_names:
+    tmp = tam_ob_dict[ob]
+    scv.pl.paga(tmp, basis = "umap", size = 50, alpha = 0.1, min_edge_width = 2, node_size_scale = 1.5)
+    # pyplot.figure(figsize = (8, 6))
+    pyplot.savefig("output/figures/rna_velocity_tams/stochastic/" + ob + "_paga_umap.svg")
+
+```

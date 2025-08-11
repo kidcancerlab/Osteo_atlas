@@ -37,6 +37,10 @@ percent_diff <-
             "Naive_NKT",            0.10
             )
 
+table_list <- list()
+unique(unlist(table_list))
+
+
 
 for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
                 "mm_prim_normal_cells", "mm_mets_normal_cells",
@@ -51,18 +55,21 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
     species <- object$organism[1]
 
     Idents(object) <- object$Ann_Level2
+    table_list[[group]] <-
+        unique(object$Ann_Level2)}
+
     #dimplot_better(object, group_by = c("Ann_Level3", "seurat_clusters")) 
     #FeaturePlot(object, features = c("BNIP3","RPL37A", "RPS18", "RPL39", "RPL35", "MRPL23", "MRPL9"), order = TRUE)
     genes <-
         FindAllMarkers(object,
                         only.pos = TRUE,
                         min.pct = 0.3,
-                        logfc.threshold = 0.2)
+                        logfc.threshold = 0.1)
     if (species == "mouse") {
         genes$gene <- 
             nichenetr::convert_mouse_to_human_symbols(genes$gene) %>%
             as.character()
-    }
+    
 
     for (item in seq_len(nrow(percent_diff))) {
         celltype <- percent_diff$population[item]
@@ -147,6 +154,8 @@ markers <-
          Smooth_muscle = c("ACTA2", "TAGLN", "MYH11"),
          Epithelial_cells = c("PATJ", "EGFR", "CDH1"),
          Naive_NKT = c("TOX","ETS1", "IKZF1"))
+
+
 ```
 
 

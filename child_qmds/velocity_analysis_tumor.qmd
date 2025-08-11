@@ -1,0 +1,348 @@
+We are interested in how cell types and states in each sample change are evolving based on splicing dynamics. For this purpose will perform velocity analysis.
+
+## New velocity analysis function
+
+I realized that I should have just created individual loom files for the filtered_feature matrices, that way I can subset by any barcodes that I want. So i'm going to rewrite the r_make_loom_files function.
+
+Input is a table with the following column names:
+    -sample_id
+    -h5_path
+    -bam_path
+    -species
+
+```{r}
+velo_input <- read.table("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/misc/allsample_details.txt",
+                         header = TRUE) %>%
+    dplyr::select(sample_id = sample_name,
+                  species,
+                  data_source) %>%
+    mutate(data_path = paste0(
+            recode(data_source,
+                   "GEO" = "/home/gdrobertslab/lab/Counts_2/",
+                   "NCH" = "/home/gdrobertslab/lab/Counts_2/",
+                   "SJ" = "/home/gdrobertslab/lab/ExternalData/Patel_lab/",
+                   "NCI_POB" = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/",
+                   "CSU" = "/home/gdrobertslab/lab/ExternalData/Regan_lab/",
+                   "TU" = "/home/gdrobertslab/lab/ExternalData/Gardner/",
+                   "UoM" = "/home/gdrobertslab/lab/ExternalData/Modiano_Lab/Counts/"))) %>%
+    unique() %>%
+    mutate(#add h5 paths
+           h5_path = ifelse(data_source == "NCI_POB",
+                            paste0(data_path,
+                                   "03_FilteredMatricesH5/",
+                                   sample_id,
+                                   "_filtered_feature_bc_matrix.h5"),
+                            paste0(data_path,
+                                   sample_id,
+                                   "/filtered_feature_bc_matrix.h5")),
+           #add bam paths
+           bam_path = ifelse(data_source == "NCI_POB",
+                             paste0(data_path,
+                                    "BAMs/",
+                                    sample_id,
+                                    "_gex_possorted_bam.bam"),
+                             ifelse(data_source == "CSU",
+                                    paste0(data_path,
+                                           sample_id,
+                                           "/",
+                                           sample_id,
+                                           "_possorted_genome_bam.bam"),
+                                    paste0(data_path,
+                                           sample_id,
+                                           "/possorted_genome_bam.bam"))),
+           gtf_path = recode(species,
+                             "canine" = "/home/gdrobertslab/lab/GenRef/10x-canine-atlas_arc/genes/genes.gtf.gz",
+                             "mousemodel" = "/home/gdrobertslab/lab/GenRef/10x-mm10_arc/genes/genes.gtf.gz",
+                             "patient" = "/home/gdrobertslab/lab/GenRef/10x-hg38_arc/genes/genes.gtf.gz",
+                             "xenograft" = "/home/gdrobertslab/lab/GenRef/10x-hg38-mm10_arc/genes/genes.gtf.gz"))
+#fix edge cases for h5's (subset of dan regan's objects) and bams (subset of nch ones)
+velo_input$h5_path[!file.exists(velo_input$h5_path)] <-
+    paste0(velo_input$data_path,
+          velo_input$sample_id,
+          "/",
+          velo_input$sample_id,
+          "_filtered_feature_bc_matrix.h5")[!file.exists(velo_input$h5_path)]
+velo_input$bam_path[!file.exists(velo_input$bam_path)] <-
+    paste0(velo_input$data_path,
+           velo_input$sample_id,
+           "/gex_possorted_bam.bam")[!file.exists(velo_input$bam_path)]
+
+all(file.exists(velo_input$h5_path) & file.exists(velo_input$bam_path))
+
+rownames(velo_input) <- NULL
+
+loom_paths <- paste0("loom_output/samples/", velo_input$sample_id, "/", velo_input$sample_id, ".loom")
+loom_paths[!file.exists(loom_paths)]
+
+velo_input <- velo_input[!file.exists(loom_paths), ]
+
+r_make_loom_files(input_table = velo_input,
+                  out_dir = "loom_output/samples",
+                  cluster_account = "gdrobertslab")
+```
+
+## Write off Metadata for Velocity Analysis
+
+In order to analyze the data, we need to save a table of cell-level metadata, including barcodes, seurat clusters, and annotations.
+
+First we need to read in our objects for this. I'm using the objects from final_tumor_vs_stroma.
+
+I'm also going to only write off single-cell reads for my objects. 
+
+```{r}
+yogi_prefix <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/"
+ob_names <- list.files(paste0(yogi_prefix, "output/seurat_objects/final_tumor_vs_stroma"))
+ob_names <- grep("cancer_cells_fdl", ob_names, value = TRUE)
+
+ob_list <- list()
+for (ob in ob_names) {
+    ob_list[[str_remove(ob, "_fdl.qs")]] <- qs::qread(
+        paste0(
+            yogi_prefix,
+            "output/seurat_objects/final_tumor_vs_stroma/",
+            ob
+        )
+    )
+}
+
+# make metadata dir
+dir.create("loom_output/tumor_metadata/sc", recursive = TRUE)
+dir.create("loom_output/tumor_metadata/sn", recursive = TRUE)
+
+# now split objects and write metadata
+for (ob in names(ob_list)) {
+    num_sc <- sum(ob_list[[ob]]$method == "single_cell")    
+    if (num_sc > 0) {
+        subset(ob_list[[ob]],
+           method == "single_cell") %>%
+        write_off_md(
+            id_col = "sample_name",
+            output_dir = paste0("loom_output/tumor_metadata/sc/", ob),
+            vars_to_keep = c("sample_name",
+                            "seurat_clusters",
+                            "Ann_Level1",
+                            "Ann_Level2",
+                            "Ann_Level3",
+                            "method"),
+            handle_n_of_1 = FALSE
+        )
+    }
+
+    num_sn <- sum(ob_list[[ob]]$method == "single_nucleus")
+    if (num_sn > 0) {
+        subset(ob_list[[ob]],
+            method == "single_nucleus") %>%
+            write_off_md(id_col = "sample_name",
+                    output_dir = paste0("loom_output/tumor_metadata/sn/",
+                                        ob),
+                    vars_to_keep = c("sample_name",
+                                    "seurat_clusters",
+                                    "Ann_Level1",
+                                    "Ann_Level2",
+                                    "Ann_Level3",
+                                    "method"),
+                    handle_n_of_1 = FALSE)
+    }
+}
+```
+
+## Analyze .loom Files
+
+First I need to activate my conda environment. I set `eval = FALSE` because the environment path will change based on who is rendering this file.
+
+```{bash activate-env, eval = FALSE}
+conda activate /home/gdrobertslab/mjg015/R/x86_64-pc-linux-gnu-library/4.3/rrrSingleCellUtils/r_rna_velo
+```
+
+Next I need to import my conda libraries.
+
+```{python load-py-libs}
+import anndata
+import scvelo as scv
+import pandas as pd
+import numpy as np
+import matplotlib as plt
+import igraph
+plt.use('Agg')
+from matplotlib import pyplot
+from matplotlib.colors import ListedColormap
+import scanpy as sc
+import os
+import re
+import python_functions
+```
+
+### Make Objects and Plots
+
+I'll do this individually for Single Cell and Single Nucleus.
+
+path to figures will now be
+    - output/figures/rna_velocity/
+    - figures will be split into single-cell and single-nuclei data in here
+
+```{python}
+# specify colors for plots
+color_mapping = {
+    "MP_Progenitor": "#D43F3AFF",
+    "Fibrogenic": "#EEA236FF",
+    "Basal_Progenitor": "#357EBDFF",
+    "Proliferative": "#5CB85CFF",
+    "Interactive": "#B8B8B8FF",
+    "Stressed": "#9632B8FF"
+}
+
+hex_codes = ["#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF", "#B8B8B8FF", "#9632B8FF", "#46B8DAFF", "#90302DFF", "#A66D04FF", "#2D577FFF", "#3E7E3EFF", "#7D7D7DFF", "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF", "#68A4E3FF", "#79D379FF", "#CDCDCDFF", "#BF6BE2FF", "#69D1F3FF", "#00FF00", "#00FFFF", "#FF00FF", "#0000FF", "#FFFF00", "#FF0000"]
+
+# get names of objects for writing and saving
+sc_obs = os.listdir("loom_output/tumor_metadata/sc")
+sn_obs = os.listdir("loom_output/tumor_metadata/sn")
+
+# Make directories for loom object output
+os.makedirs("loom_output/tumor_anndata/sc")
+os.makedirs("loom_output/tumor_anndata/sn")
+
+# make directories for velocity figures
+os.makedirs("output/figures/rna_velocity/sc")
+os.makedirs("output/figures/rna_velocity/sn")
+
+for snob in sn_obs:
+    python_functions.write_obs(
+        ob = snob,
+        method = "sn",
+        mode = "stochastic",
+        metadata_dir = "loom_output/tumor_metadata/sn/",
+        out_prefix = "loom_output/tumor_anndata/")
+    python_functions.save_plots(
+        ob = snob,
+        method = "sn",
+        ad_prefix = "loom_output/tumor_anndata/sn/",
+        file_prefix = "output/figures/rna_velocity/"
+        )
+
+
+for scob in sc_obs:
+    python_functions.write_obs(ob = scob, method = "sc", mode = "stochastic")
+    python_functions.save_plots(ob = scob, method = "sc")
+
+```
+
+#### Make objects with Stochastic Model
+
+```{python}
+sc_obs = os.listdir("loom_output/tumor_metadata/")
+for scob in sc_obs:
+    if not os.path.exists("loom_output/tumor_anndata/sc/" + scob + ".ad"):
+        write_obs(
+            ob = scob,
+            method = "sc",
+            mode = "stochastic",
+            out_prefix = "loom_output/tumor_anndata/"
+        )
+    # ad_ob = calc_velo(scob, mode = "stochastic")
+    save_plots(ob = scob, method = "sc", file_prefix = "output/figures/rna_velocity/stochastic/", ad_prefix = "loom_output/tumor_anndata/sc/")
+
+
+for snob in sn_obs:
+    if not os.path.exists("loom_output/tumor_anndata/sn/" + snob + ".ad"):
+        python_functions.write_obs(
+            ob = snob,
+            method = "sn",
+            mode = "stochastic",
+            out_prefix = "loom_output/tumor_anndata/",
+            metadata_dir = "loom_output/tumor_metadata/sn"
+        )
+    # ad_ob = calc_velo(scob, mode = "stochastic")
+    python_functions.save_plots(ob = scob, method = "sn", file_prefix = "output/figures/rna_velocity/", ad_prefix = "loom_output/tumor_anndata/sn/")
+
+
+```
+
+Going to test it with a sample object
+
+```{r}
+ob = "mm_mets_cancer_cells_fdl"
+
+ad_ob = loom_to_an(
+    ob,
+    loom_dir = "loom_output/samples",
+    metadata_dir = "loom_output/tumor_metadata"
+)
+
+calc_velo(ad_ob, mode = "stochastic")
+
+scv.pl.velocity_embedding_stream(
+    ad_ob,
+    basis = "umap",
+    palette = color_mapping,
+    color = "Ann_Level3"
+)
+```
+
+### Get Top Velocity Genes for Each Cluster/Cell Type
+
+I'll only be doing this for cancer objects
+
+#### For Single Nucleus Data
+
+```{python}
+sn_velo_genes = dict()
+sn_ob_dict = dict()
+# get velocity-driving genes
+for ob in sn_obs:
+    tmp = anndata.read("loom_output/split_ad/sn/" + ob + ".ad")
+    sn_ob_dict[ob] = tmp
+    scv.tl.rank_velocity_genes(tmp, groupby = "Ann_Level3", min_corr = 0.3)
+    rank_genes = tmp.uns["rank_velocity_genes"]
+    df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
+    sn_velo_genes[ob] = df
+```
+
+#### For Single Cell Data
+```{python}
+sc_velo_genes = dict()
+sc_ob_dict = dict()
+# get velocity-driving genes
+for ob in sc_obs:
+    tmp = anndata.read("loom_output/split_ad/sc/" + ob + ".ad")
+    sc_ob_dict[ob] = tmp
+    scv.tl.rank_velocity_genes(tmp, groupby = "Ann_Level3", min_corr = 0.3)
+    rank_genes = tmp.uns["rank_velocity_genes"]
+    df = pd.DataFrame(tmp.uns["rank_velocity_genes"]["names"])
+    sc_velo_genes[ob] = df
+```
+
+```{python}
+# evaluate speed and confidence of velocity estimates
+for ob in sn_obs:
+    tmp = sn_ob_dict[ob]
+    scv.tl.velocity_confidence(tmp)
+    ob_list[ob] = tmp
+keys = "velocity_length", "velocity_confidence"
+scv.pl.scatter(ob_list["patient_mets_cancer_cells"], c = keys, perc = [5, 95], basis = "umap", cmap = "coolwarm")
+
+#we'll use paga to investigate the velocity trajectories
+for ob in ob_names:
+    tmp = ob_list[ob]
+    tmp.uns['neighbors']['distances'] = tmp.obsp['distances']
+    tmp.uns['neighbors']['connectivities'] = tmp.obsp['connectivities']
+    scv.tl.paga(tmp, groups='Ann_Level3')
+    ob_list[ob] = tmp
+
+#save object dict
+with open("output/python_objects/cancer_ad_list.pkl", "wb") as file:
+    pickle.dump(ob_list, file)
+
+tmp = ob_list["patient_mets_cancer_cells"]
+
+keys = ['velocity_length', 'velocity_confidence']
+df = tmp.obs.groupby('Ann_Level3')[keys].mean().T
+df.style.background_gradient(cmap='coolwarm', axis=1)
+
+
+df = scv.get_df(tmp, 'paga/transitions_confidence', precision=2).T
+df.style.background_gradient(cmap='Blues').format('{:.2g}')
+
+scv.pl.paga(tmp, basis='fdl', size=50, alpha=.1,
+            min_edge_width=2, node_size_scale=1.5)
+pyplot.savefig("tmp.png")
+```

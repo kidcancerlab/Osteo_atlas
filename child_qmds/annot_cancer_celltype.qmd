@@ -494,7 +494,9 @@ Annotation_cleanup <-
             "^Monocyte_F._tularensis_novicida$" = "Monocytes",
             "^iPS_cells_adipose_stem_cells$" = "Progenitors",
             "^AT2_proliferating$" = "Epithelial_cells",
-            "^Non-switched memory B cells$" = "Memory_Bcells"),
+            "^Non-switched memory B cells$" = "Memory_Bcells",
+            "^Alveolar_fibroblasts$" = "Fibroblasts",
+            "^Peribronchial_fibroblasts$" = "Fibroblasts"),
     SingleR_Ann2_label =
         c("^Fibroblasts_activated$" = "Fibroblasts",
             "^Fibroblasts_senescent$" = "Fibroblasts",

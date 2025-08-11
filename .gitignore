@@ -101,5 +101,21 @@ sbatch
 tmp_bams
 tmp_bcs
 analyze_looms*
-*genes.gtf
+*gtf
+new_looms
+
+#DoubletFinder Files
+DoubletFinder/Counts
+DoubletFinder/output
+DoubletFinder/slurm
+DoubletFinder/all_demuxafy_results.qs
+DoubletFinder/pdx_clinical_chimera
+
 figures
+demuxafy_figs
+
+
+#doublet finder tests
+*.bin
+*.weights
+*.tree

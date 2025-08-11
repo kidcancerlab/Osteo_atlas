@@ -169,17 +169,17 @@ for (group in c("patient_prim", "patient_mets",
 cols <-
     list("Tumor" = "#D43F3AFF",
         "Normal" = "#EEA236FF",
-        "unknown" = "#357EBDFF",
+        "Unknown" = "#357EBDFF",
         "Host" = "#EEA236FF")
 # make a sankey plot to show the tumor calling
 for (group in c("patient_prim", "patient_mets",
-                "mm_prim", "mm_mets",
-                "dogs_prim", "dogs_mets")) {
+                "mm_prim", "mm_mets"
+                # "dogs_prim", "dogs_mets"
+                )) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
-
     metadata <- 
         object@meta.data %>%
         as.data.frame() %>%
@@ -187,12 +187,10 @@ for (group in c("patient_prim", "patient_mets",
         select(cell_id,
                scatomic_tumor_call,
                scevan_tumor_call,
-               final_snv_call,
-               Ann_Level0) %>%
-               arrange(Ann_Level0,
-                       final_snv_call,
-                       scatomic_tumor_call,
-                       scevan_tumor_call) %>%
+               CNV_status) %>%
+        arrange(CNV_status,
+                scevan_tumor_call,
+                scatomic_tumor_call) %>%
         mutate(cell_id_number = row_number()) %>%
         mutate(scATOMIC = str_replace_all(scatomic_tumor_call, 
                                         c("normal_cells" = "Normal",
@@ -202,110 +200,44 @@ for (group in c("patient_prim", "patient_mets",
                                         c("normal_cells" = "Normal",
                                         "cancer_cells" = "Tumor",
                                         "Host" = "Normal")),
-               SCANBIT = str_replace_all(final_snv_call,
-                                        c("normal_cells" = "Normal",
-                                        "cancer_cells" = "Tumor",
-                                        "Host" = "Normal")),
-               FinalCall = str_replace_all(Ann_Level0,
-                                        c("Host" = "Normal"))) %>%
-        mutate(across(c(scATOMIC, SCEVAN, SCANBIT, FinalCall), ~replace_na(., "unknown"))) %>%
-        select(cell_id, cell_id_number, scATOMIC, SCEVAN, SCANBIT, FinalCall)
-    # do some statistics to see how different the tumor calling is compared to truth set Ann_Level0
-    # Calculate confusion matrices and agreement statistics for each method vs Ann_Level0
-    comparison <- list()
-    for (method in c("scATOMIC", "SCEVAN", "SCANBIT", "FinalCall")) {
-        tbl <- 
-            table(Truth = metadata$FinalCall,
-                  Prediction = metadata[[method]])
-        # Cohen's kappa (skip for Ann_Level0 vs itself)
-        if (method == "FinalCall") {
-            kappa <- NA
-        } else {
-            kappa <- suppressWarnings(irr::kappa2(data.frame(metadata$FinalCall,
-                                                             metadata[[method]]))$value)
-        }
-        # Accuracy
-        acc <- sum(diag(tbl)) / sum(tbl)
-        comparison[[method]] <- 
-            list(confusion_matrix = tbl,
-                 kappa = kappa,
-                 accuracy = acc)
-    }
-    # Prepare accuracy data frame
-    comparison_df <- 
-        tibble(Method = names(comparison),
-               Accuracy = sapply(comparison, function(x) x$accuracy))
-    comparison_df$Method <- 
-        factor(comparison_df$Method,
-               levels = c("FinalCall", "SCANBIT", "scATOMIC", "SCEVAN"))
-    # Accuracy barplot
-    accuracy_plot <- 
-        ggplot(comparison_df, aes(x = Method, y = Accuracy, fill = Method)) +
-            geom_col(width = 0.7) +
-            geom_text(aes(label = round(Accuracy, 3), y = Accuracy / 2), size = 4, color = "white") +
-            theme_minimal() +
-            scale_fill_manual(values = c("scATOMIC" = "#5CB85CFF",
-                                         "SCEVAN" = "#46B8DAFF",
-                                         "SCANBIT" = "#9632B8FF",
-                                         "FinalCall" = "#D43F3AFF")) +
-            theme(legend.position = "none",
-                  panel.grid = element_blank(),
-                  axis.title.x = element_text(),
-                  axis.title.y = element_text(),
-                  axis.text.y = element_text(face = "bold"),
-                  axis.text.x = element_text(angle = 0, hjust = 0.5, face = "bold")) +
-            labs(x = "Methods", y = "Accuracy")+
-            scale_y_continuous(expand = c(0, 0)) +
-            scale_x_discrete(expand = c(0, 0))
+                CopyKAT = str_replace_all(CNV_status,
+                                         c("aneuploid" = "Tumor",
+                                         "diploid" = "Normal"))) %>%
+        mutate(across(c(scATOMIC, 
+                        SCEVAN, 
+                        CopyKAT), ~replace_na(., "Unknown"))) %>%
+        select(cell_id, 
+                cell_id_number, 
+                scATOMIC, 
+                SCEVAN, 
+                CopyKAT)
+    # make a metadata mimic to use for the tile plot
 
-    # Plot confusion matrices for each method vs FinalCall
-    confusion_plots <- list()
-    for (method in c("SCANBIT", "scATOMIC", "SCEVAN")) {
-        tbl <- comparison[[method]]$confusion_matrix
-        acc <- comparison[[method]]$accuracy
-        df_tbl <- as.data.frame(as.table(tbl))
-        confusion_plot <- 
-            ggplot(df_tbl, aes(x = Prediction, y = Truth, fill = Freq)) +
-            geom_tile(color = "white") +
-            geom_text(aes(label = Freq), size = 3) +
-            scale_fill_gradient(low = "#F0F0F0", high = "#D43F3AFF") +
-            theme_minimal() +
-            labs(title = paste0("Confusion Matrix: ", method, "\nAccuracy: ", round(acc, 2)),
-                x = "Predicted", 
-                y = "Truth") +
-            theme(panel.grid = element_blank(),
-                plot.title = element_text(hjust = 0.5, size = 8, face = "bold"),
-                legend.position = "none",
-                axis.title.y = element_text(angle = 90),
-                axis.text.y = element_text(angle = 90, vjust = 0.5, hjust = 0.5))
-
-        confusion_plots[[method]] <- confusion_plot
-    }
-    # Combine confusion plots into one figure
-    confusion_combined <- 
-        patchwork::wrap_plots(confusion_plots,
-                                nrow = 1) 
-            
     matadata_mimic <-
         metadata %>%
         pivot_longer(cols = -c(cell_id, cell_id_number),
-                names_to = "method",
-                values_to = "call") %>%
+                    names_to = "method",
+                    values_to = "call") %>%
         mutate(method = str_replace_all(method, c("scatomic_tumor_call" = "scATOMIC",
-                                                   "final_snv_call" = "SCANBIT",
-                                                   "scevan_tumor_call" = "SCEVAN",
-                                                   "Ann_Level0" = "FinalCall")),
+                                                "scevan_tumor_call" = "SCEVAN",
+                                                "CNV_status" = "CopyKAT")),
                call = str_replace_all(call, c("normal_cells" = "Normal",
-                                              "cancer_cells" = "Tumor",
-                                              "Host" = "Normal"))) %>%
-        replace_na(list(call = "unknown"))
-    
+                              "cancer_cells" = "Tumor",
+                              "Host" = "Normal"))) %>%
+        replace_na(list(call = "Unknown")) %>%
+        mutate(call = factor(call, levels = c("Tumor", "Normal", "Unknown"))) # Tumor last so it appears at bottom
+
+    write_tsv(matadata_mimic,
+              str_c("output/id_tumor/metadata/",
+                    group, "_tumor_calling.tsv"))
+                
     # make a tile plot to show the tumor calling by methods
     tile_plot <-
         ggplot(matadata_mimic %>%
             mutate(method = factor(method,
-                                  levels = c("FinalCall", "SCANBIT", "scATOMIC", "SCEVAN"))),
-            aes(x = method, y = -cell_id_number, fill = call)) +
+              levels = c("CopyKAT", "SCEVAN", "scATOMIC")),
+               call = factor(call, levels = c("Tumor", "Normal", "Unknown"))), # Tumor last
+            aes(x = method, y = cell_id_number, fill = call)) +
         geom_tile() +
         scale_fill_manual(values = unlist(cols)) +
         theme_minimal() +
@@ -315,204 +247,920 @@ for (group in c("patient_prim", "patient_mets",
             axis.text.y = element_blank(),
             plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
             panel.grid = element_blank())
-    # put tile and final_plot together
-    combined_tile_plot <-
-        cowplot::plot_grid(tile_plot, accuracy_plot, confusion_combined,
-                            ncol = 1,
-                            rel_heights = c(1, 0.5, 0.4),
-                            align = "v") +
-        patchwork::plot_annotation(title = str_c(group, " Tumor ID by methods")) &
-        theme(plot.title = element_text(size = 20))
 
+    if (!dir.exists(str_c("output/figures/Final_Annotations/results1/suppliment/",group))) {
+        dir.create(str_c("output/figures/Final_Annotations/results1/suppliment/",group),
+                    recursive = T)
+    }
     ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
-                 group, "/",
-                 "tumor_id_tileplot.pdf"),
-           plot = combined_tile_plot,
+                 group, "_",
+                 "descrep_tileplot.pdf"),
+           plot = tile_plot,
            bg = "white",
-           width = 7,
-           height = 10)
+           width = 4,
+           height = 5)
     ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
-                 group, "/",
-                 "tumor_id_tileplot",
-                 ".png"),
-           plot = combined_tile_plot,
+                 group, "_",
+                 "descrep_tileplot.png"),
+           plot = tile_plot,
            bg = "white",
-           width = 7,
-           height = 10,
-           dpi = 300,           # Higher resolution
-           type = "cairo")      # Better color rendering for PNG
-
-    # make a sankey plot to show the tumor calling
-    # sankey_plot <-
-    #     ggplot(matadata_mimic %>% 
-    #             mutate(method = factor(method, 
-    #                                     levels = c("scATOMIC", "SCEVAN", "SNV"))),
-    #             aes(x = method, stratum = call, alluvium = cell_id,
-    #                 y = cell_id_number,
-    #                 fill = call, label = call)) +
-    #     geom_flow() +
-    #     scale_fill_manual(values = unlist(cols)) +
-    #     geom_stratum(alpha = 1) +
-    #     scale_y_continuous(expand = c(0, 0)) +
-    #     scale_x_discrete(expand = c(0, 0)) +
-    #     theme_minimal() +
-    #     theme(axis.title.x = element_blank(),
-    #         axis.title.y = element_blank(),
-    #         axis.text.x = element_text(size = 10, face = "bold"),
-    #         axis.text.y = element_blank(),
-    #         plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
-    #         panel.grid = element_blank()) +
-    #     ggtitle(str_c(group, " Tumor ID by methods"))
+           width = 4,
+           height = 5)      # Better color rendering for PNG
 
 }
+
+library(irr)
+files <- list.files("output/id_tumor/metadata/", pattern = "*calling.tsv")
+
+calls <- lapply(files, function(f) {
+    df <- read.table(file.path("output/id_tumor/metadata", f), 
+        header = TRUE
+        ) %>%
+        select(-cell_id) %>%
+        pivot_wider(
+            id_cols = cell_id_number, 
+            names_from = method, 
+            values_from = call
+            ) 
+    return(df)   
+})
+
+names(calls) <- sub("_tumor.*", "", files)
+
+for(i in seq_along(calls)) {
+    df <- calls[[i]]
+    print(paste("Performing Interrater Reliability Analysis on", names(calls)[i]))
+    print("Agreement - scATOMIC vs SCEVAN")
+    results <- agree(df[, c("scATOMIC", "SCEVAN")])
+    print(results)
+    print("Agreement - SCEVAN vs CopyKAT")
+    results <- agree(df[, c("SCEVAN", "CopyKAT")])
+    print(results)
+    print("Agreement - scATOMIC vs CopyKAT")
+    results <- agree(df[, c("scATOMIC", "CopyKAT")])
+    print(results)
+    print("Interrater Reliability - Fleiss Kappa")
+    results <- kappam.fleiss(df[, c("scATOMIC", "SCEVAN", "CopyKAT")])
+    print(results)
+}
+
+## for scanbit and atlas call
+for (group in c("patient_prim", "patient_mets",
+                "mm_prim", "mm_mets"
+                # "dogs_prim", "dogs_mets"
+                )) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    metadata <- 
+        object@meta.data %>%
+        as.data.frame() %>%
+        rownames_to_column("cell_id") %>%
+        select(cell_id,
+               final_snv_call,
+               celltype_tumor_call) %>%
+        arrange(celltype_tumor_call,
+                final_snv_call) %>%
+        mutate(AtlasCall = str_replace_all(celltype_tumor_call, 
+                        c("normal_cells" = "Normal",
+                        "cancer_cells" = "Tumor",
+                        "Host" = "Normal")),
+               ScanBit = str_replace_all(final_snv_call, 
+                        c("normal_cells" = "Normal",
+                        "cancer_cells" = "Tumor",
+                        "Host" = "Normal"))) %>%
+        filter(final_snv_call != "unknown") %>%
+        mutate(cell_id_number = row_number()) %>%
+        select(cell_id, 
+                cell_id_number, 
+                AtlasCall, 
+                ScanBit)
+    # make a metadata mimic to use for the tile plot
+
+    matadata_mimic <-
+        metadata %>%
+        pivot_longer(cols = -c(cell_id, cell_id_number),
+                    names_to = "method",
+                    values_to = "call")
+
+    write_tsv(matadata_mimic,
+              str_c("output/id_tumor/metadata/",
+                    group, "atlas_scanbit_tumor_calling.tsv"))
+                
+    # make a tile plot to show the tumor calling by methods
+    tile_plot <-
+        ggplot(matadata_mimic %>%
+            mutate(method = factor(method,
+              levels = c("AtlasCall", "ScanBit")),
+               call = factor(call, levels = c("Tumor", "Normal"))), # Tumor last
+            aes(x = method, y = cell_id_number, fill = call)) +
+        geom_tile() +
+        scale_fill_manual(values = unlist(cols)) +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            axis.text.y = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
+            panel.grid = element_blank())
+
+    if (!dir.exists(str_c("output/figures/Final_Annotations/results1/suppliment/",group))) {
+        dir.create(str_c("output/figures/Final_Annotations/results1/suppliment/",group),
+                    recursive = T)
+    }
+    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
+                 group, "_",
+                 "descrep_scanbit_atlas.pdf"),
+           plot = tile_plot,
+           bg = "white",
+           width = 3,
+           height = 5)
+    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/",
+                 group, "_",
+                 "descrep_scanbit_atlas.png"),
+           plot = tile_plot,
+           bg = "white",
+           width = 3,
+           height = 5)      # Better color rendering for PNG
+}
+
+library(irr)
+files <- list.files("output/id_tumor/metadata/", pattern = "*atlas_scanbit_tumor_calling.tsv")
+
+calls <- lapply(files, function(f) {
+    df <- read.table(file.path("output/id_tumor/metadata", f), 
+        header = TRUE
+        ) %>%
+        select(-cell_id) %>%
+        pivot_wider(
+            id_cols = cell_id_number, 
+            names_from = method, 
+            values_from = call
+            ) 
+    return(df)   
+})
+
+names(calls) <- sub("_tumor.*", "", files)
+
+for(i in seq_along(calls)) {
+    df <- calls[[i]]
+    print(paste("Performing Interrater Reliability Analysis on", names(calls)[i]))
+    print("Agreement - AtlasCall vs ScanBit")
+    results <- agree(df[, c("AtlasCall", "ScanBit")])
+    print(results)
+    print("Interrater Reliability - Fleiss Kappa")
+    results <- kappam.fleiss(df[, c("AtlasCall", "ScanBit")])
+    print(results)
+}
+
+```
+
+## Import datasets
+generate correlation matrices for tumor iding across methods
+```{r}
+
+
+
+# Store results for plotting
+plot_data <- tibble()
+
+for(i in seq_along(calls)) {
+    df <- calls[[i]]
+    group <- names(calls)[i]
+    
+    # Agreement - scATOMIC vs SCEVAN
+    results1 <- 
+        agree(df[, c("scATOMIC", "SCEVAN")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                 tibble(group = group,
+                        comparison = "scATOMIC vs SCEVAN",
+                        percent_agreement = results1$value))
+    
+    # Agreement - SCEVAN vs CopyKAT
+    results2 <- 
+        agree(df[, c("SCEVAN", "CopyKAT")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                 tibble(group = group,
+                        comparison = "SCEVAN vs CopyKAT",
+                        percent_agreement = results2$value))
+    # Agreement - scATOMIC vs CopyKAT
+    results3 <- 
+        agree(df[, c("scATOMIC", "CopyKAT")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                tibble(group = group,
+                        comparison = "scATOMIC vs CopyKAT",
+                        percent_agreement = results3$value))
+    # Fleiss Kappa
+    results4 <- 
+        kappam.fleiss(df[, c("scATOMIC", "SCEVAN", "CopyKAT")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                tibble(group = group,
+                    comparison = "Fleiss Kappa",
+                    percent_agreement = results4$value))
+}
+
+# Plot percent agreement and Fleiss Kappa
+ggplot(plot_data, 
+        aes(x = group, y = percent_agreement, fill = comparison)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    labs(title = "Interrater Reliability Analysis",
+         y = "Agreement / Kappa Value",
+         x = "Group") +
+    theme_minimal() +
+    scale_fill_brewer(palette = "Set2")
 
 
 ```
 
-# regulon combined plots heatmap
-```{r hatmap_regulon, eval = TRUE}
-# create a list of the groups
-regulon_list <- list()
-# load the regulon activity saved data
-for (group in c("patient_prim_cancer_cells",
-                "patient_mets_cancer_cells" ,
-                "mm_prim_cancer_cells",
-                "mm_mets_cancer_cells",
-                "xeno_prim_human",
-                "xeno_mets_human",
-                "dogs_prim_cancer_cells",
-                "dogs_mets_cancer_cells"
-                )) {
-    name <- 
-        group %>%
-        str_remove("_cancer_cells")
-    #load the regulon activity
-    regulon_activity_scaled <-
-        qs::qread(str_c("output/figures/regulon_analysis/",
-                        group,
-                        "/regulon_activity_scaled.qs"))
 
-    # append to the list
-    regulon_activity_formatted <- 
-        regulon_activity_scaled %>%
-        as.data.frame() %>%
-        rownames_to_column("Regulon") %>%
-        mutate(Regulon = str_replace(Regulon, " .*", "")) %>%
-        mutate(Regulon = str_replace(Regulon, "_.*", "")) %>%
-        mutate(Regulon = str_replace(Regulon, "\\(.*\\)", "")) %>%
-        dplyr::rename_with(~ str_remove(., "Tumor_")) %>%
-            rename_with(~ paste0(name, "_", .), -Regulon)
-    # add the group name
-    regulon_list[[group]] <- regulon_activity_formatted
-}
 
-# combine the list into a single data frame and make a single heatmap
+## Combine the objects and create one
+```{r markers_for_all}
+#dogs 
+Mesenchymal <- 
+    list(Adv_Fibroblasts = c("CADM2", "DCN", "DPT", "SERPINF1"),
+        apCAFs = c("CD74", "HLA-DRB1", "DLA-DQB1", "PTPRC"),
+        myCAFs = c("ASPN", "DCN", "FBLN1", "SFRP2"),
+        pCAFs = c("CENPA", "UBE2C", "CDC20", "CENPF"),
+        Pericytes = c("RGS5", "MCAM", "KCNJ8", "GUCY1B1"),
+        Progenitor = c("PRRX1", "LEPR", "IGF2", "PTN"),
+        Smooth_muscle = c("CNN1", "ACTN2", "MYOCD", "FLNC"))
+Immune_Lymphoid <- 
+    list(CD4_T = c("IL7R", "LEF1", "PLCL1", "TNIK"),
+        CD8_T = c("GZMB", "GZMK", "CCL5", "CD8A"),
+        Memory_B = c("EBF1", "AFF3", "MS4A1", "PAX5"),
+        NK_cells = c("KLRK1", "KLRD1", "KLRB1", "NCR3"),
+        Plasma_B = c("JCHAIN", "TNFRSF17", "FKBP11", "POU2AF1"),
+        Prolif_T = c("CDC20", "PCLAF", "UBE2C", "CENPA"),
+        T_Reg = c("FOXP3", "CTLA4", "IL2RA", "TNFRSF18"))
+Epithelial_Endothelial <- 
+    list(AT1 = c("AGER", "HOPX", "RTKN2", "CLIC5"),
+        AT2 = c("SFTPC", "SFTPD", "CFTR", "SLC34A2"),
+        Capillary_Aerocyte = c("HPGD", "EMP2", "CA4", "CNTNAP2"),
+        Ciliated_cells = c("FOXJ1", "DNAH9", "RSPH1", "LRRIQ1"),
+        Endothelial_Activated = c("LCP1", "VCAN", "CDH11", "COLEC12"),
+        Endothelial_Artery = c("EFNB2", "HEY1", "GJA5", "SMAD6"),
+        Endothelial_Capillary = c("CD36", "JAM2", "SLC16A9", "GALNT15"),
+        Endothelial_Lymphatic = c("PROX1", "CCL21", "MMRN1", "SEMA3D"),
+        Endothelial_Prolif = c("GTSE1", "PCNA", "CENPF", "ASPM"),
+        Endothelial_Vein = c("APOD", "ENTPD1", "PLCB1", "RAPGEF4"))
+Immune_Myeloid <-
+    list(DC1 = c("CLNK", "XCR1", "CD226", "TOX"),
+        DC2 = c("FCER1A", "CD1B", "MS4A2", "SATB1"),
+        Fibrogenic_TAMs = c("MMP16", "CDH11", "COL1A1", "COL1A2"),
+        IFN_TAMs = c("IFIT1", "IFIT2", "IFIT3", "IFGGC1"),
+        Inflam_TAMs = c("CCL3", "IL1B", "IL37", "IL1A"),
+        Migratory_DC = c("CCR7", "CD83", "CD40", "ENPP3"),
+        Neutrophils = c("S100A9", "CSF3R", "SELL", "SRGN"),
+        Osteoclast_TAMs = c("MMP9", "NFATC1", "ACP5", "ATP6V0D2"),
+        pDC = c("BCL11A", "TCF4", "FCRLA", "SPATS2L"),
+        Prolif_TAMs = c("CCNA2", "UBE2C", "CENPF", "AURKB"),
+        Scar_TAMs = c("TREM2", "GPNMB.1", "CD36", "MSR1"))
+
+dogs <-
+    list(Mesenchymal = Mesenchymal,
+        Immune_Lymphoid = Immune_Lymphoid,
+        Epithelial_Endothelial = Epithelial_Endothelial,
+        Immune_Myeloid = Immune_Myeloid)
+
+# HUman
+Immune_Myeloid <-
+    list(Alv_Macrophages = c("MARCO", "FABP4", "PPARG", "OLR1"),
+        DC1 = c("IDO1", "CLNK", "CLIC2", "GPR157"),
+        DC2 = c("FCER1A", "CLEC10A", "GPAT3", "FCGR2B"),
+        Fibrogenic_TAMs = c("COL1A2", "COL3A1", "COL5A1", "SPARC"),
+        IFN_TAMs = c("IFIT1", "IFIT2", "IFIT3", "IFI44L"),
+        Inflam_TAMs = c("CCL3", "CCL4", "CXCL1", "CXCL8"),
+        Mast = c("TPSB2", "KIT", "HPGDS", "SLC24A3"),
+        Monocytes = c("S100A8", "S100A9", "FCN1", "VCAN"),
+        Osteoclast_TAMs = c("MMP9", "CTSK", "NFATC1", "ACP5"),
+        pDC = c("JCHAIN", "GZMB", "IRF7", "PTPRS"),
+        Prolif_TAMs = c("MKI67", "TOP2A", "CENPF", "NUSAP1"),
+        Scar_TAMs = c("TREM2", "FABP5", "GPNMB", "MS4A4A"))
+Immune_Lymphoid <- 
+    list(CD4_T = c("ANXA1", "CD4", "IL7R", "RORA"),
+        CD8_T = c("CD8A", "CD8B", "GZMH", "GZMK"),
+        Memory_B = c("AFF3", "BANK1", "EBF1", "HLA-DQA1"),
+        Naive_T = c("BACH2", "LEF1", "TCF7", "TXK"),
+        NK_cells = c("GNLY", "KLRD1", "NKG7", "PRF1"),
+        Plasma_B = c("DERL3", "IGHG1", "JCHAIN", "MZB1"),
+        Prolif_T = c("MKI67", "NUSAP1", "RRM2", "TOP2A"),
+        T_Reg = c("CTLA4", "IL2RA", "TNFRSF18", "TNFRSF4"))
+Epithelial_Endothelial <- 
+    list(AT1 = c("AGER", "CLIC5", "COL4A3", "RTKN2"),
+        AT2 = c("ABCA3", "SFTPB", "SFTPC", "SLC34A2"),
+        Capillary_Aerocyte = c("FENDRR", "GRM8", "HPGD", "IL1RL1"),
+        Ciliated_cells = c("DCDC1", "DNAH9", "HYDIN", "LRRIQ1"),
+        Endothelial_Activated = c("SLIT2", "SLIT3", "TGFBI", "ZEB2"),
+        Endothelial_Artery = c("EFNB2", "GJA4", "IGFBP3", "PIK3R3"),
+        Endothelial_Capillary = c("ESM1", "PLVAP", "RGCC", "SPARC"),
+        Endothelial_Lymphatic = c("FLT4", "PDPN", "PROX1", "TBX1"),
+        Endothelial_Prolif = c("ASPM", "MKI67", "NUSAP1", "TOP2A"),
+        Endothelial_Vein = c("ACKR1", "MYRIP", "VCAM1", "ZNF385D"))
+Mesenchymal <- 
+    list(adiCAFs = c("APOD", "IGF1", "SFRP1", "SFRP2"),
+        Adv_Fibroblasts = c("CXCL14", "DCN", "FBLN5", "MGP"),
+        apCAFs = c("C1QA", "CD74", "HLA-DRA", "HLA-DRB1"),
+        Chondrocytes = c("ACAN", "COL11A1", "COL2A1", "SOX9"),
+        myCAFs = c("MYL9", "SPARC", "TAGLN", "TPM2"),
+        Neuronal = c("FAT3", "PTPRD", "SEMA3A", "TENM3"),
+        Osteoblast = c("BGLAP", "IBSP", "OMD", "SPP1"),
+        Osteoblast_Stressed = c("IER3", "PLIN2", "PTX3", "SERPINE1"),
+        pCAFs = c("CCNB1", "CDC20", "CENPF", "MKI67"),
+        Pericytes = c("CDH6", "EDNRA", "RGS5", "TRPC6"))
+
+human <-
+    list(Mesenchymal = Mesenchymal,
+        Immune_Lymphoid = Immune_Lymphoid,
+        Epithelial_Endothelial = Epithelial_Endothelial,
+        Immune_Myeloid = Immune_Myeloid)
+
+# Mouse
+Mesenchymal <-
+    list(Adv_Fibroblasts = c("Dcn", "Col14a1", "Pdgfrl", "Igfbp4"),
+        Alv_Fibroblasts = c("Pdgfra", "Fgf10", "Npnt", "Tcf21"),
+        apCAFs = c("Cd74", "H2-Aa", "H2-Ab1", "H2-Eb1"),
+        mCAFs = c("Fn1", "Fbn1", "Dcn", "Fbln2"),
+        MSC = c("Dpp4", "Egfr", "Zfpm2", "Bicc1"),
+        myCAFs = c("Aspn", "Tgfbi", "Pdlim3", "Adamts1"),
+        Neuronal = c("Myrf", "Npas3", "Sh3tc2", "Rspo1"),
+        Osteoblast = c("Bglap", "Ibsp", "Bglap2", "Lars2"),
+        pCAFs = c("Top2a", "Cenpf", "Ube2c", "Birc5"),
+        Pericytes = c("Pdgfrb", "Cspg4", "Mcam", "Notch3"),
+        Smooth_muscle = c("Acta2", "Tagln", "Myh11", "Myl9"))
+Epithelial_Endothelial <- 
+    list(AT1 = c("Aqp5", "Ager", "Hopx", "Clic5"),
+        AT2 = c("Sftpb", "Sftpa1", "Sftpd", "Napsa"),
+        Capillary_Aerocyte = c("Car4", "Rgs6", "Ednrb", "Tbx2"),
+        Ciliated_cells = c("Tuba1a", "Dnah12", "Cfap54", "Ccdc181"),
+        Club_cells = c("Cyp2f2", "Gsta3", "Scgb1a1", "Scgb3a2"),
+        Endothelial_Activated = c("Tgfbi", "Zeb2", "Prkcb", "Nlrp3"),
+        Endothelial_Artery = c("Gja5", "Efnb2", "Cxcl12", "Dll4"),
+        Endothelial_Capillary = c("Plvap", "Adgrl3", "Glp1r", "Sema3c"),
+        Endothelial_Lymphatic = c("Prox1", "Flt4", "Sema3d", "Tbx1"),
+        Endothelial_Prolif = c("Mki67", "Top2a", "Cenpp", "Brip1"),
+        Endothelial_Vein = c("Vwf", "Ephb4", "Vcam1", "Ackr3"),
+        Endothelial_cells = c("Pecam1", "Emcn", "Cdh5", "Plvap"),
+        Erythroblast = c("Hbb-bs", "Hba-a2", "Hba-a1", "Hbb-bt"),
+        Prolifarating_AT = c("Mki67", "Top2a", "Cenpp", "Brip1"),
+        Transitional_AT = c("Krt18", "Sfn", "Clu", "Nupr1"))
+Immune_Lymphoid <-
+    list(B_cells = c("Ebf1", "Lyn", "Xbp1", "Sdc1"),
+        CD4_T = c("Il7r", "Icos", "Lat", "Cd4"),
+        CD8_T = c("Cd8a", "Cd8b1", "Trbc2", "Cd3d"),
+        Memory_B = c("Ighd", "Pax5", "Ebf1", "Fcmr"),
+        Naive_T = c("Tcf7", "Lef1", "S1pr1", "Bach2"),
+        NK_cells = c("Gzma", "Prf1", "Serpinb9", "Gzmb"),
+        Plasma_B = c("Prdm1", "Xbp1", "Sdc1", "Jchain"),
+        Prolif_T = c("Mki67", "Top2a", "Cenpf", "Nusap1"),
+        T_Reg = c("Foxp3", "Ctla4", "Tnfrsf18", "Tnfrsf9"))
+Immune_Myeloid <-
+    list(Alv_Macrophages = c("Plet1", "Lpl", "Abcg1", "Mgll"),
+        Ciliated_cells = c("Foxj1", "Dnah9", "Hydin", "Rp1"),
+        DC1 = c("Itgae", "Cd207", "Wdfy4", "Btla"),
+        DC2 = c("Mgl2", "H2-DMb2", "Clec10a", "H2-Oa"),
+        Fibrogenic_TAMs = c("Col1a2", "Col3a1", "Sparc", "Col5a1"),
+        IFN_TAMs = c("Ifit1", "Ifit2", "Ifi44", "Ifit3"),
+        Inflam_TAMs = c("Cxcl1", "Fn1", "Ccl24", "Cxcl3"),
+        Migratory_DC = c("Ccr7", "Fscn1", "Ccl5", "Cd40"),
+        Monocytes = c("Itgal", "Adgre4", "Treml4", "Spn"),
+        Neutrophils = c("S100a8", "S100a9", "Trem1", "Clec4d"),
+        Osteoclast_TAMs = c("Acp5", "Ctsk", "Nfatc1", "Mmp9"),
+        pDC = c("Tcf4", "Pacsin1", "Aff3", "Satb1"),
+        Prolif_TAMs = c("Mki67", "Top2a", "Cenpp", "Brip1"),
+        Scar_TAMs = c("Trem2", "Spp1", "Gpnmb", "Fabp5"))
+
+mouse <-
+    list(Mesenchymal = Mesenchymal,
+        Immune_Lymphoid = Immune_Lymphoid,
+        Epithelial_Endothelial = Epithelial_Endothelial,
+        Immune_Myeloid = Immune_Myeloid)
+
+# Xenograft
+Immune_Myeloid <-
+    list(Alv_Macrophages = c("Plet1", "Lpl", "Abcg1", "Mgll"),
+        Ciliated_cells = c("Foxj1", "Dnah9", "Hydin", "Rp1"),
+        DC = c("Flt3", "Zbtb46", "Cbfa2t3", "H2-Ab1"),
+        Fibrogenic_TAMs = c("Col1a2", "Col3a1", "Sparc", "Col5a1"),
+        IFN_TAMs = c("Ifit1", "Ifit2", "Ifi44", "Ifit3"),
+        Inflam_TAMs = c("Cxcl1", "Fn1", "Ccl7", "Ccl2"),
+        Migratory_DC = c("Ccr7", "Fscn1", "Ccl5", "Cd40"),
+        Monocytes = c("Ly6c2", "Ly6c1", "Ccr2", "Plac8"),
+        Neutrophils = c("S100a8", "Csf3r", "Trem1", "Clec4d"),
+        Osteoclast_TAMs = c("Acp5", "Ctsk", "Nfatc1", "Mmp9"),
+        pDC = c("Ccr9", "Spib", "Bcl11a", "Sell", "Tcf4"),
+        Prolif_TAMs = c("Mki67", "Top2a", "Cenpp", "Brip1"),
+        Scar_TAMs = c("Trem2", "Cd36", "Gpnmb", "Fabp5"))
+Mesenchymal <-
+    list(Adv_Fibroblasts = c("Dcn", "Lum", "Fbln1", "Igfbp6"),
+        Alv_Fibroblasts = c("Inmt", "Npnt", "Itga8", "Scube2"),
+        CAFs = c("Col1a1", "Col1a2", "Col3a1", "Fbln2"),
+        MSC = c("Runx1", "Egfr", "Zfpm2", "Bicc1"),
+        Muscle_cells = c("Myot", "Mypn", "Mlip", "Mylk4"),
+        myCAFs = c("Tagln", "Tpm1", "Lgals1", "Mgp"),
+        Pericytes = c("Rgs5", "Pdgfrb", "Mcam", "Cspg4"))
+Epithelial_Endothelial <- 
+    list(AT1 = c("Aqp5", "Ager", "Cldn18", "Pdpn"),
+        AT2 = c("Sftpb", "Sftpa1", "Sftpd", "Napsa"),
+        Capillary_Aerocyte = c("Car4", "Rgs6", "Ednrb", "Tbx2"),
+        Ciliated_cells = c("Tuba1a", "Dnah12", "Cfap54", "Ccdc181"),
+        Endothelial_cells = c("Pecam1", "Cdh5", "Ptprb", "Erg"),
+        Endothelial_Prolif = c("Mki67", "Top2a", "Cenpp", "Brip1"))
+Immune_Lymphoid <-
+    list(ILCs = c("Gata3", "Il1rl1", "Areg", "Kit"),
+         NK_cells = c("Gzma", "Prf1", "Serpinb9", "Gzmb"),
+         T_cells = c("Cd3e", "Cd3g", "Zbtb16", "Ifngr2"))
+
+xeno <-
+    list(Mesenchymal = Mesenchymal,
+        Immune_Lymphoid = Immune_Lymphoid,
+        Epithelial_Endothelial = Epithelial_Endothelial,
+        Immune_Myeloid = Immune_Myeloid)
+
+# # Combine all celltype marker lists into one list
+# all_celltypes <- list(
+#     dogs$Mesenchymal,
+#     dogs$Immune_Lymphoid,
+#     dogs$Epithelial_Endothelial,
+#     dogs$Immune_Myeloid,
+#     human$Immune_Myeloid,
+#     human$Immune_Lymphoid,
+#     human$Epithelial_Endothelial,
+#     human$Mesenchymal,
+#     mouse$Immune_Myeloid,
+#     mouse$Immune_Lymphoid,
+#     mouse$Epithelial_Endothelial,
+#     mouse$Mesenchymal,
+#     xeno$Immune_Myeloid,
+#     xeno$Mesenchymal,
+#     xeno$Epithelial_Endothelial,
+#     xeno$Immune_Lymphoid
+# )
+
+# # Get all unique celltype names (list names)
+# celltype_names <- unique(unlist(lapply(all_celltypes, names)))
+
+# celltypes <-
+#     celltype_names %>%
+#     str_replace("_", " ")
+
+# cols <- 
+#     as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
+
+# cols <-
+#     cols[1: length(celltypes)]
+
+# names(cols) <- celltypes
+
 object_list <-
-    tribble(~group1,                         ~group2,                       ~group3,
-            "patient_prim_cancer_cells",    "patient_mets_cancer_cells",   "Human_Patients",
-            "mm_prim_cancer_cells",         "mm_mets_cancer_cells",         "Syngeneic_Mouse",
-            "dogs_prim_cancer_cells",       "dogs_mets_cancer_cells",       "Canine_Patients",
-            "xeno_prim_human",             "xeno_mets_human",             "Human Patient_Xenograft")
+    tribble(~group,                         ~res_value,
+            "patient_prim_normal_cells",    0.15,
+            "patient_mets_normal_cells",    0.05,
+            "xeno_prim_mouse",              0.1,
+            "xeno_mets_mouse",              0.1,
+            "mm_prim_normal_cells",         0.25,
+            "mm_mets_normal_cells",         0.2,
+            "dogs_prim_normal_cells",       0.2,
+            "dogs_mets_normal_cells",       0.2)
 
-# make the color labels
-col_colors1 <- 
-    c("Primary" = "#BF6BE2FF",
-        "Metastatic" = "#69D1F3FF")
+for (item in seq_len(nrow(object_list))) {
+    group <- object_list$group[item]
+    res_value <- object_list$res_value[item]
+    sobj_list <- list()
+    dimplot_list <- list()
+    for (cell_type in c("Mesenchymal", "Immune_Lymphoid",
+                        "Immune_Myeloid", "Epithelial_Endothelial")) {
+        all_celltypes <- 
+            list(mouse[[cell_type]],
+                human[[cell_type]],
+                dogs[[cell_type]],
+                xeno[[cell_type]])
 
-# subpopulation  colors
-col_colors2 <- 
-    c(Synthetic = "#D43F3AFF",
-    Fibrogenic = "#EEA236FF",
-    Progenitor = "#357EBDFF",
-    Proliferative = "#5CB85CFF",
-    Interactive = "#B8B8B8FF",
-    Apoptosis = "#9632B8FF")
+        celltype_names <- 
+            unique(unlist(lapply(all_celltypes, names)))
 
-col_colors <- 
-    list(Group = col_colors1,
-        Subpopulation = col_colors2)
+        celltypes <-
+            celltype_names %>%
+            str_replace("_", " ")
 
-# make the regulon heatmap
-for (i in seq_len(nrow(object_list))) {
-    group1 <- object_list$group1[i]
-    group2 <- object_list$group2[i]
-    group3 <- object_list$group3[i]
+        cols <- 
+            as.list(c(plot_cols, sample(rainbow(length(celltypes)))))
 
-    # combine the data frames
-    output <-
-        regulon_list[[group1]] %>%
-        full_join(regulon_list[[group2]], by = "Regulon") %>%
-         replace(is.na(.), 0) %>%
-        column_to_rownames("Regulon") %>%
-        as.matrix()
+        cols <-
+            cols[1: length(celltypes)]
 
-    col_colors_df <-
-        output %>%
-        colnames() %>%
-        tibble(col = .) %>%
-        mutate(Group = if_else(str_detect(col, "prim"), "Primary", "Metastatic"),
-            Subpopulation = case_when(
-                str_detect(col, "Progenitor") ~ "Progenitor",
-                str_detect(col, "Proliferative") ~ "Proliferative",
-                str_detect(col, "Synthetic") ~ "Synthetic",
-                str_detect(col, "Fibrogenic") ~ "Fibrogenic",
-                str_detect(col, "Interactive") ~ "Interactive",
-                str_detect(col, "Apoptosis") ~ "Apoptosis",
-                TRUE ~ "Unknown")) %>%
-        column_to_rownames("col")
+        names(cols) <- celltypes
+    
+        if (cell_type == "Immune_Myeloid") {
+            cols[["TAMs"]] <- "#CDCDCDFF"
+            cols[["Fibrogenic TAMs"]] <- "#FF0060"
+        }
 
-# make a heatmap to show average regulon activity per cell type or cluster
-    regulon_activity_heatmap_all <-
-        pheatmap::pheatmap(output,
-            name = "Regulon activity",
-            scale = "none",
-            annotation_col = col_colors_df,
-            annotation_colors = col_colors,
-            cluster_cols = TRUE,
-            show_row_dend = FALSE,
-            silent = TRUE,
-            labels_col = NULL,
-            labels_row = NULL)
+        path <- 
+            str_c("output/seurat_objects/stromal_subtypes/",
+                      group, "/",
+                      cell_type,
+                      ".qs")
 
-    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/regulons/",
-                group3, "_regulon.pdf"),
-        plot = regulon_activity_heatmap_all,
-        width = 10,
-        height = 15)
-    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/regulons/",
-                group3, "_regulon.png"),
-        plot = regulon_activity_heatmap_all,
-        width = 10,
-        height = 15)
+        sobj <- qs::qread(path)
 
-    # remove the NAs
-    output_shared_TF <-
-        output %>%
-        apply(1, function(x) {
-            min(x) > 0
-        })
-    output_shared <-
-        output[output_shared_TF, ]
+        sobj$plot_labels <-
+            sobj$Ann_Level3 %>%
+            as.character() %>%
+            gsub("_", " ", .)
 
-    regulon_activity_heatmap_shared <-
-        pheatmap::pheatmap(output_shared,
-                        name = "Regulon activity",
-                        scale = "none",
-                        annotation_col = col_colors_df,
-                        annotation_colors = col_colors,
-                        cluster_cols = TRUE,
-                        show_row_dend = FALSE,
-                        silent = TRUE)
-    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/regulons/",
-                group3, "_regulon_shared.pdf"),
-        plot = regulon_activity_heatmap_shared,
-        width = 10,
-        height = 8)
-    ggsave(str_c("output/figures/Final_Annotations/results1/suppliment/regulons/",
-                group3, "_regulon_shared.png"),
-        plot = regulon_activity_heatmap_shared,
-        width = 10,
-        height = 8)
+        dimplot <-
+            DimPlot(sobj,
+                    group.by = "plot_labels", # Use the plot_labels for better aesthetics
+                    label.box = T,
+                    label = T,
+                    repel = T,
+                    cols = unlist(cols),
+                    label.size = 5,
+                    raster = F) +
+                coord_fixed() +
+                theme(aspect.ratio=1) +
+                theme_void() +
+                NoLegend() +
+                ggtitle(str_c(group, " ", cell_type))
+        if (sobj$unique[1] == "mm_prim" | sobj$unique[1] == "mm_mets") {
+            markers_list <- mouse
+        }
+        if (sobj$unique[1] == "patient_prim" | sobj$unique[1] == "patient_mets") {
+            markers_list <- human
+        }
+        if (sobj$unique[1] == "dogs_prim" | sobj$unique[1] == "dogs_mets") {
+            markers_list <- dogs
+        }
+        if (sobj$unique[1] == "xeno_prim_mouse" | sobj$unique[1] == "xeno_mets_mouse") {
+            markers_list <- xeno
+        }
+        markers_plot <-
+            markers_list[[cell_type]][names(markers_list[[cell_type]]) %in% sobj$Ann_Level3] %>%
+                        unlist() %>%
+                        as.character()
+        dotplot <-
+            DotPlot(sobj,
+                    features = markers_plot,
+                    group.by = "Ann_Level3",
+                    cols = "RdBu") +
+            RotatedAxis() +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            scale_y_discrete(labels = function(x) gsub("_", " ", x))
+        
+        dim_dot_plot <-
+            # plot_grid(dimplot + theme(plot.margin = margin(1, 1, 1, 1, "cm")),
+            #         dotplot + theme(plot.margin = margin(1, 1, 1, 1, "cm")),
+            #         ncol = 1,
+            #         rel_heights = c(2, 1),
+            #         align = "v",
+            #         scale = 1) +
+            # patchwork::plot_annotation(title = str_c(group, " ", cell_type),
+            #                             theme = theme(plot.title = element_text(hjust = 0.5)))
+            plot_grid(dimplot + theme(plot.margin = margin(1, 1, 1, 1, "cm")),
+                            dotplot + theme(plot.margin = margin(1, 1, 1, 1, "cm")),
+                            ncol = 1,
+                            rel_heights = c(length(unique(sobj$Ann_Level3))*0.4 + 10,
+                                            length(unique(sobj$Ann_Level3))*0.4 + 3),
+                            rel_widths  = c(length(markers_plot) * 0.1 + 2,
+                                            length(markers_plot) * 0.15 + 2),
+                            align = "v",
+                            scale = 1) +
+                patchwork::plot_annotation(title = str_c(group, " ", cell_type),
+                                            theme = theme(plot.title = element_text(hjust = 0.5)))
+
+        if (!dir.exists("output/figures/Final_Annotations/results3/")) {
+            dir.create("output/figures/Final_Annotations/results3/",
+                        recursive = TRUE)
+        }
+        height <- 7 + length(unique(sobj$Ann_Level3)) * 0.4
+        width <- length(markers_plot) * 0.1 + 6
+        ggsave(str_c("output/figures/Final_Annotations/results3/",
+                    group, cell_type, "_dim_dot.pdf"),
+                plot = dim_dot_plot,
+                width = 12,
+                height =  12,
+                bg = "white")
+        ggsave(str_c("output/figures/Final_Annotations/results3/",
+                    group, cell_type, "_dim_dot.png"),
+                plot = dim_dot_plot,
+                width = 12,
+                height = 12,
+                bg = "white")
+       
+    }
 }
+```
+
+
+
+### Doubletfinder Add Results to Seurat Objects
+
+```{r overlay-demuxafy-results}
+#we'll be using the objects from final_tumor_vs_stroma
+ob_names <- 
+    c("dogs_mets",
+    "dogs_prim",
+    "mm_mets",
+    "mm_prim",
+    "patient_mets",
+    "patient_prim",
+    "xeno_mets_human_cancer_cells",
+    "xeno_mets_mouse",
+    "xeno_prim_human_cancer_cells",
+    "xeno_prim_mouse"
+)
+
+for (ob_name in ob_names) {
+    print(paste("loading", ob_name))
+    #Read in seurat object from Yogesh's folder
+    tmp_ob <- qs::qread(
+        paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/",
+        ob_name,
+        ".qs"))
+    # tmp_ob <- reconstruct_cell_types(tmp_ob)
+    #read in demuxafy results
+    path <- "/home/gdrobertslab/lab/Analysis/MattGust/projects/Roberts_Lab/Osteo_atlas/"
+    demuxafy_res <- list()
+    for (sid in unique(tmp_ob$sample_name)) {
+        print(paste("loading demuxafy results for", sid))
+        demuxafy_res[[sid]] <-
+            read.table(paste0(path, "DoubletFinder/output/",
+                              sid,
+                              "/combined/combined_doublets_w_combined_assignments.tsv"),
+                        header = TRUE) %>%
+            mutate(Barcode = paste(sid, Barcode, sep = "_")) %>%
+            column_to_rownames("Barcode")
+        if (sid %in% c("SJOS013768_X3", "SJOS063824_X1")) {
+            demuxafy_res[[sid]]$scds_DropletType <- "N/A"
+        }
+        demuxafy_res[[sid]] <- dplyr::select(demuxafy_res[[sid]],
+                                             DoubletDetection_DropletType,
+                                             scDblFinder_DropletType,
+                                             scds_DropletType,
+                                             MajoritySinglet_DropletType)
+    }
+    # Create one big dataframe w demuxafy results for current object
+    all_demux <- 
+        bind_rows(demuxafy_res)
+    #Add column saying whether or not a cell passed QC
+    all_demux$passed_qc <-
+        rownames(all_demux) %in% colnames(tmp_ob)
+
+    tmp_ob <- 
+        AddMetaData(tmp_ob, metadata = all_demux)
+    
+    metadata <- 
+        tmp_ob@meta.data %>%
+        as.data.frame() %>%
+        rownames_to_column("cell_id") %>%
+        select(DoubletDetection_DropletType,
+               scDblFinder_DropletType,
+               #MajoritySinglet_DropletType,
+               scds_DropletType,
+               cell_id) %>%
+        arrange(DoubletDetection_DropletType,
+                scDblFinder_DropletType,
+                scds_DropletType)  %>%
+        mutate(cell_id_number = row_number())  %>%
+        rename(DoubletDetection = DoubletDetection_DropletType,
+               scDblFinder = scDblFinder_DropletType,
+               scds = scds_DropletType) %>%
+        mutate(across(everything(), ~ifelse(. == "", "unknown", .)))
+    
+    # make dimplot_list
+        # define colors for doublet/singlet/unknown calls
+    doublet_cols <- c(
+        "doublet" = "#D43F3AFF",
+        "singlet" = "#EEA236FF",
+        "unknown" = "#357EBDFF"
+    )
+    tumor_path <-
+        str_c("output/seurat_objects/final_tumor_vs_stroma/",
+        ob_name,
+        "_cancer_cells.qs")
+    if (file.exists(tumor_path)) {
+        tumor <-
+            qs::qread(tumor_path)
+        new_metadata <-
+            metadata %>%
+            filter(cell_id %in% colnames(tumor))
+        tumor <-
+            AddMetaData(tumor, metadata = new_metadata)
+        dimplot1 <-
+            dimplot_better(tumor, group_by = "Ann_Level2") + NoLegend()
+        dimplot2 <-
+            dimplot_better(tumor, group_by = "DoubletDetection", cols = doublet_cols) + NoLegend() 
+        dimplot3 <-
+            dimplot_better(tumor, group_by = "scDblFinder", cols = doublet_cols) + NoLegend()
+        dimplot4 <-
+            dimplot_better(tumor, group_by = "scds", cols = doublet_cols) + NoLegend()
+        panel <-
+            patchwork::wrap_plots(dimplot1, dimplot2, dimplot3, dimplot4,
+                    ncol = 2) +
+            patchwork::plot_annotation(title = str_c(ob_name, " tumor_DoubletFinder Results"),
+                            theme = theme(plot.title = element_text(hjust = 0.5)))
+        matadata_mimic <-
+            new_metadata %>%
+            mutate(cell_id_number = row_number()) %>%
+            pivot_longer(cols = -c(cell_id, cell_id_number),
+                        names_to = "method",
+                        values_to = "call")
+    } else {
+        tmp_ob <-
+            AddMetaData(tmp_ob, metadata = metadata)
+        dimplot1 <-
+            dimplot_better(tmp_ob, group_by = "Ann_Level2") + NoLegend()
+        dimplot2 <-
+            dimplot_better(tmp_ob, group_by = "DoubletDetection", cols = doublet_cols) + NoLegend() 
+        dimplot3 <-
+            dimplot_better(tmp_ob, group_by = "scDblFinder", cols = doublet_cols) + NoLegend()
+        dimplot4 <-
+            dimplot_better(tmp_ob, group_by = "scds", cols = doublet_cols) + NoLegend()
+
+        panel <-
+        patchwork::wrap_plots(dimplot1, dimplot2, dimplot3, dimplot4,
+                  ncol = 2) +
+        patchwork::plot_annotation(title = str_c(ob_name, " DoubletFinder Results"),
+                        theme = theme(plot.title = element_text(hjust = 0.5)))
+        matadata_mimic <-
+            metadata %>%
+            mutate(cell_id_number = row_number()) %>%
+            pivot_longer(cols = -c(cell_id, cell_id_number),
+                        names_to = "method",
+                        values_to = "call")
+    }
+    if (!dir.exists("output/id_tumor/metadata/doubletfinder/")) {
+        dir.create("output/id_tumor/metadata/doubletfinder", recursive = TRUE)
+    }
+    write_tsv(matadata_mimic,
+              str_c("output/id_tumor/metadata/doubletfinder/",
+                    ob_name, "_calling.tsv"))
+                
+    # make a tile plot to show the tumor calling by methods
+    tile_plot <-
+        ggplot(matadata_mimic %>%
+            mutate(method = factor(method,
+              levels = c("DoubletDetection", "scDblFinder", "scds")),
+               call = factor(call, levels = c("doublet", "singlet", "unknown"))), # Tumor last
+            aes(x = method, y = cell_id_number, fill = call)) +
+        geom_tile() +
+        scale_fill_manual(values = doublet_cols) +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            axis.text.y = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
+            panel.grid = element_blank())
+
+    if (!dir.exists("output/figures/Final_Annotations/results2/doubletfinder/")) {
+        dir.create("output/figures/Final_Annotations/results2/doubletfinder", recursive = TRUE)
+    }
+    ggsave(str_c("output/figures/Final_Annotations/results2/doubletfinder/",
+                ob_name, "_tile_plot.pdf"),
+            plot = tile_plot,
+            width = 4,
+            height = 5,
+            bg = "white")
+
+    ggsave(str_c("output/figures/Final_Annotations/results2/doubletfinder/",
+                ob_name, "_panel_plot.pdf"),
+            plot = panel,
+            width = 14,
+            height = 14,
+            bg = "white")
+    ggsave(str_c("output/figures/Final_Annotations/results2/doubletfinder/",
+                ob_name, "_panel_plot.png"),
+            plot = panel,
+            width = 14,
+            height = 14,
+            bg = "white")
+}
+
+
+# make the discordance stats plots
+
+library(irr)
+files <- list.files("output/id_tumor/metadata/doubletfinder/", pattern = "*calling.tsv")
+
+calls <- lapply(files, function(f) {
+    df <- read.table(file.path("output/id_tumor/metadata/doubletfinder/", f), 
+        header = TRUE
+        ) %>%
+        select(-cell_id) %>%
+        pivot_wider(
+            id_cols = cell_id_number, 
+            names_from = method, 
+            values_from = call
+            ) 
+    return(df)   
+})
+
+names(calls) <- sub("_calling.tsv", "", files)
+
+for(i in seq_along(calls)) {
+    df <- calls[[i]]
+    print(paste("Performing Interrater Reliability Analysis on", names(calls)[i]))
+    print("Agreement - DoubletDetection vs scDblFinder")
+    results <- agree(df[, c("DoubletDetection", "scDblFinder")])
+    print(results)
+    print("Agreement - scDblFinder vs scds")
+    results <- agree(df[, c("scDblFinder", "scds")])
+    print(results)
+    print("Agreement - DoubletDetection vs scds")
+    results <- agree(df[, c("DoubletDetection", "scds")])
+    print(results)
+    print("Interrater Reliability - Fleiss Kappa")
+    results <- kappam.fleiss(df[, c("DoubletDetection", "scDblFinder", "scds")])
+    print(results)
+}
+
+
+# Store results for plotting
+
+for(i in seq_along(calls)) {
+    plot_data <- tibble()
+    df <- calls[[i]]
+    group <- names(calls)[i]
+    
+    # Agreement - DoubletDetection vs scDblFinder
+    results1 <- 
+        agree(df[, c("DoubletDetection", "scDblFinder")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                 tibble(group = group,
+                        comparison = "DoubletDetection vs scDblFinder",
+                        percent_agreement = results1$value))
+    
+    # Agreement - scDblFinder vs scds
+    results2 <- 
+        agree(df[, c("scDblFinder", "scds")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                 tibble(group = group,
+                        comparison = "scDblFinder vs scds",
+                        percent_agreement = results2$value))
+    # Agreement - DoubletDetection vs scds
+    results3 <- 
+        agree(df[, c("DoubletDetection", "scds")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                tibble(group = group,
+                        comparison = "DoubletDetection vs scds",
+                        percent_agreement = results3$value))
+    # concordance plot
+    concordance <-
+        ggplot(plot_data, 
+            aes(x = group, y = percent_agreement, fill = comparison)) +
+        geom_bar(stat = "identity", position = position_dodge()) +
+        geom_text(aes(label = round(percent_agreement, 2)), 
+              position = position_dodge(width = 0.9), 
+              vjust = -0.5, size = 3) +
+        labs(title = "Interrater Reliability Analysis",
+            y = "Agreement / Kappa Value",
+            x = "Group") +
+        theme_minimal() +
+        scale_fill_brewer(palette = "Set2") +
+        theme(panel.grid = element_blank(),
+              plot.margin = margin(0, 0, 0, 0, "cm"),
+              axis.line = element_line(),
+              axis.ticks.length = unit(0.25, "cm"),
+              axis.ticks = element_line(),
+              axis.text.x = element_text(margin = margin(t = 0)),
+              axis.text.y = element_text(margin = margin(r = 0)))
+
+    
+    # Fleiss Kappa
+    results4 <- 
+        kappam.fleiss(df[, c("DoubletDetection", "scDblFinder", "scds")])
+    kappa_value <- results4$value
+
+    final_plot <- 
+        concordance +
+        labs( title = paste(
+            "Interrater Reliability Analysis\nFleiss Kappa:",
+            round(kappa_value, 2)),
+            y = "Agreement / Kappa Value",
+            x = "Group")
+
+    ggsave(str_c("output/figures/Final_Annotations/results2/doubletfinder/",
+                group, "_concordance_plot.pdf"),
+            plot = final_plot,
+            width = 5,
+            height = 4,
+            bg = "white")
+
+}
+
+
+
+
+
 
 ```

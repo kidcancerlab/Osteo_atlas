@@ -1,0 +1,704 @@
+## Run Demuxafy
+
+This markdown is a way for me (Matty G) to keep track of my progress with running DoubletFinder on all our samples.
+
+```{r sample-information}
+sample_info <- read.table("misc/allsample_details.txt", header = TRUE)
+# write.table(sample_info, "misc/allsample_details.txt")
+```
+
+### Make Directories
+
+I need to make directories to hold my doublet finder results
+
+```{bash doublet-finder-dirs}
+for dirname in \
+    DoubletFinder \
+    DoubletFinder/output \
+    DoubletFinder/slurm
+do
+    if [ ! -d ${dirname} ]
+    then
+        mkdir -p ${dirname}
+    fi
+done
+```
+
+I'll be submitting these jobs as arrays in bash.
+
+Before I can, though, I'll need to add information to our sample table (and remove extraneous stuff for the purposes of this). The table needs to contain the sample id's and the paths to the filtered feature matrix h5 file.
+
+### Create Input Table for Demuxafy
+
+```{r re-work-sample-info-table}
+atlas_path <-
+    "/home/gdrobertslab/lab/Analysis/MattGust/projects/Roberts_Lab/Osteo_atlas/"
+
+#Specify path to data based on data source
+sample_info <- dplyr::select(sample_info, sample_name, data_source) %>%
+    mutate(data_path = recode(data_source,
+                               "GEO" = "/home/gdrobertslab/lab/Counts_2/",
+                               "NCH" = "/home/gdrobertslab/lab/Counts_2/",
+                               "SJ" = "/home/gdrobertslab/lab/ExternalData/Patel_lab/",
+                               "NCI_POB" = "/home/gdrobertslab/lab/ExternalData/McEachron_lab/03_FilteredMatricesH5/",
+                               "CSU" = "/home/gdrobertslab/lab/ExternalData/Regan_lab/",
+                               "TU" = "/home/gdrobertslab/lab/ExternalData/Gardner/",
+                               "UoM" = "/home/gdrobertslab/lab/ExternalData/Modiano_Lab/"))
+
+count_path_end <- list("GEO" = "/home/gdrobertslab/lab/",
+                       "NCH" = "/home/gdrobertslab/lab/",
+                       "SJ" = "/home/gdrobertslab/lab/",
+                       "NCI_POB" = "/home/gdrobertslab/lab/",
+                       "CSU" = "/home/gdrobertslab/lab/",
+                       "TU" = "/home/gdrobertslab/lab/",
+                       "UoM" = "/home/gdrobertslab/lab/")
+
+
+#make new data frame for doublet finder input
+df_input <- sample_info
+df_input$count_path <- ifelse(df_input$data_source %in% c("GEO", "NCH"),
+                              paste0(df_input$data_path,
+                                     df_input$sample_name,
+                                     "/filtered_feature_bc_matrix/"),
+                              ifelse(df_input$data_source == "NCI_POB",
+                                     paste0(atlas_path,
+                                            "DoubletFinder/troy_counts/",
+                                            df_input$sample_name),
+                                     paste0(atlas_path,
+                                            "DoubletFinder/anand_counts/",
+                                            df_input$sample_name)))
+
+#Make h5 paths for reading in data to make new count folders
+sample_info$h5_path <-
+    paste0(sample_info$data_path,
+           ifelse(sample_info$data_source == "NCI_POB",
+                  paste0("03_FilteredMatricesH5/",
+                         sample_info$sample_name,
+                         "_filtered_feature_bc_matrix.h5"),
+                  paste0(sample_info$sample_name,
+                         "/filtered_feature_bc_matrix.h5")))
+
+
+#create 10x counts folders for troy and anand's data; and Regan, Gardner, and Modiano
+needs_counts <- subset(sample_info, data_source %in% c("SJ", "NCI_POB", "CSU", "TU", "UoM"))
+
+#make paths to h5 files
+needs_counts <- mutate(needs_counts,
+       h5_path = paste0(data_path,
+                        recode(data_source,
+                               "SJ" = paste0(sample_name, "/filtered_feature_bc_matrix.h5"),
+                               "NCI_POB" = paste0(sample_name, "_filtered_feature_bc_matrix.h5"),
+                               "CSU" = paste0(sample_name,
+                                              "/",
+                                              ifelse(startsWith(sample_name, "OSLM"),
+                                                     paste0(sample_name, "_filtered_feature_bc_matrix.h5"),
+                                                     "filtered_feature_bc_matrix.h5")
+                                              ),
+                               "TU" = paste0(sample_name, "/filtered_feature_bc_matrix.h5"),
+                               "UoM" = paste0("cellranger_", sample_name, "/filtered_feature_bc_matrix.h5"))
+       )) %>%
+    unique()
+
+
+#write counts to folders
+system("mkdir -p DoubletFinder/Counts/SJ DoubletFinder/Counts/NCI_POB DoubletFinder/Counts/CSU DoubletFinder/Counts/TU DoubletFinder/Counts/UoM")
+#set up will be DoubletFinder/`data_source`/`sample_name`/filtered_feature_bc_matrix
+for (i in 1:nrow(needs_counts)) {
+    #only do it if the counts folder doesn't exist
+    if (!dir.exists(paste0("DoubletFinder/Counts/",
+                          needs_counts$data_source[i],
+                          "/",
+                          needs_counts$sample_name[i]))) {
+
+        h5_data <- Read10X_h5(needs_counts$h5_path[i])
+        if (class(h5_data) == "list") h5_data <- h5_data[["Gene Expression"]]
+        write10xCounts(path = paste0("DoubletFinder/Counts/",
+                                    needs_counts$data_source[i],
+                                    "/",
+                                    needs_counts$sample_name[i]),
+                    x = h5_data,
+                    barcodes = colnames(h5_data),
+                    type = "sparse")
+    }
+}
+
+sample_info$count_path <- ifelse(sample_info$data_source %in% c("NCH", "GEO"),
+                                 paste0(sample_info$data_path, sample_info$sample_name, "/filtered_feature_bc_matrix"),
+                                 paste0("DoubletFinder/Counts/", sample_info$data_source, "/", sample_info$sample_name))
+
+df_input <- select(sample_info, sample_name, count_path) %>% unique()
+
+
+#Check that all count paths in df_input exist
+dir.exists(df_input$count_path)
+
+write.table(df_input,
+             "misc/doubletfinder_input.txt",
+             quote = FALSE,
+             row.names = FALSE,
+             col.names = FALSE)
+```
+
+### Submit Batch Jobs
+
+```{bash}
+sbatch DoubletFinder/run_demuxafy.sh
+```
+
+## Evaluate Demuxafy Results
+
+Note that scds did not work for samples SJOS063824_X1 and SJOS013768_X3.
+
+### Re-combine results for those missing scds
+
+```{bash combine-results-SJOS063824_X1-SJOS013768_X3}
+singularity exec --bind /home/gdrobertslab/lab/Analysis/MattGust/projects/Roberts_Lab/Osteo_atlas \
+    /home/gdrobertslab/lab/Tools/Demuxafy.sif \
+    Combine_Results.R \
+    -o DoubletFinder/output/SJOS063824_X1/combined/combined_doublets.tsv \
+    -t DoubletFinder/output/SJOS063824_X1/DoubletDetection \
+    -n DoubletFinder/output/SJOS063824_X1/scDblFinder \
+    -m 'MajoritySinglet'
+
+singularity exec --bind /home/gdrobertslab/lab/Analysis/MattGust/projects/Roberts_Lab/Osteo_atlas \
+    /home/gdrobertslab/lab/Tools/Demuxafy.sif \
+    Combine_Results.R \
+    -o DoubletFinder/output/SJOS013768_X3/combined/combined_doublets.tsv \
+    -t DoubletFinder/output/SJOS013768_X3/DoubletDetection \
+    -n DoubletFinder/output/SJOS013768_X3/scDblFinder \
+    -m 'MajoritySinglet'
+
+```
+
+### Add Results to Seurat Objects
+
+```{r overlay-demuxafy-results}
+tumor_stroma_path <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/"
+#we'll be using the objects from final_tumor_vs_stroma
+ob_names <- c(
+    "dogs_mets",
+    "dogs_prim",
+    "mm_mets",
+    "mm_prim",
+    "patient_mets",
+    "patient_prim",
+    "xeno_mets_human_cancer_cells",
+    "xeno_prim_human_cancer_cells",
+    "xeno_mets_mouse",
+    "xeno_prim_mouse"
+)
+
+obj_list <- list()
+all_demux <- list()
+
+for (ob_name in ob_names) {
+    print(paste("loading", ob_name))
+    #Read in seurat object from Yogesh's folder
+    tmp_ob <- qs::qread(
+        paste0("/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/final_tumor_vs_stroma/",
+        ob_name,
+        ".qs"))
+    # tmp_ob <- reconstruct_cell_types(tmp_ob)
+    #read in demuxafy results
+    demuxafy_res <- list()
+    for (sid in unique(tmp_ob$sample_name)) {
+        print(paste("loading demuxafy results for", sid))
+        demuxafy_res[[sid]] <-
+            read.table(paste0("DoubletFinder/output/",
+                              sid,
+                              "/combined/combined_doublets_w_combined_assignments.tsv"),
+                        header = TRUE) %>%
+            mutate(Barcode = paste(sid, Barcode, sep = "_")) %>%
+            column_to_rownames("Barcode")
+        if (sid %in% c("SJOS013768_X3", "SJOS063824_X1")) {
+            demuxafy_res[[sid]]$scds_DropletType <- "N/A"
+        }
+        demuxafy_res[[sid]] <- dplyr::select(demuxafy_res[[sid]],
+                                             DoubletDetection_DropletType,
+                                             scDblFinder_DropletType,
+                                             scds_DropletType,
+                                             MajoritySinglet_DropletType)
+    }
+    # Create one big dataframe w demuxafy results for current object
+    all_demux[[ob_name]] <- bind_rows(demuxafy_res) %>%
+        mutate(object = ob_name)
+    #Add column saying whether or not a cell passed QC
+    all_demux[[ob_name]]$passed_qc <-
+        rownames(all_demux[[ob_name]]) %in% colnames(tmp_ob)
+
+    obj_list[[ob_name]] <- AddMetaData(tmp_ob, metadata = all_demux[[ob_name]])
+}
+qs::qsave(obj_list, "output/seurat_objects/demuxafied_obj_list.qs")
+qs::qsave(all_demux, "DoubletFinder/all_demuxafy_results.qs")
+
+
+
+# split into cancer vs stroma lists
+
+
+cancer_obs <- list()
+stroma_obs <- list()
+for (ob in ob_names) {
+    if (!str_detect(ob, "xeno")) {
+        cancer_obs[[ob]] <- qs::qread(paste0(tumor_stroma_path, ob, "_cancer_cells.qs"))
+        stroma_obs[[ob]] <- qs::qread(paste0(tumor_stroma_path, ob, "_normal_cells.qs"))
+        # add demuxafy results
+        cancer_obs[[ob]] <- AddMetaData(
+            cancer_obs[[ob]],
+            all_demux[[ob]]
+        )
+        stroma_obs[[ob]] <- AddMetaData(
+            stroma_obs[[ob]],
+            all_demux[[ob]]
+        )
+
+    } else if (str_detect(ob, "cancer_cells")) { # add xeno human directly to cancer list
+        cancer_obs[[ob]] <- obj_list[[ob]]
+    } else { # add xeno mouse directly to stroma list
+        stroma_obs[[ob]] <- obj_list[[ob]] 
+    }
+}
+
+dir.create("output/figures/demuxafy/dimplots/", recursive = TRUE)
+
+for (ob in names(cancer_obs)) {
+    pdf(paste0("output/figures/demuxafy/dimplots/", ob, "_cancer.pdf"),
+        width = 20,
+        height = 8)
+    print(
+        dimplot_better(
+            cancer_obs[[ob]],
+            group = c("Ann_Level3", "MajoritySinglet_DropletType"),
+            ncol = 2
+        )
+    )
+    dev.off()
+}
+
+for (ob in names(stroma_obs)) {
+        pdf(paste0("output/figures/demuxafy/dimplots/", ob, "_stroma.pdf"),
+        width = 20,
+        height = 8)
+    print(
+        dimplot_better(
+            stroma_obs[[ob]],
+            group = c("Ann_Level3",
+            "MajoritySinglet_DropletType"),
+            ncol = 2
+        )
+    )
+    dev.off()
+}
+
+```
+
+### Make Heatmaps for % of Doublet Calls by Cell Types
+
+I'm going to look for patterns in if particular cell types are called doublets across models.
+```{r}
+for (ob in names(obj_list)) {
+    png(
+        paste0("output/demuxafy/heatmaps/", ob, ".png"),
+        width = 480,
+        height = 1200
+    )
+    all_demux[[ob]] %>%
+        dplyr::select(MajoritySinglet_DropletType) %>%
+}
+
+
+tumor_demux <- lapply(obj_list, function(x) {
+    subset(x@meta.data, Ann_Level1 == "Tumor") %>%
+        dplyr::select(MajoritySinglet_DropletType, object, Ann_Level3)
+})
+all_tumor_demux <- bind_rows(tumor_demux)
+
+group_by(all_tumor_demux, Ann_Level3, object) %>%
+    mutate(
+        num_cells = n(),
+        perc_doublet = sum(MajoritySinglet_DropletType == "doublet") / num_cells * 100
+    ) %>%
+    dplyr::select(Ann_Level3, perc_doublet, object) %>%
+    unique() %>%
+    ggplot(aes(x = object, y = Ann_Level3, fill = perc_doublet)) +
+    geom_tile() + 
+    geom_label(aes(label = round(perc_doublet, 3)), fill = "white")
+
+
+
+for (ob in names(tumor_demux)) {
+    res <- tumor_demux[[ob]]
+    if (nrow(res) > 0) {
+        group_by(res, Ann_Level3) %>%
+            mutate(
+                num_cells = n(),
+                perc_doublet = sum(MajoritySinglet_DropletType == "doublet") / num_cells * 100
+            ) %>%
+            dplyr::select(Ann_Level3, perc_doublet, object) %>%
+            unique() %>%
+            ggplot(aes(x = object, y = Ann_Level3, fill = perc_doublet)) +
+            geom_tile() + 
+            geom_label(aes(label = round(perc_doublet, 3)), fill = "white")
+    }
+}
+
+
+stroma_demux <- lapply(obj_list, function(x) {
+    subset(x@meta.data, Ann_Level1 != "Tumor") %>%
+        dplyr::select(MajoritySinglet_DropletType, object, Ann_Level3)
+})
+
+
+
+
+all_demux <- lapply(obj_list, function(x) {
+    dplyr::select(x@meta.data, MajoritySinglet_DropletType, object, Ann_Level3)
+})
+merged_demux <- bind_rows(all_demux)
+
+merged_demux %>%
+    group_by(Ann_Level3, object) %>%
+    mutate(
+        num_cells = n(),
+        perc_doublet = sum(MajoritySinglet_DropletType == "doublet") / num_cells * 100) %>%
+    dplyr::select(object, Ann_Level3, perc_doublet) %>%
+    unique() %>%
+    # pivot_wider(names_from = "object", values_from = "perc_doublet") %>%
+    # dplyr::select(-`NA`) %>%
+    ggplot(aes(x = object, y = Ann_Level3, fill = perc_doublet)) +
+    geom_tile()
+
+
+qc_doublet_heatmaps <- lapply(all_demux, function(x) {
+    x %>%
+        dplyr::select(MajoritySinglet_DropletType,
+                    passed_qc) %>%
+        group_by(passed_qc) %>%
+        mutate(group_total = n()) %>%
+        group_by(MajoritySinglet_DropletType, passed_qc) %>%
+        mutate(prop = sum(n()) / group_total) %>%
+        unique() %>%
+        ggplot(aes(x = MajoritySinglet_DropletType,
+                y = passed_qc,
+                fill = prop)) +
+            geom_tile() +
+            geom_label(aes(label = round(prop, 3)), fill = "white")
+})
+```
+
+
+### Compare Doublet Calls in QC'd Cells
+
+```{r}
+df_res_by_ob <- list()
+df_by_filtered <- list()
+for (ob_name in names(obj_list)) {
+    tmp_ob <- obj_list[[ob_name]]
+    for (sid in unique(tmp_ob$sample_name)) {
+    print(paste("loading demuxafy results for", sid))
+    demuxafy_res[[sid]] <-  
+        read.table(paste0("DoubletFinder/output/",
+                          sid,
+                          "/combined/combined_doublets_w_combined_assignments.tsv"),
+                    header = TRUE) %>%
+        mutate(Barcode = paste(sid, Barcode, sep = "_")) %>%
+        column_to_rownames("Barcode")
+    }
+    df_res_by_ob[[ob_name]] <- bind_rows(demuxafy_res)
+    df_res_by_ob[[ob_name]]$passed_qc <- rownames(df_res_by_ob[[ob_name]]) %in% colnames(tmp_ob)
+    df_by_filtered[[ob_name]] <- table(df_res_by_ob[[ob_name]]$passed_qc,
+                                       df_res_by_ob[[ob_name]]$MajoritySinglet_DropletType)
+
+    # df_res_by_ob[[ob_name]]@meta.data %>%
+    #     dplyr::select(DoubletDetection_DropletType,
+    #                   scDblFinder_DropletType,
+    #                   scds_DropletType,
+    #                   MajoritySinglet_DropletType,
+    #                   passed_qc) %>%
+    #     mutate(object = ob_name)
+}
+
+lapply(df_by_filtered, prop.table, margin = 1)
+
+#Make one dataframe with all demux calls
+merged_demux <- bind_rows(all_demux)
+#make bar chart showing proportion of doublet calls between cells that did and didn't pass qc
+group_by(merged_demux, object, passed_qc) %>%
+    mutate(num_cells = n(),
+           doublet_prop = sum(MajoritySinglet_DropletType == "doublet")/num_cells) %>%
+    dplyr::select(MajoritySinglet_DropletType,
+                  object,
+                  passed_qc,
+                  num_cells,
+                  doublet_prop) %>%
+    unique() %>%
+    group_by(object) %>%
+    mutate(tot_cells = sum(num_cells)) %>%
+    ggplot(aes(x = object,
+               y = doublet_prop,
+               fill = passed_qc)) +
+        geom_bar(position = "dodge",
+                 stat = "identity",
+                 color = "black",
+                 width = 0.7) +
+    theme(axis.text.x = element_text(angle = -45),
+          legend.position = c(0.1, 0.9)) +
+    ylab("Proportion of Cells Called Doublets") +
+    labs(title = "Comparing the Proportion of Cells Called Doublets and Whether or not They Passed QC")
+```
+
+### PDX Sanity Check
+
+One way I can check whether or not the doublet calling algorithms are doing their job is by looking at cells with similar levels of mouse and human reads in the PDX data. If these algorithms are working well, we should expect most, if not all, of these cells to be labelled as doublets, since a doublet is the only way there would be similar amounts of human and murine reads.
+
+```{r pdx-sanity-check}
+pdx_details <- read.table("misc/allsample_details.txt", header = TRUE) %>%
+    subset(CL_or_PDX == "xenograft_PDX") %>%
+    select(sample_name, data_source) %>%
+    unique()
+
+#get demuxafy results for pdx samples
+pdx_df <- all_demux[c("xeno_mets_human_cancer_cells",
+                      "xeno_mets_mouse",
+                      "xeno_prim_human_cancer_cells",
+                      "xeno_prim_mouse")]
+
+#convert rownames to a column
+pdx_df <- lapply(pdx_df, rownames_to_column, "bc")
+
+pdx_df <- bind_rows(pdx_df)
+
+length(unique(pdx_df$bc))
+dim(pdx_df)
+#we have more rows than barcodes since many cells were counted twice for a human and mouse demuxafy call
+pdx_df <- dplyr::select(pdx_df, bc, MajoritySinglet_DropletType) %>% 
+    unique()
+dim(pdx_df)
+#now we have a dataframe saying whether or not each cell was called a doublet by the majority
+mixed_bcs <- list()
+for (i in seq_len(nrow(pdx_details))) {
+    sid <- pdx_details$sample_name[i]
+    if (pdx_details$data_source[i] == "NCH") {
+        ct_mtx <- Read10X_h5(paste0("/home/gdrobertslab/lab/Counts_2/",
+                                    sid,
+                                    "/filtered_feature_bc_matrix.h5"))
+    } else {
+        ct_mtx <-
+            Read10X_h5(paste0("/home/gdrobertslab/lab/ExternalData/Patel_lab/",
+                              sid,
+                              "/filtered_feature_bc_matrix.h5"))
+    }
+    if (class(ct_mtx) == "list") ct_mtx <- ct_mtx[["Gene Expression"]]
+    #calculate percentage of human reads in each cell
+    pct_human <-
+        colSums(ct_mtx[startsWith(rownames(ct_mtx), "GRCh38"), ])/colSums(ct_mtx)
+
+    #get barcodes for cells that have > 40% and < 60% human reads
+    true_doublets <- names(pct_human)[pct_human > 0.40 & pct_human < 0.60]
+        # paste(sid,
+        #       names(pct_human)[pct_human > 0.40 & pct_human < 0.60],
+        #       sep = "_")
+    #get number of reads in these cells
+    num_reads <- setNames(colSums(ct_mtx)[true_doublets], true_doublets)
+    true_doublets <- paste(sid, true_doublets, sep = "_")
+    mixed_bcs[[sid]] <- as.data.frame(cbind(num_reads, true_doublets))
+    mixed_bcs[[sid]]$num_reads <- as.numeric(mixed_bcs[[sid]]$num_reads)
+}
+head(mixed_bcs[[1]])
+
+#for each bc, determine whether or not it was called a doublet
+mixed_read_results <- lapply(names(mixed_bcs), function(sid) {
+    #only keep cells with > 200 reads
+    x <- mixed_bcs[[sid]]
+    x <- subset(x, num_reads > 200)
+    tmp <- setNames(pdx_df$MajoritySinglet_DropletType[match(x$true_doublets, pdx_df$bc)],
+                    pdx_df$bc[match(x$true_doublets, pdx_df$bc)])
+    # prop_doublets <- mean(tmp == "doublet")
+    return(c("sample" = sid,
+             "num_cells" = as.integer(nrow(x)),
+             "proportion_doublets" = round(mean(tmp == "doublet"), 3)))
+})
+bind_rows(mixed_read_results) %>%
+    ggplot(aes(x = sample, y = proportion_doublets)) +
+    geom_tile()
+```
+
+### Merge PDX Tumor Cells with Patient Stromal Cells
+
+We'll merge human cells from a pdx and human stromal cells from a patient sample and merge into one object. I'll then run demuxafy on this object to see if the doublet callers call anything new a doublet. This will give an idea of how much it overcalls.
+
+```{r}
+human_pdx <- cancer_obs[["xeno_mets_human_cancer_cells"]]
+
+human_stroma <- stroma_obs[["patient_mets"]]
+
+chimera <- merge(human_pdx, human_stroma)
+# rename demuxafy result metadata columns
+chimera$original_majority <- chimera$MajoritySinglet_DropletType
+chimera <- JoinLayers(chimera) %>%
+    process_seurat()
+qs::qsave(chimera, "output/seurat_objects/human_pdx_stroma_chimera.qs")
+
+Idents(chimera) <- chimera$Ann_Level3
+# downsample to a max of 2000 cells per ann_level3
+down_chi <- subset(chimera, downsample = 2000)
+table(down_chi$Ann_Level3)
+
+chimera_counts <- GetAssayData(down_chi, layer = "counts")
+
+library(DropletUtils)
+write10xCounts(path = "DoubletFinder/pdx_clinical_chimera/",
+               x = chimera_counts)
+```
+
+#### Run Demuxafy on Chimera Object
+
+```{bash chimera-demuxafy}
+ml purge
+ml HDF5/1.10.6
+
+mkdir -p DoubletFinder/output/pdx_clinical_chimera/DoubletDetection
+singularity exec --env NUMBA_CACHE_DIR=/tmp \
+    -B DoubletFinder/pdx_clinical_chimera:/input,DoubletFinder/output/pdx_clinical_chimera/DoubletDetection/:/out,/home/gdrobertslab/mjg015/annoying_stuff:/home \
+    --no-home \
+    /home/gdrobertslab/lab/Tools/Demuxafy.sif \
+    DoubletDetection.py \
+    -i 50 \
+    -m /input \
+    -o /out \
+    -j 5
+
+mkdir DoubletFinder/output/pdx_clinical_chimera/scDblFinder
+singularity exec --env NUMBA_CACHE_DIR=/tmp \
+    -B DoubletFinder/pdx_clinical_chimera/:/input,DoubletFinder/output/pdx_clinical_chimera/scDblFinder/:/out,/home/gdrobertslab/mjg015/annoying_stuff:/home \
+    --no-home \
+    /home/gdrobertslab/lab/Tools/Demuxafy.sif \
+    scDblFinder.R \
+        -t /input \
+        -o /out
+
+mkdir DoubletFinder/output/pdx_clinical_chimera/scds
+singularity exec --env NUMBA_CACHE_DIR=/tmp \
+    -B DoubletFinder/pdx_clinical_chimera/:/input,DoubletFinder/output/pdx_clinical_chimera/scds/:/out,/home/gdrobertslab/mjg015/annoying_stuff:/home \
+    --no-home /home/gdrobertslab/lab/Tools/Demuxafy.sif \
+    scds.R \
+        -t /input \
+        -o /out
+
+mkdir DoubletFinder/output/pdx_clinical_chimera/combined
+singularity exec -B DoubletFinder/output/pdx_clinical_chimera:/out \
+    /home/gdrobertslab/lab/Tools/Demuxafy.sif \
+    Combine_Results.R \
+        -t /out/DoubletDetection/ \
+        -n /out/scDblFinder/ \
+        -c /out/scds/ \
+        -o /out/combined/combined_doublets.tsv \
+        -m "MajoritySinglet"
+
+```
+
+#### Analyze Chimera Sample + Make Figures
+
+```{r add-results-to-chimera}
+dimplot_better(chimera, group = "Ann_Level1") | dimplot_better(down_chi, group = "Ann_Level1")
+
+#read in demuxafy results
+chimera_demux <- read.table("DoubletFinder/output/pdx_clinical_chimera/combined/combined_doublets_w_combined_assignments.tsv", header = TRUE) %>%
+    column_to_rownames("Barcode") %>%
+    dplyr::select(DoubletDetection_DropletType,
+                  scDblFinder_DropletType,
+                  scds_DropletType,
+                  MajoritySinglet_DropletType)
+
+down_chi$new_demux_call <-
+    chimera_demux$MajoritySinglet_DropletType[match(colnames(down_chi),
+                                                             rownames(chimera_demux))]
+
+down_chi$old_demux_call <- down_chi$MajoritySinglet_DropletType
+qs::qsave(down_chi, "output/seurat_objects/downsampled_xeno_tumor_patient_stroma.qs")
+
+
+# confusion matrix
+pdf("output/figures/demuxafy/pdx_tumor_patient_stroma_confusion_matrix.pdf")
+conf_mat <- table(down_chi$old_demux_call, down_chi$new_demux_call)
+conf_df <- as.data.frame(conf_mat)
+colnames(conf_df) <- c("Old Call", "New Call", "Count")
+ggplot(conf_df, aes(x = `Old Call`, y = `New Call`, fill = Count)) +
+    geom_tile(color = "white") +
+    geom_label(aes(label = Count), size = 6, fill = "white")
+dev.off()
+
+# dimplot grouped by first and second call
+down_chi$comb_call <-
+    paste0("Old: ", down_chi$old_demux_call, "\n New:", down_chi$new_demux_call)
+
+pdf("output/figures/demuxafy/combined_old_new_calls.pdf")
+dimplot_better(
+    down_chi,
+    group = "comb_call"
+) +
+    NoLegend()
+dev.off()
+
+# making colored bar plot
+tmp_ob <- down_chi
+metadata <-
+        tmp_ob@meta.data %>%
+        as.data.frame() %>%
+        rownames_to_column("cell_id") %>%
+        select(
+            # DoubletDetection_DropletType,
+            #    scDblFinder_DropletType,
+            #    MajoritySinglet_DropletType,
+            #    scds_DropletType,
+                object,
+                new_demux_call,
+                old_demux_call,
+                cell_id) %>%
+        arrange(
+            # DoubletDetection_DropletType,
+            # scDblFinder_DropletType,
+            # scds_DropletType,
+            # MajoritySinglet_DropletType
+            old_demux_call,
+            new_demux_call
+        )  %>%
+        mutate(cell_id_number = row_number())
+        # rename(DoubletDetection = DoubletDetection_DropletType,
+            #    scDblFinder = scDblFinder_DropletType,
+            #    scds = scds_DropletType,
+            #    Majority = MajoritySinglet_DropletType)
+        # mutate(across(everything(), ~ifelse(. == "", "unknown", .)))
+
+matadata_mimic <-
+            metadata %>%
+            # rownames_to_column("cell_id") %>%
+            # select(cell_id, DoubletDetection, scDblFinder, scds) %>%
+            mutate(cell_id_number = row_number()) %>%
+            pivot_longer(cols = -c(cell_id, cell_id_number, object),
+                        names_to = "method",
+                        values_to = "call")
+
+doublet_cols <- c("singlet" = "#D43F3AFF", "doublet" = "#EEA236FF")
+
+pdf("output/figures/demuxafy/pdx_tumor_patient_stroma_doublet_calls.pdf")
+matadata_mimic %>%
+    mutate(
+        method = factor(method,
+        levels = c("old_demux_call", "new_demux_call")),
+        call = factor(call, levels = c("singlet", "doublet"))
+    ) %>%
+    ggplot(aes(x = method, y = cell_id_number, fill = call)) +
+    geom_tile() +
+    scale_fill_manual(values = doublet_cols) +
+    theme_minimal() +
+    theme(
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_text(size = 10, face = "bold"),
+        axis.text.y = element_blank(),
+        plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
+        panel.grid = element_blank()
+    )
+dev.off()
+```
