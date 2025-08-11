@@ -18,6 +18,25 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells")) {
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
+    group_name <- str_remove(group, "_cancer_cells")
+    cancer_label_file <-
+            str_c("output/id_tumor/",
+                  "snv_calling",
+                  "/",
+                  group_name,
+                  "_metadata.tsv")
+
+    if (file.exists(cancer_label_file)) {
+        cancer_label <-
+            readr::read_tsv(cancer_label_file) %>%
+            dplyr::filter(cell %in% colnames(object)) %>%
+            dplyr::distinct(cell, .keep_all = TRUE) %>%
+            tibble::column_to_rownames("cell")
+
+        object <-
+            object %>%
+            AddMetaData(metadata = cancer_label)
+    }
     dimplot1 <- 
         dimplot_better(object, group_by = "class") +
         NoLegend()
@@ -281,6 +300,336 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
             limitsize = FALSE,
             bg = "white")
 }
+
+
+```
+
+
+
+
+### Doubletfinder Add Results to Seurat Objects
+
+```{r overlay-demuxafy-results}
+#we'll be using the objects from final_tumor_vs_stroma
+ob_names <- 
+    c("patient_prim_cancer_cells",
+    "patient_mets_cancer_cells",
+    "mm_prim_cancer_cells",
+    "mm_mets_cancer_cells",
+    "xeno_prim_human_cancer_cells",
+    "xeno_mets_human_cancer_cells",
+    "dogs_prim_cancer_cells",
+    "dogs_mets_cancer_cells")
+
+for (ob_name in ob_names) {
+    print(paste("loading", ob_name))
+    #Read in seurat object from Yogesh's folder
+    tmp_ob <- qs::qread(
+        paste0("output/seurat_objects/final_tumor_vs_stroma/",
+        ob_name,
+        ".qs"))
+    # tmp_ob <- reconstruct_cell_types(tmp_ob)
+    #read in demuxafy results
+    path <- "/home/gdrobertslab/lab/Analysis/MattGust/projects/Roberts_Lab/Osteo_atlas/"
+    demuxafy_res <- list()
+    for (sid in unique(tmp_ob$sample_name)) {
+        print(paste("loading demuxafy results for", sid))
+        demuxafy_res[[sid]] <-
+            read.table(paste0(path, "DoubletFinder/output/",
+                              sid,
+                              "/combined/combined_doublets_w_combined_assignments.tsv"),
+                        header = TRUE) %>%
+            mutate(Barcode = paste(sid, Barcode, sep = "_")) %>%
+            column_to_rownames("Barcode")
+        if (sid %in% c("SJOS013768_X3", "SJOS063824_X1")) {
+            demuxafy_res[[sid]]$scds_DropletType <- "N/A"
+        }
+        demuxafy_res[[sid]] <- dplyr::select(demuxafy_res[[sid]],
+                                             DoubletDetection_DropletType,
+                                             scDblFinder_DropletType,
+                                             scds_DropletType,
+                                             MajoritySinglet_DropletType)
+    }
+    # Create one big dataframe w demuxafy results for current object
+    all_demux <- 
+        bind_rows(demuxafy_res) %>%
+        mutate(across(everything(), ~ifelse(is.na(.) | . == "", "unknown", .)))
+
+    #Add column saying whether or not a cell passed QC
+    all_demux$passed_qc <-
+        rownames(all_demux) %in% colnames(tmp_ob)
+
+    tmp_ob <- 
+        AddMetaData(tmp_ob,
+                    metadata = all_demux %>%
+                        mutate(across(everything(), ~ifelse(is.na(.) | . == "", "unknown", .))))
+    # Ensure DoubletDetection_DropletType is present for all cells
+    methods <- c("DoubletDetection_DropletType", "scDblFinder_DropletType", "scds_DropletType", "MajoritySinglet_DropletType")
+    for (m in methods) {
+        if (!m %in% colnames(tmp_ob@meta.data)) {
+            tmp_ob@meta.data[[m]] <- "unknown"
+        }
+        tmp_ob@meta.data[[m]][is.na(tmp_ob@meta.data[[m]]) | tmp_ob@meta.data[[m]] == ""] <- "unknown"
+    }
+    # make dimplot_list
+    doublet_cols <- c(
+        "doublet" = "#D43F3AFF",
+        "singlet" = "#EEA236FF",
+        "unknown" = "#357EBDFF",
+        "Basal_Progenitor" = "#5CB85CFF", # for Ann_Level3
+        "Fibrogenic" = "#B8B8B8FF", # for Ann_Level3
+        "Interactive" = "#9632B8FF", # for Ann_Level3
+        "MP_Progenitor" = "#46B8DAFF", # for Ann_Level3
+        "Proliferative" = "#90302DFF", # for Ann_Level3
+        "COMA" = "#A66D04FF" # for Ann_Level3
+    )
+    dimplots <- list()
+    for (names in c("Ann_Level3", "DoubletDetection_DropletType", "scDblFinder_DropletType",
+                    "scds_DropletType", "MajoritySinglet_DropletType")) {
+        dimplots[[names]] <-
+           DimPlot(tmp_ob,
+                group.by = names,
+                label.box = TRUE,
+                shuffle = TRUE,
+                repel= TRUE,
+                label = TRUE,
+                label.size = 5,
+                cols = doublet_cols) +
+        coord_fixed() +
+        theme(aspect.ratio=1) +
+        theme_void() +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        theme(panel.border = element_rect(colour = "black", fill = NA, size = 1))
+    }
+    panel <-
+        patchwork::wrap_plots(dimplots$Ann_Level3,
+                            dimplots$DoubletDetection_DropletType,
+                            dimplots$scDblFinder_DropletType,
+                            dimplots$scds_DropletType,
+                            dimplots$MajoritySinglet_DropletType,
+                            ncol = 2,
+                            widths = 14,
+                            heights = 21) +
+        patchwork::plot_annotation(title = str_c(ob_name, " DoubletFinder Results"),
+                                   theme = theme(plot.title = element_text(size = 10)))
+
+    # make tile plot
+    metadata <- 
+        tmp_ob@meta.data %>%
+        as.data.frame() %>%
+        mutate(Ann_Level3 = str_replace_all(Ann_Level3, "Stressed", "COMA")) %>%
+        rownames_to_column("cell_id") %>%
+        select(DoubletDetection_DropletType,
+               scDblFinder_DropletType,
+               MajoritySinglet_DropletType,
+               scds_DropletType,
+               cell_id,
+               Ann_Level3) %>%
+        arrange(Ann_Level3,
+                scds_DropletType,
+                DoubletDetection_DropletType,
+                scDblFinder_DropletType,
+                MajoritySinglet_DropletType)  %>%
+        mutate(cell_id_number = row_number())  %>%
+        rename(DoubDet = DoubletDetection_DropletType,
+               scDblFinder = scDblFinder_DropletType,
+               scds = scds_DropletType,
+               Majority = MajoritySinglet_DropletType) %>%
+        mutate(across(everything(), ~ifelse(. == "", "unknown", .)))
+    
+    # Create a publication-ready table using gt
+    library(gt)
+    table_data <- 
+        metadata %>%
+        group_by(Ann_Level3, Majority) %>%
+        summarise(count = n(), .groups = "drop") %>%
+        pivot_wider(names_from = Majority, values_from = count, values_fill = 0)
+    # Visualize singlet/doublet counts by cell type as a stacked bar plot
+    table_data_long <- table_data %>%
+        pivot_longer(cols = -Ann_Level3, names_to = "DropletType", values_to = "Count")
+
+    bar_plot <- 
+        ggplot(table_data_long, aes(x = Ann_Level3, y = Count, fill = DropletType)) +
+        geom_bar(stat = "identity") +
+        scale_fill_manual(values = c("singlet" = "#EEA236FF", "doublet" = "#D43F3AFF", "unknown" = "#357EBDFF")) +
+        labs(title = "Majority Singlet/Doublet Counts by Cell Type",
+             x = "Cell Type", y = "Count", fill = "Droplet Type") +
+        theme_minimal(base_size = 12) +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10, face = "bold"),
+            plot.title = element_text(hjust = 0.5, face = "bold"),
+            panel.grid = element_blank())
+
+    if (!dir.exists("output/id_tumor/metadata/doubletfinder/")) {
+        dir.create("output/id_tumor/metadata/doubletfinder", recursive = TRUE)
+    }
+    write_tsv(matadata_mimic,
+              str_c("output/id_tumor/metadata/doubletfinder/",
+                    ob_name, "_calling.tsv"))
+                
+    # make a tile plot to show the tumor calling by methods
+    matadata_mimic <-
+        metadata %>%
+        select(cell_id, DoubDet, scDblFinder, scds, Majority, Ann_Level3) %>%
+        mutate(cell_id_number = row_number()) %>%
+        pivot_longer(cols = -c(cell_id, cell_id_number),
+                    names_to = "method",
+                    values_to = "call")
+    tile_plot <-
+        ggplot(matadata_mimic %>%
+            mutate(method = factor(method,
+            levels = unique(matadata_mimic$method)),
+            call = factor(call, levels = unique(matadata_mimic$call))),
+            aes(x = method, y = cell_id_number, fill = call)) +
+        geom_tile() +
+        scale_fill_manual(values = doublet_cols) +
+        theme_minimal() +
+        theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.x = element_text(size = 10, face = "bold"),
+            axis.text.y = element_blank(),
+            plot.title = element_text(hjust = 0.5, size = 10, face = "bold"),
+            panel.grid = element_blank())
+    # Save the tile plot and bar plot
+    tile_and_bar <-
+        patchwork::wrap_plots(tile_plot, bar_plot, ncol = 2, widths = c(2, 1)) +
+        patchwork::plot_annotation(title = str_c(ob_name, " tumor DoubletFinder Results"),
+                    theme = theme(plot.title = element_text(hjust = 0.5)))
+
+    if (!dir.exists("output/figures/Final_Annotations/results2/doubletfinder/")) {
+        dir.create("output/figures/Final_Annotations/results2/doubletfinder", recursive = TRUE)
+    }
+    ggsave(str_c("output/figures/Final_Annotations/results2/doubletfinder/",
+                ob_name, "_tile_plot.pdf"),
+            plot = tile_and_bar,
+            width = 10,
+            height = 5,
+            bg = "white")
+
+    ggsave(str_c("output/figures/Final_Annotations/results2/doubletfinder/",
+                ob_name, "_panel_plot.pdf"),
+            plot = panel,
+            width = 14,
+            height = 14,
+            bg = "white")
+    ggsave(str_c("output/figures/Final_Annotations/results2/doubletfinder/",
+                ob_name, "_panel_plot.png"),
+            plot = panel,
+            width = 14,
+            height = 14,
+            bg = "white")
+}
+
+
+# make the discordance stats plots
+
+library(irr)
+files <- list.files("output/id_tumor/metadata/doubletfinder/", pattern = "*calling.tsv")
+
+calls <- lapply(files, function(f) {
+    df <- read.table(file.path("output/id_tumor/metadata/doubletfinder/", f), 
+        header = TRUE
+        ) %>%
+        select(-cell_id) %>%
+        pivot_wider(
+            id_cols = cell_id_number, 
+            names_from = method, 
+            values_from = call
+            ) 
+    return(df)   
+})
+
+names(calls) <- sub("_calling.tsv", "", files)
+
+for(i in seq_along(calls)) {
+    df <- calls[[i]]
+    print(paste("Performing Interrater Reliability Analysis on", names(calls)[i]))
+    print("Agreement - DoubletDetection vs scDblFinder")
+    results <- agree(df[, c("DoubletDetection", "scDblFinder")])
+    print(results)
+    print("Agreement - scDblFinder vs scds")
+    results <- agree(df[, c("scDblFinder", "scds")])
+    print(results)
+    print("Agreement - DoubletDetection vs scds")
+    results <- agree(df[, c("DoubletDetection", "scds")])
+    print(results)
+    print("Interrater Reliability - Fleiss Kappa")
+    results <- kappam.fleiss(df[, c("DoubletDetection", "scDblFinder", "scds")])
+    print(results)
+}
+
+
+# Store results for plotting
+
+for(i in seq_along(calls)) {
+    plot_data <- tibble()
+    df <- calls[[i]]
+    group <- names(calls)[i]
+    # Agreement - DoubletDetection vs scDblFinder
+    results1 <- 
+        agree(df[, c("DoubletDetection", "scDblFinder")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                 tibble(group = group,
+                        comparison = "DoubletDetection vs scDblFinder",
+                        percent_agreement = results1$value))
+    # Agreement - scDblFinder vs scds
+    results2 <- 
+        agree(df[, c("scDblFinder", "scds")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                 tibble(group = group,
+                        comparison = "scDblFinder vs scds",
+                        percent_agreement = results2$value))
+    # Agreement - DoubletDetection vs scds
+    results3 <- 
+        agree(df[, c("DoubletDetection", "scds")])
+    plot_data <- 
+        bind_rows(plot_data, 
+                tibble(group = group,
+                        comparison = "DoubletDetection vs scds",
+                        percent_agreement = results3$value))
+    # concordance plot
+    concordance <-
+        ggplot(plot_data, 
+            aes(x = group, y = percent_agreement, fill = comparison)) +
+        geom_bar(stat = "identity", position = position_dodge()) +
+        geom_text(aes(label = round(percent_agreement, 2)), 
+              position = position_dodge(width = 0.9), 
+              vjust = -0.5, size = 3) +
+        labs(title = "Interrater Reliability Analysis",
+            y = "Agreement / Kappa Value",
+            x = "Group") +
+        theme_minimal() +
+        scale_fill_brewer(palette = "Set2") +
+        theme(panel.grid = element_blank(),
+              plot.margin = margin(0, 0, 0, 0, "cm"),
+              axis.line = element_line(),
+              axis.ticks.length = unit(0.25, "cm"),
+              axis.ticks = element_line(),
+              axis.text.x = element_text(margin = margin(t = 0)),
+              axis.text.y = element_text(margin = margin(r = 0)))
+    # Fleiss Kappa
+    results4 <- 
+        kappam.fleiss(df[, c("DoubletDetection", "scDblFinder", "scds")])
+    kappa_value <- results4$value
+    final_plot <- 
+        concordance +
+        labs( title = paste(
+            "Interrater Reliability Analysis\nFleiss Kappa:",
+            round(kappa_value, 2)),
+            y = "Agreement / Kappa Value",
+            x = "Group")
+    ggsave(str_c("output/figures/Final_Annotations/results2/doubletfinder/",
+                group, "_concordance_plot.pdf"),
+            plot = final_plot,
+            width = 5,
+            height = 4,
+            bg = "white")
+}
+
+
+
+
 
 
 ```

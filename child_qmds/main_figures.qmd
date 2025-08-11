@@ -1,6 +1,156 @@
 
 In this qmd, i will just make the main result figures and stash_plot save them
+```{r dimplots_all_the_metadata}
 
+for (group in c("patient_prim", "patient_mets",
+                 "xeno_prim_human_cancer_cells","xeno_mets_human_cancer_cells",
+                 "xeno_prim_mouse", "xeno_mets_mouse",
+                 "mm_prim", "mm_mets",
+                 "dogs_prim", "dogs_mets")) {
+    
+    merged_sobj <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    after_harmony_dimplots <- list()
+    for (i in c("seurat_clusters", "method", "sample_name", "data_source")) {
+        after_harmony_dimplots[[i]] <-
+            dimplot_better(merged_sobj,
+                        group_by = i) +
+                NoLegend() +
+                theme(plot.title = element_text(size = 15))
+    }
+
+    post_harmony_dimplots <- 
+        patchwork::wrap_plots(after_harmony_dimplots$seurat_clusters,
+                                after_harmony_dimplots$method,
+                                after_harmony_dimplots$sample_name,
+                                after_harmony_dimplots$data_source,
+                                ncol = 2,
+                                widths = 14,
+                                heights = 14) +
+        patchwork::plot_annotation(title = str_c(group, " post harmony dimplots")) +
+        theme(plot.title = element_text(size = 15)) &
+        theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 1))
+
+    directory <- 
+        str_c("output/figures/combined_plots/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+    #save the combined plots
+    ggsave(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "postHarmony_combined_plots.png"),
+           plot = post_harmony_dimplots,
+           width = 14,
+           height = 14)
+    ggsave(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "postHarmony_combined_plots.pdf"),
+           plot = post_harmony_dimplots,
+           width = 14,
+           height = 14)
+}
+
+cols <-
+    list("Tumor" = "#D43F3AFF",
+        "Normal" = "#EEA236FF",
+        "Unknown" = "#357EBDFF",
+        "Host" = "#EEA236FF")
+
+for (group in c("patient_prim", "patient_mets",
+               "mm_prim", "mm_mets",
+               "dogs_prim", "dogs_mets")) {
+    
+    merged_sobj <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    merged_sobj$scATOMIC <-
+        merged_sobj$scatomic_tumor_call %>%
+            str_replace_all(c("normal_cells" = "Normal",
+                              "cancer_cells" = "Tumor",
+                              "Host" = "Normal")) %>%
+            replace_na("Unknown")
+    merged_sobj$SCEVAN <-
+        merged_sobj$scevan_tumor_call %>%
+            str_replace_all(c("normal_cells" = "Normal",
+                              "cancer_cells" = "Tumor",
+                              "Host" = "Normal")) %>%
+            replace_na("Unknown")
+    merged_sobj$CopyKAT <-
+        merged_sobj$CNV_status %>%
+            str_replace_all(c("aneuploid" = "Tumor",
+                            "diploid" = "Normal")) %>%
+            replace_na("Unknown")
+    merged_sobj$AtlasCall <-
+        str_replace_all(merged_sobj$celltype_tumor_call,
+                        c("normal_cells" = "Normal",
+                          "cancer_cells" = "Tumor"))%>%
+            replace_na("Unknown")
+    merged_sobj$ScanBit <-
+        str_replace_all(merged_sobj$final_snv_call,
+                        c("normal_cells" = "Normal",
+                          "cancer_cells" = "Tumor",
+                          "unknown" = "Unknown"))%>%
+            replace_na("Unknown")
+
+    tumor_panel_plots <- list()
+    for (i in c("CopyKAT", "SCEVAN", "scATOMIC", "ScanBit", "AtlasCall")) {
+        tumor_panel_plots[[i]] <-
+            DimPlot(merged_sobj,
+                        group.by = i,
+                        label.box = T,
+                        label = T,
+                        repel = T,
+                        cols = unlist(cols),
+                        raster = F,
+                        label.size = 5) +
+                coord_fixed() +
+                NoLegend() +
+                theme(aspect.ratio=1) +
+                theme_void()+
+                theme(plot.title = element_text(size = 15, hjust = 0.5))
+    }
+    tumor_panels <- 
+        patchwork::wrap_plots(tumor_panel_plots$CopyKAT,
+                                tumor_panel_plots$SCEVAN,
+                                tumor_panel_plots$scATOMIC,
+                                tumor_panel_plots$ScanBit,
+                                tumor_panel_plots$AtlasCall,
+                                ncol = 2,
+                                widths = 14,
+                                heights = 21) +
+        patchwork::plot_annotation(title = str_c(group, " post harmony dimplots")) +
+        theme(plot.title = element_text(size = 15)) &
+        theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 1))
+
+    directory <- 
+        str_c("output/figures/combined_plots/", group)
+    if (!dir.exists(directory)) {
+        dir.create(directory, recursive = TRUE)
+    }
+    #save the combined plots
+    ggsave(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "tumor_id_plots.png"),
+           plot = tumor_panels,
+           width = 14,
+           height = 21)
+    ggsave(str_c("output/figures/combined_plots/",
+                 group,
+                 "/",
+                 "tumor_id_plots.pdf"),
+           plot = tumor_panels,
+           width = 14,
+           height = 21)
+}
+
+```
 ## Result 1 figures
 ```{r, figure_cancer_panel, echo = FALSE}
 # load the cancer final object
@@ -20,6 +170,7 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
                 
     cell_count <-
         object$Ann_Level3 %>%
+        str_replace_all("Stressed", "COMA") %>%
         table() %>%
         as.data.frame() %>%
         arrange(desc(Freq)) %>%
@@ -85,7 +236,8 @@ celltypes <-
     unique(cancer_sobj_list$dogs_prim_cancer_cells$Ann_Level2),
     unique(cancer_sobj_list$dogs_mets_cancer_cells$Ann_Level2)) %>%
     unique() %>%
-    str_replace("_", " ")
+    str_replace("_", " ") %>%
+    str_replace("Stressed", "COMA")
 cols <- c(plot_cols, sample(rainbow(length(celltypes))))
 
 names(cols) <- celltypes
@@ -120,6 +272,7 @@ for (group in c(
                         ".qs"))
     object$plot_labels <-
         object$Ann_Level3 %>%
+        str_replace_all("Stressed", "COMA") %>%
         as.character() %>%
         gsub("_", " ", .) # for plotting
     
@@ -146,7 +299,7 @@ for (group in c(
                     theme(x = NULL,
                             y = NULL,
                             plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
-                        axis.text.x = element_text(angle = 45, hjust = 1, face = "bold"),
+                        axis.text.x = element_text(angle = 45, hjust = 1),
                         axis.title.x = element_text(face = "bold"),
                         axis.title.y = element_text(face = "bold"),
                         axis.text.y = element_blank(),
@@ -277,6 +430,9 @@ cancer_bar_plot_panel <-
                         barplot_list$mm_mets_cancer_cells,
                         ncol = 2) +
         patchwork::plot_annotation(title = "Cell Count per Sample")
+mets <-
+    barplot_list$patient_mets_cancer_cells
+
 
 ggsave(filename = "output/figures/Final_Annotations/tumor_cell_count_barplot.pdf",
         plot = cancer_bar_plot_panel,

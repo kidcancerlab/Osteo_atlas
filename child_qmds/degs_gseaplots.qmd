@@ -1194,6 +1194,11 @@ for (comb_group in c(
         qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
                         comb_group,
                         ".qs"))
+    # Downsample up to 100000 cells if needed
+    if (ncol(object) > 100000) {
+        set.seed(12345)
+        object <- subset(object, cells = sample(colnames(object), 100000))
+    }
 
     resolution_range <- seq(from = 0, to = 1, by = 0.05)
     clustree_sobj <- 
