@@ -39,13 +39,13 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells")) {
     }
     dimplot1 <- 
         dimplot_better(object, group_by = "class") +
-        NoLegend()
+        NoLegend() 
     dimplot2 <-
         dimplot_better(object, group_by = "CNV_status") +
-        NoLegend()
+        NoLegend()+  ggtitle("CopyKAT")
     dimplot3 <-
         dimplot_better(object, group_by = "final_snv_call") +
-        NoLegend()
+        NoLegend() 
     dimplot4 <-
         dimplot_better(object, group_by = "scevan_tumor_call") +
         NoLegend()
@@ -69,7 +69,7 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells")) {
         NoLegend()
 
     all_tumor_dimplots <- 
-        patchwork::wrap_plots(dimplot1, dimplot2, dimplot3,
+        patchwork::wrap_plots(dimplot2, dimplot3,
                             dimplot4, dimplot5, dimplot6,
                             dimplot7, dimplot8, dimplot9,
                             dimplot10,
@@ -100,9 +100,28 @@ In this section, we will take the interactive tumor cells and mix them with the 
 ```{r mix_tams_and_tumor, echo=FALSE, message=FALSE, warning=FALSE}
 
 dimplot_group <-
-    c("Ann_Level3", "celltype_tumor_call", "final_snv_call",
-      "scevan_tumor_call", "scatomic_tumor_call", "CNV_status",
-      "class", "new_annot_clust", "sample_name", "data_source", "method")
+    c("Ann_Level3", "AtlasCall", "scATOMIC",
+      "SCEVAN", "CopyKAT", "ScanBit")
+
+plot_colors <- 
+    list(Tumor = "#D43F3AFF",
+         Normal = "#EEA236FF",
+         Unknown = "#357EBDFF",
+         unknown = "#357EBDFF",
+         Osteoclast_TAMs = "#5CB85CFF", 
+         Scar_TAMs = "#B8B8B8FF", 
+         Fibrogenic_TAMs = "#9632B8FF", 
+         TAMs = "#46B8DAFF",           
+         Inflam_TAMs = "#90302DFF",     
+         Prolif_TAMs = "#A66D04FF",     
+         IFN_TAMs = "#2D577FFF",        
+         Interactive = "#3E7E3EFF",
+         COMA = "#7D7D7DFF", 
+         Basal_Progenitor = "#6D1D87FF", 
+         MP_Progenitor = "#097F9AFF", 
+         Proliferative = "#FF6E6AFF", 
+         Fibrogenic = "#FFBB70FF")
+
 
 # grab the tumor and TAMs
 for (group in c("patient_prim", "patient_mets")) {
@@ -110,10 +129,29 @@ for (group in c("patient_prim", "patient_mets")) {
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
+    object$scATOMIC <-
+        ifelse(grepl("Cancer Cell$", object$scATOMIC_pred),
+                "Tumor",
+                "Normal")
+    object$SCEVAN <-
+        ifelse(object$scevan_tumor_call == "cancer_cells",
+                "Tumor",
+                "Normal")
+    object$CopyKAT <-
+        ifelse(is.na(object$CNV_status), "Unknown",
+            ifelse(object$CNV_status == "aneuploid", "Tumor", "Normal"))
+    object$ScanBit <-
+        ifelse(object$final_snv_call == "cancer_cells",
+                "Tumor",
+                "Normal")
+    object$AtlasCall <-
+        ifelse(object$celltype_tumor_call == "cancer_cells",
+                "Tumor",
+                "Normal")
 
     #just interactive and TAMs
     interactive_TAMs <-
-        subset(object, subset = (Ann_Level3 == "Tumor_Interactive" | Ann_Level2 == "TAMs"))
+        subset(object, subset = (Ann_Level3 == "Interactive" | Ann_Level2 == "TAMs"))
 
     int_TAMs_reprocess <-
         interactive_TAMs %>%
@@ -125,8 +163,19 @@ for (group in c("patient_prim", "patient_mets")) {
     dimplot_list_int_tams <- list()
     for (names in dimplot_group) {
         dimplot_list_int_tams[[names]] <-
-            dimplot_better(int_TAMs_reprocess, group_by = names) +
-            NoLegend()
+            DimPlot(int_TAMs_reprocess,
+                group.by = names,
+                label.box = TRUE,
+                shuffle = TRUE,
+                repel= TRUE,
+                label = TRUE,
+                cols = unlist(plot_colors),
+                label.size = 5) +
+            coord_fixed() +
+            theme(aspect.ratio=1) +
+            theme_void() +
+            theme(plot.title = element_text(hjust = 0.5)) +
+            theme(panel.border = element_rect(colour = "black", fill = NA, size = 1))
     }
     just_interactive_and_TAMs_dotplot <-
         DotPlot(int_TAMs_reprocess,
@@ -145,22 +194,16 @@ for (group in c("patient_prim", "patient_mets")) {
             height = 6,
             limitsize = FALSE,
             bg = "white")
-
     macs_int_tams_dimplots <-
         patchwork::wrap_plots(dimplot_list_int_tams$Ann_Level3,
-                             dimplot_list_int_tams$class,
-                             dimplot_list_int_tams$celltype_tumor_call,
-                             dimplot_list_int_tams$new_annot_clust,
-                             dimplot_list_int_tams$final_snv_call,
-                             dimplot_list_int_tams$sample_name,
-                             dimplot_list_int_tams$scevan_tumor_call,
-                             dimplot_list_int_tams$data_source,
-                             dimplot_list_int_tams$scatomic_tumor_call,
-                             dimplot_list_int_tams$method,
-                             dimplot_list_int_tams$CNV_status,
+                             dimplot_list_int_tams$AtlasCall,
+                             dimplot_list_int_tams$scATOMIC,
+                             dimplot_list_int_tams$SCEVAN,
+                             dimplot_list_int_tams$CopyKAT,
+                             dimplot_list_int_tams$ScanBit,
                             ncol = 2,
                             widths = 14,
-                            heights = 42) +
+                            heights = 21) +
         patchwork::plot_annotation(title = group,
                                    theme = theme(plot.title = element_text(size = 10)))
 
@@ -170,7 +213,7 @@ for (group in c("patient_prim", "patient_mets")) {
                 "just_interactive_and_TAMs.png"),
             plot = macs_int_tams_dimplots,
             width = 14,
-            height = 42,
+            height = 21,
             limitsize = FALSE,
             bg = "white")
 
@@ -189,52 +232,73 @@ for (group in c("patient_prim", "patient_mets")) {
         DimPlot(Tumor_TAMs_reprocess,
                 raster = F,
                 cells.highlight = subset(Tumor_TAMs_reprocess,
-                                         Ann_Level3 == "Tumor_Interactive") %>%
+                                         Ann_Level3 == "Interactive") %>%
                                          colnames()) +
         NoLegend()
 
     dimplot_list <- list()  
     for (names in dimplot_group) {
-        dimplot_list[[names]] <-
-            dimplot_better(Tumor_TAMs_reprocess, group_by = names) +
-            NoLegend()
+         dimplot_list[[names]] <-
+            DimPlot(Tumor_TAMs_reprocess,
+                    group.by = names,
+                    label.box = TRUE,
+                    cols = unlist(plot_colors),
+                    shuffle = TRUE,
+                    raster = FALSE,
+                    repel= TRUE,
+                    label = TRUE,
+                    label.size = 5) +
+                coord_fixed() +
+                theme(aspect.ratio=1) +
+                theme_void() +
+                theme(plot.title = element_text(hjust = 0.5)) +
+                theme(panel.border = element_rect(colour = "black", fill = NA, size = 1))
     }
 
     all_tumor_tams_dotplot <-
-        DotPlot(Tumor_TAMs_reprocess,
+        DotPlot(Tumor_TAMs,
             group.by = "Ann_Level3",
             cols = "RdBu",
             scale = F,
             features = c("CD74", "CD14", "CD68", "MSR1", "MRC1",
-                            "CD163", "COL1A1", "COL1A2", "RUNX2")) +
-        theme(axis.text.x = element_text(angle = 90, hjust = 1))
+                    "CD163", "COL1A1", "COL1A2", "RUNX2")) +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+        scale_y_discrete(limits = c(
+            "Osteoclast_TAMs", "Scar_TAMs", "TAMs", "Inflam_TAMs", 
+           "Prolif_TAMs", "IFN_TAMs","Fibrogenic_TAMs",  "Interactive",
+            "COMA", "Basal_Progenitor", "MP_Progenitor", "Proliferative", "Fibrogenic"
+        ))
 
     ggsave(str_c("output/figures/interactive_dissecting/",
                 group, "_cancer_cells",
                 "/",
                 "all_tumor_tams_dotplot.png"),
             plot = all_tumor_tams_dotplot,
-            width = 10,
-            height = 10,
+            width = 6,
+            height = 5,
             limitsize = FALSE,
             bg = "white")
+    ggsave(str_c("output/figures/interactive_dissecting/",
+                group, "_cancer_cells",
+                "/",
+                "all_tumor_tams_dotplot.pdf"),
+            plot = all_tumor_tams_dotplot,
+            width = 6,
+            height = 5,
+            limitsize = FALSE,
+            bg = "white")
+    
 
     macs_tumor_dimplots <-
-        patchwork::wrap_plots(dimplot1,
-                             dimplot_list$Ann_Level3,
-                             dimplot_list$class,
-                             dimplot_list$celltype_tumor_call,
-                             dimplot_list$new_annot_clust,
-                             dimplot_list$final_snv_call,
-                             dimplot_list$sample_name,
-                             dimplot_list$scevan_tumor_call,
-                             dimplot_list$data_source,
-                             dimplot_list$scatomic_tumor_call,
-                             dimplot_list$method,
-                             dimplot_list$CNV_status,
+        patchwork::wrap_plots(dimplot_list$Ann_Level3,
+                             dimplot_list$AtlasCall,
+                             dimplot_list$scATOMIC,
+                             dimplot_list$SCEVAN,
+                             dimplot_list$CopyKAT,
+                             dimplot_list$ScanBit,
                             ncol = 2,
                             widths = 14,
-                            heights = 49) +
+                            heights = 21) +
         patchwork::plot_annotation(title = group,
                                    theme = theme(plot.title = element_text(size = 10)))
     
@@ -244,7 +308,7 @@ for (group in c("patient_prim", "patient_mets")) {
                 "all_tumor_TAMs.png"),
             plot = macs_tumor_dimplots,
             width = 14,
-            height = 49,
+            height = 21,
             limitsize = FALSE,
             bg = "white")
 }
@@ -259,7 +323,7 @@ In this section, we will take the interactive tumor cells and mix them with the 
 
 
 for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
-                "xeno_prim_human", "xeno_mets_human")) {
+                "xeno_prim_human_cancer_cells", "xeno_mets_human_cancer_cells")) {
     object <- 
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,

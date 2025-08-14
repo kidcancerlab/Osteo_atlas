@@ -716,27 +716,53 @@ names(cols) <-
 ```
 
 
-
+## Make stromal panel for celltype composition
 ```{r make_plots_stackbars}
 
 #plots for stromal panel
 cols <- list(
-    `B cells` = "#D43F3AFF",
-    CAFs = "#EEA236FF",
-    DC = "#357EBDFF",
-    `Endothelial cells` = "#5CB85CFF",
-    `Epithelial cells` = "#B8B8B8FF",
-    Mast = "#9632B8FF",
-    Monocytes = "#46B8DAFF",
-    Neutrophils = "#90302DFF",
-    `NK cells` = "#A66D04FF",
-    Pericytes = "#2D577FFF",
-    `Smooth muscle` = "#3E7E3EFF",
-    `T cells` = "#7D7D7DFF",
-    TAMs = "#6D1D87FF"
-)
+    "Tumor" = "#D43F3AFF",
+    "Normal" = "#EEA236FF",
+    "Unknown" = "#357EBDFF",
+    "Host" = "#EEA236FF",
+    "CAFs" = "#5CB85CFF",
+    "Osteoblasts" = "#B8B8B8FF",
+    "Pericytes" = "#9632B8FF",
+    "Neuronal" = "#46B8DAFF",
+    "Chondrocytes" = "#90302DFF",
+    "T cells" = "#A66D04FF",
+    "B cells" = "#2D577FFF",
+    "NK cells" = "#3E7E3EFF",
+    "TAMs" = "#7D7D7DFF",
+    "DC" = "#6D1D87FF",
+    "Mast" = "#097F9AFF",
+    "Monocytes" = "#FF6E6AFF",
+    "Endothelial cells" = "#FFBB70FF",
+    "MP Progenitor" = "#68A4E3FF",
+    "Fibrogenic" = "#79D379FF",
+    "Basal Progenitor" = "#CDCDCDFF",
+    "Proliferative" = "#BF6BE2FF",
+    "Interactive" = "#69D1F3FF",
+    "COMA" = "#DB00FF",
+    "Fibroblasts" = "#00B3FF",
+    "Alv Macrophages" = "#00FFD1",
+    "Epithelial cells" = "#0029FF",
+    "Neutrophils" = "#FF00D6",
+    "Smooth muscle" = "#00FF47",
+    "Erythrocytes" = "#00FFE0",
+    "MSC" = "#FFE500",
+    "Muscle cells" = "#00D1FF",
+    "ILCs" = "#FF7A00",
+    "Basal" = "#FFB300",
+    "Progenitor" = "#0099FF",
+    "Epithelial_Endothelial" = "#EEA236FF",
+    "Immune_Lymphoid" = "#357EBDFF",
+    "Immune_Myeloid" = "#5CB85CFF",
+    "Mesenchymal" = "#B8B8B8FF") 
 
-dimplot_list <- list()
+
+dimplot_list1 <- list()
+dimplot_list2 <- list()
 barplot_list <- list()
 
 # vector for data source colors
@@ -760,11 +786,47 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
+    # create a plot_labels column for ann_level1
+    dimplot_list1[[group]] <-
+        DimPlot(object,
+                group.by = "Ann_Level1",
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = unlist(cols),
+                raster = F,
+                label.size = 5) +
+        coord_fixed() +
+        theme_void() +
+        NoLegend() +
+        ggtitle(title_replacement[group][1]) +
+        theme(aspect.ratio=1)+
+        theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) +
+        theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 1)) 
+
     object$plot_labels <-
         object$Ann_Level2 %>%
         as.character() %>%
         gsub("_", " ", .) # for plotting, replace underscores with spaces
 
+    dimplot_list2[[group]] <-
+        DimPlot(object,
+                group.by = "plot_labels", # Use the plot_labels for better aesthetics
+                label.box = T,
+                label = T,
+                repel = T,
+                cols = unlist(cols),
+                raster = F,
+                label.size = 5) +
+        coord_fixed() +
+        theme_void() +
+        NoLegend() +
+        ggtitle(title_replacement[group][1]) +
+        theme(aspect.ratio=1)+ 
+        theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) +
+        theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 1))
+    
+    # Create a dimplot for the stromal cells
     cells_present <- 
         c(unique(object$plot_labels))
 
@@ -866,13 +928,54 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
     barplot_list[[group]] <- bar_plot
 }
 
-stromal_panel_plot <-
-    patchwork::wrap_plots(plotlist = dimplot_list,
-            ncol = 2) +
-        patchwork::plot_annotation(title = "Stromal cell types Ann_Level2")
+stromal_panel_plot1 <-
+    patchwork::wrap_plots(plotlist = dimplot_list1$patient_prim_normal_cells,
+                                     dimplot_list1$patient_mets_normal_cells,        
+                                     dimplot_list1$xeno_prim_mouse,
+                                     dimplot_list1$xeno_mets_mouse,
+                                     dimplot_list1$dogs_prim_normal_cells,
+                                     dimplot_list1$dogs_mets_normal_cells,
+                                    dimplot_list1$mm_prim_normal_cells,
+                                    dimplot_list1$mm_mets_normal_cells,
+                            ncol = 2) +
+    patchwork::plot_annotation(title = "Stromal cell types Ann_Level1")
 
-ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
-        plot = stromal_panel_plot,
+ggsave(filename = "output/figures/Final_Annotations/Ann1_stromal_panel_plots.png",
+        plot = stromal_panel_plot1,
+        width = 14,
+        height = 28,
+        limitsize = FALSE,
+        bg = "white")
+
+ggsave(filename = "output/figures/Final_Annotations/Ann1_stromal_panel_plots.pdf",
+        plot = stromal_panel_plot1,
+        width = 14,
+        height = 28,
+        limitsize = FALSE,
+        bg = "white")
+
+
+stromal_panel_plot2 <-
+    patchwork::wrap_plots(plotlist = dimplot_list2$patient_prim_normal_cells,
+                                     dimplot_list2$patient_mets_normal_cells,        
+                                     dimplot_list2$xeno_prim_mouse,
+                                     dimplot_list2$xeno_mets_mouse,
+                                     dimplot_list2$dogs_prim_normal_cells,
+                                     dimplot_list2$dogs_mets_normal_cells,
+                                     dimplot_list2$mm_prim_normal_cells,
+                                     dimplot_list2$mm_mets_normal_cells,
+                          ncol = 2) +
+    patchwork::plot_annotation(title = "Stromal cell types Ann_Level2")
+
+ggsave(filename = "output/figures/Final_Annotations/Ann2_stromal_panel_plots.png",
+        plot = stromal_panel_plot2,
+        width = 14,
+        height = 28,
+        limitsize = FALSE,
+        bg = "white")
+
+ggsave(filename = "output/figures/Final_Annotations/Ann2_stromal_panel_plots.pdf",
+        plot = stromal_panel_plot2,
         width = 14,
         height = 28,
         limitsize = FALSE,
@@ -881,22 +984,28 @@ ggsave(filename = "output/figures/Final_Annotations/stromal_panel_plots.png",
 stromal_cell_count_barplot <-
     patchwork::wrap_plots(barplot_list$patient_prim_normal_cells,
                         barplot_list$patient_mets_normal_cells,
-                        barplot_list$mm_prim_normal_cells,
-                        barplot_list$mm_mets_normal_cells,
                         barplot_list$xeno_prim_mouse,
                         barplot_list$xeno_mets_mouse,
                         barplot_list$dogs_prim_normal_cells,
                         barplot_list$dogs_mets_normal_cells,
+                        barplot_list$mm_prim_normal_cells,
+                        barplot_list$mm_mets_normal_cells,
                         ncol = 2) +
         patchwork::plot_annotation(title = "Cell Count per Sample for Stromal Cell Types")
 
 ggsave(filename = "output/figures/Final_Annotations/stromal_cell_count_barplot.png",
         plot = stromal_cell_count_barplot,
-        width = 14, # Adjust width for better visibility
-        height = 28,
+        width = 20, # Adjust width for better visibility
+        height = 30,
         limitsize = FALSE,
         bg = "white")
 
+ggsave(filename = "output/figures/Final_Annotations/stromal_cell_count_barplot.pdf",
+        plot = stromal_cell_count_barplot,
+        width = 20, # Adjust width for better visibility
+        height = 30,
+        limitsize = FALSE,
+        bg = "white")
 
 
 ```
