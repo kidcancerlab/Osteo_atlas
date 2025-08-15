@@ -14,7 +14,7 @@ run_rctd <- function(sp_ob, ref) {
     rctd_obj <- spacexr::create.RCTD(
         my_data,
         ref,
-        max_cores = 1,
+        max_cores = 4,
         UMI_min = 3,
         counts_MIN = 0,
         UMI_max = 900000000,
@@ -27,18 +27,8 @@ run_rctd <- function(sp_ob, ref) {
     return(rctd_out)
 }
 
-size.factors <- list("OS1_Seurat" = 1500,
-                     "OS2_Seurat" = 1400,
-                     "OS3_Seurat" = 2700,
-                     "OS4_Seurat" = 1700,
-                     "OS5_Seurat" = 650,
-                     "OS6_Seurat" = 3000,
-                     "OS7_Seurat" = 2500,
-                     "OS8_Seurat" = 1300)
-
-
 #!/usr/bin/env Rscript
-args = commandArgs(trailingOnly = TRUE)
+args <- commandArgs(trailingOnly = TRUE)
 ob_name <- args[1]
 ref_name <- args[2]
 
@@ -67,97 +57,3 @@ qs::qsave(
         ".qs"
     )
 )
-# rctd_res <- qs::qread(
-#     paste0(
-#         "output/spacexr/granular_references/",
-#         ref_name,
-#         "/",
-#         ob_name,
-#         ".qs"
-#     )
-# )
-
-# # add results to object for plotting
-# norm_weights <- spacexr::normalize_weights(rctd_res@results$weights)
-# sp_ob <- AddMetaData(sp_ob, norm_weights)
-# sp_ob$COMA <- sp_ob$Stressed
-
-
-# # get cell types from reference object
-# cell_types <- unique(ref@cell_types) %>%
-#     as.character()
-# # replace Stressed with COMA
-# scell_types <- sort(c(cell_types[cell_types != "Stressed"], "COMA"))
-
-# # get matrix of deconvolution scores
-# ann_mat <- sp_ob@meta.data[ , cell_types]
-
-# # plot heatmap of deconvolution score correlation between all cell types
-# pdf(
-#     paste0(
-#         "output/figures/spatial/spacexr/granular_",
-#         ref_name,
-#         "/",
-#         ob_name,
-#         "_heatmap.pdf"
-#     ),
-#     width = 10,
-#     height = 8
-# )
-# pheatmap::pheatmap(
-#     cor(ann_mat, method = "spearman"),
-#     scale = "none",
-#     low = "blue",
-#     high = "red",
-#     mid = "white",
-#     midpoint = 0,
-#     angle_col = 45,
-#     fontsize = 14)
-# dev.off()
-
-# # make pdf of all rctd scores w h&e and cumulative tumor score at the start
-# sp_ob$Tumor_Cumulative <-
-#     sp_ob$Basal_Progenitor +
-#     sp_ob$Fibrogenic +
-#     sp_ob$Interactive +
-#     sp_ob$MP_Progenitor +
-#     sp_ob$Proliferative +
-#     sp_ob$Stressed
-# pdf(
-#     paste0("output/figures/spatial/spacexr/granular_",
-#     ref_name,
-#     "/",
-#     ob_name,
-#     "_scores.pdf"),
-#     height = 4,
-#     width = 4
-# )
-# # H&E first
-# print(
-#     SpatialDimPlot(
-#         sp_ob,
-#         pt.size.factor = 0) + NoLegend()
-# )
-
-# # Now Tumor Cumulative
-# print(
-#     SpatialFeaturePlot(
-#         sp_ob,
-#         features = "Tumor_Cumulative",
-#         pt.size.factor = size.factors[[ob_name]],
-#         image.alpha = 0
-#     )
-# )
-
-# # now all cell type scores
-# for (ct in cell_types) {
-#     print(
-#         SpatialFeaturePlot(
-#             sp_ob,
-#             features = ct,
-#             pt.size.factor = size.factors[[ob_name]],
-#             image.alpha = 0
-#         )
-#     )
-# }
-# dev.off()
