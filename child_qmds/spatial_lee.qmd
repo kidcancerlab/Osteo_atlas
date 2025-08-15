@@ -1,38 +1,128 @@
-
-##
+## Calculate Lee's statistic
 ```{r spatialee_calc_lee}
 cell_types <-
     qs::qread("output/spacexr/granular_references/cell_groups.qs") %>%
     unlist() %>%
     as.vector()
 
+# We'll add the output to this table
 cell_combos <-
-    combn(cell_types, 2, simplify = FALSE)
+    combn(cell_types, 2, simplify = TRUE) %>%
+    t() %>%
+    as.data.frame()
 
-spatial_list <-
-    qs::qread("output/spatial_objects/spatial_list_level3_annotations.qs")
+nrow(cell_combos)
 
-for (this_data in names(spatial_list)) {
+system(paste0(
+    "sbatch --array=1-",
+    nrow(cell_combos),
+    " scripts/run_lee_perms.sh"
+))
+```
 
-system.time({
-    stuff <- run_lee_perms(
-            spatial_list$OS2_Seurat,
-            colname_1 = "Endothelial_Capillary",
-            colname_2 = "Tumor_Cumulative",
-            nsim = 100000,
-            k_nn = 6,
-            nproc = 10
+```{r}
+lee_stats <-
+    read_tsv(
+        list.files(
+            "output/spacexr/granular_references/lee_perms",
+            full.names = TRUE,
+            pattern = "lee_perms_.*\\.tsv"
+        ),
+        show_col_types = FALSE
+    ) %>%
+    mutate(
+        perm_p = if_else(
+            perm_p == "p < 1e-05",
+            "0.00001",
+            perm_p
+        ) %>%
+            as.numeric(),
+        fdr = p.adjust(perm_p, method = "fdr")
+    )
+
+make_lower_triangle <- function(lee_stats) {
+    full_data <-
+        lee_stats |>
+        dplyr::full_join(
+            lee_stats |>
+                dplyr::mutate(
+                    cell_type_1_temp = cell_type_2,
+                    cell_type_2_temp = cell_type_1
+                ) |>
+                dplyr::select(-cell_type_1, -cell_type_2) |>
+                dplyr::rename(
+                    cell_type_1 = cell_type_1_temp,
+                    cell_type_2 = cell_type_2_temp
+                )
         )
-})
 
-hist(stuff$sims, n= 100, xlim = c(-0.15, 0))
-abline(v = stuff$real, col = "red", lwd = 2)
+    return(full_data)
+}
 
-SpatialFeaturePlot(
-    spatial_list$OS2_Seurat,
-    features = c("Endothelial_Capillary", "Tumor_Cumulative"),
-    ncol = 1,
-    pt.size.factor = 1500
+make_lee_heatmaps <- function(lee_stats, ...) {
+    sub_data <-
+        lee_stats |>
+        make_lower_triangle()
+
+    use_order <-
+        lee_stats$cell_type_1 |>
+        unique() |>
+        sort()
+
+    pheatmap_out <-
+        sub_data |>
+        dplyr::select(dplyr::all_of(c(
+            "cell_type_1",
+            "cell_type_2",
+            "lee_stat"
+        ))) |>
+        tidyr::pivot_wider(
+            names_from = "cell_type_2",
+            values_from = "lee_stat",
+            values_fill = NA
+        ) |>
+        dplyr::relocate(dplyr::all_of(c("cell_type_1", use_order))) |>
+        dplyr::arrange(cell_type_1, .locale = "en") |>
+        tibble::column_to_rownames("cell_type_1") |>
+        pheatmap::pheatmap(silent = TRUE, ...)
+
+    return()
+}
+
+lee_stats %>%
+    mutate(
+        lee_stat = if_else(
+            fdr < 0.1,
+            lee_stat,
+            NA
+        )
+    ) %>%
+    make_lee_heatmaps(sample_name = "OS2_Seurat")
+
+lapply(
+    unique(lee_stats$sample),
+    function(x) {
+        lee_stats %>%
+            filter(sample == x) %>%
+            make_lee_heatmaps(
+                sample_name = x,
+                file = paste0(
+                    "output/figures/spatial/lees/", x, ".pdf"
+                ),
+                width = 10,
+                height = 10,
+                color = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 7, name = "RdBu")))(100)
+            )
+    }
 )
 
+lee_stats %>%
+    group_by(cell_type_1, cell_type_2) %>%
+    summarize(lee_stat = mean(lee_stat), .groups = "drop") %>%
+    make_lee_heatmaps(
+        file = "output/figures/spatial/lees/average.pdf",
+        width = 10,
+        height = 10,
+        color = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 7, name = "RdBu")))(100)
+    )
 ```

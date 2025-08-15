@@ -5,10 +5,8 @@
 #SBATCH --job-name=lee_perms
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=20
-#SBATCH --mem=25G
+#SBATCH --cpus-per-task=4
 #SBATCH --partition=general,himem
-#SBATCH --array=1-8
 #SBATCH --wait
 
 set -e ### stops bash script if line ends with error
