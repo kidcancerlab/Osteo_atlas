@@ -1,0 +1,38 @@
+
+##
+```{r spatialee_calc_lee}
+cell_types <-
+    qs::qread("output/spacexr/granular_references/cell_groups.qs") %>%
+    unlist() %>%
+    as.vector()
+
+cell_combos <-
+    combn(cell_types, 2, simplify = FALSE)
+
+spatial_list <-
+    qs::qread("output/spatial_objects/spatial_list_level3_annotations.qs")
+
+for (this_data in names(spatial_list)) {
+
+system.time({
+    stuff <- run_lee_perms(
+            spatial_list$OS2_Seurat,
+            colname_1 = "Endothelial_Capillary",
+            colname_2 = "Tumor_Cumulative",
+            nsim = 100000,
+            k_nn = 6,
+            nproc = 10
+        )
+})
+
+hist(stuff$sims, n= 100, xlim = c(-0.15, 0))
+abline(v = stuff$real, col = "red", lwd = 2)
+
+SpatialFeaturePlot(
+    spatial_list$OS2_Seurat,
+    features = c("Endothelial_Capillary", "Tumor_Cumulative"),
+    ncol = 1,
+    pt.size.factor = 1500
+)
+
+```

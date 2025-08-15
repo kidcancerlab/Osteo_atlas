@@ -1,0 +1,6 @@
+## Calculate Lee's statistic
+```{r helper_sp_lee}
+#| cache.vars:[run_lee_perms, get_lee_p, get_perm_p]
+source("scripts/lee_perm_function.R")
+```
+
