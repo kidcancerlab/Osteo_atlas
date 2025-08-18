@@ -52,7 +52,7 @@ knitr::purl("child_qmds/helper_functions.qmd", "helpers.R")
 source("helpers.R")
 
 
-# # list of files in order to keep track of the files order 
+# # list of files in order to keep track of the files order
 # read_raw_data.qmd
 # helper_functions.qmd
 # variants.qmd
@@ -85,6 +85,8 @@ for directoryName in \
     output/figures/tumor_vs_stroma/clustree \
     output/figures/stromal_species_correlations \
     output/figures/tumor_subtypes_correlations \
+    output/figures/spatial/spacexr \
+    output/figures/spatial/lees \
     output/counts \
     output/metadata \
     output/seurat_objects/sobj_preprocess \
@@ -99,7 +101,9 @@ for directoryName in \
     output/id_tumor/snvs/plots \
     output/id_tumor/celltype \
     output/stromal_species_correlations \
-    output/tumor_subtypes_correlations
+    output/tumor_subtypes_correlations \
+    output/spacexr/granular_references/ \
+    output/spacexr/granular_references/lee_perms
 do
     if [ ! -d ${directoryName} ]
     then
