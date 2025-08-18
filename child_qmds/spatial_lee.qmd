@@ -20,7 +20,8 @@ system(paste0(
 ))
 ```
 
-```{r}
+```{r spatialee_plot_all}
+#| cache.vars: [make_lee_heatmaps, make_lower_triangle, lee_stats]
 lee_stats <-
     read_tsv(
         list.files(
@@ -89,16 +90,6 @@ make_lee_heatmaps <- function(lee_stats, ...) {
     return()
 }
 
-lee_stats %>%
-    mutate(
-        lee_stat = if_else(
-            fdr < 0.1,
-            lee_stat,
-            NA
-        )
-    ) %>%
-    make_lee_heatmaps(sample_name = "OS2_Seurat")
-
 lapply(
     unique(lee_stats$sample),
     function(x) {
@@ -126,3 +117,56 @@ lee_stats %>%
         color = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 7, name = "RdBu")))(100)
     )
 ```
+
+## Make plots with just a subset of types
+
+```{r spatialee_plot_subset}
+y_celltypes <-
+    c(
+        "Basal_Progenitor",
+        "Fibrogenic",
+        "Interactive",
+        "MP_Progenitor",
+        "Proliferative",
+        "Fibrogenic_TAMs",
+        "IFN_TAMs",
+        "Osteoclast_TAMs",
+        "Prolif_TAMs",
+        "Scar_TAMs"
+    )
+
+colors_use <-
+    colorRampPalette(rev(RColorBrewer::brewer.pal(n = 7, name = "RdBu")))(1000)
+
+lee_stats %>%
+    group_by(cell_type_1, cell_type_2) %>%
+    summarize(
+        lee_stat = mean(lee_stat),
+        fdr = min(fdr),
+        .groups = "drop"
+    ) %>%
+    dplyr::select(dplyr::all_of(c(
+        "cell_type_1",
+        "cell_type_2",
+        "lee_stat"
+    ))) |>
+    make_lower_triangle() %>%
+    tidyr::pivot_wider(
+        names_from = "cell_type_2",
+        values_from = "lee_stat",
+        values_fill = NA
+    ) %>%
+    dplyr::filter(cell_type_1 %in% y_celltypes) %>%
+    column_to_rownames("cell_type_1") %>%
+    pheatmap::pheatmap(
+        file = "output/figures/spatial/lees/subset_average.pdf",
+        width = 15,
+        height = 10,
+        color = colors_use,
+        cellwidth = 20,
+        cellheight = 20,
+        na_col = "darkgrey"
+    )
+
+```
+
