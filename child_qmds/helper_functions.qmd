@@ -656,6 +656,11 @@ run_degs <- function(sobject,
         batch_df <-
             data.frame(sample_name = colnames(pseudobulk))
 
+        organism_details <-
+            sobject@meta.data %>%
+            select(all_of(c("sample_name", "organism", "unique"))) %>%
+            distinct()
+        
         batch_df_new <-
             tibble(col_label = colnames(pseudobulk),
                    sample_name = colnames(pseudobulk) %>%
@@ -663,8 +668,16 @@ run_degs <- function(sobject,
                    cluster_no = str_remove(colnames(pseudobulk), ".+_")) %>%
             left_join(batch_df) %>%
             mutate(sample_name = str_replace_all(sample_name, "-", "_")) %>%
-            mutate(organism = sobject@meta.data[[organism_col]][[1]]) %>%
+            # mutate(organism = sobject@meta.data[[organism_col]][[1]]) %>%
             mutate(cluster_no = str_replace_all(cluster_no, "-", "_"))
+        
+        # add the organism column from the organism_details
+        batch_df_new <- 
+            batch_df_new %>%
+            left_join(organism_details, by = "sample_name") %>%
+            select(col_label, cluster_no, sample_name, organism)
+
+
         #add the datasource and method as batch in batch_df_new from all_samples_csv for each sample_name
         new_all_samples_csv <-
             all_samples_csv %>%

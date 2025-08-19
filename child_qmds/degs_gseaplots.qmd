@@ -1961,33 +1961,289 @@ cat_tib <- dplyr::tribble(
     # "C6",       "NA",          "Oncogenic_signature",
     "C5",       "GO:BP",       "Biological_processes",
     "C2",       "CP:REACTOME", "Reactome")
-
+dimplot_list <- list()
 for (obj in c("COMA_merged", "Fibrogenic_merged",
              "MP_Progenitor_merged", "Basal_Progenitor_merged",
              "Proliferative_merged", "Interactive_merged")) {
     object <- 
         qs::qread(str_c("output/seurat_objects/tumor_only/", obj, ".qs"))
+    dimplot_list[[obj]] <-
+        dimplot_better(object, group_by = "unique") + NoLegend()
 
-    dimplot_better(object, group_by = "unique") + NoLegend() +
-        ggtitle(str_c("Tumor", obj))
-    object$organisms <- "human"
+     # save the combined object
+    Idents(object) <- "unique"
+    markers <- 
+        FindAllMarkers(object = object,
+                        logfc.threshold = 1,
+                        min.pct = 0.1,
+                        only.pos = T)
 
-    make_panel_plot(sobj = object,
-                    comparison_col = "unique",
-                    label = "unique",
-                    group = obj,
-                    aggregate_by = c("sample_name", "unique"),
-                    organism_col = "organisms",
-                    subset = FALSE,
-                    batch_var = "data_source")
+    # get top markers for heatmap and plots
+    top_markers <- 
+        markers %>%
+        as.data.frame() %>%
+        group_by(cluster) %>%
+        filter(p_val_adj < 0.05) %>%
+        # arrange(-avg_log2FC) %>%
+        group_by(cluster) %>%
+        mutate(pct_diff = pct.1 - pct.2) %>%
+        arrange(desc(pct_diff)) %>%
+        filter(pct_diff > 0.2) %>%
+        arrange(-avg_log2FC) %>%
+        slice_head(n =15)
+
+    # genes <- 
+    #     top_markers$gene %>%
+    #     unique()
+    # # make dot plot
+    # dotplot_degs <-
+    #     DotPlot(object = object,
+    #             features = genes,
+    #             cols = "RdBu",
+    #             dot.scale = 7,
+    #         col.max = 1.5) +
+    #     scale_y_discrete(labels = function(x) gsub("_", " ", gsub("human", "", x))) +
+    #     scale_x_discrete(labels = function(x) gsub("ENSCAFG00805016104", "BNIP3", x)) +
+    #         #ggtitle(title_replacement[group][1]) +
+    #     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+    #             legend.title = element_text(hjust = 0.5, size=10),
+    #             legend.text = element_text(size = 9),
+    #             title = element_text(hjust = 0.5, size = 10)) +
+    #     coord_fixed()
+     genes <- 
+        top_markers$gene %>%
+        unique()
+
+    # change to RNA assay
+    DefaultAssay(object) <- "RNA"
+
+    # scale data for visualization
+    data <-
+        ScaleData(object = object,
+                    assay = "RNA")
+    data <-
+        subset(x = data,
+        downsample = min(100, ncol(object)))
+
+    heatmap_degs <-
+        DoHeatmap(object = data,
+                features = genes,
+                group.by = "unique")
+
+    heatmap <-
+        DoHeatmap(object = object,
+                features = genes,
+                group.by = "unique",
+                assay = "RNA",
+                slot = "data") +
+        scale_fill_gradientn(colors = RColorBrewer::brewer.pal(n = 9, name = "RdBu")) +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+                legend.title = element_text(hjust = 0.5, size=10),
+                legend.text = element_text(size = 9),
+                title = element_text(hjust = 0.5, size = 10)) +
+        coord_fixed()
+
+    if (!dir.exists("output/figures/tumor_only/")) {
+        dir.create("output/figures/tumor_only/", recursive = TRUE)
+    }
+    ggsave(str_c("output/figures/tumor_only/",
+                obj,
+                "_dotplot_degs.png"),
+            plot = dotplot_degs,
+            width = 10,
+            height = 4,
+            bg = "white")
+
+    # object$organisms <- "human"
+
+    # make_panel_plot(sobj = object,
+    #                 comparison_col = "unique",
+    #                 label = "unique",
+    #                 group = obj,
+    #                 aggregate_by = c("sample_name", "unique"),
+    #                 organism_col = "organisms",
+    #                 subset = FALSE,
+    #                 batch_var = "data_source")
 }
 
-   make_panel_plot(sobj = object,
-                    comparison_col = "Ann_Level3",
-                    label = "Ann_Level3",
-                    group = comb_group,
-                    aggregate_by = c("sample_name", "Ann_Level3"),
-                    organism_col = "organism",
-                    subset = FALSE,
-                    batch_var = "data_source")}
+patchwork::wrap_plots(plotlist = dimplot_list,
+                ncol = 3)
+
+```
+
+### tumor gsea plots
+```{r tumor_gsea_plots}
+# basal progenitor
+Basal_Progenitor <-
+    c("REACTOME_G_ALPHA_Q_SIGNALLING_EVENTS",  #patient_prim
+      "REACTOME_INTERLEUKIN_4_AND_INTERLEUKIN_13_SIGNALING",
+        "REACTOME_RAF_INDEPENDENT_MAPK1_3_ACTIVATION",
+        "REACTOME_NUCLEAR_EVENTS_KINASE_AND_TRANSCRIPTION_FACTOR_ACTIVATION","REACTOME_SIGNALING_BY_GPCR",                         #patient_mets    
+        "REACTOME_GPCR_LIGAND_BINDING",                            
+        "REACTOME_G_ALPHA_I_SIGNALLING_EVENTS",
+        "REACTOME_PEPTIDE_LIGAND_BINDING_RECEPTORS",
+        "REACTOME_CHROMATIN_MODIFYING_ENZYMES",  #xeno prim
+        "REACTOME_COMPLEX_I_BIOGENESIS",      #xeno mets
+        "REACTOME_NONSENSE_MEDIATED_DECAY_NMD",
+        "REACTOME_EUKARYOTIC_TRANSLATION_ELONGATION",
+        "REACTOME_SIGNALING_BY_NTRKS",    #dogs prim
+        "REACTOME_NGF_STIMULATED_TRANSCRIPTION",   
+        "REACTOME_ACTIVATION_OF_ATR_IN_RESPONSE_TO_REPLICATION_STRESS", #dogs mets
+        "REACTOME_DISEASES_OF_DNA_REPAIR",
+        "REACTOME_APC_C_MEDIATED_DEGRADATION_OF_CELL_CYCLE_PROTEINS",  # mm prim
+        "REACTOME_THE_ROLE_OF_GTSE1_IN_G2_M_PROGRESSION_AFTER_G2_CHECKPOINT",
+        "REACTOME_ROS_AND_RNS_PRODUCTION_IN_PHAGOCYTES"   ## mm mets
+       )
+Proliferative <-
+    c("REACTOME_INTERLEUKIN_4_AND_INTERLEUKIN_13_SIGNALING",
+      "REACTOME_INTERLEUKIN_10_SIGNALING",
+      "REACTOME_PEPTIDE_LIGAND_BINDING_RECEPTORS",
+      "REACTOME_GPCR_LIGAND_BINDING",
+      "REACTOME_SIGNALING_BY_GPCR",
+      "REACTOME_OXIDATIVE_STRESS_INDUCED_SENESCENCE",
+      "REACTOME_CHROMATIN_MODIFYING_ENZYMES",
+      "REACTOME_MRNA_SPLICING",
+      "REACTOME_NUCLEAR_EVENTS_KINASE_AND_TRANSCRIPTION_FACTOR_ACTIVATION",
+      "REACTOME_NGF_STIMULATED_TRANSCRIPTION",
+      "REACTOME_CELLULAR_RESPONSES_TO_STIMULI",
+      "REACTOME_G_ALPHA_Q_SIGNALLING_EVENTS",
+      "REACTOME_CLASS_A_1_RHODOPSIN_LIKE_RECEPTORS",
+      "REACTOME_MITOCHONDRIAL_TRANSLATION",
+      "REACTOME_TRANSLATION",
+      "REACTOME_CYTOKINE_SIGNALING_IN_IMMUNE_SYSTEM"
+      )
+MP_Progenitor <- c(
+    "REACTOME_INTERLEUKIN_10_SIGNALING",
+    "REACTOME_MUSCLE_CONTRACTION",
+    "REACTOME_SIGNALING_BY_GPCR",
+    "REACTOME_MYOGENESIS",
+    "REACTOME_CHROMATIN_MODIFYING_ENZYMES",
+    "REACTOME_METABOLISM_OF_AMINO_ACIDS_AND_DERIVATIVES",
+    "REACTOME_SIGNALING_BY_NTRKS",
+    "REACTOME_NGF_STIMULATED_TRANSCRIPTION",
+    "REACTOME_G_ALPHA_Q_SIGNALLING_EVENTS",
+    "REACTOME_GPCR_LIGAND_BINDING",
+    "REACTOME_NERVOUS_SYSTEM_DEVELOPMENT",
+    "REACTOME_REGULATION_OF_HMOX1_EXPRESSION_AND_ACTIVITY",
+    "REACTOME_RESPONSE_OF_EIF2AK4_GCN2_TO_AMINO_ACID_DEFICIENCY",
+    "REACTOME_SRP_DEPENDENT_COTRANSLATIONAL_PROTEIN_TARGETING_TO_MEMBRANE"
+    )
+Fibrogenic <- c(
+    "REACTOME_INTEGRIN_SIGNALING",
+    "REACTOME_PLATELET_AGGREGATION_PLUG_FORMATION",
+    "REACTOME_INTERLEUKIN_4_AND_INTERLEUKIN_13_SIGNALING",
+    "REACTOME_SIGNALING_BY_GPCR",
+    "REACTOME_PEPTIDE_LIGAND_BINDING_RECEPTORS",
+    "REACTOME_GPCR_LIGAND_BINDING",
+    "REACTOME_CHROMATIN_MODIFYING_ENZYMES",
+    "REACTOME_CELLULAR_RESPONSES_TO_STIMULI",
+    "REACTOME_NGF_STIMULATED_TRANSCRIPTION",
+    "REACTOME_NUCLEAR_EVENTS_KINASE_AND_TRANSCRIPTION_FACTOR_ACTIVATION",
+    "REACTOME_DISEASES_OF_DNA_REPAIR",
+    "REACTOME_RAF_INDEPENDENT_MAPK1_3_ACTIVATION",
+    "REACTOME_CELL_SURFACE_INTERACTIONS_AT_THE_VASCULAR_WALL"
+    )
+
+COMA <- c(
+    "REACTOME_INTERLEUKIN_10_SIGNALING",
+    "REACTOME_CHEMOKINE_RECEPTORS_BIND_CHEMOKINES",
+    "REACTOME_PEPTIDE_LIGAND_BINDING_RECEPTORS",
+    "REACTOME_CLASS_A_1_RHODOPSIN_LIKE_RECEPTORS",
+    "REACTOME_INITIAL_TRIGGERING_OF_COMPLEMENT",   "REACTOME_SUMOYLATION_OF_CHROMATIN_ORGANIZATION_PROTEINS",
+    "REACTOME_SUMOYLATION_OF_RNA_BINDING_PROTEINS",
+    "REACTOME_CELLULAR_RESPONSE_TO_HYPOXIA",
+    "REACTOME_FORMATION_OF_ATP_BY_CHEMIOSMOTIC_COUPLING",
+    "REACTOME_ACTIVATION_OF_MATRIX_METALLOPROTEINASES",
+    "REACTOME_CELLULAR_RESPONSE_TO_STARVATION",
+    "REACTOME_METABOLISM_OF_ANGIOTENSINOGEN_TO_ANGIOTENSINS",
+    "REACTOME_ACTIVATION_OF_ATR_IN_RESPONSE_TO_REPLICATION_STRESS",
+    "REACTOME_PI3K_AKT_SIGNALING_IN_CANCER",
+    "REACTOME_CONSTITUTIVE_SIGNALING_BY_ABERRANT_PI3K_IN_CANCER",
+    "REACTOME_SUMOYLATION_OF_TRANSCRIPTION_FACTORS"
+    )
+Interactive <- c(
+    "REACTOME_SIGNALING_BY_MODERATE_KINASE_ACTIVITY_BRAF_MUTANTS",
+    "REACTOME_PEPTIDE_LIGAND_BINDING_RECEPTORS",
+    "REACTOME_INSULIN_RECEPTOR_RECYCLING",
+    "REACTOME_CLASS_A_1_RHODOPSIN_LIKE_RECEPTORS",
+    "REACTOME_GPCR_LIGAND_BINDING",
+    "REACTOME_HEME_SIGNALING",
+    "REACTOME_DISEASES_OF_DNA_REPAIR",
+    "REACTOME_SIGNALING_BY_ROBO_RECEPTORS",
+    "REACTOME_REGULATION_OF_EXPRESSION_OF_SLITS_AND_ROBOS",
+    "REACTOME_SIGNALING_BY_INSULIN_RECEPTOR",
+    "REACTOME_IRON_UPTAKE_AND_TRANSPORT",
+    "REACTOME_AMINO_ACIDS_REGULATE_MTORC1"
+)
+
+pathways <- list(
+    Basal_Progenitor = Basal_Progenitor,
+    Proliferative = Proliferative,
+    MP_Progenitor = MP_Progenitor,
+    Fibrogenic = Fibrogenic,
+    COMA = COMA,
+    Interactive = Interactive
+)
+
+for (obj in c("COMA", "Fibrogenic",
+             "MP_Progenitor", "Basal_Progenitor",
+             "Proliferative", "Interactive")) {
+
+    files <-
+        list.files(str_c("output/gsea/",
+                            obj,
+                        "_merged/unique"), 
+                pattern = "Reactome",
+                full.names = TRUE)
+    read_tsv(files, id = "unique") %>%
+        mutate(unique = str_remove(unique, ".+cluster_") %>%
+                        str_remove("_gsea.tsv")) %>%
+        filter(pathway %in% pathways[[obj]]) %>%
+        mutate(pathway = factor(pathway, 
+                                levels = pathways[[obj]])) %>%
+        as.data.frame() %>%
+        select(pathway, unique, NES)
+    
+    pathway_plot <-
+        read_tsv(files, id = "unique") %>%
+        mutate(unique = str_remove(unique, ".+cluster_") %>%
+                        str_remove("_gsea.tsv")) %>%
+        filter(pathway %in% pathways[[obj]]) %>%
+        mutate(pathway = factor(pathway, 
+                                levels = pathways[[obj]])) %>%
+        mutate(unique = factor(unique %>% str_replace("_", " ") %>% str_remove("_human"), 
+                                levels = c("patient prim", "patient mets",
+                                            "xeno prim", "xeno mets",
+                                            "dogs prim", "dogs mets",
+                                            "mm prim", "mm mets"))) %>%
+        ggplot(aes(x = unique, y = pathway, fill = NES)) +
+        geom_tile() +
+        scale_fill_gradient2(low = "#357EBDFF", mid = "white", high = "#D43F3AFF", midpoint = 0) +
+        scale_y_discrete(labels = function(x) gsub("_", " ", gsub("^REACTOME_", "", x))) +
+        theme_bw() +
+        geom_text(aes(label = round(NES, 2)), size = 3, color = "black")+
+        theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+    height = length(pathways[[obj]]) * 0.3 + 1
+    width = length(unique(pathway_plot$data$unique)) * 0.5 + 7
+    
+    ggsave(str_c("output/figures/tumor_only/",
+                obj,
+                "_gsea_heatmap.png"),
+            plot = pathway_plot,
+            width = width,
+            height = height,
+            bg = "white")
+    ggsave(str_c("output/figures/tumor_only/",
+                obj,
+                "_gsea_heatmap.pdf"),
+            plot = pathway_plot,
+            width = width,
+            height = height,
+            bg = "white")
+}
+
+
+
+
 ```
