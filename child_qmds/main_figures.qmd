@@ -165,6 +165,7 @@ for (group in c("patient_prim_cancer_cells", "patient_mets_cancer_cells",
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
+    dimplot_better(object, group_by = "Ann_Level3")
 
     cancer_sobj_list[[group]] <- object
                 
@@ -187,8 +188,8 @@ title_replacement <-
         patient_mets_cancer_cells = "Patient Metastatic",
         mm_prim_cancer_cells = "Mouse Primary",
         mm_mets_cancer_cells = "Mouse Metastatic",
-        xeno_prim_human = "Xenograft Primary",
-        xeno_mets_human = "Xenograft Metastatic",
+        xeno_prim_human_cancer_cells = "Xenograft Primary",
+        xeno_mets_human_cancer_cells = "Xenograft Metastatic",
         dogs_prim_cancer_cells = "Dog Primary",
         dogs_mets_cancer_cells = "Dog Metastatic")
 
@@ -278,39 +279,38 @@ for (group in c(
     
     celltype_subset_cols <-
         cols[sort(unique(object$plot_labels))] 
-
     cell_count_per_sample <-
-        table(object$Ann_Level2, object$sample_name) %>%
+        table(object$plot_labels, object$sample_name) %>%
         as.data.frame() %>%
         dplyr::rename(CellType = Var1, Sample = Var2, Count = Freq) %>%
+        mutate(CellType = str_replace_all(CellType, "_", " ")) %>%
         group_by(Sample) %>%
-        mutate(Count = Count / sum(Count) * 100) %>%
+        mutate(Count = round(Count / sum(Count) * 100, 1)) %>%
         ungroup() %>%
         mutate(Method = object$method[match(Sample, object$sample_name)],
                 DataSource = object$data_source[match(Sample, object$sample_name)])
     # Create a bar plot
     plot1 <-
         ggplot(cell_count_per_sample, aes(x = Sample, y = Count, fill = CellType)) +
-                    geom_bar(stat = "identity", position = "stack") +
-                    theme_minimal() +
-                    scale_fill_manual(values = as.vector(celltype_subset_cols),
-                                      labels = gsub("Tumor ", "", gsub("_", " ", names(celltype_subset_cols)))) +
-                    labs(y = NULL, x = "Sample", fill = "Cell Type") +
-                    theme(x = NULL,
-                            y = NULL,
-                            plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
-                        axis.text.x = element_text(angle = 45, hjust = 1),
-                        axis.title.x = element_text(face = "bold"),
-                        axis.title.y = element_text(face = "bold"),
-                        axis.text.y = element_blank(),
-                        legend.position = "right",
-                        legend.direction = "vertical",
-                        panel.grid.major = element_blank(),
-                        panel.grid.minor = element_blank(),
-                        legend.key.size = unit(0.4, 'cm'),
-                        legend.title = element_text(face = "bold", hjust = 0.5),
-                        plot.margin = margin(t = 0, r = 0.5, b = 0, l = 1.5, unit = "cm")) +
-                    scale_x_discrete(labels = function(x) gsub("_GEX_FL|Modiano_|_3GEX_FL", "", x))
+                geom_bar(stat = "identity", position = "stack") +
+                theme_minimal() +
+                scale_fill_manual(values =celltype_subset_cols) +
+                labs(y = NULL, x = "Sample", fill = "Cell Type") +
+                theme(x = NULL,
+                        y = NULL,
+                        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+                    axis.text.x = element_text(angle = 45, hjust = 1),
+                    axis.title.x = element_text(face = "bold"),
+                    axis.title.y = element_text(face = "bold"),
+                    axis.text.y = element_blank(),
+                    legend.position = "right",
+                    legend.direction = "vertical",
+                    panel.grid.major = element_blank(),
+                    panel.grid.minor = element_blank(),
+                    legend.key.size = unit(0.4, 'cm'),
+                    legend.title = element_text(face = "bold", hjust = 0.5),
+                    plot.margin = margin(t = 0, r = 0.5, b = 0, l = 1.5, unit = "cm")) +
+                scale_x_discrete(labels = function(x) gsub("_GEX_FL|Modiano_|_3GEX_FL", "", x))
     plot2 <-
         ggplot(cell_count_per_sample, 
                 aes(x = Sample, y = 1, fill = Method)) +
@@ -833,7 +833,7 @@ for (group in c("patient_prim_normal_cells", "patient_mets_normal_cells",
      celltype_subset_cols <-
         cols[sort(unique(object$plot_labels))] %>%
         as.vector()
-    
+
     cell_count_per_sample <-
         table(object$plot_labels, object$sample_name) %>%
         as.data.frame() %>%

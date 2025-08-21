@@ -565,6 +565,7 @@ for (i in seq_len(nrow(object_list))) {
                             cluster_cols = FALSE,
                             cluster_rows = TRUE,
                             show_row_dend = FALSE,
+                            silent = TRUE,
                             main = str_c(group3, " Regulon activity"))
 
 
@@ -576,6 +577,48 @@ for (i in seq_len(nrow(object_list))) {
     ggsave(str_c("output/figures/Final_Annotations/results2/suppliment/regulons/",
                 group3, "_regulon_shared.png"),
         plot = regulon_activity_heatmap_shared,
+        width = 10,
+        height = 8)
+
+    
+    # get regulons that are not shared between the groups)
+    # get regulons that are specific and unique to each site
+    output_not_shared_TF <- 
+        !(rownames(output) %in% rownames(output_shared))
+    # Order columns: all prim_* first (in their subpopulation order), then mets_* (same order)
+    subpop_order <- 
+        c("Interactive", "Fibrogenic", "COMA", "MP_Progenitor", "Proliferative", "Basal_Progenitor")
+    prim_cols <- 
+        unlist(lapply(subpop_order, 
+            function(x) grep(str_c("prim(_human)?_", x), colnames(output), value = TRUE)))
+    mets_cols <- 
+        unlist(lapply(subpop_order, 
+                     function(x) grep(str_c("mets(_human)?_", x), colnames(output), value = TRUE)))
+    ordered_cols <- 
+        c(prim_cols, mets_cols)
+    output_not_shared <-
+        output[output_not_shared_TF, ordered_cols, drop = FALSE]
+
+    # make a heatmap to show average regulon activity per cell type or cluster
+    regulon_activity_heatmap_not_shared <-
+        pheatmap::pheatmap(output_not_shared,
+                            name = "Regulon activity",
+                            scale = "none",
+                            annotation_col = col_colors_df,
+                            annotation_colors = col_colors,
+                            cluster_cols = FALSE,
+                            cluster_rows = TRUE,
+                            show_row_dend = FALSE,
+                            silent = TRUE,
+                            main = str_c(group3, " Regulon activity site-specific"))
+    ggsave(str_c("output/figures/Final_Annotations/results2/suppliment/regulons/",
+                group3, "_regulon_unshared.pdf"),
+        plot = regulon_activity_heatmap_not_shared,
+        width = 10,
+        height = 8)
+    ggsave(str_c("output/figures/Final_Annotations/results2/suppliment/regulons/",
+                group3, "_regulon_unshared.png"),
+        plot = regulon_activity_heatmap_not_shared,
         width = 10,
         height = 8)
 
@@ -596,10 +639,6 @@ order_regulons <-
         late_genes = c("CREB3L1", "STAT1", "CEBPD", "JUND", "JUNB", "FOSB", "FOSL2", "NFKB1", "REL",
                         "SREBF2", "FOS", "CEBPB",  "ATF4", "Atf4", "Nfkb1", "Rel",
                         "Cebpd", "Cebpb", "Srebf2", "Stat1", "Stat3", "Fosl1",  "Jund", "Jun"))
-
-"Nfkb2"  "Fosl1"  "Rel"    "Mafb"   "Irf8"   "Fli1"   "Irf7"   "Stat2" 
- [9] "Stat1"  "Stat3"  "Nfkb1"  "Srebf2" "E2f1"   "Elk3"   "Ets1"   "Cebpb" 
-[17] "Atf4"   "Jund"   "Jun"    "Cebpd"  "Pbx1"
 
 mouse <-
     c("Elk3", "Nfkb1" "Cebpb", "Jund", "Jun")
