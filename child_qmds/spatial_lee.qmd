@@ -116,6 +116,62 @@ lee_stats %>%
         height = 10,
         color = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 7, name = "RdBu")))(100)
     )
+
+
+lee_stats %>%
+    make_lower_triangle() %>%
+    group_by(cell_type_1, cell_type_2) %>%
+    summarize(lee_stat = mean(lee_stat)) %>%
+    pivot_wider(names_from = "cell_type_2", values_from = "lee_stat") %>%
+    write_tsv("output/spacexr/granular_references/lee_perms/average_lee.tsv")
+
+lee_stats %>%
+    make_lower_triangle() %>%
+    group_by(cell_type_1, cell_type_2) %>%
+    summarize(
+        lee_stat = mean(lee_stat, na.rm = TRUE),
+        n_signif = sum(fdr < 0.1),
+        .groups = "drop"
+    ) %>%
+    mutate(
+        group = if_else(
+            n_signif > 6,
+            if_else(
+                lee_stat > 0,
+                "Correlated",
+                "Anti-correlated"
+            ),
+            "Not correlated"
+        )
+    ) %>%
+    ggplot(
+        aes(x = lee_stat)
+    ) +
+    geom_histogram(bins = 100) +
+    facet_wrap(~ group, ncol = 1)
+
+lee_stats %>%
+    make_lower_triangle() %>%
+    group_by(cell_type_1, cell_type_2) %>%
+    summarize(
+        lee_stat = mean(lee_stat, na.rm = TRUE),
+        n_signif = sum(fdr < 0.1),
+        .groups = "drop"
+    ) %>%
+    mutate(
+        group = if_else(
+            n_signif > 6,
+            if_else(
+                lee_stat > 0,
+                "Correlated",
+                "Anti-correlated"
+            ),
+            "Not correlated"
+        )
+    ) %>%
+    arrange() %>%
+    write_tsv("output/spacexr/granular_references/lee_perms/average_lee_stats.tsv")
+
 ```
 
 ## Make plots with just a subset of types
