@@ -225,14 +225,238 @@ for (i in 1:nrow(object_list)) {
                     ".qs"))
 }
 
-## for whole object at ann level2
+# convert dog to human symbols
+orthologs <-
+    read_tsv("input/downloads/dog_human_gene_orthologs.txt")
+for (group in c("dogs_prim",
+                "dogs_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    raw_counts <-
+        GetAssayData(object,
+                     slot = "counts")
+
+    number_of_ENSEMBL_genes <-
+        sum(str_detect(rownames(raw_counts), "^ENSCAFG"))
+
+    raw_counts_new <-
+        raw_counts[rownames(raw_counts) %in% orthologs$dog_gene_name, ]
+    rownames(raw_counts_new) <-
+        orthologs$human_gene_ortholog[match(rownames(raw_counts_new), orthologs$dog_gene_name)]
+    new_seurat_object <-
+        CreateSeuratObject(counts = raw_counts_new) %>%
+        AddMetaData(metadata = object@meta.data)
+    newobject <-
+        new_seurat_object %>%
+        process_seurat()
+    newobject$organism <- "human"
+    qs::qsave(newobject,
+              str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    group,
+                    "human_ortho.qs"))
+
+}
+
+for (group in c("mm_prim",
+                "mm_mets")) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    raw_counts <-
+        GetAssayData(object,
+                     slot = "counts")
+    human_genes <-
+        object %>%
+        rownames() %>%
+        nichenetr::convert_mouse_to_human_symbols() %>%
+        as.character()
+    new_raw_counts <- raw_counts
+    rownames(new_raw_counts) <- human_genes
+    new_raw_counts <-
+        new_raw_counts[!is.na(rownames(new_raw_counts)), ]
+    new_raw_counts <-
+        new_raw_counts[!duplicated(rownames(new_raw_counts)), ]
+    new_seurat_object <-
+        CreateSeuratObject(counts = new_raw_counts) %>%
+        AddMetaData(metadata = object@meta.data)
+    object <-
+        new_seurat_object %>%
+        process_seurat()
+    
+    object$organism <- "human"
+    qs::qsave(object,
+              str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    group,
+                    "human_ortho.qs"))
+
+}
+
+# function for cellchat function
+suppressPackageStartupMessages({
+  library(CellChat); library(patchwork)
+})
+run_cellchat <- function(sobject,
+                        group.by="celltype",
+                        species_db="human") {
+    data.input <- GetAssayData(sobject, assay="RNA", slot="data")  # log-normalized
+    meta <- data.frame(labels = sobject[[group.by]][,1], row.names=colnames(sobject))
+    cellchat <- createCellChat(object = data.input, meta = meta, group.by = "labels")
+    cellchat@DB <- if (species_db=="human") CellChatDB.human else CellChatDB.mouse
+    cellchat <- 
+        subsetData(cellchat) %>%
+        identifyOverExpressedGenes() %>%
+        identifyOverExpressedInteractions() %>%
+        computeCommunProb() %>%
+        filterCommunication(min.cells = 10) %>%
+        computeCommunProbPathway() %>%
+        aggregateNet() %>%
+        netAnalysis_computeCentrality()
+  return(cellchat)
+}
+
+# ann_level2
+
+# cellchat at ann_level3 using all the pathways general
 for (group in c(
                 "patient_prim",
                 "patient_mets",
                 "mm_prim",
                 "mm_mets",
                 "xeno_prim_cancer_normal",
-                "xeno_mets_cancer_normal"
+                "xeno_mets_cancer_normal",
+                "dogs_primhuman_ortho",
+                "dogs_metshuman_ortho",
+                "mm_primhuman_ortho",
+                "mm_metshuman_ortho"
+            )) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    # Subset to max 500 cells per celltype (Ann_Level2)
+    celltype_counts <- table(object$Ann_Level3)
+    object <- SetIdent(object, value = "Ann_Level3")
+    cells_to_keep <- unlist(lapply(names(celltype_counts), function(ct) {
+        ct_cells <- WhichCells(object, idents = ct)
+        if (length(ct_cells) > 500) {
+            sample(ct_cells, 500)
+        } else {
+            ct_cells
+        }
+    }))
+    object <- 
+        subset(object, cells = cells_to_keep)
+    
+    cellchat <-
+        run_cellchat(sobject = object,
+                     group.by="Ann_Level2",
+                     species_db=object$organism[1])
+    qs::qsave(cellchat, str_c("output/cellchat_objects/", group, "_annlevel2_everything", ".qs"))
+}
+
+# cellchat at ann_level3 using all the pathways general
+for (group in c(
+                "patient_prim",
+                "patient_mets",
+                "mm_prim",
+                "mm_mets",
+                "xeno_prim_cancer_normal",
+                "xeno_mets_cancer_normal",
+                "dogs_primhuman_ortho",
+                "dogs_metshuman_ortho"
+            )) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    # Subset to max 500 cells per celltype (Ann_Level2)
+    celltype_counts <- table(object$Ann_Level3)
+    object <- SetIdent(object, value = "Ann_Level3")
+    cells_to_keep <- unlist(lapply(names(celltype_counts), function(ct) {
+        ct_cells <- WhichCells(object, idents = ct)
+        if (length(ct_cells) > 500) {
+            sample(ct_cells, 500)
+        } else {
+            ct_cells
+        }
+    }))
+    object <- 
+        subset(object, cells = cells_to_keep)
+                                
+    data.input <-
+        GetAssayData(object,
+                    assay = "RNA",
+                    slot = "data") 
+    labels <- object$Ann_Level3
+    meta <- 
+        data.frame(group = labels,
+                    row.names = names(labels)) 
+    cellchat <- 
+        createCellChat(object = data.input,
+                        meta = meta,
+                        group.by = "group")
+
+    # Load the ligand-receptor interaction database
+    CellChatDB.use <- 
+        if (object$organism[1] == "human") CellChatDB.human else CellChatDB.mouse
+
+    # whatever you deice to use
+    cellchat@DB <- CellChatDB.use
+    
+    # 3.Subset and pre-processing the expression data 
+    # subset the expression data to use less RAM
+    cellchat <- subsetData(cellchat)
+    future::plan("multisession", workers = 5) # do parallel
+
+    # Pre-processing the expression data
+    cellchat <- identifyOverExpressedGenes(cellchat)
+    cellchat <- identifyOverExpressedInteractions(cellchat)
+
+    # 4. Compute the communication probability and infer cellular communication network
+    cellchat <- computeCommunProb(cellchat)
+
+    # 5. Filter out the cell-cell communication if there are only few number of cells 
+    # in certain cell groups
+    cellchat <- filterCommunication(cellchat, min.cells = 10)
+
+    # 6. Infer the cell-cell communication at a signaling pathway level
+    cellchat <- computeCommunProbPathway(cellchat)
+
+    # 7. Calculate the aggregated cell-cell communication network
+    cellchat <- aggregateNet(cellchat)
+
+    # # 8. Compute the network centrality scores
+    # cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP")
+
+    # # 9. Groups signaling pathways based on their functional/structural similarities
+    # # Identify signaling groups based on functional similarity
+    # cellchat <- computeNetSimilarity(cellchat, type = "functional")
+    # cellchat <- netEmbedding(cellchat, type = "functional")
+    # cellchat <- netClustering (cellchat, type = "functional", do.parallel = FALSE)
+
+    # save the cellchat object
+    if (!dir.exists("output/cellchat_objects")) {
+        dir.create("output/cellchat_objects")
+    }
+    qs::qsave(cellchat, str_c("output/cellchat_objects/", group, "_everything", ".qs"))
+}
+
+
+## for whole object at ann levele using the specific pathways
+for (group in c(
+                "patient_prim",
+                "patient_mets",
+                "mm_prim",
+                "mm_mets",
+                "xeno_prim_cancer_normal",
+                "xeno_mets_cancer_normal",
+                "dogs_primhuman_ortho",
+                "dogs_metshuman_ortho",
+                "mm_primhuman_ortho",
+                "mm_metshuman_ortho"
             )) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
@@ -308,18 +532,18 @@ for (group in c(
         # 8. Compute the network centrality scores
         cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP")
 
-        # 9. Groups signaling pathways based on their functional/structural similarities
-        # Identify signaling groups based on functional similarity
-        cellchat <- computeNetSimilarity(cellchat, type = "functional")
-        cellchat <- netEmbedding(cellchat, type = "functional")
-        cellchat <- netClustering (cellchat, type = "functional", do.parallel = FALSE)
+        # # 9. Groups signaling pathways based on their functional/structural similarities
+        # # Identify signaling groups based on functional similarity
+        # cellchat <- computeNetSimilarity(cellchat, type = "functional")
+        # cellchat <- netEmbedding(cellchat, type = "functional")
+        # cellchat <- netClustering (cellchat, type = "functional", do.parallel = FALSE)
 
-        # Identify signaling groups based on structure similarity
-        # multimeric ligand-receptor complexes, soluble agonists and antagonists, 
-        # stimulatory and inhibitory co-ligands and co-receptors
-        cellchat <- computeNetSimilarity(cellchat, type = "structural")
-        cellchat <- netEmbedding(cellchat, type = "structural")
-        cellchat <- netClustering(cellchat, type = "structural",do.parallel = FALSE)
+        # # Identify signaling groups based on structure similarity
+        # # multimeric ligand-receptor complexes, soluble agonists and antagonists, 
+        # # stimulatory and inhibitory co-ligands and co-receptors
+        # cellchat <- computeNetSimilarity(cellchat, type = "structural")
+        # cellchat <- netEmbedding(cellchat, type = "structural")
+        # cellchat <- netClustering(cellchat, type = "structural",do.parallel = FALSE)
 
         # save the cellchat object
         if (!dir.exists("output/cellchat_objects")) {
@@ -344,10 +568,17 @@ for (group in c(
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
-    celltypes <-
-        c()
 
-    # Subset to max 500 cells per celltype (Ann_Level2)
+    celltypes <- 
+        c("MP_Progenitor", "Fibrogenic", "Interactive", "Basal_Progenitor",
+        "Proliferative", "COMA", "Scar_TAMs", "Osteoclast_TAMs", "Prolif_TAMs",
+        "IFN_TAMs", "Fibrogenic_TAMs", "Inflam_TAMs","TAMs")
+    
+    #subset just TAMs and tumor cells
+    object <- 
+        subset(object, Ann_Level3 %in% celltypes)
+
+    # Subset to max 500 cells per celltype (Ann_Level3)
     celltype_counts <- table(object$Ann_Level3)
     object <- SetIdent(object, value = "Ann_Level3")
     cells_to_keep <- unlist(lapply(names(celltype_counts), function(ct) {
@@ -364,8 +595,8 @@ for (group in c(
     data.input <-
         GetAssayData(object,
                     assay = "RNA",
-                    slot = "data") 
-    labels <- object$Ann_Level2
+                    slot = "data")
+    labels <- object$Ann_Level3
     meta <- 
         data.frame(group = labels,
                     row.names = names(labels)) 
@@ -431,286 +662,840 @@ for (group in c(
         cellchat <- netClustering(cellchat, type = "structural",do.parallel = FALSE)
 
         # save the cellchat object
-        if (!dir.exists("output/cellchat_objects")) {
-            dir.create("output/cellchat_objects")
+        if (!dir.exists("output/TAMs_Tumor_cellchat_objects")) {
+            dir.create("output/TAMs_Tumor_cellchat_objects")
         }
         subset_db_name <- gsub(" ", "_", subset_db)
-        qs::qsave(cellchat, str_c("output/cellchat_objects/", group, "_", subset_db_name, ".qs"))
+        qs::qsave(cellchat, str_c("output/TAMs_Tumor_cellchat_objects/", group, "_", subset_db_name, ".qs"))
     }
 }
 
+```
 
 
+### Plotting for cellchat
 
 
+```{r cellchat_plots}
 
-
-
-
-
-
-
-
-
-
-        # 8. visualize the aggregated cell-cell communication network
-        groupSize <- as.numeric(table(cellchat@idents))
-        par(mfrow = c(1, 2), xpd=TRUE)
-        if (!dir.exists(str_c("output/figures/cellchat/", group))) {
-            dir.create(str_c("output/figures/cellchat/", group),
-                        recursive = TRUE)
-        }
-        p1 <- netVisual_circle(cellchat@net$count,
-                              vertex.weight = groupSize, 
-                              weight.scale = TRUE,
-                              label.edge = FALSE,
-                              title.name = "Number of interactions")
-        p2 <- netVisual_circle(cellchat@net$weight,
-                              vertex.weight = groupSize, 
-                              weight.scale = TRUE,
-                              label.edge = FALSE,
-                              title.name = "Interaction weights/strength")
-        combined_plot <- 
-            plot_grid(p1, p2, ncol = 1) +
-            patchwork::plot_annotation(title = stringr::str_c(group," ", subset_db))
-        ggsave(str_c("output/figures/cellchat/", group, "/", subset_db, "circle_plots.pdf"),
-            combined_plot,
-            width = 10,
-            height = 20
-        )
-        #  examine the signaling sent from each cell group
-        mat <- cellchat@net$weight
-        plot_list1 <- list()
-        for (i in 1:nrow(mat)) {
-            mat2 <- 
-                matrix(0, nrow = nrow(mat), ncol = ncol(mat), dimnames = dimnames(mat))
-            mat2[i, ] <- mat[i, ]
-            plot_list1[[i]] <-
-                netVisual_circle(mat2, 
-                                 vertex.weight = groupSize,
-                                 weight.scale = F, 
-                                edge.weight.max = max(mat),
-                                title.name = rownames(mat)[i]) 
-        }
-        combined_plot1 <- 
-            plot_grid(plotlist = plot_list1, ncol = 3) +
-            patchwork::plot_annotation(title = stringr::str_c(group," ", subset_db))
-        ggsave(str_c("output/figures/cellchat/", group, "/", subset_db, "outgoing_signaling.png"),
-            combined_plot1,
-            width = 21,
-            height = 7 * length(plot_list1)/3
-        )
-
-        # save the cellchat object
-        if (!dir.exists("output/cellchat_objects")) {
-            dir.create("output/cellchat_objects")
-        }
-        subset_db_name <- gsub(" ", "_", subset_db)
-        qs::qsave(cellchat, str_c("output/cellchat_objects/", group, "_", subset_db_name, ".qs"))
-    }
-}
-
-
-
+# plot for the cellchat objects
+object_list <- list()
 for (group in c(
                 "patient_prim",
                 "patient_mets",
-                "mm_prim",
-                "mm_mets",
                 "xeno_prim_cancer_normal",
-                "xeno_mets_cancer_normal"
+                "xeno_mets_cancer_normal",
+                "dogs_primhuman_ortho",
+                "dogs_metshuman_ortho",
+                "mm_primhuman_ortho",
+                "mm_metshuman_ortho"
             )) {
-    for (subset_db in c("Secreted Signaling", "ECM-Receptor", "Cell-Cell Contact")) {
-        subset_db_name <- gsub(" ", "_", subset_db)
-        cellchat <- qs::qread(str_c("output/cellchat_objects/", group, "_", subset_db_name, ".qs"))
-        future::plan("multisession", workers = 5) # do parallel
-        # 9. Identify the signaling roles of cell
-        cellchat@netP[["pathways"]]
+    cellchat <- 
+        qs::qread(str_c("output/cellchat_objects/", group, "_annlevel2_everything", ".qs"))
 
-        # reveal all the ligand-receptor pairs for a signaling pathway
-        extractEnrichedLR(cellchat, signaling = c(cellchat@netP[["pathways"]]),
-                        geneLR.return = TRUE)
+    object_list[[group]] <- cellchat
 
-        # visualize the contribution of each LR pairs to the communication network
+    # 8. visualize the aggregated cell-cell communication network
+    groupSize <- as.numeric(table(cellchat@idents))
+    if (!dir.exists(str_c("output/figures/cellchat/", group))) {
+        dir.create(str_c("output/figures/cellchat/", group),
+                    recursive = TRUE)
+    }
+    p1 <- netVisual_circle(cellchat@net$count,
+                            vertex.weight = groupSize, 
+                            weight.scale = TRUE,
+                            label.edge = FALSE,
+                            title.name = "Number of interactions")
+    p2 <- netVisual_circle(cellchat@net$weight,
+                            vertex.weight = groupSize, 
+                            weight.scale = TRUE,
+                            label.edge = FALSE,
+                            title.name = "Interaction weights/strength")
+    combined_plot <- 
+        plot_grid(p1, p2, ncol = 1) +
+        patchwork::plot_annotation(title = stringr::str_c(group," everything "))
+    ggsave(str_c("output/figures/cellchat/", group, "/", "everything_circle_plots.pdf"),
+        combined_plot,
+        width = 15,
+        height = 30
+    )
+    ggsave(str_c("output/figures/cellchat/", group, "/", "everything_circle_plots.png"),
+        combined_plot,
+        width = 15,
+        height = 30
+    )
+    #  examine the signaling sent from each cell group
+    mat <- cellchat@net$weight
+    plot_list1 <- list()
+    for (i in 1:nrow(mat)) {
+        mat2 <- 
+            matrix(0, nrow = nrow(mat), ncol = ncol(mat), dimnames = dimnames(mat))
+        mat2[i, ] <- mat[i, ]
+        plot_list1[[i]] <-
+            netVisual_circle(mat2, 
+                                vertex.weight = groupSize,
+                                weight.scale = F, 
+                            edge.weight.max = max(mat),
+                            title.name = rownames(mat)[i]) 
+    }
+    combined_plot1 <- 
+        plot_grid(plotlist = plot_list1, ncol = 3) +
+        patchwork::plot_annotation(title = stringr::str_c(group," ", subset_db))
+    ggsave(str_c("output/figures/cellchat/", group, "/", subset_db, "outgoing_signaling.png"),
+        combined_plot1,
+        width = 21,
+        height = 7 * length(plot_list1)/3
+    )
+
+    future::plan("multisession", workers = 10) # do parallel
+    # 9. Identify the signaling roles of cell
+    cellchat@netP[["pathways"]]
+    # rank the pathways 
+    ranked_pathways <-
+        rankNet(cellchat, mode="single")
+    ggsave(str_c("output/figures/cellchat/", group, "/everything_ranked_pathways.png"),
+        ranked_pathways,
+        width = 10,
+        height = 15
+    )
+    # reveal all the ligand-receptor pairs for a signaling pathway
+    extractEnrichedLR(cellchat, signaling = c(cellchat@netP[["pathways"]]),
+                    geneLR.return = TRUE)
+
+    # visualize the contribution of each LR pairs to the communication network
+    netAnalysis_contribution(cellchat, 
+                            signaling = c(cellchat@netP[["pathways"]]), 
+                            title = "Contribution of each LR pairs")
+    # visualize the contribution of each LR pairs to the communication network top5
+    top5_ligand_receptor_pairs <-
         netAnalysis_contribution(cellchat, 
-                                signaling = c(cellchat@netP[["pathways"]]), 
-                                title = "Contribution of each LR pairs")
-        # visualize the contribution of each LR pairs to the communication network top5
-        top5_ligand_receptor_pairs <-
-            netAnalysis_contribution(cellchat, 
-                                    signaling = c(cellchat@netP[["pathways"]][1:5]))
-        ggsave(str_c("output/figures/cellchat/", group, "/", subset_db, "top5_ligand_receptor_pairs.png"),
-            top5_ligand_receptor_pairs,
-            width = 10,
-            height = 10
-        )
+                                signaling = c(cellchat@netP[["pathways"]][1]))
+    ggsave(str_c("output/figures/cellchat/", group, "/", subset_db, "top5_ligand_receptor_pairs.png"),
+        top5_ligand_receptor_pairs,
+        width = 10,
+        height = 15
+    )
+    # 10. Visualize cell-cell communication mediated by specific signaling pathways
+    extractEnrichedLR(cellchat, signaling = "COLLAGEN", geneLR.return = FALSE)
+    netAnalysis_contribution(cellchat, signaling = "COLLAGEN")
 
-        # # 10. Visualize cell-cell communication mediated by specific signaling pathways
-        # extractEnrichedLR(cellchat, signaling = "SPP1", geneLR.return = FALSE)
-        # netAnalysis_contribution(cellchat, signaling = "SPP1")
+    # Circle plot
+    netVisual_aggregate(cellchat, signaling = "COLLAGEN", layout = "circle")
+    netVisual_individual(cellchat, signaling = "COLLAGEN", 
+                        pairLR.use = "COL1A1_ITGA1_ITGB1")
 
-        # extractEnrichedLR(cellchat, signaling = "CCL", geneLR.return = FALSE)
-        # netAnalysis_contribution(cellchat, signaling = "CCL")
+    # Arrange so that tumor are on one side in the chord diagram
+    # Define group.cellType so that tumor cell types are grouped together
+    # Example: assign "Tumor" to tumor clusters, others as before
+    tumor_clusters <- c("Basal_Progenitor", "Proliferative", "MP_Progenitor",
+                        "COMA", "Fibrogenic", "Interactive", "Stressed")
+    other_clusters <- setdiff(levels(cellchat@idents), tumor_clusters)
 
-        # # Circle plot
-        # netVisual_aggregate(cellchat, signaling = "CCL", layout = "circle")
-        # netVisual_individual(cellchat, signaling = "CCL", layout = "circle")
-        # netVisual_individual(cellchat, signaling = "CCL", 
-        #                     pairLR.use = "CCL7_CCR1",
+    group.cellType <- c(
+        rep("Tumor", length(tumor_clusters)),
+        rep("Other", length(other_clusters)))
+    names(group.cellType) <- c(tumor_clusters, other_clusters)
 
-        # Chord diagram: group cell clusters into fibroblast, DC and TC cells
-        tumor <- c("Basal_Progenitor", "Proliferative", "MP_Progenitor",
-                    "COMA", "Fibrogenic", "Interactive")
-
-        # Arrange so that tumor are on one side in the chord diagram
-        # Define group.cellType so that tumor cell types are grouped together
-        # Example: assign "Tumor" to tumor clusters, others as before
-        tumor_clusters <- c("Basal_Progenitor", "Proliferative", "MP_Progenitor",
-                            "COMA", "Fibrogenic", "Interactive")
-        other_clusters <- setdiff(levels(cellchat@idents), tumor_clusters)
-
-        group.cellType <- c(
-            rep("Tumor", length(tumor_clusters)),
-            rep("Other", length(other_clusters)))
-        names(group.cellType) <- c(tumor_clusters, other_clusters)
-        par(mfrow = c(1, 1), xpd=TRUE)
-        par(cex = 0.5)
-        netVisual_chord_cell(cellchat, signaling = "CCL", 
+    chord_plot <-
+        netVisual_chord_cell(cellchat, signaling = "COLLAGEN", 
             group = group.cellType, 
-            title.name = paste0("CCL_", "signaling network"))
+            title.name = paste0("COLLAGEN_", "signaling network"))
 
-        # Chord diagram: define source and target cell types
-        netVisual_chord_gene(cellchat, sources.use = 4, targets.use = c(5:6), 
-                            lab.cex = 0.5,legend.pos.y = 30)
+    # Chord diagram: define source and target cell types
+    netVisual_chord_gene(cellchat, sources.use = 4, targets.use = c(5:6), 
+                        lab.cex = 0.5,legend.pos.y = 30)
 
-        netVisual_chord_gene(cellchat, sources.use = c(1,2,3,4), targets.use = 8,
-                            lab.cex = 0.5, legend.pos.x = 15)
+    netVisual_chord_gene(cellchat, sources.use = c(1,2,3,4), targets.use = 8,
+                        lab.cex = 0.5, legend.pos.x = 15)
 
-        # Chord diagram: show LR pairs associated with certain signaling pathways
-        netVisual_chord_gene(cellchat, sources.use = c(1,2,3,4), targets.use = 8,
-                            signaling = c("CCL","CXCL", "SPP1"),legend.pos.x = 8)
+    # Chord diagram: show LR pairs associated with certain signaling pathways
+    netVisual_chord_gene(cellchat,
+                         sources.use = c("Basal_Progenitor", "Proliferative", "MP_Progenitor",
+                                        "COMA", "Fibrogenic", "Interactive", "Stressed"),
+                        targets.use = c("TAMs"),
+                        signaling = c("COLLAGEN"),legend.pos.x = 8)
 
-        # Hierarchy plot 
-        # Define tumor clusters as vertex.receiver for hierarchy plot
-        tumor_clusters <- c("Basal_Progenitor", "Proliferative", "MP_Progenitor",
-                            "COMA", "Fibrogenic", "Interactive")
-        vertex.receiver <- which(levels(cellchat@idents) %in% tumor_clusters)
+    # Hierarchy plot 
+    # Define tumor clusters as vertex.receiver for hierarchy plot
+    tumor_clusters <- c("Basal_Progenitor", "Proliferative", "MP_Progenitor",
+                        "COMA", "Fibrogenic", "Interactive")
+    vertex.receiver <- which(levels(cellchat@idents) %in% tumor_clusters)
 
-        netVisual_aggregate(cellchat, signaling = "CCL", 
-                            vertex.receiver = vertex.receiver, layout = "hierarchy")
-        netVisual_individual(cellchat, signaling = "CXCL", 
-                            pairLR.use = "CXCL12_CXCR4", 
-                            vertex.receiver = vertex.receiver, 
-                            layout = "hierarchy")
+    netVisual_aggregate(cellchat, signaling = "COLLAGEN", 
+                        vertex.receiver = vertex.receiver, layout = "hierarchy")
+    netVisual_individual(cellchat, signaling = "COLLAGEN", 
+                        pairLR.use = "COL1A1_ITGA1_ITGB1", 
+                        vertex.receiver = vertex.receiver, 
+                        layout = "hierarchy")
 
-        # Heatmap for sender receiver pairs for a specific signaling pathway
-        netVisual_heatmap(cellchat, signaling = "CCL", color.heatmap = "Reds")
+    # Heatmap for sender receiver pairs for a specific signaling pathway
+    netVisual_heatmap(cellchat, signaling = "COLLAGEN", color.heatmap = "Reds")
 
-        # bubble plot 
-        # bubble plot: show all LR pairs from source to target cell groups
-        netVisual_bubble(cellchat, sources.use = 4, targets.use = c(1:10), 
-                        remove.isolate = FALSE) 
+    # bubble plot 
+    # bubble plot: show all LR pairs from source to target cell groups
+    netVisual_bubble(cellchat, sources.use = c("Basal_Progenitor", "Proliferative", "MP_Progenitor",
+                                        "COMA", "Fibrogenic", "Interactive", "Stressed"),
+                        targets.use = c(1:10), 
+                    remove.isolate = FALSE) 
 
-        # bubble plot: show LR pairs associated with certain signaling pathways
-        netVisual_bubble(cellchat, sources.use = 4, targets.use = c(5:12), 
-                        signaling = c("CCL","CXCL"), remove.isolate = FALSE)
-    }
+    # bubble plot: show LR pairs associated with certain signaling pathways
+    netVisual_bubble(cellchat, sources.use = 4, targets.use = c(5:12), 
+                    signaling = c("COLLAGEN"), remove.isolate = FALSE)
+                
+    # 1. Compute the network centrality scores
+    cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP")
+
+    # Scatter plot to visualize aggregated communication networks for each cell type, with repelled labels
+    aggregated_network <- netAnalysis_signalingRole_scatter(cellchat) + coord_fixed()
+    ggsave(str_c("output/figures/cellchat/", group, "/", subset_db_name, "_aggregated_network.png"),
+        aggregated_network,
+        width = 7,
+        height = 7
+    )
+
+    # Scatter plot to Visualize selected communication networks
+    netAnalysis_signalingRole_scatter(cellchat, signaling = "COLLAGEN")
+
+    # Heatmap to visualize dominant cell types for each signaling pathway
+    netAnalysis_signalingRole_heatmap(cellchat, pattern = "outgoing", height = 11)
+    netAnalysis_signalingRole_heatmap(cellchat, pattern = "incoming", height = 11)
+
+    # Visualize selected outgoing/incoming signals and contributing cell types
+    netAnalysis_signalingRole_heatmap(cellchat, pattern = "outgoing",
+                                        signaling = c("COLLAGEN"))
+    netAnalysis_signalingRole_heatmap(cellchat, pattern = "incoming",
+                                        signaling = c("COLLAGEN"))
+
+    # Heatmap to visualize major signaling roles of different cell groups
+    netAnalysis_signalingRole_network(cellchat, signaling = "FN1", width = 10, 
+                                    height = 5, font.size = 10)
+
+    # 2. Identify global communication patterns to explore how multiple cell types 
+    # and signaling pathways coordinate
+    # Identify and visualize outgoing communication pattern of secreting cells
+    selectK(cellchat, pattern = "outgoing") # infer the number of patterns, NMF
+    nPatterns = 4 # a suitable number of patterns is the one begin to drop suddenly.
+    cellchat <- identifyCommunicationPatterns(cellchat, pattern = "outgoing",
+                    k = nPatterns, width = 5, height = 9)
+
+    netAnalysis_river(cellchat, pattern = "outgoing") # river plot
+    netAnalysis_dot(cellchat, pattern = "outgoing") # dot plot
+
+    ## Identify and visualize incoming communication pattern of target cells
+    selectK(cellchat, pattern = "incoming")
+    nPatterns = 4
+    cellchat <- identifyCommunicationPatterns(cellchat,pattern = "incoming", 
+                    k = nPatterns, width = 5, height = 9)
+
+    netAnalysis_river(cellchat, pattern = "incoming") # river plot
+    netAnalysis_dot(cellchat, pattern = "incoming") # dot plot
+
+    # 3. Groups signaling pathways based on their functional/structural similarities
+    # Identify signaling groups based on functional similarity
+    cellchat <- computeNetSimilarity(cellchat, type = "functional")
+    cellchat <- netEmbedding(cellchat, type = "functional")
+    cellchat <- netClustering (cellchat, type = "functional", do.parallel = FALSE)
+
+    # Visualization in 2D-space based on the functional similarity
+    functional_gene_groups <-
+        netVisual_embedding(cellchat, type = "functional", label.size = 3.5)
+    ggsave(str_c("output/figures/cellchat/", group, "/", subset_db_name, "_functional_gene_groups.png"),
+        functional_gene_groups,
+        width = 7,
+        height = 7
+    )
+    netVisual_embeddingZoomIn(cellchat, type = "functional", nCol = 2)
+
+    # Identify signaling groups based on structure similarity
+    # multimeric ligand-receptor complexes, soluble agonists and antagonists, 
+    # stimulatory and inhibitory co-ligands and co-receptors
+    cellchat <- computeNetSimilarity(cellchat, type = "structural")
+    cellchat <- netEmbedding(cellchat, type = "structural")
+    cellchat <- netClustering(cellchat, type = "structural",do.parallel = FALSE)
+
+    # Visualization in 2D-space
+    structural_gene_groups <-
+        netVisual_embedding(cellchat, type = "structural", label.size = 3.5)
+    ggsave(str_c("output/figures/cellchat/", group, "/", subset_db_name, "_structural_gene_groups.png"),
+        structural_gene_groups,
+        width = 7,
+        height = 7
+    )
+    netVisual_embeddingZoomIn(cellchat, type = "structural", nCol = 2)
 }
 
+
+
+object_list <- list()
+collagen_bubble <- list()
 for (group in c(
                 "patient_prim",
                 "patient_mets",
-                "mm_prim",
-                "mm_mets",
                 "xeno_prim_cancer_normal",
-                "xeno_mets_cancer_normal"
+                "xeno_mets_cancer_normal",
+                "dogs_primhuman_ortho",
+                "dogs_metshuman_ortho",
+                "mm_primhuman_ortho",
+                "mm_metshuman_ortho"
             )) {
-    for (subset_db in c("Secreted Signaling", "ECM-Receptor", "Cell-Cell Contact")) {
-        subset_db_name <- gsub(" ", "_", subset_db)
-        cellchat <- qs::qread(str_c("output/cellchat_objects/", group, "_", subset_db_name, ".qs"))
-        future::plan("multisession", workers = 5) # do parallel
-        # 1. Compute the network centrality scores
-        cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP")
+    cellchat <- 
+        qs::qread(str_c("output/cellchat_objects/", group, "_annlevel2_everything", ".qs"))
 
-        # Scatter plot to visualize aggregated communication networks for each cell type, with repelled labels
-        aggregated_network <- netAnalysis_signalingRole_scatter(cellchat) + coord_fixed()
-        ggsave(str_c("output/figures/cellchat/", group, "/", subset_db_name, "_aggregated_network.png"),
-            aggregated_network,
-            width = 7,
-            height = 7
-        )
-
-        # Scatter plot to Visualize selected communication networks
-        netAnalysis_signalingRole_scatter(cellchat, signaling = "SPP1")
-        netAnalysis_signalingRole_scatter(cellchat, signaling = c("CXCL", "CCL"))
-
-        # Heatmap to visualize dominant cell types for each signaling pathway
-        netAnalysis_signalingRole_heatmap(cellchat, pattern = "outgoing", height = 11)
-        netAnalysis_signalingRole_heatmap(cellchat, pattern = "incoming", height = 11)
-
-        # Visualize selected outgoing/incoming signals and contributing cell types
-        netAnalysis_signalingRole_heatmap(cellchat, pattern = "outgoing",
-                                            signaling = c("CXCL", "CCL"))
-        netAnalysis_signalingRole_heatmap(cellchat, pattern = "incoming",
-                                            signaling = c("CXCL", "CCL"))
-
-        # Heatmap to visualize major signaling roles of different cell groups
-        netAnalysis_signalingRole_network(cellchat, signaling = "CCL", width = 10, 
-                                        height = 5, font.size = 10)
-
-        # 2. Identify global communication patterns to explore how multiple cell types 
-        # and signaling pathways coordinate
-
-        # # Identify and visualize outgoing communication pattern of secreting cells
-        # selectK(cellchat, pattern = "outgoing") # infer the number of patterns, NMF
-        # nPatterns = 5 # a suitable number of patterns is the one begin to drop suddenly.
-        # cellchat <- identifyCommunicationPatterns(cellchat, pattern = "outgoing",
-        #                 k = nPatterns, width = 5, height = 9)
-
-        # netAnalysis_river(cellchat, pattern = "outgoing") # river plot
-        # netAnalysis_dot(cellchat, pattern = "outgoing") # dot plot
-
-        # ## Identify and visualize incoming communication pattern of target cells
-        # selectK(cellchat, pattern = "incoming")
-        # nPatterns = 3
-        # cellchat <- identifyCommunicationPatterns(cellchat,pattern = "incoming", 
-        #                 k = nPatterns, width = 5, height = 9)
-
-        # netAnalysis_river(cellchat, pattern = "incoming") # river plot
-        # netAnalysis_dot(cellchat, pattern = "incoming") # dot plot
-
-        # 3. Groups signaling pathways based on their functional/structural similarities
-        # Identify signaling groups based on functional similarity
-        cellchat <- computeNetSimilarity(cellchat, type = "functional")
-        cellchat <- netEmbedding(cellchat, type = "functional")
-        cellchat <- netClustering (cellchat, type = "functional", do.parallel = FALSE)
-
-        # Visualization in 2D-space based on the functional similarity
-        functional_gene_groups <-
-            netVisual_embedding(cellchat, type = "functional", label.size = 3.5)
-        ggsave(str_c("output/figures/cellchat/", group, "/", subset_db_name, "_functional_gene_groups.png"),
-            functional_gene_groups,
-            width = 7,
-            height = 7
-        )
-        netVisual_embeddingZoomIn(cellchat, type = "functional", nCol = 2)
-
-        # Identify signaling groups based on structure similarity
-        # multimeric ligand-receptor complexes, soluble agonists and antagonists, 
-        # stimulatory and inhibitory co-ligands and co-receptors
-        cellchat <- computeNetSimilarity(cellchat, type = "structural")
-        cellchat <- netEmbedding(cellchat, type = "structural")
-        cellchat <- netClustering(cellchat, type = "structural",do.parallel = FALSE)
-
-        # Visualization in 2D-space
-        structural_gene_groups <-
-            netVisual_embedding(cellchat, type = "structural", label.size = 3.5)
-        ggsave(str_c("output/figures/cellchat/", group, "/", subset_db_name, "_structural_gene_groups.png"),
-            structural_gene_groups,
-            width = 7,
-            height = 7
-        )
-        netVisual_embeddingZoomIn(cellchat, type = "structural", nCol = 2)
+     # Scatter plot to visualize aggregated communication networks for each cell type, with repelled labels
+    aggregated_network <- 
+        netAnalysis_signalingRole_scatter(cellchat) +
+        coord_fixed() +
+        ggtitle(str_c(group," aggregated network"))
+    if (!dir.exists(str_c("output/figures/cellchat/", group))) {
+    dir.create(str_c("output/figures/cellchat/", group),
+                recursive = TRUE)
     }
+    ggsave(str_c("output/figures/cellchat/", group, "/", "ann2_aggregated_network.png"),
+        aggregated_network,
+        width = 10,
+        height = 10)
+
+    # Visualize selected outgoing/incoming signals and contributing cell types
+        # Scatter plot to Visualize selected communication networks
+    collagen_bubble[[group]] <-
+        netAnalysis_signalingRole_scatter(cellchat, signaling = "COLLAGEN")
+
+    ggsave(str_c("output/figures/cellchat/", group, "/", "collagen_bubble.png"),
+        collagen_bubble[[group]],
+        width = 10,
+        height = 10)
+    
+     # 3. Groups signaling pathways based on their functional/structural similarities
+    # Identify signaling groups based on functional similarity
+    cellchat <- computeNetSimilarity(cellchat, type = "functional")
+    cellchat <- netEmbedding(cellchat, type = "functional")
+    cellchat <- netClustering (cellchat, type = "functional", do.parallel = FALSE)
+    # Visualization in 2D-space based on the functional similarity
+    functional_gene_groups <-
+        netVisual_embedding(cellchat, type = "functional", label.size = 3.5) +
+        ggtitle(str_c(group," functional gene groups"))
+    ggsave(str_c("output/figures/cellchat/", group, "/", "functional_gene_groups.png"),
+        functional_gene_groups,
+        width = 7,
+        height = 7
+    )
+
+    png(filename = str_c("output/figures/cellchat/", group, "/", "collagen_network_heatmap.png"),
+        width = 1000, height = 500, res = 300)
+    netAnalysis_signalingRole_network(cellchat, signaling = "COLLAGEN", width = 10, height = 5, font.size = 10)
+
+    dev.off()
 }
+
+```
+
+
+
+
+```{r cellchat_comparative analysis}
+
+# plot for the cellchat objects
+object_list <- list()
+for (group in c(
+                "patient_prim",
+                "patient_mets",
+                # "mm_prim",
+                # "mm_mets",
+                "xeno_prim_cancer_normal",
+                "xeno_mets_cancer_normal",
+                "dogs_primhuman_ortho",
+                "dogs_metshuman_ortho",
+                "mm_primhuman_ortho",
+                "mm_metshuman_ortho"
+            )) {
+    cellchat <- 
+        qs::qread(str_c("output/cellchat_objects/", group, "_annlevel2_everything", ".qs"))
+
+    object_list[[group]] <- cellchat
+            }
+
+# rank the pathways 
+rankNet(object_list$mm_metshuman_ortho, mode="single")
+rankNet(mergeCellChat(list(object_list$mm_primhuman_ortho,
+                            object_list$mm_metshuman_ortho),
+        add.names=c("patient","xeno")),
+        mode="comparison")
+
+
+get_pathway_flow <- function(cc,
+                             dataset_name) {
+    flows <- 
+        apply(cc@netP$prob, 3, function(mat) sum(mat, na.rm = TRUE))
+    data.frame(pathway = names(flows),
+            information_flow = as.numeric(flows),
+            dataset = dataset_name,
+            stringsAsFactors = FALSE)
+}
+
+# Collect all datasets
+df_list <- 
+    Map(get_pathway_flow, object_list,
+    names(object_list))
+df_all <-
+    do.call(rbind, df_list) %>%
+    as_tibble() %>%
+    as.data.frame()
+# Pivot to wide format: rows = pathway, columns = dataset, values = information_flow
+df_wide <- df_all %>%
+    select(pathway, dataset, information_flow) %>%
+    tidyr::pivot_wider(names_from = dataset,
+                        values_from = information_flow,
+                        values_fill = 0)
+# Set rownames to pathway and remove pathway column
+mat_t <- 
+    as.data.frame(df_wide) %>%
+    column_to_rownames("pathway") %>%
+    t()
+
+# Scale and run PCA
+pca_res <- prcomp(mat_t, scale. = TRUE)
+
+# PCA plot: one dot per group (dataset)
+pca_df <- as.data.frame(pca_res$x)
+pca_df$group <- rownames(pca_df)
+
+library(ggplot2)
+ggplot(pca_df, aes(x = PC1, y = PC2, label = group)) +
+    geom_point(size = 3) +
+    geom_text(vjust = -0.5, size = 3) +
+    labs(title = "PCA of Pathway Information Flow (one dot per group)",
+            x = "PC1", y = "PC2") +
+    theme_minimal()
+
+# the pathways that drive the differences between groups
+loading_scores_df <-
+    pca_res$rotation %>%
+    as.data.frame() %>%
+    rownames_to_column("pathway")
+
+
+## Hypothesis 1: Metastasis vs. Primary (within specie
+# Function to compare pathways between two CellChat objects (e.g. primary vs. mets)
+compare_pathways <- function(cc_primary,
+                            cc_mets) {
+                        
+    info_primary <- 
+        cc_primary@netP$pathways %>% 
+        data.frame(pathway = .,
+                flow = apply(cc_primary@netP$prob, 3, function(mat) sum(mat, na.rm = TRUE)))
+    info_mets <- 
+        cc_mets@netP$pathways %>%
+        data.frame(pathway = .,
+                flow = apply(cc_mets@netP$prob, 3, function(mat) sum(mat, na.rm = TRUE)))
+
+    merged <- 
+        merge(info_primary, info_mets, by="pathway", suffixes = c("_prim", "_mets"))
+    merged$diff_mets_up <- merged$flow_mets - merged$flow_prim
+    merged$diff_prim_up <- merged$flow_prim - merged$flow_mets
+
+    merged
+}
+
+groups_by <-
+    tribble(~primary,                    ~ mets,
+            "patient_prim",               "patient_mets",
+            "mm_primhuman_ortho",         "mm_metshuman_ortho",
+            "xeno_prim_cancer_normal",    "xeno_mets_cancer_normal",
+            "dogs_primhuman_ortho",        "dogs_metshuman_ortho")
+
+for (i in 1:nrow(groups_by)) {
+    group_prim <- groups_by$primary[i]
+    group_mets <- groups_by$mets[i]
+
+    # Example: Patient primary vs. patient mets
+    patient_diff <-
+        compare_pathways(cc_primary = object_list[[group_prim]],
+                        cc_mets = object_list[[group_mets]])
+
+    # Sort and visualize
+    # Top 10 pathways enriched in mets (mets > primary)
+    top_diff_mets_up <-
+        head(patient_diff[order(-patient_diff$diff_mets_up), ], 10)
+
+    # Top 10 pathways enriched in primary (primary > mets)
+    top_diff_prim_up <-
+        head(patient_diff[order(-patient_diff$diff_prim_up), ], 10)
+
+    # Barplot of top pathways enriched in mets (mets > primary)
+    top_diff_mets_up$group <- "Metastasis"
+    # Barplot of top pathways enriched in primary (primary > mets)
+    top_diff_prim_up$group <- "Primary"
+
+    # Combine top pathways for plotting
+    top_diff_combined <- rbind(
+        top_diff_mets_up %>% dplyr::select(pathway, flow_mets, flow_prim, group),
+        top_diff_prim_up %>% dplyr::select(pathway,  flow_mets, flow_prim, group))
+
+    # Reshape to long format for ggplot
+    top_diff_long <-
+        top_diff_combined %>%
+        tidyr::pivot_longer(cols = c(flow_prim, flow_mets),
+                            names_to = "condition",
+                            values_to = "information_flow") %>%
+        mutate(condition = ifelse(condition == "flow_prim", "Primary", "Metastasis")) %>%
+        arrange(desc(group), information_flow) %>%
+        mutate(pathway = factor(pathway, levels = unique(pathway)))
+
+    ggplot(top_diff_long,
+                    aes(x = information_flow, y = pathway,
+                            fill = condition)) +
+        geom_bar(stat = "identity", position = "dodge") +
+        labs(title = "Top 10 Differential Pathways: Metastasis vs. Primary",
+                x = "Information Flow", y = "Pathway") +
+        scale_fill_manual(values = c("Metastasis" = "#E41A1C", "Primary" = "#377EB8")) +
+        theme_minimal()
+
+    ggsave(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets, "_top_diff_pathways.png"),
+        width = 10,
+        height = 10,
+        bg = "white"
+    )
+}
+
+
+
+# look at top five pathways for everything
+pathways_list <- list()
+
+for (item in names(object_list)) {
+    cc <- object_list[[item]]
+    top_pathways <-
+        cc@netP$pathways %>%
+        data.frame(pathway = .,
+                flow = apply(cc@netP$prob, 3, function(mat) sum(mat, na.rm = TRUE)))
+    top5 <-
+        head(top_pathways[order(-top_pathways$flow), ], 5) %>%
+        mutate(group = item)
+
+    pathways_list[[item]] <- top5
+}
+
+pathwys_df <-
+    do.call(rbind, pathways_list) %>%
+    as_tibble() %>%
+    as.data.frame()
+
+# Define plot_cols as a named vector, e.g.:
+# plot_cols <- c("patient_prim"="#1f77b4", "patient_mets"="#ff7f0e", ...)
+top5_all <-
+    ggplot(pathwys_df,
+    aes(x = flow, y = pathway, fill = group)) +
+    geom_bar(stat = "identity",position = position_dodge(preserve = "single", width = 0.8), width = 0.7) +
+    labs(title = "Top 5 Pathways per Group",
+        x = "Information Flow", y = "Pathway") +
+    scale_fill_manual(values = plot_cols) +
+    theme_minimal()
+
+ggsave("output/figures/cellchat/top5_pathways_all.png",
+    top5_all,
+    width = 10,
+    height = 10,
+    bg = "white"
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# run it broadly
+```
+
+
+
+## spatial nichenet
+
+```{r spatial_nichenet_analysis}
+
+average_spatial_leestat <- 
+    read_tsv("/gpfs0/home2/gdrobertslab/lab/Analysis/Matt/24_Osteo_atlas/output/spacexr/granular_references/lee_perms/average_lee_stats.tsv") 
+
+not_correlated <-
+    average_spatial_leestat %>%
+    filter(group != "Correlated")
+
+ggplot(data.frame(value = correlated$lee_stat), aes(x = value)) +
+    geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+    ggtitle("Histogram of Correlated Lee Stat Values") +
+    xlab("Lee Stat")
+
+
+df_pairs <-
+    average_spatial_leestat %>%
+    rownames_to_column("Cell1") %>%
+    pivot_longer(-Cell1, names_to = "Cell2", values_to = "LeeStat") %>%
+    filter(Cell1 != Cell2)
+
+# Select top 10% values
+threshold <- quantile(df_pairs$LeeStat, 0.95)
+
+top_pairs <- df_pairs %>% filter(LeeStat >= threshold)
+high_cells <- top_pairs %>%
+  gather(CellRole, Cell, Cell1:Cell2) %>%
+  group_by(Cell) %>%
+  summarise(Count = n()) %>%
+  arrange(desc(Count))
+
+# Option 1: Use a fixed LeeStat threshold (e.g., 0.1)
+fixed_threshold <- 0.2
+top_pairs_fixed <- df_pairs %>% filter(LeeStat >= fixed_threshold)
+high_cells_fixed <- 
+    top_pairs_fixed %>%
+    gather(CellRole, Cell, Cell1:Cell2) %>%
+    group_by(Cell) %>%
+    summarise(Count = n()) %>%
+    arrange(desc(Count))
+
+
+
+
+
+
+
+
+
+
+
+# Plot a histogram for each column in average_spatial_leestat using ggplot2
+library(ggplot2)
+library(cowplot)
+
+hist_list <- list()
+for (col in colnames(average_spatial_leestat)) {
+    df <- data.frame(value = average_spatial_leestat[[col]])
+    hist_list[[col]] <-
+        ggplot(df, aes(x = value)) +
+        geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+        ggtitle(paste("Histogram of", col)) +
+        xlab(col)
+}
+
+hists <-
+    plot_grid(plotlist = hist_list, ncol = 3)
+ggsave("output/figures/cellchat/average_spatial_leestat_histograms.png",
+    hists,
+    width = 15,
+    height = 45
+)
+
+# Combine all values into a single vector and plot as one histogram
+average_spatial_leestat_long <- 
+    average_spatial_leestat %>%
+    tibble::rownames_to_column("cell_type_1") %>%
+    tidyr::pivot_longer(-cell_type_1, names_to = "cell_type_2", values_to = "value")
+
+all_values <- average_spatial_leestat_long$value
+
+# Plot a histogram of all values combined
+ggplot(data.frame(value = all_values), aes(x = value)) +
+    geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+    ggtitle("Histogram of All Values in average_spatial_leestat") +
+    xlab("Value")
+
+median_value <- median(average_spatial_leestat_long$value, na.rm = TRUE)
+
+celltypes_for_callchat <-
+
+
+
+
+
+
+# Install the NNLM package
+devtools::install_github("linxihui/NNLM")
+# Install SpaTalk
+devtools::install_github("ZJUFanLab/SpaTalk")
+
+library(NNLM)
+library(SpaTalk)
+
+if (!dir.exists("output/spatial_objects/")) {
+    dir.create("output/spatial_objects/",
+    recursive = TRUE)
+}
+
+spatial_objects <- 
+   qs::qread("output/spatial_objects/spatial_list_level3_annotations.qs")
+
+scObj <- 
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs")
+sc_data <- GetAssayData(scObj, assay = "RNA", slot = "data")
+
+for (item in names(spatial_objects)) {
+    object <- spatial_objects[[item]]
+
+    celltypes <- c(
+        "myCAFs", "Pericytes", "Adv_Fibroblasts", "apCAFs", "Neuronal", "CD4_T",
+        "CD8_T", "Prolif_T", "NK_cells", "T_Reg", "Naive_T", "Plasma_B",
+        "Memory_B", "Inflam_TAMs", "Mast", "DC2", "TAMs", "Scar_TAMs",
+        "Monocytes", "Prolif_TAMs", "DC1", "IFN_TAMs", "Fibrogenic_TAMs",
+        "Alv_Macrophages", "Osteoclast_TAMs", "Endothelial_Vein",
+        "Endothelial_Capillary", "Endothelial_Artery", "AT2",
+        "Endothelial_Lymphatic", "Endothelial_Activated", "Capillary_Aerocyte",
+        "Endothelial_Prolif", "Ciliated_cells", "AT1", "Basal_Progenitor",
+        "Fibrogenic", "MP_Progenitor", "Proliferative", "Interactive", "COMA")
+    
+    # Subset just the cell types of interestprop_mat <- object@meta.data[, celltypes]
+    prop_mat <- object@meta.data[, celltypes]
+    rownames(prop_mat) <- rownames(object@meta.data)
+
+        # Create SpaTalk object
+    st_obj <- 
+        createSpaTalk(st_data = prop_mat,        # Deconvolution results
+                        st_meta = object@meta.data[, c("x", "y")],  # Spatial coordinates
+                        species = "Human",         # Adjust if using mouse data
+                        if_st_is_sc = FALSE,       # Indicate spot-based data
+                        spot_max_cell = 30         # Recommended for 10x 55um data
+                        )
+
+
+
+    # --------------------------------------
+# INPUTS
+# --------------------------------------
+# prop_mat: spots × celltypes (from deconvolution)
+#           rows = spot IDs, cols = cell types, values = proportion [0-1]
+# ref_expr: genes × celltypes (reference scRNA-seq average expression)
+#           rows = gene symbols, cols = cell types
+# meta:     data.frame with rownames = spots, and extra info (e.g. sample, region)
+
+# Example: ensure order matches
+
+    prop_mat <- object@meta.data[, celltypes]
+    # Assign each spot the dominant cell type
+    meta <- data.frame(celltype = celltypes[max.col(prop_mat, ties.method = "first")])
+    rownames(meta) <- rownames(prop_mat)
+
+# --------------------------------------
+# 1. Build pseudo-expression matrix
+# --------------------------------------
+# E_spot_gene = prop * ref expression
+pseudo_expr <- as.matrix(prop_mat) %*% t(as.matrix(ref_expr))
+# Now: spots × genes
+
+pseudo_expr <- t(pseudo_expr)  # make it genes × spots (CellChat expects genes × cells)
+
+# --------------------------------------
+# 2. Create CellChat object
+# --------------------------------------
+cellchat <- createCellChat(object = pseudo_expr, meta = meta, group.by = "celltype")
+
+# Use the appropriate database
+CellChatDB <- CellChatDB.human  # or .mouse
+cellchat@DB <- CellChatDB
+
+# --------------------------------------
+# 3. Run pipeline
+# --------------------------------------
+cellchat <- subsetData(cellchat) # subset the ligand–receptor genes
+cellchat <- computeCommunProb(cellchat, type = "triMean")
+cellchat <- filterCommunication(cellchat, min.cells = 10)
+cellchat <- computeCommunProbPathway(cellchat)
+cellchat <- aggregateNet(cellchat)
+
+# --------------------------------------
+# 4. Visualize
+# --------------------------------------
+netVisual_circle(cellchat@net$count, 
+                 vertex.label = levels(cellchat@idents),
+                 title.name = "Tumor–stroma Pseudo L–R Network")
+
+
+
+
+
+    # Prepare input data for CelChat analysis
+    data.input = GetAssayData(cortex, slot = "data", assay = "SCT") # SCT normalized
+    meta = data.frame(labels = Idents(cortex), row.names = names(Idents(cortex))) 
+
+    # load spatial imaging information: Spatial locations of spots 
+    spatial.locs = GetTissueCoordinates(cortex, scale = NULL, 
+                                        cols = c("imagerow", "imagecol")) 
+
+    # Scale factors and spot diameters of the full resolution images 
+    scale.factors = jsonlite::fromJSON(txt = file.path(
+    "../Desktop/Video_Tutorials/Cellchat/Mouse_Brain_Sagittal_Anterior/spatial/", 
+    'scalefactors_json.json'))
+    scale.factors = list(spot.diameter = 65, 
+        spot = scale.factors$spot_diameter_fullres, 
+        fiducial = scale.factors$fiducial_diameter_fullres, 
+        hires = scale.factors$tissue_hires_scalef, 
+        lowres = scale.factors$tissue_lowres_scalef)   
+
+    # Create a CellChat object
+    cellchat <- createCellChat(object = data.input, meta = meta, group.by = "labels",
+                            datatype = "spatial", coordinates = spatial.locs, 
+                            scale.factors = scale.factors)
+
+    cellchat
+
+    # use Secreted Signaling from CellChatDB for cell-cell communication analysis
+    cellchat@DB <- subsetDB(CellChatDB.mouse, search = "Secreted Signaling")
+
+    # subset the expression data of signaling genes for saving computation cost
+    cellchat <- subsetData(cellchat)
+
+    # Pre-processing
+    cellchat <- identifyOverExpressedGenes(cellchat)
+    cellchat <- identifyOverExpressedInteractions(cellchat)
+
+    # Compute the communication probability and infer cellular communication network
+    cellchat <- computeCommunProb(cellchat, type = "truncatedMean", trim = 0.1, 
+            distance.use = TRUE, interaction.length = 200, scale.distance = 0.01)
+
+    # Filter out the cell-cell communication if number of cells <10 in a group
+    cellchat <- filterCommunication(cellchat, min.cells = 10)
+
+    cellchat <- computeCommunProbPathway(cellchat)
+
+    cellchat <- aggregateNet(cellchat)
+
+    # visualize the aggregated cell-cell communication network using Circle plot
+    groupSize <- as.numeric(table(cellchat@idents))
+    par(mfrow = c(1,2), xpd=TRUE)
+    netVisual_circle(cellchat@net$count, vertex.weight = rowSums(cellchat@net$count), 
+            weight.scale = T, label.edge= F,  arrow.size = 0.1, 
+            title.name = "Number of interactions")
+    netVisual_circle(cellchat@net$weight, vertex.weight = rowSums(cellchat@net$weight), 
+            weight.scale = T, label.edge= F, arrow.size = 0.1,
+            title.name = "Interaction weights/strength")
+
+    # selected cell-cell communication network
+    par(mfrow=c(1,1))
+    netVisual_aggregate(cellchat, signaling = c("NPY"), layout = "circle", 
+                        arrow.size = 0.1)
+    netVisual_aggregate(cellchat, signaling = c("SEMA3"), layout = "circle", 
+                        arrow.size = 0.1)
+
+    # Compute the network centrality scores
+    cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP")
+
+    # Visualize the computed centrality scores using heatmap
+    netAnalysis_signalingRole_network(cellchat, signaling = c("SEMA3"), 
+                                    width = 8, height = 2.5, font.size = 10)
+
+    # Spatial plot
+    netVisual_aggregate(cellchat, signaling = c("SEMA3"), layout = "spatial", 
+                        edge.width.max = 2, vertex.size.max = 1, alpha.image = 0.2, 
+                        vertex.label.cex = 3.5)
+
+    saveRDS(cellchat, file = "cellchat_visium_mouse_cortex.rds")
+
+}
+
+
 ```

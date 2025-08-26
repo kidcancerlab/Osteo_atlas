@@ -459,9 +459,9 @@ for (group in c("patient_xeno_prim_mets", "mouse_prim_mets", "dog_prim_mets")) {
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                     group,
                     "_cancer_cells.qs"))
-    object <-
-        subset(object,
-                method == "single_cell")
+    # object <-
+    #     subset(object,
+    #             method == "single_cell")
 
     # Run PCA for each sample (column) on the cell type counts
     celltype_sample_pca <- table(object$sample_name, object$Ann_Level3)
@@ -478,6 +478,8 @@ for (group in c("patient_xeno_prim_mets", "mouse_prim_mets", "dog_prim_mets")) {
     # Add method information to pca_data
     pca_data$Method <- object$method[match(pca_data$Sample, object$sample_name)]
     pca_data$DataSource <- object$data_source[match(pca_data$Sample, object$sample_name)]
+    pca_data$unique <- object$unique[match(pca_data$Sample, object$sample_name)]
+    pca_data$method <- object$method[match(pca_data$Sample, object$sample_name)]
     # Calculate the subpopulation (Ann_Level3) with the highest proportion for each sample
     celltype_counts <- as.data.frame.matrix(table(object$sample_name, object$Ann_Level3))
     celltype_props <- sweep(celltype_counts, 1, rowSums(celltype_counts), FUN = "/")
@@ -493,24 +495,53 @@ for (group in c("patient_xeno_prim_mets", "mouse_prim_mets", "dog_prim_mets")) {
         ggrepel::geom_text_repel(size = 3, max.overlaps = 100) +
         scale_color_manual(values = dom_cell_type_colors) +
         theme_minimal() +
-        labs(title = "PCA of Cell Type Composition per Sample",
+        labs(title = "PCA by Dominant Cell Type Composition per Sample",
              x = "PC1",
              y = "PC2",
-             color = "dominant_cell_type") 
+             color = "dominant_cell_type")
+    
+    # define color for unique
+    unique_types <- unique(pca_data$unique)
+    unique_cell_type_colors <- setNames(RColorBrewer::brewer.pal(min(length(unique_types), 8), "Set1")[seq_along(unique_types)], unique_types)
+    pca_plot_unique <-
+        ggplot(pca_data, aes(x = PC1, y = PC2, label = Sample, color = unique)) +
+        geom_point(size = 3) +
+        ggrepel::geom_text_repel(size = 3, max.overlaps = 100) +
+        scale_color_manual(values = unique_cell_type_colors) +
+        theme_minimal() +
+        labs(title = "PCA of site Composition per Sample",
+             x = "PC1",
+             y = "PC2",
+             color = "dominant_cell_type")
+    
+    # deine color for method
+    method_types <- unique(pca_data$method)
+    method_cell_type_colors <- setNames(RColorBrewer::brewer.pal(min(length(method_types), 8), "Set1")[seq_along(method_types)], method_types)
+    pca_plot_method <-
+        ggplot(pca_data, aes(x = PC1, y = PC2, label = Sample, color = method)) +
+        geom_point(size = 3) +
+        ggrepel::geom_text_repel(size = 3, max.overlaps = 100) +
+        scale_color_manual(values = method_cell_type_colors) +
+        theme_minimal() +
+        labs(title = "PCA of Method Composition per Sample",
+             x = "PC1",
+             y = "PC2",
+             color = "dominant_cell_type")
+
     # Automatically determine optimal number of clusters using the elbow method
-    max_k <- min(3, nrow(pca_data) - 1)
+    max_k <- min(6, nrow(pca_data) - 1)
     wss <- sapply(1:max_k, function(k) {
         kmeans(pca_data[, c("PC1", "PC2")], centers = k, nstart = 10)$tot.withinss
     })
-    # Find the "elbow" point where the decrease in WSS slows down
+    # Calculate the second derivative to find the "elbow"
     if (length(wss) > 2) {
-        diffs <- diff(wss)
-        elbow <- which.max(diffs[-1] / diffs[-length(diffs)]) + 1
+        d1 <- diff(wss)
+        d2 <- diff(d1)
+        elbow <- which.min(d2) + 1
         optimal_k <- elbow
     } else {
-        optimal_k <- 2
+        optimal_k <- max_k
     }
-
     # Perform clustering in PCA space with optimal number of clusters
     pca_clusters <- kmeans(pca_data[, c("PC1", "PC2")], centers = optimal_k, nstart = 25)
     pca_data$Cluster <- as.factor(pca_clusters$cluster) # Convert to factor for coloring
@@ -527,12 +558,13 @@ for (group in c("patient_xeno_prim_mets", "mouse_prim_mets", "dog_prim_mets")) {
         theme(plot.title = element_text(hjust = 0.5, size = 12, face = "bold"))
 
     combined_pca_plot <- 
-        cowplot::plot_grid(pca_plot, pca_cluster_plot, ncol = 1)
+        cowplot::plot_grid(pca_plot, pca_plot_unique,
+                         pca_plot_method, pca_cluster_plot, ncol = 2)
 
     ggsave(str_c("output/figures/tumor_vs_stroma/", group, "_celltype_composition_pca.png"),
         plot = combined_pca_plot,
-        width = 6,
-        height = 12,
+        width = 20,
+        height = 20,
         bg = "white")
 
 
@@ -553,7 +585,6 @@ for (group in c("patient_xeno_prim_mets", "mouse_prim_mets", "dog_prim_mets")) {
              y = "Loading") +
         theme(plot.title = element_text(hjust = 0.5, size = 12, face = "bold"),
               axis.text.x = element_text(angle = 45, hjust = 1))
-
 
 }
 
