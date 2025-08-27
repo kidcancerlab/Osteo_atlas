@@ -1,170 +1,7 @@
 
+
 ## Run Nichenet and other analyses
-Workflow (CellChat only)
-0) Species setup (incl. PDX)
 
-Human, dog, mouse (non-PDX): run CellChat per dataset with the matching DB (CellChatDB.human for human; CellChatDB.mouse for mouse). For dog, map canine genes to human orthologs first and then use CellChatDB.human (CellChat doesn’t ship a dog DB).
-
-PDX (human tumor + mouse stroma): map mouse stroma gene symbols to human orthologs, keep human tumor genes as human, so the whole object uses human symbols, and run with CellChatDB.human. (CellChat expects one species’ symbol space per object.) If you prefer not to remap, run two CellChat objects (human-only; mouse-only) and compare at the pathway level rather than per-gene L–R.
-
-The CellChat docs include human and mouse DBs, and support comparison across datasets, identifying conserved vs context-specific signaling via joint manifold learning and rank/graph contrasts. 
-rdrr.io
-+2
-rdrr.io
-+2
-Nature
-
-1) Run CellChat per model (tumor+stroma together)
-library(CellChat)
-
-prep_cellchat <- function(seu, group_col, species=c("human","mouse")){
-  # seu: Seurat with all cells (tumor + stroma); group_col: celltype labels (e.g., Tumor, CAF, TAM, EC, etc.)
-  data.input <- GetAssayData(seu, slot="data")          # log-normalized
-  meta <- seu@meta.data
-  cellchat <- createCellChat(object = data.input, meta = meta, group.by = group_col)
-
-  CellChatDB <- if (species=="human") CellChatDB.human else CellChatDB.mouse
-  cellchat@DB <- CellChatDB
-
-  cellchat <- subsetData(cellchat)                       # filters LR to expressed genes
-  cellchat <- identifyOverExpressedGenes(cellchat)
-  cellchat <- identifyOverExpressedInteractions(cellchat)
-
-  # permutation-based significance; set nboot as you like
-  cellchat <- computeCommunProb(cellchat, type="triMean", raw.use=FALSE, population.size=TRUE, nboot=100)
-  cellchat <- filterCommunication(cellchat, min.cells = 20)       # tighten thresholds as needed
-
-  cellchat <- computeCommunProbPathway(cellchat)
-  cellchat <- aggregateNet(cellchat)                     # aggregate to pathway- and pair-level nets
-  return(cellchat)
-}
-
-# Example:
-# ch_human  <- prep_cellchat(seu_human,  "celltype", species="human")
-# ch_dog    <- prep_cellchat(seu_dog_mapped_to_human, "celltype", species="human")
-# ch_mouse  <- prep_cellchat(seu_mouse,  "celltype", species="mouse")
-# ch_pdx    <- prep_cellchat(seu_pdx_all_in_human_symbols, "celltype", species="human")
-
-
-CellChat performs the permutation-based computation of communication probabilities and pathway aggregation you’ll use downstream. 
-RDocumentation
-rdrr.io
-
-2) Compare datasets & call “conserved” signaling
-A) Merge for comparison
-object.list <- list(human=ch_human, dog=ch_dog, mouse=ch_mouse, pdx=ch_pdx)
-cellchat_all <- mergeCellChat(object.list, add.names = names(object.list))
-
-
-You can then use built-in comparison utilities (network size/weight, diffs, embedding). 
-rdrr.io
-
-B) Pathway-level conservation (recommended)
-
-Use CellChat’s joint manifold + clustering on pathway networks to find conserved vs context-specific pathways across models:
-
-# Works even when cell compositions differ: use structural similarity
-cellchat_all <- computeNetSimilarityPairwise(cellchat_all, type="structural")
-cellchat_all <- netEmbedding(cellchat_all, type="structural")
-cellchat_all <- netClustering(cellchat_all, type="structural")
-
-# Visualize clusters of pathways and inspect those that are shared across datasets
-netVisual_embeddingPairwise(cellchat_all, type="structural", label.size = 3.5)
-
-
-This is the canonical CellChat approach for “conserved/context-specific” signaling across multiple datasets. 
-rdrr.io
-+1
-
-C) Ligand–receptor pair conservation (edge-level)
-
-Extract significant LR edges from each object:
-
-get_sig_pairs <- function(ch){
-  # returns L-R with sender & receiver and adjusted p from ch@netP
-  extractEnrichedLR(ch, signaling = NULL)  # or use ch@LR$LRsig for the table
-}
-lr_h <- get_sig_pairs(ch_human)
-lr_d <- get_sig_pairs(ch_dog)
-lr_m <- get_sig_pairs(ch_mouse)
-lr_x <- get_sig_pairs(ch_pdx)
-
-
-Harmonize gene symbols (all human symbols if you remapped dog/mouse/PDX).
-
-Define an edge key LR = paste(ligand, receptor, sep="~") and a direction key edge = paste(sender,"→",receiver); mark an edge “present” in a model if it passes CellChat’s significance filter.
-
-Call conserved if present in ≥3 of your models (human, dog, mouse, PDX).
-CellChat’s extraction and merging flow is documented in the comparison tutorials. 
-rdrr.io
-
-3) Tumor↔stroma focus and robustness checks
-
-Restrict to tumor↔stroma: subset edges where sender %in% stroma_labels & receiver == "Tumor" (and the reverse if needed).
-
-Expression specificity: confirm ligand expression in sender and receptor in receiver (CellChat stores averaged expr per group; you can also check computeAveExpr).
-
-Permutation control: your computeCommunProb(..., nboot=100+) already supplies permutation; keep LR edges with adjusted p below your cutoff in each dataset. 
-RDocumentation
-
-Different compositions across datasets? Use liftCellChat to align group labels, or rely on structural similarity comparisons that tolerate differences. 
-rdrr.io
-
-4) Practical outputs you can generate (CellChat-native)
-
-Conserved pathway map: netVisual_embeddingPairwise(...) with clusters annotated as conserved/context-specific. 
-rdrr.io
-
-Edge panels for top conserved LR (e.g., TGFB, SPP1, CXCL, IL6, VEGF pathways): netVisual_bubble, netVisual_aggregate(..., layout="circle"/"chord"). 
-rdrr.io
-
-Counts/weights diffs per celltype pair: compareInteractions, netVisual_diffInteraction, netVisual_heatmap. 
-rdrr.io
-
-Notes specific to your cross-species atlas
-
-PDX: keep species-specific reads separated (human tumor vs mouse stroma) and then ortholog-map the mouse symbols to human to run a unified CellChat object, which is common practice for PDX CCC analyses. Background on separating PDX human/mouse signals is widely described. 
-Nature
-qianzhulab.github.io
-
-Dog: no built-in canine DB—so ortholog-map to human symbols and use the human DB.
-
-Minimal code skeleton to produce a “conserved LR” table
-library(dplyr)
-
-to_tbl <- function(df, model){
-  df %>% transmute(
-    model = model,
-    ligand = ligand, receptor = receptor,
-    sender = source, receiver = target,
-    LR = paste(ligand, receptor, sep="~"),
-    edge = paste(sender, "→", receiver),
-    sig = p.adjust < 0.05 | (!!as.name("adj_pval") < 0.05) # adapt to your column name
-  ) %>% filter(sig)
-}
-
-tbl <- bind_rows(
-  to_tbl(lr_h, "human"),
-  to_tbl(lr_d, "dog"),
-  to_tbl(lr_m, "mouse"),
-  to_tbl(lr_x, "pdx")
-)
-
-conserved_lr <- tbl %>%
-  group_by(LR, edge) %>%
-  summarise(models_present = n_distinct(model), which = paste(sort(unique(model)), collapse=","), .groups="drop") %>%
-  filter(models_present >= 3)
-
-# Write out
-# write.csv(conserved_lr, "results/cellchat_conserved_tumor_stroma_lr.csv", row.names=FALSE)
-
-What you’ll be able to claim (CellChat-only):
-
-“CellChat’s joint analysis identified conserved stromal→tumor pathways (e.g., TGFB, SPP1, CXCL, IL6, VEGF) across human, dog, mouse, and PDX, and highlighted context-specific edges unique to models.” (Backed by CellChat’s comparison vignettes + permutation calls.) 
-rdrr.io
-+1
-
-If you want, I can tailor the code to your exact Seurat object names (labels for Tumor/CAF/TAM/EC, your dog/mouse→human ortholog map, and the PDX symbol harmonization).
 ```{r cell_cell_communication}
 object_list <-
     tribble(~group1,                         ~group2,                       ~group3,
@@ -305,6 +142,7 @@ run_cellchat <- function(sobject,
     meta <- data.frame(labels = sobject[[group.by]][,1], row.names=colnames(sobject))
     cellchat <- createCellChat(object = data.input, meta = meta, group.by = "labels")
     cellchat@DB <- if (species_db=="human") CellChatDB.human else CellChatDB.mouse
+    future::plan("multisession", workers = 10) # do parallel
     cellchat <- 
         subsetData(cellchat) %>%
         identifyOverExpressedGenes() %>%
@@ -313,11 +151,64 @@ run_cellchat <- function(sobject,
         filterCommunication(min.cells = 10) %>%
         computeCommunProbPathway() %>%
         aggregateNet() %>%
-        netAnalysis_computeCentrality()
+        netAnalysis_computeCentrality()%>%
+        computeNetSimilarity(type = "functional") %>%
+        netEmbedding(type = "functional") %>%
+        netClustering(type = "functional", do.parallel = FALSE) %>%
+        computeNetSimilarity(type = "structural") %>%
+        netEmbedding(type = "structural") %>%
+        netClustering(type = "structural", do.parallel = FALSE)
   return(cellchat)
 }
 
-# ann_level2
+# ann_level2 sample by sample
+
+# cellchat at ann_level3 using all the pathways general
+for (group in c(
+                "patient_prim",
+                "patient_mets",
+                "mm_prim",
+                "mm_mets"
+                # "xeno_prim_cancer_normal",
+                # "xeno_mets_cancer_normal",
+                # "dogs_primhuman_ortho",
+                # "dogs_metshuman_ortho",
+                # "mm_primhuman_ortho",
+                # "mm_metshuman_ortho"
+            )) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    for (sample in unique(object$sample_name)){
+        sub_object <- subset(object, sample_name == sample)
+        # Subset to max 500 cells per celltype (Ann_Level2)
+        celltype_counts <- table(sub_object$Ann_Level3)
+        sub_object <- SetIdent(sub_object, value = "Ann_Level3")
+        cells_to_keep <- unlist(lapply(names(celltype_counts), function(ct) {
+            ct_cells <- WhichCells(sub_object, idents = ct)
+            if (length(ct_cells) > 100) {
+                sample(ct_cells, 100)
+            } else {
+                ct_cells
+            }
+        }))
+        sub_object <- 
+            subset(object, cells = cells_to_keep)
+        
+        cellchat <-
+            run_cellchat(sobject = sub_object,
+                        group.by="Ann_Level2",
+                        species_db=sub_object$organism[1])
+        if (!dir.exists(str_c("output/cellchat_objects", "/", group))) {
+            dir.create(str_c("output/cellchat_objects", "/", group),
+                        recursive = TRUE)
+        }
+        qs::qsave(cellchat, str_c("output/cellchat_objects/", group, "/", sample, "_AnnL2_whole", ".qs"))
+    }
+}
+
+
 
 # cellchat at ann_level3 using all the pathways general
 for (group in c(
@@ -386,56 +277,10 @@ for (group in c(
     object <- 
         subset(object, cells = cells_to_keep)
                                 
-    data.input <-
-        GetAssayData(object,
-                    assay = "RNA",
-                    slot = "data") 
-    labels <- object$Ann_Level3
-    meta <- 
-        data.frame(group = labels,
-                    row.names = names(labels)) 
-    cellchat <- 
-        createCellChat(object = data.input,
-                        meta = meta,
-                        group.by = "group")
-
-    # Load the ligand-receptor interaction database
-    CellChatDB.use <- 
-        if (object$organism[1] == "human") CellChatDB.human else CellChatDB.mouse
-
-    # whatever you deice to use
-    cellchat@DB <- CellChatDB.use
-    
-    # 3.Subset and pre-processing the expression data 
-    # subset the expression data to use less RAM
-    cellchat <- subsetData(cellchat)
-    future::plan("multisession", workers = 5) # do parallel
-
-    # Pre-processing the expression data
-    cellchat <- identifyOverExpressedGenes(cellchat)
-    cellchat <- identifyOverExpressedInteractions(cellchat)
-
-    # 4. Compute the communication probability and infer cellular communication network
-    cellchat <- computeCommunProb(cellchat)
-
-    # 5. Filter out the cell-cell communication if there are only few number of cells 
-    # in certain cell groups
-    cellchat <- filterCommunication(cellchat, min.cells = 10)
-
-    # 6. Infer the cell-cell communication at a signaling pathway level
-    cellchat <- computeCommunProbPathway(cellchat)
-
-    # 7. Calculate the aggregated cell-cell communication network
-    cellchat <- aggregateNet(cellchat)
-
-    # # 8. Compute the network centrality scores
-    # cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP")
-
-    # # 9. Groups signaling pathways based on their functional/structural similarities
-    # # Identify signaling groups based on functional similarity
-    # cellchat <- computeNetSimilarity(cellchat, type = "functional")
-    # cellchat <- netEmbedding(cellchat, type = "functional")
-    # cellchat <- netClustering (cellchat, type = "functional", do.parallel = FALSE)
+    cellchat <-
+        run_cellchat(sobject = object,
+                     group.by="Ann_Level3",
+                     species_db=object$organism[1])
 
     # save the cellchat object
     if (!dir.exists("output/cellchat_objects")) {
@@ -502,48 +347,22 @@ for (group in c(
         
         # 3.Subset and pre-processing the expression data 
         # subset the expression data to use less RAM
-        cellchat <- subsetData(cellchat)
         future::plan("multisession", workers = 5) # do parallel
-
-        # Pre-processing the expression data
-        cellchat <- identifyOverExpressedGenes(cellchat)
-        cellchat <- identifyOverExpressedInteractions(cellchat)
-        
-        # # Optional: project gene expression data onto protein-protein interaction (PPI)
-        # if (object$organism[1] == "human") {
-        #     cellchat <- projectData(cellchat, PPI.human)
-        # } else if (object$organism[1] == "mouse") {
-        #     cellchat <- CellChat::projectData(cellchat, PPI.mouse) # PPI.mouse for mouse samples
-        # }
-
-        # 4. Compute the communication probability and infer cellular communication network
-        cellchat <- computeCommunProb(cellchat)
-
-        # 5. Filter out the cell-cell communication if there are only few number of cells 
-        # in certain cell groups
-        cellchat <- filterCommunication(cellchat, min.cells = 10)
-
-        # 6. Infer the cell-cell communication at a signaling pathway level
-        cellchat <- computeCommunProbPathway(cellchat)
-
-        # 7. Calculate the aggregated cell-cell communication network
-        cellchat <- aggregateNet(cellchat)
-
-        # 8. Compute the network centrality scores
-        cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP")
-
-        # # 9. Groups signaling pathways based on their functional/structural similarities
-        # # Identify signaling groups based on functional similarity
-        # cellchat <- computeNetSimilarity(cellchat, type = "functional")
-        # cellchat <- netEmbedding(cellchat, type = "functional")
-        # cellchat <- netClustering (cellchat, type = "functional", do.parallel = FALSE)
-
-        # # Identify signaling groups based on structure similarity
-        # # multimeric ligand-receptor complexes, soluble agonists and antagonists, 
-        # # stimulatory and inhibitory co-ligands and co-receptors
-        # cellchat <- computeNetSimilarity(cellchat, type = "structural")
-        # cellchat <- netEmbedding(cellchat, type = "structural")
-        # cellchat <- netClustering(cellchat, type = "structural",do.parallel = FALSE)
+        cellchat <-
+            subsetData(cellchat) %>%
+            identifyOverExpressedGenes() %>%
+            identifyOverExpressedInteractions() %>%
+            computeCommunProb() %>%
+            filterCommunication(min.cells = 10) %>%
+            computeCommunProbPathway() %>%
+            aggregateNet() %>%
+            netAnalysis_computeCentrality() %>%
+            computeNetSimilarity(type = "functional") %>%
+            netEmbedding(type = "functional") %>%
+            netClustering(type = "functional", do.parallel = FALSE) %>%
+            computeNetSimilarity(type = "structural") %>%
+            netEmbedding(type = "structural") %>%
+            netClustering(type = "structural", do.parallel = FALSE)
 
         # save the cellchat object
         if (!dir.exists("output/cellchat_objects")) {
@@ -573,11 +392,9 @@ for (group in c(
         c("MP_Progenitor", "Fibrogenic", "Interactive", "Basal_Progenitor",
         "Proliferative", "COMA", "Scar_TAMs", "Osteoclast_TAMs", "Prolif_TAMs",
         "IFN_TAMs", "Fibrogenic_TAMs", "Inflam_TAMs","TAMs")
-    
     #subset just TAMs and tumor cells
     object <- 
         subset(object, Ann_Level3 %in% celltypes)
-
     # Subset to max 500 cells per celltype (Ann_Level3)
     celltype_counts <- table(object$Ann_Level3)
     object <- SetIdent(object, value = "Ann_Level3")
@@ -618,49 +435,21 @@ for (group in c(
         
         # 3.Subset and pre-processing the expression data 
         # subset the expression data to use less RAM
-        cellchat <- subsetData(cellchat)
         future::plan("multisession", workers = 5) # do parallel
-
-        # Pre-processing the expression data
-        cellchat <- identifyOverExpressedGenes(cellchat)
-        cellchat <- identifyOverExpressedInteractions(cellchat)
-        
-        # # Optional: project gene expression data onto protein-protein interaction (PPI)
-        # if (object$organism[1] == "human") {
-        #     cellchat <- projectData(cellchat, PPI.human)
-        # } else if (object$organism[1] == "mouse") {
-        #     cellchat <- CellChat::projectData(cellchat, PPI.mouse) # PPI.mouse for mouse samples
-        # }
-
-        # 4. Compute the communication probability and infer cellular communication network
-        cellchat <- computeCommunProb(cellchat)
-
-        # 5. Filter out the cell-cell communication if there are only few number of cells 
-        # in certain cell groups
-        cellchat <- filterCommunication(cellchat, min.cells = 10)
-
-        # 6. Infer the cell-cell communication at a signaling pathway level
-        cellchat <- computeCommunProbPathway(cellchat)
-
-        # 7. Calculate the aggregated cell-cell communication network
-        cellchat <- aggregateNet(cellchat)
-
-        # 8. Compute the network centrality scores
-        cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP")
-
-        # 9. Groups signaling pathways based on their functional/structural similarities
-        # Identify signaling groups based on functional similarity
-        cellchat <- computeNetSimilarity(cellchat, type = "functional")
-        cellchat <- netEmbedding(cellchat, type = "functional")
-        cellchat <- netClustering (cellchat, type = "functional", do.parallel = FALSE)
-
-        # Identify signaling groups based on structure similarity
-        # multimeric ligand-receptor complexes, soluble agonists and antagonists, 
-        # stimulatory and inhibitory co-ligands and co-receptors
-        cellchat <- computeNetSimilarity(cellchat, type = "structural")
-        cellchat <- netEmbedding(cellchat, type = "structural")
-        cellchat <- netClustering(cellchat, type = "structural",do.parallel = FALSE)
-
+        cellchat <- subsetData(cellchat) %>%
+            identifyOverExpressedGenes() %>%
+            identifyOverExpressedInteractions() %>%
+            computeCommunProb() %>%
+            filterCommunication(min.cells = 10) %>%
+            computeCommunProbPathway() %>%
+            aggregateNet() %>%
+            netAnalysis_computeCentrality() %>%
+            computeNetSimilarity(type = "functional") %>%
+            netEmbedding(type = "functional") %>%
+            netClustering(type = "functional", do.parallel = FALSE) %>%
+            computeNetSimilarity(type = "structural") %>%
+            netEmbedding(type = "structural") %>%
+            netClustering(type = "structural", do.parallel = FALSE)
         # save the cellchat object
         if (!dir.exists("output/TAMs_Tumor_cellchat_objects")) {
             dir.create("output/TAMs_Tumor_cellchat_objects")
@@ -990,7 +779,7 @@ for (group in c(
 ```
 
 
-
+## comparative cellchat analysis
 
 ```{r cellchat_comparative analysis}
 
@@ -999,8 +788,6 @@ object_list <- list()
 for (group in c(
                 "patient_prim",
                 "patient_mets",
-                # "mm_prim",
-                # "mm_mets",
                 "xeno_prim_cancer_normal",
                 "xeno_mets_cancer_normal",
                 "dogs_primhuman_ortho",
@@ -1010,17 +797,24 @@ for (group in c(
             )) {
     cellchat <- 
         qs::qread(str_c("output/cellchat_objects/", group, "_annlevel2_everything", ".qs"))
+    
+    # qs::qsave(cellchat, str_c("output/cellchat_objects/", group, "_annlevel2_everything", ".qs")) 
 
     object_list[[group]] <- cellchat
             }
 
-# rank the pathways 
+# rank the pathways and compare across groups
 rankNet(object_list$mm_metshuman_ortho, mode="single")
+rankNet(mergeCellChat(list(object_list$patient_prim,
+                            object_list$mm_primhuman_ortho),
+        add.names=c("patient","xeno")),
+        mode="comparison",
+        stacked = TRUE)
 rankNet(mergeCellChat(list(object_list$mm_primhuman_ortho,
                             object_list$mm_metshuman_ortho),
-        add.names=c("patient","xeno")),
-        mode="comparison")
-
+        add.names=c("patient","xeno", "dog")),
+        mode="comparison",
+        stacked = FALSE)
 
 get_pathway_flow <- function(cc,
                              dataset_name) {
@@ -1032,7 +826,7 @@ get_pathway_flow <- function(cc,
             stringsAsFactors = FALSE)
 }
 
-# Collect all datasets
+# Collect all datasets and perform PCA for each dataset
 df_list <- 
     Map(get_pathway_flow, object_list,
     names(object_list))
@@ -1074,7 +868,7 @@ loading_scores_df <-
     rownames_to_column("pathway")
 
 
-## Hypothesis 1: Metastasis vs. Primary (within specie
+
 # Function to compare pathways between two CellChat objects (e.g. primary vs. mets)
 compare_pathways <- function(cc_primary,
                             cc_mets) {
@@ -1199,21 +993,254 @@ ggsave("output/figures/cellchat/top5_pathways_all.png",
 )
 
 
+cell_cols <- list(
+    "Tumor" = "#D43F3AFF",           "Normal" = "#EEA236FF",
+    "Unknown" = "#357EBDFF",         "Host" = "#EEA236FF",
+    "CAFs" = "#5CB85CFF",            "Osteoblasts" = "#B8B8B8FF",
+    "Pericytes" = "#9632B8FF",       "Neuronal" = "#46B8DAFF",
+    "Chondrocytes" = "#90302DFF",    "T_cells" = "#A66D04FF",
+    "B_cells" = "#2D577FFF",         "NK_cells" = "#3E7E3EFF",
+    "TAMs" = "#7D7D7DFF",            "DC" = "#6D1D87FF",
+    "Mast" = "#097F9AFF",            "Monocytes" = "#FF6E6AFF",
+    "Endothelial_cells" = "#FFBB70FF","MP_Progenitor" = "#68A4E3FF",
+    "Fibrogenic" = "#79D379FF",      "Basal_Progenitor" = "#CDCDCDFF",
+    "Proliferative" = "#BF6BE2FF",   "Interactive" = "#69D1F3FF",
+    "COMA" = "#DB00FF",              "Fibroblasts" = "#00B3FF",
+    "Alv_Macrophages" = "#00FFD1",   "Epithelial_cells" = "#0029FF",
+    "Neutrophils" = "#FF00D6",       "Smooth_muscle" = "#00FF47",
+    "Erythrocytes" = "#00FFE0",      "MSC" = "#FFE500",
+    "Muscle_cells" = "#00D1FF",      "ILCs" = "#FF7A00",
+    "Basal" = "#FFB300",             "Progenitor" = "#0099FF",
+    "Epithelial_Endothelial" = "#EEA236FF", "Immune_Lymphoid" = "#357EBDFF",
+    "Immune_Myeloid" = "#5CB85CFF",  "Mesenchymal" = "#B8B8B8FF"
+)
 
 
+### merge by cellchat function testing if the net number and weight of interaciton change by merging
+groups_by <-
+    tribble(~primary,                    ~ mets,
+            "patient_prim",               "patient_mets",
+            "mm_primhuman_ortho",         "mm_metshuman_ortho",
+            "xeno_prim_cancer_normal",    "xeno_mets_cancer_normal",
+            "dogs_primhuman_ortho",        "dogs_metshuman_ortho")
+
+for (i in 1:nrow(groups_by)) {
+    group_prim <- groups_by$primary[i]
+    group_mets <- groups_by$mets[i]
+
+    # Example: Patient primary vs. patient mets
+    object_list_sub <-
+        list(object_list[[group_prim]],
+             object_list[[group_mets]]) %>%
+        setNames(c(group_prim, group_mets))
+    cellchat <-
+        mergeCellChat(object.list = object_list_sub,
+                      add.names = names(object_list_sub),
+                      merge.data = FALSE,
+                      cell.prefix = FALSE)
+
+    # comapre fropm merged
+    compareInteractions(cellchat, show.legend = F, group = c(1,2), measure = "count")
+    compareInteractions(cellchat, show.legend = F, group = c(1,2), measure = "weight")
+
+    # 2. Compare the total number of interactions and interaction strength
+    # Calculate total number of interactions for each group
+    interaction_sums <- 
+        sapply(object_list_sub, function(x) sum(x@net$count))
+    interaction_sum_df <- 
+        data.frame(
+        group = names(interaction_sums),
+        total_interactions = as.numeric(interaction_sums))
+
+    # Barplot individually
+    library(ggplot2)
+    interaction_df$group <-
+        factor(interaction_df$group,
+                levels = c("patient_prim", setdiff(interaction_df$group, "patient_prim")))
+    ggplot(interaction_df, aes(x = group, y = total_interactions, fill = group, label = total_interactions)) +
+        geom_bar(stat = "identity", width = 0.6) +
+        geom_text(aes(label = total_interactions), vjust = -0.5, size = 4) +
+        labs(title = "Total Number of Interactions per Group",
+             x = "Group", y = "Total Interactions") +
+        theme_minimal() +
+        theme(legend.position = "none")
+    
+    # weight     
+    interaction_weight <- 
+        sapply(object_list_sub, function(x) sum(x@net$weight))
+    interaction_weight_df <- 
+        data.frame(
+        group = names(interaction_weight),
+        total_interactions = as.numeric(interaction_weight))
+    interaction_weight_df$group <-
+        factor(interaction_weight_df$group,
+                levels = c("patient_prim", setdiff(interaction_weight_df$group, "patient_prim")))
+    ggplot(interaction_weight_df, aes(x = group, y = total_interactions, fill = group, label = total_interactions)) +
+        geom_bar(stat = "identity", width = 0.6) +
+        geom_text(aes(label = total_interactions), vjust = -0.5, size = 4) +
+        labs(title = "Total Interaction Weights per Group",
+             x = "Group", y = "Total Interaction Weights") +
+        theme_minimal() +
+        theme(legend.position = "none")
+
+}
 
 
+# merge everything
+merged_all <-
+    mergeCellChat(object.list = object_list,
+                  add.names = names(object_list),
+                  cell.prefix = TRUE)
+# compare the total number of interactions and interaction strength
+gg1<-
+    compareInteractions(merged_all, show.legend = F, group = c(1:8)) +
+        theme(axis.text.x = element_blank())
+gg2 <-
+    compareInteractions(merged_all, show.legend = F, group = c(1:8), measure = "weight") +
+     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+combined <-
+    patchwork::wrap_plots(gg1 + xlab(NULL), gg2, ncol = 1)
 
+ggsave("output/figures/cellchat/merged_everything_compare_interactions.png",
+    combined,
+    width = 10,
+    height = 10
+)
 
-
-
-
-
-
-
-# run it broadly
 ```
+
+
+
+
+## Focus on pathways
+```{r cellchat_pathway_analysis}
+object_list <- list()
+for (group in c(
+                "patient_prim",
+                "patient_mets",
+                # "mm_prim",
+                # "mm_mets",
+                "xeno_prim_cancer_normal",
+                "xeno_mets_cancer_normal",
+                "dogs_primhuman_ortho",
+                "dogs_metshuman_ortho",
+                "mm_primhuman_ortho",
+                "mm_metshuman_ortho"
+            )) {
+    cellchat <- 
+        qs::qread(str_c("output/cellchat_objects/", group, "_annlevel2_everything", ".qs"))
+    
+    # qs::qsave(cellchat, str_c("output/cellchat_objects/", group, "_annlevel2_everything", ".qs")) 
+
+    object_list[[group]] <- cellchat
+            }
+
+# pathways to focus on
+pathways <- 
+    c("COLLAGEN", "FN1", "LAMININ")
+
+df_list <- lapply(names(object_list), function(name) {
+    obj <- object_list[[name]]
+    # sum interaction strength by pathway
+    pathways_flow <-
+        obj@netP$pathways %>%
+        data.frame(pathway = .,
+                    flow = apply(obj@netP$prob, 3, function(mat) sum(mat, na.rm = TRUE)))
+    pathways_flow_filter <-
+        pathways_flow %>%
+        filter(pathway %in% pathways) %>%
+        mutate(group = name) %>%
+        select(group, flow) %>%
+        rownames_to_column("pathway")
+
+    return(pathways_flow_filter)
+})
+
+df_all <-
+    bind_rows(df_list) %>%
+        mutate(group = factor(group, levels = c(
+            "patient_prim",
+            "patient_mets",
+            "xeno_prim_cancer_normal",
+            "xeno_mets_cancer_normal",
+            "dogs_primhuman_ortho",
+            "dogs_metshuman_ortho",
+            "mm_primhuman_ortho",
+            "mm_metshuman_ortho"
+        ))) %>%
+        arrange(group)
+
+ggplot(df_all, aes(x = group, y = flow, fill = pathway)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    ylab("Aggregated Interaction Strength") +
+    ggtitle("Collagen, FN1, Laminin signaling across osteosarcoma conditions")
+
+df_matrix <-
+    df_all %>%
+    pivot_wider(names_from = group, values_from = flow) %>%
+    column_to_rownames("pathway")
+
+pheatmap::pheatmap(df_matrix, 
+         cluster_rows = FALSE, 
+         cluster_cols = FALSE, 
+         display_numbers = TRUE,
+         color = colorRampPalette(c("white", "red"))(100),
+         main = "ECM Pathway Interaction Strength (CellChat)")
+
+
+### pull the individual interactions
+pathways.use <- c("COLLAGEN", "FN1", "LAMININ")
+
+df.netP <-
+    subsetCommunication(cellchat, slot.name = "netP")
+pathways <- unique(df.netP$pathway_name)
+print(pathways)
+
+# returns a data.frame of LR interactions (or a list if geneLR.return=TRUE)
+lr_df <- list()
+lr_and_prob <- list()
+pathways_and_lr <- list()
+for (group in names(object_list)) {
+    # pull the individual interactions without probabilities
+    lr_df[[group]] <-
+        extractEnrichedLR(object_list[[group]],
+                          signaling = c("COLLAGEN", "FN1", "LAMININ"),
+                          geneLR.return = FALSE)
+
+    # pull the individual pathways with probabilities
+    lr_and_prob[[group]] <-
+        subsetCommunication(object_list[[group]],
+                            signaling = c("COLLAGEN","FN1", "LAMININ"),
+                            slot.name = "netP") %>%
+        arrange(desc(prob))
+    
+    # pull the indivvidual pathways with individual interactions and probabilities
+     pathways_and_lr[[group]] <-
+        subsetCommunication(object_list[[group]],
+                            signaling = c("COLLAGEN","FN1", "LAMININ"),
+                            slot.name = "net") %>%
+        arrange(desc(prob))
+
+}
+
+# intersect
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
