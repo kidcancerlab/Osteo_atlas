@@ -1658,13 +1658,14 @@ for (i in 1:nrow(groups_by)) {
     # put the padj baclk to the pathways_prob_df_filtered
     pathways_prob_df_filtered <-
         pathways_prob_df_filtered %>%
-        left_join(padj_df, by = "pathway_name")
+        left_join(pull_path_pval, by = "pathway_name")
 
     prob_filter <- median(pathways_prob_df$prob)
     chosen_pathways <- 
         pathways_prob_df_filtered %>%
         filter(mean_prob > prob_filter & fold_change < 0.8) %>%
         filter(padj < 0.1) %>%
+        arrange(desc(prob)) %>%
         select(pathway_name, fold_change) %>%
         distinct()
 
@@ -2025,6 +2026,255 @@ for (i in 1:nrow(groups_by)) {
 
 
 
+
+### I want tumor to be the sender and stroma to be the receiver
+### then look at the top ligands from tumor to stroma and see what target genes they
+### might be activating using nichenet
+```{r tumor_to_stroma_cellchat_nichenet}
+
+## compare_pathway networks between primary and mets
+groups_by <-
+    tribble(~primary,                    ~ mets,
+            "patient_prim",               "patient_mets",
+            "mm_primhuman_ortho",         "mm_metshuman_ortho",
+            "xeno_prim_cancer_normal",    "xeno_mets_cancer_normal",
+            "dogs_primhuman_ortho",        "dogs_metshuman_ortho")
+
+ligand_source <- 
+    c("Interactive", "Fibrogenic", "Basal_Progenitor", "Proliferative", "COMA", "MP_Progenitor")
+
+
+receiver_celltypes <- c(
+    "CAFs", "Pericytes", 
+    "T_cells", "B_cells", "NK_cells",
+    "TAMs", "DC", "Mast",
+    "Monocytes", "Endothelial_cells",
+    "Alv_Macrophages", "Epithelial_cells"
+)
+
+## analysis for interactions and probabilities level
+for (i in 1:nrow(groups_by)) {
+    group_prim <- groups_by$primary[i]
+    group_mets <- groups_by$mets[i]
+
+    # list for both primary and mets
+    cellchat_list <- list()
+    pathways_LR <- list()
+
+    for (receiver_cell in receiver_celltypes) {
+        # get the pathways and lr with prob for primary
+        cell_chat_prim <-
+            list.files(str_c("output/cellchat_objects/", group_prim),
+                    pattern = "*.qs",
+                    full.names = TRUE)
+
+        for (file_path in cell_chat_prim) {
+            sample_name <- str_replace(basename(file_path), ".qs", "")
+            cellchat <- qs::qread(file_path)
+            cellchat_list[[sample_name]] <- cellchat
+            # pull the individual interactions without probabilities
+            pathways_and_lr_prob <-
+                subsetCommunication(cellchat,
+                                #signaling = c("COLLAGEN","FN1", "LAMININ"),
+                                slot.name = "net") %>%
+                arrange(desc(prob))
+
+            target_cells <- receiver_cell
+
+            # filter to LR and pathways and prob
+            pathways_LR[[sample_name]] <-
+                pathways_and_lr_prob %>%
+                filter(source %in% ligand_source & target %in% target_cells) %>%
+                select(interaction_name, prob) %>%
+                group_by(interaction_name) %>%
+                summarise(prob = sum(prob), .groups = "drop") %>%
+                mutate(sample = sample_name, group = "Primary") %>%
+                arrange(desc(prob))
+        }
+
+        # get the metastatic pathways and lr with prob
+        cell_chat_mets <-
+            list.files(str_c("output/cellchat_objects/", group_mets),
+                    pattern = "*.qs",
+                    full.names = TRUE)
+        for (file_path in cell_chat_mets) {
+            sample_name <- str_replace(basename(file_path), ".qs", "")
+            cellchat <- qs::qread(file_path)
+            cellchat_list[[sample_name]] <- cellchat
+            # filter to LR and pathways and prob
+            # pull the individual interactions without probabilities
+            pathways_and_lr_prob <-
+                subsetCommunication(cellchat,
+                                #signaling = c("COLLAGEN","FN1", "LAMININ"),
+                                slot.name = "net") %>%
+                arrange(desc(prob))
+            # target_cells <-
+            #     setdiff(as.vector(unique(pathways_and_lr_prob$target)), ligand_source)
+            target_cells <- receiver_cell
+
+            pathways_LR[[sample_name]] <-
+                pathways_and_lr_prob %>%
+                filter(source %in% ligand_source & target %in% target_cells) %>%
+                select(interaction_name, prob) %>%
+                group_by(interaction_name) %>%
+                summarise(prob = sum(prob), .groups = "drop") %>%
+                mutate(sample = sample_name, group = "Metastatic") %>%
+                arrange(desc(prob))
+        }
+    
+        # this is for the specific interactions across primary and mets
+        # specific interactions across primary and mets
+        pathways_prob_df <-
+            do.call(rbind, pathways_LR) %>%
+            as_tibble() %>%
+            as.data.frame() %>%
+            arrange(desc(prob))
+
+        # only continue if there are both primary and mets samples
+        if (length(unique(pathways_prob_df$group)) == 2) {
+
+            # fill up the missing pathways with 0 prob for each sample
+            fill_prob_prim_mets <-
+                pathways_prob_df %>%
+                mutate(sample_group = paste(sample, group, sep = "-")) %>%
+                select(interaction_name, sample_group, prob) %>%
+                pivot_wider(names_from = sample_group, values_from = prob, values_fill = 0) %>%
+                pivot_longer(-interaction_name, names_to = "sample_group", values_to = "prob") %>%
+                separate(sample_group, into = c("sample", "group"), sep = "-")
+
+            # calculate the mean prob for each pathway in both primary and mets separately
+            total_number_primary <- 
+                n_distinct(pathways_prob_df$sample[pathways_prob_df$group == "Primary"])
+            total_number_mets <- 
+                n_distinct(pathways_prob_df$sample[pathways_prob_df$group == "Metastatic"])
+
+            mean_per_pathway_in_mets <-
+                pathways_prob_df %>%
+                filter(group == "Metastatic") %>%
+                group_by(interaction_name) %>%
+                arrange(desc(prob)) %>%
+                summarise(mean_prob = sum(prob)/total_number_mets) %>%  
+                arrange(desc(mean_prob))
+            mean_per_pathway_in_primary <-
+                pathways_prob_df %>%
+                filter(group == "Primary") %>%
+                group_by(interaction_name) %>%
+                arrange(desc(prob)) %>%
+                summarise(mean_prob = sum(prob)/total_number_primary) %>%  
+                arrange(desc(mean_prob))
+            
+            # jopin the two means and keep the higher one
+            mean_per_pathway <-
+                full_join(x = mean_per_pathway_in_primary,
+                        y = mean_per_pathway_in_mets,
+                        by = "interaction_name",
+                        suffix = c("_prim", "_mets")) %>%
+                mutate(mean_prob = pmax(replace_na(mean_prob_prim, 0), replace_na(mean_prob_mets, 0))) %>%
+                select(interaction_name, mean_prob) %>%
+                arrange(desc(mean_prob))
+            
+            # to calculate the pvalue
+            myfun <- function(x) {
+                x$pvalue <-
+                    t.test(prob ~ group, data = x)$p.value
+                return(x)
+            }
+
+            # now filter pathways for primary
+            pathways_prob_df_filtered <- 
+                fill_prob_prim_mets %>%
+                filter(interaction_name %in% mean_per_pathway$interaction_name) %>%
+                arrange(desc(prob)) %>%
+                left_join(mean_per_pathway, by = "interaction_name") %>%
+                mutate(norm_prob = prob / mean_prob) %>%
+                select(sample, group, interaction_name, prob, mean_prob, norm_prob) %>%
+                group_by(interaction_name) %>%
+                group_split() %>%
+                map(~ myfun(.x)) %>%
+                bind_rows() %>%
+                group_by(interaction_name, group) %>%
+                mutate(fold_change = mean(prob) / max(mean_prob)) %>%
+                arrange(interaction_name) %>%
+                ungroup()
+
+            pull_path_pval <-
+                pathways_prob_df_filtered %>%
+                select(interaction_name, pvalue) %>%
+                distinct() %>%
+                mutate(padj =  p.adjust(pvalue, method = "BH")) %>%
+                select(interaction_name, padj)
+
+            # put the padj baclk to the pathways_prob_df_filtered
+            pathways_prob_df_filtered <-
+                pathways_prob_df_filtered %>%
+                left_join(pull_path_pval, by = "interaction_name")
+
+            prob_filter <- median(pathways_prob_df$prob)
+            chosen_pathways <- 
+                pathways_prob_df_filtered %>%
+                filter(mean_prob > prob_filter & fold_change < 0.8) %>%
+                filter(padj < 0.1) %>%
+                arrange(desc(prob)) %>%
+                select(interaction_name, fold_change) %>%
+                distinct()
+
+            # plot the chosen pathways
+            if (nrow(chosen_pathways) != 0) {
+                plot_pathways <-
+                    pathways_prob_df_filtered %>%
+                    filter(interaction_name %in% chosen_pathways$interaction_name) %>%
+                    mutate(group = factor(group, levels = c("Primary", "Metastatic"))) %>%
+                    ggplot(aes(x = reorder(interaction_name, -norm_prob, FUN = median), y = norm_prob, fill = group)) +
+                    geom_boxplot(outlier.shape = NA, position = position_dodge(width = 0.75)) +
+                    geom_jitter(aes(color = group), position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75), size = 1, alpha = 0.7) +
+                    scale_fill_manual(values = c("Primary" = "#87c9ffff", "Metastatic" = "#f87478ff")) +
+                    scale_color_manual(values = c("Primary" = "#0088f7ff", "Metastatic" = "#f70004ff")) +
+                    labs(title = str_c("Top Interactions from Tumor to TAMs in ", group_prim, " vs ", group_mets),
+                        x = "Interaction",
+                        y = "Normalized Probability (by mean)") +
+                    theme_minimal() +
+                                theme(
+                                    axis.text.x = element_text(angle = 45, hjust = 1),
+                                    panel.grid = element_blank(),
+                                    axis.line.x = element_line(),
+                                    axis.line.y = element_line())
+
+            } else {
+                plot_pathways <-
+                    ggplot() +
+                    ggtitle(paste("No significant interactions from Tumor to", receiver_cell, "in", group_prim, "vs", group_mets)) +
+                    theme_void()
+            }
+            if (!dir.exists(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets))) {
+                dir.create(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets),
+                recursive = TRUE)
+            }
+            ggsave(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets, "/tumor_to_", receiver_cell, "_boxplot.png"),
+            plot_pathways,
+            width = max(length(chosen_pathways$interaction_name) * 0.75 + 1, 6),
+            height = 6,
+            bg = "white")
+
+        } else {
+            print(paste("Celltype ", receiver_cell, " not present in both", group_prim, "vs", group_mets))
+        }
+    }
+}
+
+
+
+
+
+
+
+## this analysis is to identify how Tumor cells reprogram the AT cells in the mets
+
+
+
+
+
+
+```
 
 
 
