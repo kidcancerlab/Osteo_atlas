@@ -2147,114 +2147,116 @@ for (i in 1:nrow(groups_by)) {
                 n_distinct(pathways_prob_df$sample[pathways_prob_df$group == "Primary"])
             total_number_mets <- 
                 n_distinct(pathways_prob_df$sample[pathways_prob_df$group == "Metastatic"])
-
-            mean_per_pathway_in_mets <-
-                pathways_prob_df %>%
-                filter(group == "Metastatic") %>%
-                group_by(interaction_name) %>%
-                arrange(desc(prob)) %>%
-                summarise(mean_prob = sum(prob)/total_number_mets) %>%  
-                arrange(desc(mean_prob))
-            mean_per_pathway_in_primary <-
-                pathways_prob_df %>%
-                filter(group == "Primary") %>%
-                group_by(interaction_name) %>%
-                arrange(desc(prob)) %>%
-                summarise(mean_prob = sum(prob)/total_number_primary) %>%  
-                arrange(desc(mean_prob))
             
-            # jopin the two means and keep the higher one
-            mean_per_pathway <-
-                full_join(x = mean_per_pathway_in_primary,
-                        y = mean_per_pathway_in_mets,
-                        by = "interaction_name",
-                        suffix = c("_prim", "_mets")) %>%
-                mutate(mean_prob = pmax(replace_na(mean_prob_prim, 0), replace_na(mean_prob_mets, 0))) %>%
-                select(interaction_name, mean_prob) %>%
-                arrange(desc(mean_prob))
-            
-            # to calculate the pvalue
-            myfun <- function(x) {
-                x$pvalue <-
-                    t.test(prob ~ group, data = x)$p.value
-                return(x)
-            }
+            # only proceed if total number of primary and mets samples are both > 1
+            if (total_number_primary > 1 & total_number_mets > 1) {
+                mean_per_pathway_in_mets <-
+                    pathways_prob_df %>%
+                    filter(group == "Metastatic") %>%
+                    group_by(interaction_name) %>%
+                    arrange(desc(prob)) %>%
+                    summarise(mean_prob = sum(prob)/total_number_mets) %>%  
+                    arrange(desc(mean_prob))
+                mean_per_pathway_in_primary <-
+                    pathways_prob_df %>%
+                    filter(group == "Primary") %>%
+                    group_by(interaction_name) %>%
+                    arrange(desc(prob)) %>%
+                    summarise(mean_prob = sum(prob)/total_number_primary) %>%  
+                    arrange(desc(mean_prob))
+                
+                # jopin the two means and keep the higher one
+                mean_per_pathway <-
+                    full_join(x = mean_per_pathway_in_primary,
+                            y = mean_per_pathway_in_mets,
+                            by = "interaction_name",
+                            suffix = c("_prim", "_mets")) %>%
+                    mutate(mean_prob = pmax(replace_na(mean_prob_prim, 0), replace_na(mean_prob_mets, 0))) %>%
+                    select(interaction_name, mean_prob) %>%
+                    arrange(desc(mean_prob))
+                
+                # to calculate the pvalue
+                myfun <- function(x) {
+                    x$pvalue <-
+                        t.test(prob ~ group, data = x)$p.value
+                    return(x)
+                }
 
-            # now filter pathways for primary
-            pathways_prob_df_filtered <- 
-                fill_prob_prim_mets %>%
-                filter(interaction_name %in% mean_per_pathway$interaction_name) %>%
-                arrange(desc(prob)) %>%
-                left_join(mean_per_pathway, by = "interaction_name") %>%
-                mutate(norm_prob = prob / mean_prob) %>%
-                select(sample, group, interaction_name, prob, mean_prob, norm_prob) %>%
-                group_by(interaction_name) %>%
-                group_split() %>%
-                map(~ myfun(.x)) %>%
-                bind_rows() %>%
-                group_by(interaction_name, group) %>%
-                mutate(fold_change = mean(prob) / max(mean_prob)) %>%
-                arrange(interaction_name) %>%
-                ungroup()
+                # now filter pathways for primary
+                pathways_prob_df_filtered <- 
+                    fill_prob_prim_mets %>%
+                    filter(interaction_name %in% mean_per_pathway$interaction_name) %>%
+                    arrange(desc(prob)) %>%
+                    left_join(mean_per_pathway, by = "interaction_name") %>%
+                    mutate(norm_prob = prob / mean_prob) %>%
+                    select(sample, group, interaction_name, prob, mean_prob, norm_prob) %>%
+                    group_by(interaction_name) %>%
+                    group_split() %>%
+                    map(~ myfun(.x)) %>%
+                    bind_rows() %>%
+                    group_by(interaction_name, group) %>%
+                    mutate(fold_change = mean(prob) / max(mean_prob)) %>%
+                    arrange(interaction_name) %>%
+                    ungroup()
 
-            pull_path_pval <-
-                pathways_prob_df_filtered %>%
-                select(interaction_name, pvalue) %>%
-                distinct() %>%
-                mutate(padj =  p.adjust(pvalue, method = "BH")) %>%
-                select(interaction_name, padj)
-
-            # put the padj baclk to the pathways_prob_df_filtered
-            pathways_prob_df_filtered <-
-                pathways_prob_df_filtered %>%
-                left_join(pull_path_pval, by = "interaction_name")
-
-            prob_filter <- median(pathways_prob_df$prob)
-            chosen_pathways <- 
-                pathways_prob_df_filtered %>%
-                filter(mean_prob > prob_filter & fold_change < 0.8) %>%
-                filter(padj < 0.1) %>%
-                arrange(desc(prob)) %>%
-                select(interaction_name, fold_change) %>%
-                distinct()
-
-            # plot the chosen pathways
-            if (nrow(chosen_pathways) != 0) {
-                plot_pathways <-
+                pull_path_pval <-
                     pathways_prob_df_filtered %>%
-                    filter(interaction_name %in% chosen_pathways$interaction_name) %>%
-                    mutate(group = factor(group, levels = c("Primary", "Metastatic"))) %>%
-                    ggplot(aes(x = reorder(interaction_name, -norm_prob, FUN = median), y = norm_prob, fill = group)) +
-                    geom_boxplot(outlier.shape = NA, position = position_dodge(width = 0.75)) +
-                    geom_jitter(aes(color = group), position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75), size = 1, alpha = 0.7) +
-                    scale_fill_manual(values = c("Primary" = "#87c9ffff", "Metastatic" = "#f87478ff")) +
-                    scale_color_manual(values = c("Primary" = "#0088f7ff", "Metastatic" = "#f70004ff")) +
-                    labs(title = str_c("Top Interactions from Tumor to TAMs in ", group_prim, " vs ", group_mets),
-                        x = "Interaction",
-                        y = "Normalized Probability (by mean)") +
-                    theme_minimal() +
-                                theme(
-                                    axis.text.x = element_text(angle = 45, hjust = 1),
-                                    panel.grid = element_blank(),
-                                    axis.line.x = element_line(),
-                                    axis.line.y = element_line())
+                    select(interaction_name, pvalue) %>%
+                    distinct() %>%
+                    mutate(padj =  p.adjust(pvalue, method = "BH")) %>%
+                    select(interaction_name, padj)
 
-            } else {
-                plot_pathways <-
-                    ggplot() +
-                    ggtitle(paste("No significant interactions from Tumor to", receiver_cell, "in", group_prim, "vs", group_mets)) +
-                    theme_void()
-            }
-            if (!dir.exists(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets))) {
-                dir.create(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets),
-                recursive = TRUE)
-            }
-            ggsave(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets, "/tumor_to_", receiver_cell, "_boxplot.png"),
-            plot_pathways,
-            width = max(length(chosen_pathways$interaction_name) * 0.75 + 1, 6),
-            height = 6,
-            bg = "white")
+                # put the padj baclk to the pathways_prob_df_filtered
+                pathways_prob_df_filtered <-
+                    pathways_prob_df_filtered %>%
+                    left_join(pull_path_pval, by = "interaction_name")
 
+                prob_filter <- median(pathways_prob_df$prob)
+                chosen_pathways <- 
+                    pathways_prob_df_filtered %>%
+                    filter(mean_prob > prob_filter & fold_change < 0.8) %>%
+                    filter(padj < 0.1) %>%
+                    arrange(desc(prob)) %>%
+                    select(interaction_name, fold_change) %>%
+                    distinct()
+
+                # plot the chosen pathways
+                if (nrow(chosen_pathways) != 0) {
+                    plot_pathways <-
+                        pathways_prob_df_filtered %>%
+                        filter(interaction_name %in% chosen_pathways$interaction_name) %>%
+                        mutate(group = factor(group, levels = c("Primary", "Metastatic"))) %>%
+                        ggplot(aes(x = reorder(interaction_name, -norm_prob, FUN = median), y = norm_prob, fill = group)) +
+                        geom_boxplot(outlier.shape = NA, position = position_dodge(width = 0.75)) +
+                        geom_jitter(aes(color = group), position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75), size = 1, alpha = 0.7) +
+                        scale_fill_manual(values = c("Primary" = "#87c9ffff", "Metastatic" = "#f87478ff")) +
+                        scale_color_manual(values = c("Primary" = "#0088f7ff", "Metastatic" = "#f70004ff")) +
+                        labs(title = str_c("Top Interactions from Tumor to TAMs in ", group_prim, " vs ", group_mets),
+                            x = "Interaction",
+                            y = "Normalized Probability (by mean)") +
+                        theme_minimal() +
+                                    theme(
+                                        axis.text.x = element_text(angle = 45, hjust = 1),
+                                        panel.grid = element_blank(),
+                                        axis.line.x = element_line(),
+                                        axis.line.y = element_line())
+
+                } else {
+                    plot_pathways <-
+                        ggplot() +
+                        ggtitle(paste("No significant interactions from Tumor to", receiver_cell, "in", group_prim, "vs", group_mets)) +
+                        theme_void()
+                }
+                if (!dir.exists(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets))) {
+                    dir.create(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets),
+                    recursive = TRUE)
+                }
+                ggsave(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets, "/tumor_to_", receiver_cell, "_boxplot.png"),
+                plot_pathways,
+                width = max(length(chosen_pathways$interaction_name) * 0.75 + 1, 6),
+                height = 6,
+                bg = "white")
+            }
         } else {
             print(paste("Celltype ", receiver_cell, " not present in both", group_prim, "vs", group_mets))
         }
