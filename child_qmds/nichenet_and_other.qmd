@@ -215,12 +215,12 @@ for (group in c(
 
 
 
-# cellchat at ann_level3 using all the pathways general
+# cellchat at ann_level2 using all the pathways general
+list_of_genes <- list()
+samples_numbers <- list()
 for (group in c(
                 "patient_prim",
                 "patient_mets",
-                "mm_prim",
-                "mm_mets",
                 "xeno_prim_cancer_normal",
                 "xeno_mets_cancer_normal",
                 "dogs_primhuman_ortho",
@@ -232,240 +232,96 @@ for (group in c(
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
-    # Subset to max 500 cells per celltype (Ann_Level2)
-    celltype_counts <- table(object$Ann_Level3)
-    object <- SetIdent(object, value = "Ann_Level3")
-    cells_to_keep <- unlist(lapply(names(celltype_counts), function(ct) {
-        ct_cells <- WhichCells(object, idents = ct)
-        if (length(ct_cells) > 500) {
-            sample(ct_cells, 500)
-        } else {
-            ct_cells
-        }
-    }))
-    object <- 
-        subset(object, cells = cells_to_keep)
-    
-    cellchat <-
-        run_cellchat(sobject = object,
-                     group.by="Ann_Level2",
-                     species_db=object$organism[1])
-    qs::qsave(cellchat, str_c("output/cellchat_objects/", group, "_annlevel2_everything", ".qs"))
+    samples_numbers[[group]] <- length(unique(object$sample_name))
+
+    genes <- rownames(object)
+    list_of_genes[[group]] <- genes
 }
+
+# shared genes
+shared_genes <-
+    Reduce(intersect, list_of_genes) %>%
+    as_tibble()
+
+# save the shared genes
+write_tsv(shared_genes,
+          "input/shared_genes_across_groups_for_cellchat.txt")
+
+# load the shared genes
+shared_genes <-
+    read_tsv("input/shared_genes_across_groups_for_cellchat.txt",
+            col_names = "gene")  %>%
+            as.data.frame()
 
 # cellchat at ann_level3 using all the pathways general
 for (group in c(
                 "patient_prim",
                 "patient_mets",
-                "mm_prim",
-                "mm_mets",
-                "xeno_prim_cancer_normal",
-                "xeno_mets_cancer_normal",
-                "dogs_primhuman_ortho",
-                "dogs_metshuman_ortho"
-            )) {
-    object <-
-        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                        group,
-                        ".qs"))
-    # Subset to max 500 cells per celltype (Ann_Level2)
-    celltype_counts <- table(object$Ann_Level3)
-    object <- SetIdent(object, value = "Ann_Level3")
-    cells_to_keep <- unlist(lapply(names(celltype_counts), function(ct) {
-        ct_cells <- WhichCells(object, idents = ct)
-        if (length(ct_cells) > 500) {
-            sample(ct_cells, 500)
-        } else {
-            ct_cells
-        }
-    }))
-    object <- 
-        subset(object, cells = cells_to_keep)
-                                
-    cellchat <-
-        run_cellchat(sobject = object,
-                     group.by="Ann_Level3",
-                     species_db=object$organism[1])
-
-    # save the cellchat object
-    if (!dir.exists("output/cellchat_objects")) {
-        dir.create("output/cellchat_objects")
-    }
-    qs::qsave(cellchat, str_c("output/cellchat_objects/", group, "_everything", ".qs"))
-}
-
-
-## for whole object at ann levele using the specific pathways
-for (group in c(
-                "patient_prim",
-                "patient_mets",
-                # "mm_prim",
-                # "mm_mets",
-                "xeno_prim_cancer_normal",
-                "xeno_mets_cancer_normal",
-                "dogs_primhuman_ortho",
-                "dogs_metshuman_ortho",
-                "mm_primhuman_ortho",
-                "mm_metshuman_ortho"
-            )) {
-    object <-
-        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
-                        group,
-                        ".qs"))
-    # Subset to max 500 cells per celltype (Ann_Level2)
-    celltype_counts <- table(object$Ann_Level3)
-    object <- SetIdent(object, value = "Ann_Level3")
-    cells_to_keep <- unlist(lapply(names(celltype_counts), function(ct) {
-        ct_cells <- WhichCells(object, idents = ct)
-        if (length(ct_cells) > 500) {
-            sample(ct_cells, 500)
-        } else {
-            ct_cells
-        }
-    }))
-    object <- 
-        subset(object, cells = cells_to_keep)
-                                
-    data.input <-
-        GetAssayData(object,
-                    assay = "RNA",
-                    slot = "data") 
-    labels <- object$Ann_Level2
-    meta <- 
-        data.frame(group = labels,
-                    row.names = names(labels)) 
-    cellchat <- 
-        createCellChat(object = data.input,
-                        meta = meta,
-                        group.by = "group")
-
-    # Load the ligand-receptor interaction database
-    CellChatDB <- 
-        if (object$organism[1] == "human") CellChatDB.human else CellChatDB.mouse
-
-    # Set a subset of CellChatDB if interested in specific signaling pathways
-    for (subset_db in c("Secreted Signaling", "ECM-Receptor", "Cell-Cell Contact")) {
-        CellChatDB.use <- 
-            subsetDB(CellChatDB, search = subset_db)
-        # whatever you deice to use
-        cellchat@DB <- CellChatDB.use
-        
-        # 3.Subset and pre-processing the expression data 
-        # subset the expression data to use less RAM
-        future::plan("multisession", workers = 5) # do parallel
-        cellchat <-
-            subsetData(cellchat) %>%
-            identifyOverExpressedGenes() %>%
-            identifyOverExpressedInteractions() %>%
-            computeCommunProb() %>%
-            filterCommunication(min.cells = 10) %>%
-            computeCommunProbPathway() %>%
-            aggregateNet() %>%
-            netAnalysis_computeCentrality() %>%
-            computeNetSimilarity(type = "functional") %>%
-            netEmbedding(type = "functional") %>%
-            netClustering(type = "functional", do.parallel = FALSE) %>%
-            computeNetSimilarity(type = "structural") %>%
-            netEmbedding(type = "structural") %>%
-            netClustering(type = "structural", do.parallel = FALSE)
-
-        # save the cellchat object
-        if (!dir.exists("output/cellchat_objects")) {
-            dir.create("output/cellchat_objects")
-        }
-        subset_db_name <- gsub(" ", "_", subset_db)
-        qs::qsave(cellchat, str_c("output/cellchat_objects/", group, "_", subset_db_name, ".qs"))
-    }
-}
-
-
-# for just TAMs and tumors
-for (group in c(
-                "patient_prim",
-                "patient_mets",
-                "mm_prim",
-                "mm_mets",
                 "xeno_prim_cancer_normal",
                 "xeno_mets_cancer_normal"
+                "dogs_primhuman_ortho",
+                "dogs_metshuman_ortho"
+                "mm_primhuman_ortho",
+                "mm_metshuman_ortho"
             )) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
+    object <-
+        subset(object, features = shared_genes$gene) %>%
+        process_seurat()
 
-    celltypes <- 
-        c("MP_Progenitor", "Fibrogenic", "Interactive", "Basal_Progenitor",
-        "Proliferative", "COMA", "Scar_TAMs", "Osteoclast_TAMs", "Prolif_TAMs",
-        "IFN_TAMs", "Fibrogenic_TAMs", "Inflam_TAMs","TAMs")
-    #subset just TAMs and tumor cells
-    object <- 
-        subset(object, Ann_Level3 %in% celltypes)
-    # Subset to max 500 cells per celltype (Ann_Level3)
-    celltype_counts <- table(object$Ann_Level3)
-    object <- SetIdent(object, value = "Ann_Level3")
-    cells_to_keep <- unlist(lapply(names(celltype_counts), function(ct) {
-        ct_cells <- WhichCells(object, idents = ct)
-        if (length(ct_cells) > 500) {
-            sample(ct_cells, 500)
+    for (sample in unique(object$sample_name)){
+        if (!file.exists(str_c("output/cellchat_objects_sharedgenes/", group, "/", sample, "_AnnL2_whole", ".qs"))) {
+            sub_object <- subset(object, sample_name == sample)
+            # Subset to max 500 cells per celltype (Ann_Level2)
+            celltype_counts <- table(sub_object$Ann_Level3)
+            sub_object <- SetIdent(sub_object, value = "Ann_Level3")
+            cells_to_keep <- unlist(lapply(names(celltype_counts), function(ct) {
+                ct_cells <- WhichCells(sub_object, idents = ct)
+                if (length(ct_cells) > 100) {
+                    sample(ct_cells, 100)
+                } else {
+                    ct_cells
+                }
+            }))
+            sub_object <- 
+                subset(object, cells = cells_to_keep)
+            
+            cellchat <-
+                run_cellchat(sobject = sub_object,
+                            group.by="Ann_Level2",
+                            species_db=sub_object$organism[1])
+            if (!dir.exists(str_c("output/cellchat_objects_sharedgenes", "/", group))) {
+                dir.create(str_c("output/cellchat_objects_sharedgenes", "/", group),
+                            recursive = TRUE)
+            }
+            qs::qsave(cellchat, str_c("output/cellchat_objects_sharedgenes/", group, "/", sample, "_AnnL2_whole", ".qs"))
         } else {
-            ct_cells
+            print(str_c("output/cellchat_objects_sharedgenes/", group, "/", sample, "_AnnL2_whole", ".qs already exists"))
         }
-    }))
-    object <- 
-        subset(object, cells = cells_to_keep)
-                                
-    data.input <-
-        GetAssayData(object,
-                    assay = "RNA",
-                    slot = "data")
-    labels <- object$Ann_Level3
-    meta <- 
-        data.frame(group = labels,
-                    row.names = names(labels)) 
-    cellchat <- 
-        createCellChat(object = data.input,
-                        meta = meta,
-                        group.by = "group")
-
-    # Load the ligand-receptor interaction database
-    CellChatDB <- 
-        if (object$organism[1] == "human") CellChatDB.human else CellChatDB.mouse
-
-    # Set a subset of CellChatDB if interested in specific signaling pathways
-    for (subset_db in c("Secreted Signaling", "ECM-Receptor", "Cell-Cell Contact")) {
-        CellChatDB.use <- 
-            subsetDB(CellChatDB, search = subset_db)
-        # whatever you deice to use
-        cellchat@DB <- CellChatDB.use
-        
-        # 3.Subset and pre-processing the expression data 
-        # subset the expression data to use less RAM
-        future::plan("multisession", workers = 5) # do parallel
-        cellchat <- subsetData(cellchat) %>%
-            identifyOverExpressedGenes() %>%
-            identifyOverExpressedInteractions() %>%
-            computeCommunProb() %>%
-            filterCommunication(min.cells = 10) %>%
-            computeCommunProbPathway() %>%
-            aggregateNet() %>%
-            netAnalysis_computeCentrality() %>%
-            computeNetSimilarity(type = "functional") %>%
-            netEmbedding(type = "functional") %>%
-            netClustering(type = "functional", do.parallel = FALSE) %>%
-            computeNetSimilarity(type = "structural") %>%
-            netEmbedding(type = "structural") %>%
-            netClustering(type = "structural", do.parallel = FALSE)
-        # save the cellchat object
-        if (!dir.exists("output/TAMs_Tumor_cellchat_objects")) {
-            dir.create("output/TAMs_Tumor_cellchat_objects")
-        }
-        subset_db_name <- gsub(" ", "_", subset_db)
-        qs::qsave(cellchat, str_c("output/TAMs_Tumor_cellchat_objects/", group, "_", subset_db_name, ".qs"))
     }
 }
+
+
+
 
 ```
 
+### Run cellchat in slurm job
+```{bash cellchat_slurm_job}
+
+sbatch --array=1-25 child_qmds/cellchat_run_shellscript.sh patient_prim 
+sbatch --array=1-36 child_qmds/cellchat_run_shellscript.sh patient_mets
+sbatch --array=1-14 child_qmds/cellchat_run_shellscript.sh  xeno_prim_cancer_normal
+sbatch --array=1-12 child_qmds/cellchat_run_shellscript.sh xeno_mets_cancer_normal
+sbatch --array=1-17 child_qmds/cellchat_run_shellscript.sh dogs_primhuman_ortho
+sbatch --array=1-16 child_qmds/cellchat_run_shellscript.sh dogs_metshuman_ortho
+sbatch --array=1-3 child_qmds/cellchat_run_shellscript.sh mm_primhuman_ortho
+sbatch --array=1-8 child_qmds/cellchat_run_shellscript.sh mm_metshuman_ortho
+
+```
 
 ### Plotting for cellchat
 
