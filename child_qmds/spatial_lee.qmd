@@ -148,7 +148,7 @@ lee_stats %>%
         aes(x = lee_stat)
     ) +
     geom_histogram(bins = 100) +
-    facet_wrap(~ group, ncol = 1)
+    facet_wrap(~group, ncol = 1)
 
 lee_stats %>%
     make_lower_triangle() %>%
@@ -171,7 +171,6 @@ lee_stats %>%
     ) %>%
     arrange() %>%
     write_tsv("output/spacexr/granular_references/lee_perms/average_lee_stats.tsv")
-
 ```
 
 ## Make plots with just a subset of types
@@ -223,6 +222,205 @@ lee_stats %>%
         cellheight = 20,
         na_col = "darkgrey"
     )
-
 ```
 
+```{r spatiallee_prep_cell_cats}
+qs::qread(
+    "output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs"
+)@meta.data %>%
+    select(starts_with("Ann_Level")) %>%
+    distinct() %>%
+    as_tibble() %>%
+    write_tsv("output/human_met_cell_type_categories.tsv")
+```
+
+
+```{r spatiallee_graph}
+lee_val_cutoff <- 0.1
+
+prep_lee_stats <- function(lee_stats_table,
+                           fdr_cutoff,
+                           lee_val_cutoff) {
+    lee_stats_table <-
+        lee_stats_table |>
+        make_lower_triangle() %>%
+        left_join(
+            read_tsv(
+                "output/human_met_cell_type_categories.tsv",
+                show_col_types = FALSE
+            ) %>%
+                rename(cell_type_1 = Ann_Level3)
+        ) %>%
+        arrange(cell_type_1, cell_type_2) %>%
+        mutate(
+            lee_stat =
+                if_else(
+                    fdr <= fdr_cutoff &
+                        lee_stat >= lee_val_cutoff,
+                    lee_stat,
+                    0
+                )
+        )
+
+    return(lee_stats_table)
+}
+
+make_adj_matrix <- function(lee_stats_table) {
+    adjacency_matrix <-
+        lee_stats_table %>%
+        select(cell_type_1, cell_type_2, lee_stat) %>%
+        pivot_wider(
+            names_from = cell_type_1,
+            values_from = lee_stat,
+            values_fill = 0
+        ) %>%
+        column_to_rownames("cell_type_2") %>%
+        as.matrix()
+
+    adjacency_matrix <- adjacency_matrix[, rownames(adjacency_matrix)]
+
+    return(adjacency_matrix)
+}
+
+make_edge_table <- function(adjacency_graph,
+                            lee_stats_table) {
+
+    graph_coords <-
+        igraph::layout_with_kk(adjacency_graph) %>%
+        as.data.frame() %>%
+        as_tibble() %>%
+        rename(x = "V1", y = "V2") %>%
+        mutate(cell_type = rownames(adjacency_graph[]))
+
+    edge_table <-
+        lee_stats_table %>%
+        left_join(
+            rename(
+                graph_coords,
+                x_1 = x,
+                y_1 = y,
+                cell_type_1 = cell_type
+            )
+        ) %>%
+        left_join(
+            rename(
+                graph_coords,
+                x_2 = x,
+                y_2 = y,
+                cell_type_2 = cell_type
+            )
+        )
+
+    return(edge_table)
+}
+
+make_network_plot_from_lee <- function(lee_stats_table,
+                                       lee_val_cutoff = 0.1,
+                                       fdr_cutoff = 0.1,
+                                       plot_title = "") {
+    lee_stats_table <-
+        prep_lee_stats(
+            lee_stats_table,
+            fdr_cutoff = fdr_cutoff,
+            lee_val_cutoff = lee_val_cutoff
+        )
+
+    adjacency_matrix <- make_adj_matrix(lee_stats_table)
+
+    adjacency_graph <-
+        igraph::graph_from_adjacency_matrix(
+            adjacency_matrix,
+            weighted = TRUE,
+            diag = FALSE
+        )
+
+    edge_table <- make_edge_table(adjacency_graph, lee_stats_table)
+
+    ggplot() +
+        geom_segment(
+            data = edge_table %>% filter(lee_stat != 0),
+            aes(
+                x = x_1,
+                y = y_1,
+                xend = x_2,
+                yend = y_2,
+                alpha = lee_stat,
+                linewidth = lee_stat
+            ),
+            color = "darkblue"
+        ) +
+        geom_point(
+            data =  edge_table %>%
+                select(cell_type_1, x_1, y_1, Ann_Level1) %>%
+                distinct(),
+            aes(
+                x = x_1,
+                y = y_1,
+                color = Ann_Level1
+            ),
+            size = 5
+        ) +
+        ggrepel::geom_label_repel(
+            data = edge_table %>%
+                select(cell_type_1, x_1, y_1, Ann_Level1) %>%
+                distinct(),
+            aes(
+                x = x_1,
+                y = y_1,
+                label = cell_type_1,
+                fill = Ann_Level1
+            ),
+            size = 3,
+            color = "white",
+            label.size = 0
+        ) +
+        labs(
+            x = NULL,
+            y = NULL,
+            title = plot_title
+        ) +
+        theme_void() +
+        theme(
+            legend.position.inside = c(0.9, 0.9)
+        )
+}
+
+pdf(
+    "output/figures/spatial/lees/lee_sample_graphs.pdf",
+    width = 15,
+    height = 12
+)
+lapply(
+    unique(lee_stats$sample),
+    function(x) {
+        lee_stats %>%
+            filter(sample == x) %>%
+            make_network_plot_from_lee(
+                lee_val_cutoff = lee_val_cutoff,
+                fdr_cutoff = 0.1,
+                plot_title = x
+            )
+    }
+)
+dev.off()
+
+averaged_lee_graph <-
+    lee_stats %>%
+    group_by(cell_type_1, cell_type_2) %>%
+    summarize(
+        lee_stat = mean(lee_stat),
+        fdr = max(fdr),
+        .groups = "drop"
+    ) %>%
+    make_network_plot_from_lee(
+        lee_val_cutoff = lee_val_cutoff,
+        fdr_cutoff = 0.1,
+        plot_title = "Average Across All Samples"
+    )
+
+ggsave(
+    "output/figures/spatial/lees/lee_sample_average_graph.pdf",
+    width = 15,
+    height = 12
+)
+```
