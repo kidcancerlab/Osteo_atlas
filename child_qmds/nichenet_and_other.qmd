@@ -982,9 +982,6 @@ for (group in c(
                             slot.name = "netP") %>%
             arrange(desc(prob))
 
-        receiver_cells <-
-            setdiff(levels(cellchat@idents), ligand_source)
-        
         # filter to LR and pathways and prob
         pathways_LR[[sample_name]] <-
             pathways_and_lr_prob %>%
@@ -1002,7 +999,7 @@ for (group in c(
         as_tibble() %>%
         as.data.frame() %>%
         arrange(desc(prob))
-    
+
     #mean filter for probabilities
     mean_filter <- mean(pathways_LR_df$prob)
 
@@ -1016,6 +1013,66 @@ for (group in c(
         mutate(group = group)
     
     average_pathways_allgenes[[group]] <- pathway_average
+
+    # Perform PCA on the pathways
+    pca_input <- 
+        pathways_LR_df %>%
+        filter(str_starts(sample, "CCDI")) %>%
+        mutate(sample_group = paste(sample, group, sep = "-")) %>%
+        select(pathway_name, sample_group, prob) %>%
+        pivot_wider(names_from = pathway_name, values_from = prob, values_fill = 0) %>%
+        column_to_rownames("sample_group")
+    
+    # make a heatmap
+    heatmap_matrix <-
+        pathways_LR_df %>%
+        filter(str_starts(sample, "CCDI")) %>%
+        filter(!pathway_name %in% c("COLLAGEN", "FN1", "LAMININ")) %>%
+        mutate(sample_group = paste(sample, group, sep = "-")) %>%
+        select(pathway_name, sample_group, prob) %>%
+        pivot_wider(names_from = pathway_name, values_from = prob, values_fill = 0) %>%
+        { 
+            mat <- .
+            cols_to_keep <- names(mat)[-1][colSums(mat[,-1, drop=FALSE]) > mean_filter]
+            mat <- mat[, c("sample_group", cols_to_keep), drop=FALSE]
+            mat
+        } %>%
+        column_to_rownames("sample_group")
+
+    # plot heatmap
+    heatmap <-
+        pheatmap::pheatmap(
+            heatmap_matrix,
+            cluster_rows = TRUE,
+            cluster_cols = TRUE,
+            silent = TRUE,
+            color = colorRampPalette(c("white", "#fd5252ff","#fd3c3cff","#fc1717ff", "#ff0000ff"))(100),
+            main = stringr::str_c("Pathway Probabilities Heatmap ", group),
+            fontsize_row = 8,
+            fontsize_col = 8
+        )
+
+    # Run PCA
+    pca_res <- prcomp(pca_input, scale. = TRUE)
+    # PCA plot: one dot per sample
+    pca_df <- as.data.frame(pca_res$x)
+    pca_df$sample <- rownames(pca_df) %>% sub("_.*", "", .) 
+    pca_df$group <- sapply(strsplit(rownames(pca_df), "-"), `[`, 2)
+
+    # K-means clustering (choose k=2 for example, adjust as needed)
+    set.seed(123)
+    k <- 3
+    km_res <- kmeans(pca_df[, c("PC1", "PC2")], centers = k)
+    pca_df$cluster <- as.factor(km_res$cluster)
+
+    # Plot PCA with clusters
+    ggplot(pca_df, aes(x = PC1, y = PC2, label = sample, color = cluster, shape = group)) +
+        geom_point(size = 3) +
+        geom_text(vjust = -0.5, size = 3) +
+        labs(title = stringr::str_c(group, " PCA of Pathway Probabilities with Clustering"),
+             x = "PC1", y = "PC2") +
+        theme_minimal()
+
 }
 ## compare prim vs mets
 # make a heatmap from the average pathways
@@ -1061,6 +1118,9 @@ ggsave("output/figures/cellchat/aallgenes_average_pathway_heatmap_across_all.png
 
 average_pathways <- list()
 module_pathways_list <- list()
+tumor_sub <- 
+    c("Interactive", "Fibrogenic", "Basal_Progenitor",
+      "Proliferative", "COMA", "MP_Progenitor")
 # load the objects
 for (group in c(
                 "patient_prim",
@@ -1174,15 +1234,23 @@ for (site in c("prim", "mets")) {
         filter(rowSums(across(everything())) > mean_filter) %>%
         as.matrix()
     # Plot heatmap: group on x-axis, pathway on y-axis
-    pheatmap::pheatmap(
-        heatmap_df,
-        cluster_rows = TRUE,
-        cluster_cols = TRUE,
-        color = colorRampPalette(c("white", "#ff6b6bff","#ff4a4aff","#ff2424ff", "#ff0e0eff"))(100),
-        main = "Pathway Mean Probability (Tumor→Stroma, Shared Genes)",
-        fontsize_row = 8,
-        fontsize_col = 10,
-        display_numbers = round(heatmap_df, 2)
+    heatmap_per_site<-
+        pheatmap::pheatmap(
+            heatmap_df,
+            cluster_rows = TRUE,
+            cluster_cols = TRUE,
+            silent = TRUE,
+            color = colorRampPalette(c("white", "#ff6b6bff","#ff4a4aff","#ff2424ff", "#ff0e0eff"))(100),
+            main = "Pathway Mean Probability (Shared Genes)",
+            fontsize_row = 8,
+            fontsize_col = 10,
+            display_numbers = round(heatmap_df, 2)
+        )
+    ggsave(str_c("output/figures/cellchat/sharedgenes_", site, "_average_pathway_heatmap.png"),
+        heatmap_per_site,
+        width = 4,
+        height = length(colnames(heatmap_df)) * 0.5 + 4,
+        bg = "white"
     )
 
     # plot correlation heatmap
@@ -1193,15 +1261,13 @@ for (site in c("prim", "mets")) {
         cor_matrix,
         cluster_rows = TRUE,
         cluster_cols = TRUE,
-        color = colorRampPalette(c("#596affff", "#fd3f3fff"))(100),
+        color = colorRampPalette(c("#ffe0e0ff", "#fd3f3fff"))(100),
         main = str_c("Correlation Heatmap of Pathways - ", site, " Site"),
         fontsize_row = 8,
         fontsize_col = 10,
         display_numbers = round(cor_matrix, 2),
-        number_color = "white"
-        )
-
-    # Alternative visualization: correlation network graph
+        number_color = "black"
+    )  # Alternative visualization: correlation network graph
     library(igraph)
     library(ggraph)
 
@@ -1230,11 +1296,13 @@ for (site in c("prim", "mets")) {
         filter(pathways != "COLLAGEN") %>%
         column_to_rownames("pathways")
     library(GGally)
-    GGally::ggpairs(site_specific_GGPAIRS,
+    GGally::ggpairs(
+        site_specific_GGPAIRS,
         lower = list(continuous = wrap("points", alpha = 0.5)),
         upper = list(continuous = wrap("cor", size = 3)),
         diag = list(continuous = wrap("barDiag", fill = "lightblue")),
-        title = str_c("Pairwise Pathway Correlations - ", site, " Site")
+        title = str_c("Pairwise Pathway Correlations - ", site, " Site"),
+        axisLabels = "show"
     )
 }
 # Fidelity by modules like ECM (compact spacing)
@@ -1282,8 +1350,8 @@ for (site in c("prim", "mets")) {
         rename_with(~ ifelse(str_detect(.x, "dog"), "Dog",
                         ifelse(str_detect(.x, "mm"), "Mouse",
                         ifelse(str_detect(.x, "xeno"), "PDX",
-                        ifelse(str_detect(.x, "patient"), "Human", .x)))), .cols = everything()) %>% 
-        filter(Pathway %in% unlist(pathway_groups))
+                        ifelse(str_detect(.x, "patient"), "Human", .x)))), .cols = everything()) #%>% 
+        # filter(Pathway %in% unlist(pathway_groups))
 
     site_specific_paths[[site]] <- pathway_scores
     
@@ -1341,21 +1409,25 @@ for (site in c("prim", "mets")) {
 
 ## Statistical comparison for all primary across 
 ```{r statistical_comparison_pathways_primary_mets}
-# site_specific_paths$prim$Pathway
-#  [1] "COLLAGEN"    "LAMININ"     "FN1"         "APP"         "THBS"       
-#  [6] "CADM"        "NCAM"        "PTPRM"       "TGFb"        "ADGRL"      
-# [11] "PDGF"        "VEGF"        "MPZ"         "FLRT"        "PTN"        
-# [16] "Cholesterol" "TENASCIN"    "CDH"         "MHC-II"      "UNC5"       
-# [21] "NRXN"        "CXCL"        "NRG"         "EPHA"        "CCL"        
+# > site_specific_paths$prim$Pathway
+#  [1] "COLLAGEN"    "LAMININ"     "FN1"         "APP"         "MK"         
+#  [6] "SLIT"        "THBS"        "CADM"        "NCAM"        "PTPRM"      
+# [11] "TGFb"        "ADGRL"       "PDGF"        "VEGF"        "MPZ"        
+# [16] "FLRT"        "PTN"         "Cholesterol" "TENASCIN"    "CDH"        
+# [21] "MHC-II"      "UNC5"        "NRXN"        "CXCL"        "NRG"        
+# [26] "EPHA"        "Glutamate"   "CCL"        
 # > site_specific_paths$mets$Pathway
-#  [1] "COLLAGEN"    "LAMININ"     "FN1"         "ADGRL"       "CADM"       
-#  [6] "NCAM"        "PTPRM"       "APP"         "VEGF"        "THBS"       
-# [11] "UNC5"        "PDGF"        "CDH"         "EPHA"        "TGFb"       
-# [16] "FLRT"        "MPZ"         "Cholesterol" "PTN"         "SEMA3"      
-# [21] "PECAM1"      "TENASCIN"    "BMP"         "ADGRG"       "ICAM"       
-# [26] "CCL"         "ANNEXIN"
+#  [1] "COLLAGEN"    "LAMININ"     "SLIT"        "FN1"         "ADGRL"      
+#  [6] "CADM"        "NCAM"        "PTPRM"       "APP"         "VEGF"       
+# [11] "THBS"        "Glutamate"   "UNC5"        "PDGF"        "CDH"        
+# [16] "EPHA"        "TGFb"        "FLRT"        "MPZ"         "MK"         
+# [21] "Cholesterol" "PTN"         "SEMA3"       "PECAM1"      "TENASCIN"   
+# [26] "BMP"         "ADGRG"       "ICAM"        "CCL"         "ANNEXIN"    
 
 average_pathways <- list()
+tumor_sub <- 
+    c("Interactive", "Fibrogenic", "Basal_Progenitor",
+      "Proliferative", "COMA", "MP_Progenitor")
 # load the objects
 for (group in c(
                 "patient_prim",
@@ -1387,6 +1459,7 @@ for (group in c(
         # filter to LR and pathways and prob
         pathways_LR[[sample_name]] <-
             pathways_and_lr_prob %>%
+            # filter(!source %in% tumor_sub) %>%
             select(pathway_name, prob) %>%
             group_by(pathway_name) %>%
             summarise(prob = sum(prob)) %>%
@@ -1412,6 +1485,7 @@ comparisons <- list(
     c("patient_mets", "dogs_metshuman_ortho"),
     c("patient_mets", "mm_metshuman_ortho")
 )
+
 
 for (comp in comparisons) {
     group1 <- comp[1]
@@ -1502,6 +1576,19 @@ for (comp in comparisons) {
  
     ttest_results[[str_c(group1, "_vs_", group2)]] <- plot_pathways
 }
+
+# modules used to arrange the order
+pathway_modules <- list(
+  ECM_Remodeling = c("COLLAGEN","LAMININ","FN1","THBS","TENASCIN","ANNEXIN","BMP","TGFb"),
+  Cell_Adhesion = c("ADGRL","ADGRG","CADM","NCAM","CDH","ICAM","PECAM1"),
+  Angiogenic_GrowthFactor = c("VEGF","PDGF","PTN","MK"),
+  Immune_Modulation = c("CCL","CXCL","MHC-II","SEMA3"),
+  Neural_AxonGuidance = c("SLIT","UNC5","EPHA","FLRT","NRXN","NRG"),
+  Metabolic_Signaling = c("Glutamate","Cholesterol","MPZ"),
+  Cell_Signaling_Receptors = c("PTPRM","APP")
+) %>%
+    unlist() %>%
+    unique()
 # now plot the results all together side by side for each pathway, for each site (Primary and Metastatic)
 
 for (site in c("Primary", "Metastatic")) {
@@ -1528,21 +1615,32 @@ for (site in c("Primary", "Metastatic")) {
         levels = c("Human vs Dog", "Human vs PDX", "Human vs Mouse"))
 
     plot <-
-        ggplot(ttest_results_df_site %>% filter(group != "Human"),
-            aes(x = pathway_name, y = log10(norm_prob+0.0001), fill = group)) +
+        ggplot(
+            ttest_results_df_site %>%
+                filter(group != "Human", pathway_name %in% pathway_modules) %>%
+                mutate(pathway_name = factor(pathway_name, levels = pathway_modules)),
+            aes(x = pathway_name, y = log10(norm_prob + 0.0001), fill = group)
+        ) +
             geom_boxplot(outlier.shape = NA, width = 0.6, position = position_dodge(width = 0.8)) +
             geom_jitter(aes(color = group), position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8), size = 1, alpha = 0.7) +
             scale_fill_manual(values = c("Dog" = "#ff7f0e", "PDX" = "#d62728", "Mouse" = "#2ca02c")) +
             scale_color_manual(values = c("Dog" = "#ff7f0e", "PDX" = "#d62728", "Mouse" = "#2ca02c")) +
             theme_minimal(base_size = 14) +
             theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-            labs(title = str_c("Pathway Probability Comparison Across Species (", site, ", Excluding Human)"),
-                x = "Pathway", y = "Normalized Probability log10") +
+            labs(
+                title = str_c("Pathway Probability Comparison Across Species (", site, ", Excluding Human)"),
+                x = "Pathway", y = "Normalized Probability log10"
+            ) +
             geom_text(
                 data = ttest_results_df_site %>%
-                    filter(group != "Human") %>%
+                    filter(group != "Human", pathway_name %in% pathway_modules) %>%
+                    mutate(pathway_name = factor(pathway_name, levels = pathway_modules)) %>%
                     group_by(pathway_name, group, comparison) %>%
-                    summarise(y_pos = min(max(log10(norm_prob+0.0001), na.rm = TRUE) + 0.1, 22), significance = first(significance), .groups = "drop"),
+                    summarise(
+                        y_pos = min(max(log10(norm_prob + 0.0001), na.rm = TRUE) + 0.1, 22),
+                        significance = first(significance),
+                        .groups = "drop"
+                    ),
                 aes(x = pathway_name, y = y_pos, label = significance, group = group),
                 inherit.aes = FALSE,
                 position = position_dodge(width = 0.8),
@@ -1566,7 +1664,7 @@ for (site in c("Primary", "Metastatic")) {
 ## Dig Deepeer into the pathways that are interesting
 ```{r dig_deeper_pathways}
 
-interesting_pathways <- c("TGFb", "FN1", "LAMININ")
+interesting_pathways <- c("TGFb", "FN1", "LAMININ", "VEGF")
 average_pathways <- list()
 # load the objects
 for (group in c(
@@ -1713,67 +1811,92 @@ ligand_target_matrix_mouse <-
 
 
 for (group in c(
-                "patient_prim",
-                "patient_mets",
-                "xeno_prim_cancer_normal",
-                "xeno_mets_cancer_normal",
-                "dogs_primhuman_ortho",
-                "dogs_metshuman_ortho",
-                # "mm_primhuman_ortho",
-                # "mm_metshuman_ortho",
-                "mm_prim",
-                "mm_mets"
+                "patient_prim", "patient_mets",
+                "xeno_prim_cancer_normal", "xeno_mets_cancer_normal",
+                "dogs_primhuman_ortho", "dogs_metshuman_ortho",
+                "mm_primhuman_ortho", "mm_metshuman_ortho",
+                "mm_prim", "mm_mets"
             )) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
                         ".qs"))
-
     if (object$organism[1] == "human") {
         ligand_target_matrix_use <- ligand_target_matrix
     } else {
         ligand_target_matrix_use <- ligand_target_matrix_mouse
     }
+    # Use parallel::mclapply to process ligands in parallel
+    ligand_results <- parallel::mclapply(
+        c("TGFB1","TGFB2", "FN1", "LAMA1", "LAMB1", "LAMC1", "VEGFA", "VEGFB", "VEGFC"),
+        function(ligands) {
+            # check if the ligand is expressed in the object
+            if (ligands %in% rownames(object)) {
+                message(str_c("Processing ligand ", ligands, " in group ", group))
+                if (object$organism[1] == "human") {
+                    lig <- ligands
+                } else {
+                    lig <- nichenetr::convert_human_to_mouse_symbols(ligands) %>%
+                        as.character()
+                }
+                if (lig %in% rownames(ligand_target_matrix_use)) {
+                    targets <-
+                        ligand_target_matrix_use[lig, ] %>%
+                        as.data.frame() %>%
+                        rownames_to_column("target") %>%
+                        rename(score = 2) %>%
+                        arrange(desc(score)) %>%
+                        filter(score > 0.02) %>%
+                        mutate(ligand = lig)
+                    #make a expression name with ligands_ligand
+                    ligand_display_name <- str_c(ligands, "_ligand")
+                    object[[ligand_display_name]] <- GetAssayData(object, slot = "data")[ligands, ]
 
-    # find the ligands that are expressed in the sender cell type
-    for (ligands in c("TGFB1", "FN1", "LAMA1", "LAMB1", "LAMC1")) {
-        if (object$organism[1] == "human") {
-            lig <- ligands
-        } else {
-            lig <- nichenetr::convert_human_to_mouse_symbols(ligands) %>%
-                as.character()
-        }
-        if (!(lig %in% rownames(ligand_target_matrix_use))) {
-            message(str_c("Ligand ", lig, " not found in ligand-target matrix for group ", group))
-            next
-        }
-        
-        targets <-
-            ligand_target_matrix_use[lig, ] %>%
-            as.data.frame() %>%
-            rownames_to_column("target") %>%
-            rename(score = 2) %>%
-            arrange(desc(score)) %>%
-            filter(score > 0.05) %>%
-            mutate(ligand = lig) 
-        
-        downstream_genes <-
-            targets %>%
-            filter(target %in% rownames(object)) %>%
-            pull(target)
-        # Subset downstream_genes to max 50 if more than 50
-        if (length(downstream_genes) > 50) {
-            downstream_genes <- downstream_genes[1:50]
-        }  
-        DotPlot(object,
-                features = downstream_genes,
-                group.by = "Ann_Level2",
-                scale = T) +
-            theme(axis.text.x = element_text(angle = 45, hjust = 1))
- 
-    }
+                    downstream_genes <-
+                        targets %>%
+                        filter(target %in% rownames(object)) %>%
+                        # filter(target != lig) %>%
+                        pull(target)
+                    if (length(downstream_genes) > 50) {
+                        downstream_genes <- downstream_genes[1:50]
+                    }
+                    # run Aucell with the downstream genes
+                    entire_matrix <- object@assays$RNA$counts
+                    genelist <- downstream_genes
+                    cell_ranks <-
+                        AUCell::AUCell_run(exprMat = entire_matrix,
+                                           geneSets = genelist)
+                    object[[str_c(ligands,"_dwnstrm")]] <- AUCell::getAUC(cell_ranks)[1,]
 
+                    dotplot_everything <-
+                        DotPlot(object,
+                            #cols = "RdBu",
+                            features =  c(ligand_display_name, str_c(ligands,"_dwnstrm"), downstream_genes),
+                            group.by = "Ann_Level2",
+                            scale = T) +
+                            theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+                            ggtitle(str_c("Ligand: ", ligands, " and Downstream Targets (", group, ")"))
+                
+                    ggsave(str_c("output/figures/cellchat/", group, "/", ligands, "_ligand_and_downstream_targets.png"),
+                            dotplot_everything,
+                            width = length(downstream_genes) * 0.3 + 5,
+                            height = length(unique(object$Ann_Level2)) * 0.3 + 3,
+                            bg = "white")
+                    return(TRUE)
+                } else {
+                    message(str_c("Ligand ", ligands, " not found in ligand-target matrix for ", group))
+                    return(FALSE)
+                }
+            }
+            return(FALSE)
+        },
+        mc.cores = 5 # adjust the number of cores as needed
+    )
 }
+
+
+
+
 
 
 lig <- "Tgfb1"
