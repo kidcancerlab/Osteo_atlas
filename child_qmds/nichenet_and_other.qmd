@@ -1146,17 +1146,17 @@ for (group in c(
         # pull the individual interactions without probabilities
         pathways_and_lr_prob <-
             subsetCommunication(cellchat,
-                            slot.name = "netP") %>%
+                            slot.name = "net") %>%
             arrange(desc(prob)) 
         # filter to LR and pathways and prob
         pathways_LR[[sample_name]] <-
             pathways_and_lr_prob %>%
-            select(pathway_name, prob) %>%
-            group_by(pathway_name) %>%
-            summarise(prob = sum(prob)) %>%
-            ungroup() %>%
-            mutate(sample = sample_name, group = group) %>%
-            arrange(desc(prob))
+            select(source,target, interaction_name, prob) #%>%
+            # group_by(pathway_name) %>%
+            # summarise(prob = sum(prob)) %>%
+            # ungroup() %>%
+            # mutate(sample = sample_name, group = group) %>%
+            # arrange(desc(prob))
     }
 
     pathways_LR_df <-
@@ -3385,3 +3385,197 @@ ggplot(module_summary, aes(x=Group, y=MeanScore, fill=Dataset)) +
 
 ```
 
+
+
+
+
+```{r multi_sample_cellchat_analysis_sharedgenes_analysis}
+
+average_pathways <- list()
+module_pathways_list <- list()
+tumor_sub <- 
+    c("Interactive", "Fibrogenic", "Basal_Progenitor",
+      "Proliferative", "COMA", "MP_Progenitor")
+# load the objects
+for (group in c(
+                "patient_prim",
+                "patient_mets",
+                "xeno_prim_cancer_normal",
+                "xeno_mets_cancer_normal",
+                "dogs_primhuman_ortho",
+                "dogs_metshuman_ortho",
+                "mm_primhuman_ortho",
+                "mm_metshuman_ortho"
+            )) {
+    cell_chat_objs <-
+        list.files(str_c("output/cellchat_objects_sharedgenes/", group),
+                pattern = "*.qs",
+                full.names = TRUE)
+    cellchat_list <- list()
+    pathways_LR <- list()
+    for (file_path in cell_chat_objs) {
+        sample_name <- str_replace(basename(file_path), ".qs", "")
+        cellchat <- qs::qread(file_path)
+        cellchat_list[[sample_name]] <- cellchat
+
+        # pull the individual interactions without probabilities
+        pathways_and_lr_prob <-
+            subsetCommunication(cellchat,
+                            slot.name = "net") %>%
+            arrange(desc(prob)) 
+        # filter to LR and pathways and prob
+        pathways_LR[[sample_name]] <-
+            pathways_and_lr_prob %>%
+            mutate(target_LR =
+                    paste(target, interaction_name, sep="-")) %>%
+            select(target_LR, prob) %>%
+            group_by(target_LR) %>%
+            summarise(prob = sum(prob)) %>%
+            ungroup()
+    }
+
+    pathways_LR_df <-
+        do.call(rbind, pathways_LR) %>%
+        as_tibble() %>%
+        as.data.frame() %>%
+        arrange(desc(prob))
+
+    # plot heatmap of top interactions by group
+    pathway_average <-
+        pathways_LR_df %>%
+        group_by(target_LR) %>%
+        summarise(mean_prob = mean(prob)) %>%
+        arrange(desc(mean_prob)) %>%
+        mutate(group = group) %>%
+        ungroup()
+    
+    average_pathways[[group]] <- pathway_average
+
+}
+
+## compare prim vs mets
+# make a heatmap from the average pathways
+average_pathways_df <-
+    do.call(rbind, average_pathways)
+heatmap_matrix <-
+    average_pathways_df %>%
+    pivot_wider(names_from = group, values_from = mean_prob, values_fill = 0) %>%
+    column_to_rownames("target_LR")
+
+# Plot heatmap: group on x-axis, pathway on y-axis
+heatmap<-
+    pheatmap::pheatmap(
+        heatmap_matrix,
+        cluster_rows = FALSE,
+        cluster_cols = FALSE,
+        silent = TRUE,
+        color = colorRampPalette(c("white", "#fd5252ff","#fd3c3cff","#fc1717ff", "#ff0000ff"))(100),
+        main = "Average Pathway Mean Probability Across All)",
+        fontsize_row = 8,
+        fontsize_col = 10,
+        display_numbers = round(heatmap_matrix, 2)
+)
+ggsave("output/figures/cellchat/sharedgenes_average_pathway_heatmap_across_all.png",
+    heatmap,
+    width = 10,
+    height = 20,
+    bg = "white"
+)
+
+patientprimt <-
+    average_pathways_df %>%
+    filter(str_detect(group, "patient_prim")) %>%
+    as.data.frame()
+
+hist(patientprimt$mean_prob, n=100)
+# plots
+for (site in c("prim", "mets")) {
+    site_specific <-
+        average_pathways_df %>%
+        filter(str_detect(group, site)) %>%
+        as.data.frame() %>%
+        pivot_wider(names_from = group, values_from = mean_prob, values_fill = 0) %>%
+        column_to_rownames("target_LR")
+
+    # heatmap as a whole
+    mean_filter <-
+        average_pathways_df %>%
+        filter(str_detect(group, site)) %>%
+        pull(mean_prob) %>%
+        mean()  
+    heatmap_df <-
+        site_specific %>%
+        filter(rowSums(across(everything())) > mean_filter) %>%
+        as.matrix()
+    # Plot heatmap: group on x-axis, pathway on y-axis
+    heatmap_per_site<-
+        pheatmap::pheatmap(
+            heatmap_df,
+            cluster_rows = TRUE,
+            cluster_cols = TRUE,
+            silent = TRUE,
+            color = colorRampPalette(c("white", "#ff6b6bff","#ff4a4aff","#ff2424ff", "#ff0e0eff"))(100),
+            main = "Pathway Mean Probability (Shared Genes)",
+            fontsize_row = 8,
+            fontsize_col = 10,
+            display_numbers = round(heatmap_df, 2)
+        )
+    ggsave(str_c("output/figures/cellchat/sharedgenes_", site, "_average_pathway_heatmap.png"),
+        heatmap_per_site,
+        width = 4,
+        height = length(colnames(heatmap_df)) * 0.5 + 4,
+        bg = "white"
+    )
+
+    # plot correlation heatmap
+    # Correlation matrix heatmap (already present)
+    cor_matrix <-
+        cor(site_specific, use = "everything", method = "spearman")
+    pheatmap::pheatmap(
+        cor_matrix,
+        cluster_rows = TRUE,
+        cluster_cols = TRUE,
+        color = colorRampPalette(c("#ffe0e0ff", "#fd3f3fff"))(100),
+        main = str_c("Correlation Heatmap of Pathways - ", site, " Site"),
+        fontsize_row = 8,
+        fontsize_col = 10,
+        display_numbers = round(cor_matrix, 2),
+        number_color = "black"
+    )  # Alternative visualization: correlation network graph
+    library(igraph)
+    library(ggraph)
+
+    # Convert correlation matrix to long format for graph
+    cor_long <-
+        as.data.frame(as.table(cor_matrix))
+    colnames(cor_long) <- c("Var1", "Var2", "Correlation")
+    cor_long <- cor_long %>% filter(Var1 != Var2 & abs(Correlation) > 0.7)
+
+    # Create igraph object
+    g <- graph_from_data_frame(cor_long, directed = FALSE)
+
+    # Plot correlation network
+    ggraph(g, layout = "fr") +
+        geom_edge_link(aes(edge_alpha = abs(Correlation), edge_width = abs(Correlation), color = Correlation > 0), show.legend = TRUE) +
+        geom_node_point(size = 5) +
+        geom_node_text(aes(label = name), repel = TRUE) +
+        scale_edge_color_manual(values = c("TRUE" = "red", "FALSE" = "blue")) +
+        labs(title = str_c("Pathway Correlation Network - ", site, " Site")) +
+        theme_void()
+
+    # Alternative: pairwise scatterplots
+    site_specific_GGPAIRS <-
+        site_specific %>%
+        rownames_to_column("pathways") %>%
+        filter(pathways != "COLLAGEN") %>%
+        column_to_rownames("pathways")
+    library(GGally)
+    GGally::ggpairs(
+        site_specific_GGPAIRS,
+        lower = list(continuous = wrap("points", alpha = 0.5)),
+        upper = list(continuous = wrap("cor", size = 3)),
+        diag = list(continuous = wrap("barDiag", fill = "lightblue")),
+        title = str_c("Pairwise Pathway Correlations - ", site, " Site"),
+        axisLabels = "show"
+    )
+}
