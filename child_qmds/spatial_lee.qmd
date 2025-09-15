@@ -284,7 +284,6 @@ make_adj_matrix <- function(lee_stats_table) {
 
 make_edge_table <- function(adjacency_graph,
                             lee_stats_table) {
-
     graph_coords <-
         igraph::layout_with_kk(adjacency_graph) %>%
         as.data.frame() %>%
@@ -350,7 +349,7 @@ make_network_plot_from_lee <- function(lee_stats_table,
             color = "darkblue"
         ) +
         geom_point(
-            data =  edge_table %>%
+            data = edge_table %>%
                 select(cell_type_1, x_1, y_1, Ann_Level1) %>%
                 distinct(),
             aes(
@@ -372,7 +371,26 @@ make_network_plot_from_lee <- function(lee_stats_table,
             ),
             size = 3,
             color = "white",
-            label.size = 0
+            label.size = 0,
+            segment.colour = "black"
+        ) +
+        scale_color_manual(
+            values = c(
+                Epithelial_Endothelial = "#D43F3AFF",
+                Immune_Lymphoid = "#EEA236FF",
+                Immune_Myeloid = "#357EBDFF",
+                Mesenchymal = "#5CB85CFF",
+                Tumor = "#B8B8B8FF"
+            )
+        ) +
+        scale_fill_manual(
+            values = c(
+                Epithelial_Endothelial = "#D43F3AFF",
+                Immune_Lymphoid = "#EEA236FF",
+                Immune_Myeloid = "#357EBDFF",
+                Mesenchymal = "#5CB85CFF",
+                Tumor = "#B8B8B8FF"
+            )
         ) +
         labs(
             x = NULL,
