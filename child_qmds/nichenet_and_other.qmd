@@ -1182,6 +1182,7 @@ for (group in c(
 # make a heatmap from the average pathways
 average_pathways_df <-
     do.call(rbind, average_pathways)
+
 heatmap_matrix <-
     average_pathways_df %>%
     pivot_wider(names_from = group, values_from = mean_prob, values_fill = 0) %>%
@@ -1267,7 +1268,6 @@ for (site in c("prim", "mets")) {
     )  # Alternative visualization: correlation network graph
     library(igraph)
     library(ggraph)
-
     # Convert correlation matrix to long format for graph
     cor_long <-
         as.data.frame(as.table(cor_matrix))
@@ -1326,16 +1326,19 @@ pathway_groups <- list(
 # plots
 site_specific_paths <- list()
 for (site in c("prim", "mets")) {
+    patient_site_name <-
+        ifelse(site == "prim", "patient_prim", "patient_mets")
     site_specific <-
         average_pathways_df %>%
         filter(str_detect(group, site)) %>%
         as.data.frame() %>%
         pivot_wider(names_from = group, values_from = mean_prob, values_fill = 0) %>%
+        filter(.data[[patient_site_name]] > 0) %>% 
         column_to_rownames("pathway_name") %>%
         mutate(row_sum = rowSums(across(everything()))) %>%
         arrange(desc(row_sum)) %>%
         select(-row_sum) %>%
-        slice_head(n=50)
+        slice_head(n=40)
 
     # heatmap as a whole
     mean_filter <-
@@ -1531,7 +1534,7 @@ for (comp in comparisons) {
     # now filter pathways for primary
     pathways_prob_df_filtered <- 
         human_vs_another %>%
-        filter(pathway_name %in% mean_per_pathway_in_human$pathway_name) %>%
+        #filter(pathway_name %in% mean_per_pathway_in_human$pathway_name) %>%
         arrange(desc(prob)) %>%
         left_join(mean_per_pathway_in_human, by = "pathway_name") %>%
         mutate(norm_prob = prob / mean_prob_human) %>%
@@ -1578,39 +1581,35 @@ for (comp in comparisons) {
     ttest_results[[str_c(group1, "_vs_", group2)]] <- plot_pathways
 }
 
-# modules used to arrange the order
-pathway_modules <- list(
-  ECM_Remodeling = c("COLLAGEN","LAMININ","FN1","THBS","TENASCIN","ANNEXIN","BMP","TGFb"),
-  Cell_Adhesion = c("ADGRL","ADGRG","CADM","NCAM","CDH","ICAM","PECAM1"),
-  Angiogenic_GrowthFactor = c("VEGF","PDGF","PTN","MK"),
-  Immune_Modulation = c("CCL","CXCL","MHC-II","SEMA3"),
-  Neural_AxonGuidance = c("SLIT","UNC5","EPHA","FLRT","NRXN","NRG"),
-  Metabolic_Signaling = c("Glutamate","Cholesterol","MPZ"),
-  Cell_Signaling_Receptors = c("PTPRM","APP")
-) %>%
-    unlist() %>%
-    unique()
 
 # with 50 pathways, we can group them into functional modules
-
-pathway_modules <- list(
-    ECM_Remodelling = c("COLLAGEN","LAMININ","FN1","THBS","TENASCIN",
-                        "AGRN","TGFb","ANNEXIN"),
-    Cell_Adhesion = c("APP","CADM","PTPRM","NCAM","ADGRL","ADGRG","CDH",
-                        "CDH5","PECAM1","ICAM","SELL","JAM","UNC5","CLDN"),
-    Angiogenesis = c("VEGF","PDGF","ANGPT","IGF","MK","PTN","FGF"),
-    Immune_Signalling = c("CXCL","CCL","MHC-II","IL1","CD45","CD80",
-                            "CD86","OSM","CSF","TNF","TWEAK"),
-    Stemness = c("BMP","NOTCH","ncWNT","RA","GDF"),
-    Neuronal = c("SLIT","FLRT","MPZ","EPHA","NRG","NRXN","NEGR","SEMA3","SEMA6"),
-    Metabolic = c("Cholesterol","Glutamate","RBP4","DHEA")
+prim_modules <- list(
+    ECM_Remodelling   = c("COLLAGEN", "LAMININ", "FN1", "THBS", "TENASCIN", "TGFb"),
+    Cell_Adhesion     = c("APP", "CADM", "PTPRM", "NCAM", "ADGRL", "ADGRG", "CDH",
+                            "PECAM1", "ICAM", "SELL", "JAM"),
+    Angiogenesis      = c("VEGF", "PDGF", "MK", "PTN", "IGF", "ANGPT"),
+    Immune_Signalling = c("CXCL", "CCL", "IL1", "MHC-II"),
+    Stemness          = c("BMP", "RA", "NRG"),
+    Neuronal          = c("SLIT", "FLRT", "MPZ", "EPHA", "NRXN", "NEGR", "SEMA3", "UNC5"),
+    Metabolic         = c("Cholesterol", "Glutamate")
 ) %>%
-    unlist() %>%
-    unique()
+unlist() %>%
+unique()
 
+# Metastatic
+mets_modules <- list(
+    ECM_Remodelling   = c("COLLAGEN", "LAMININ", "FN1", "THBS", "TENASCIN", "TGFb"),
+    Cell_Adhesion     = c("APP", "CADM", "PTPRM", "NCAM", "ADGRL", "ADGRG", "CDH", "PECAM1", "ICAM"),
+    Angiogenesis      = c("VEGF", "PDGF", "MK", "PTN", "IGF", "FGF", "ANGPT"),
+    Immune_Signalling = c("CXCL", "CCL", "IL1", "TNF", "CD80"),
+    Stemness          = c("BMP", "RA"),
+    Neuronal          = c("SLIT", "FLRT", "MPZ", "EPHA", "NRXN", "NEGR", "SEMA3", "UNC5"),
+    Metabolic         = c("Cholesterol", "Glutamate", "DHEA")
+)%>%
+unlist() %>%
+unique()
 
 # now plot the results all together side by side for each pathway, for each site (Primary and Metastatic)
-
 for (site in c("Primary", "Metastatic")) {
     ttest_results_df_site <-
         do.call(rbind, ttest_results) %>%
@@ -1634,9 +1633,12 @@ for (site in c("Primary", "Metastatic")) {
     ttest_results_df_site$comparison <- factor(ttest_results_df_site$comparison,
         levels = c("Human vs Dog", "Human vs PDX", "Human vs Mouse"))
 
-    library(patchwork)
-
     # Split pathways into two halves
+    if (site == "Primary") {
+        pathway_modules <- prim_modules
+    } else {
+        pathway_modules <- mets_modules
+    }
     half_n <- ceiling(length(pathway_modules) / 2)
     pathways1 <- pathway_modules[1:half_n]
     pathways2 <- pathway_modules[(half_n + 1):length(pathway_modules)]
@@ -1723,6 +1725,20 @@ for (site in c("Primary", "Metastatic")) {
 
 
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3608,6 +3624,14 @@ for (site in c("prim", "mets")) {
 
 ```
 
+
+
+
+
+
+
+
+
 Now using specific modules of pathways
 ```{r multi_sample_cellchat_analysis_sharedgenes_analysis_modules}
 
@@ -3676,6 +3700,35 @@ unique_receiver_celltypes_all <-
     sort()
 
 
+
+# with 50 pathways, we can group them into functional modules
+prim_modules <- list(
+    ECM_Remodelling   = c("COLLAGEN", "LAMININ", "FN1", "THBS", "TENASCIN", "TGFb"),
+    Cell_Adhesion     = c("APP", "CADM", "PTPRM", "NCAM", "ADGRL", "ADGRG", "CDH",
+                            "PECAM1", "ICAM", "SELL", "JAM"),
+    Angiogenesis      = c("VEGF", "PDGF", "MK", "PTN", "IGF", "ANGPT"),
+    Immune_Modulation = c("CXCL", "CCL", "IL1", "MHC-II"),
+    Stemness          = c("BMP", "RA", "NRG"),
+    Neuronal          = c("SLIT", "FLRT", "MPZ", "EPHA", "NRXN", "NEGR", "SEMA3", "UNC5"),
+    Metabolic         = c("Cholesterol", "Glutamate")
+)
+
+# Metastatic
+mets_modules <- list(
+    ECM_Remodelling   = c("COLLAGEN", "LAMININ", "FN1", "THBS", "TENASCIN", "TGFb"),
+    Cell_Adhesion     = c("APP", "CADM", "PTPRM", "NCAM", "ADGRL", "ADGRG", "CDH", "PECAM1", "ICAM"),
+    Angiogenesis      = c("VEGF", "PDGF", "MK", "PTN", "IGF", "FGF", "ANGPT"),
+    Immune_Modulation = c("CXCL", "CCL", "IL1", "TNF", "CD80"),
+    Stemness          = c("BMP", "RA"),
+    Neuronal          = c("SLIT", "FLRT", "MPZ", "EPHA", "NRXN", "NEGR", "SEMA3", "UNC5"),
+    Metabolic         = c("Cholesterol", "Glutamate", "DHEA")
+)
+
+Immune_Modulation_cells <- 
+    c("Alv_Macrophages","TAMs","Monocytes","Neutrophils",
+        "Mast","DC","T_cells","B_cells","NK_cells","ILCs",
+        "Interactive")
+
 # load the objects
 All_pathways_and_Groups <- list()
 for (group in c(
@@ -3701,11 +3754,16 @@ for (group in c(
         pathways_and_lr_prob <-
             subsetCommunication(cellchat,
                                 slot.name = "net") %>%
-            select(target, prob, pathway_name, interaction_name, source) %>%
-            mutate(Target_LR = paste0(source, "-to-", target, "-", interaction_name)) %>%
+            select(target, prob, pathway_name, interaction_name, source) %>% 
+            mutate(Target_LR = paste0(target, "-", interaction_name)) %>%
             select(Target_LR, pathway_name, prob) %>%
             group_by(Target_LR, pathway_name) %>%
             summarise(prob = sum(prob), .groups = "drop")
+            
+        # filter out unwanted cell types Neutrophils|Smooth_muscle|
+        pathways_and_lr_prob <-
+            pathways_and_lr_prob %>%
+                filter(!str_detect(Target_LR, "^(Chondrocytes|Mast|Osteoblasts|Stressed|Erythrocytes|Progenitor|MSC|Neuronal)-"))
 
         # save to list
         pathways_LR_per_group[[sample_name]] <- pathways_and_lr_prob
@@ -3727,26 +3785,51 @@ All_pathways_LR_combined <-
     as_tibble() %>%
     as.data.frame()
 
+# look at specific pathways
+IL6_pathways <-
+    All_pathways_LR_combined %>%
+    filter(pathway_name == "CXCL") %>%
+    filter(group %in% c("xeno_prim_cancer_normal", "xeno_mets_cancer_normal")) %>%
+    arrange(desc(mean_prob))
+
+#color for pathays in modules
+module_colors <- c(
+    ECM_Remodelling = "#D43F3AFF",
+    Cell_Adhesion = "#EEA236FF",
+    Angiogenesis = "#357EBDFF",
+    Immune_Modulation = "#5CB85CFF",
+    Stemness = "#90302DFF",
+    Neuronal = "#9632B8FF",
+    Metabolic = "#46B8DAFF"
+)
+
 # loop for primary and mets
 for (site in c("prim", "mets")) {
-    mean_cutoff <-
-        All_pathways_LR_combined %>%
-        filter(str_detect(group, site)) %>%
-        as.data.frame() %>%
-        select(mean_prob) %>%
-        summarise(mean = mean(mean_prob)) %>%
-        pull(mean)
     site_specific <-
         All_pathways_LR_combined %>%
         filter(str_detect(group, site)) %>%
-        as.data.frame() %>% 
+        as_tibble() %>%
+        filter(pathway_name %in% (if (site == "prim") unique(unlist(prim_modules)) 
+                                  else unique(unlist(mets_modules)))) %>%
+        as.data.frame() %>%
         pivot_wider(names_from = group,
                     values_from = mean_prob,
                     values_fill = 0,
                     id_cols = c(Target_LR, pathway_name)) %>%
-        # filter(rowSums(select(., -Target_LR, -pathway_name)) > mean_cutoff) %>%
+        filter(if (site == "prim") patient_prim > 0 
+               else patient_mets > 0) %>%
         group_by(pathway_name) %>%
         group_split() %>%
+        # Need to filter the immune modulation pathways to only include those with immune cell targets
+        map(function(df) {
+            if (df$pathway_name[1] == "CXCL" || df$pathway_name[1] == "CCL" || df$pathway_name[1] == "IL1" || df$pathway_name[1] == "MHC-II" || df$pathway_name[1] == "TNF" || df$pathway_name[1] == "CD80") {
+                df %>% filter(str_detect(Target_LR, paste0("^(", paste(Immune_Modulation_cells, collapse = "|"), ")-")))
+            } else {
+                df
+            }
+        }) %>%
+        # remove any dataframes that are less than 10 rows after filtering
+        keep(~ nrow(.) >= 10) %>%
         # Calculate correlation for each group or pathway_name in xeno, mm, and dogs compared to patient
         map(function(df) {
             # Get the patient column (reference)
@@ -3769,24 +3852,98 @@ for (site in c("prim", "mets")) {
     # plot the correlations
     plot_cooraltion_df <-
         site_specific %>%
-        pivot_wider(names_from = comparison_group, values_from = correlation, values_fill = 0) %>%
+        pivot_wider(names_from = comparison_group,
+            values_from = correlation,
+            values_fill = 0) %>%
+        arrange(factor(pathway_or_group,
+                    levels = if (site == "prim") unique(unlist(prim_modules)) 
+                             else unique(unlist(mets_modules)))) %>%
         column_to_rownames("pathway_or_group") %>%
-        filter(rowSums(. > 0) >= 2)
+        rename(patient = starts_with("patient_"),
+                PDX = starts_with("xeno_"),
+                Mouse = starts_with("mm_"),
+                Dogs = starts_with("dogs_")) %>%
+                select(Dogs, Mouse, PDX) %>%
+        as.matrix()
 
-    # plot the heatmap
-    pheatmap::pheatmap(
-        plot_cooraltion_df,
-        cluster_rows = TRUE,
-        cluster_cols = TRUE,
-        color = colorRampPalette(c("#5e9ffaff","#f3f6faff", "#f84c4cff"))(100),
-        main = str_c("Correlation Heatmap of Pathways - ", site, " Site"),
-        fontsize_row = 8,
-        fontsize_col = 10,
-        display_numbers = round(plot_cooraltion_df, 2),
-        number_color = "black"
+    # plot the heatmap 
+    # describe the color for the values
+    my_colors <- c("#4d9fe7ff", "#ffffff", "#eb433dff")
+    my_breaks <- c(-1, -0.3, 0.3, 1)
+    my_values <- scales::rescale(my_breaks, from = c(-1, 1))
+    # Map pathway_name to module and color
+    module_map <- if (site == "prim") prim_modules else mets_modules
+    module_color_df <- tibble(
+        pathway_name = unlist(module_map),
+        module = rep(names(module_map), lengths(module_map)),
+        color = unname(module_colors[rep(names(module_map), lengths(module_map))])
     )
 
+    # Prepare data for plotting
+    plot_cooraltion_df_df <- as.data.frame(as.table(plot_cooraltion_df))
+    plot_cooraltion_df_df$module <- module_color_df$module[match(plot_cooraltion_df_df$Var1, module_color_df$pathway_name)]
+    plot_cooraltion_df_df$color <- module_color_df$color[match(plot_cooraltion_df_df$Var1, module_color_df$pathway_name)]
 
+    # Colored y-axis labels
+    pathway_label_colors <- module_color_df$color
+    names(pathway_label_colors) <- module_color_df$pathway_name
+    y_labels_colored <- sapply(
+        rownames(plot_cooraltion_df),
+        function(lab) {
+            col <- pathway_label_colors[lab]
+            if (is.na(col)) col <- "#000000"
+            sprintf("<span style='color:%s'>%s</span>", col, lab)
+        }
+    )
+
+    heatmap_LR <- 
+        ggplot(plot_cooraltion_df_df, 
+            aes(x = Var2, y = factor(Var1, levels = rev(rownames(plot_cooraltion_df))), fill = Freq)) +
+            geom_tile(color = "white", linewidth = 0.5) +
+            geom_text(aes(label = sprintf("%.2f", Freq)), size = 5, color = "black") +
+            scale_fill_gradientn(colours = my_colors,
+                                values = my_values,
+                                limits = c(-1, 1),
+                                name = "Spearman\nCorrelation",
+                                guide = guide_colorbar(barwidth = 1, barheight = 15,
+                                                      frame.colour = "black", ticks.colour = "black")) +
+            labs(x = "Comparison Group",
+                y = "Pathway",
+                title = str_c("Correlation Heatmap of Pathways - ", site, " Site")) +
+            theme_minimal(base_size = 15) +
+            theme(axis.text.x = element_text(size = 15),
+                axis.text.y = ggtext::element_markdown(size = 15),
+                axis.title = element_text(size = 15),
+                plot.title = element_text(size = 15, hjust = 0.5),
+                legend.title = element_text(size = 15),
+                legend.text = element_text(size = 15),
+                panel.grid = element_blank(),
+                panel.border = element_rect(color = "black", fill = NA, linewidth = 1)) +
+            guides(fill = guide_colorbar(barwidth = 1, barheight = 15)) +
+            scale_y_discrete(labels = y_labels_colored) +
+            geom_point(data = module_color_df %>% distinct(module, color),
+                aes(x = 1, y = -Inf, color = module),
+                size = 5, shape = 15, inherit.aes = FALSE, show.legend = TRUE) +
+            scale_color_manual(name = "Pathway Module",
+                values = setNames(module_colors, names(module_colors)),
+                guide = guide_legend(override.aes = list(size = 5, shape = 15),
+                                    order = 1,
+                                    title.position = "top",
+                                    title.hjust = 0.5,
+                                    label.position = "right",
+                                    label.hjust = 0),
+                breaks = names(module_colors),
+                labels = names(module_colors)) +
+            theme(legend.position = "right",
+                 legend.box = "vertical",
+                 legend.box.just = "left")
+
+    ggsave(str_c("output/figures/cellchat/sharedgenes_modules/correlation_heatmap_pathways_",
+                site, ".png"),
+            heatmap_LR,
+            width = 7,
+            height = 12,
+            bg = "white")
 }
 
 
@@ -3797,81 +3954,6 @@ for (site in c("prim", "mets")) {
 
 
 
-
-# define the modules of pathways
-cellchat_modules <- list(
-    ECM = c("FN1", "COLLAGEN", "LAMININ", "TENASCIN", "THBS", "AGRN", "APP",
-            "PTPR", "PTPRM", "ADGRL", "ADGRB", "ADGRG", "ANNEXIN"),
-    CellAdhesion = c("CDH", "CDH1", "CDH5", "CADM", "NCAM", "PECAM1", "ICAM",
-                     "JAM", "NECTIN", "CLDN", "OCLN", "PCDH", "SELL"),
-    Angiogenesis = c("VEGF", "ANGPT", "ANGPTL", "PDGF", "FGF", "VWF", "EDN",
-                     "CALCR", "RANKL", "CSF", "KIT", "HGF"),
-    Stemness = c("WNT", "ncWNT", "NOTCH", "BMP", "GDF", "RA", "GAP", "MK", "PTN"),
-    Neuronal = c("SEMA3", "SEMA5", "SEMA6", "UNC5", "Netrin", "FLRT", "NRXN",
-                 "EPHA", "EPHB", "NRG", "MPZ", "NEGR"),
-    Metabolic = c("Glutamate", "Cholesterol", "Estradiol", "Desmosterol",
-                  "RBP4", "ENHO", "CysLTs"),
-    ImmuneModulation = c("CXCL", "CCL", "IL2", "IL1", "IL6", "IL16", "TNF", "TWEAK",
-                    "Prostaglandin", "CSF", "CX3C", "TGFb", "MHC-II", "CD45",
-                    "CD80", "CD86", "ICOS", "CD30", "APRIL", "BAFF", "CD39")
-)
-
-# cellltypes present 
-celltypes_present <- c(
-    "Alv_Macrophages", "B_cells", "Basal", "Basal_Progenitor", "CAFs", "Chondrocytes",
-    "COMA", "DC", "Endothelial_cells", "Epithelial_cells", "Erythrocytes", "Fibroblasts",
-    "Fibrogenic", "ILCs", "Interactive", "Mast", "Monocytes", "MP_Progenitor", "MSC",
-    "Muscle_cells", "Neuronal", "Neutrophils", "NK_cells", "Osteoblasts", "Pericytes",
-    "Progenitor", "Proliferative", "Smooth_muscle", "Stressed", "T_cells", "TAMs"
-)
-
-celltype_modules <- list(
-    ECM = c("Alv_Macrophages", "B_cells", "Basal", "Basal_Progenitor", "CAFs",
-                "Chondrocytes", "COMA", "DC", "Endothelial_cells", "Epithelial_cells",
-                "Erythrocytes", "Fibroblasts", "Fibrogenic", "ILCs", "Interactive",
-                "Mast", "Monocytes", "MP_Progenitor", "MSC", "Muscle_cells", "Neuronal",
-                "Neutrophils", "NK_cells", "Osteoblasts", "Pericytes", "Progenitor",
-                "Proliferative", "Smooth_muscle", "Stressed", "T_cells", "TAMs"),
-
-    CellAdhesion = c("Alv_Macrophages", "B_cells", "Basal", "Basal_Progenitor", "CAFs",
-                "Chondrocytes", "COMA", "DC", "Endothelial_cells", "Epithelial_cells",
-                "Erythrocytes", "Fibroblasts", "Fibrogenic", "ILCs", "Interactive",
-                "Mast", "Monocytes", "MP_Progenitor", "MSC", "Muscle_cells", "Neuronal",
-                "Neutrophils", "NK_cells", "Osteoblasts", "Pericytes", "Progenitor",
-                "Proliferative", "Smooth_muscle", "Stressed", "T_cells", "TAMs"),
-    
-    Angiogenesis = c("Alv_Macrophages", "B_cells", "Basal", "Basal_Progenitor", "CAFs",
-                "Chondrocytes", "COMA", "DC", "Endothelial_cells", "Epithelial_cells",
-                "Erythrocytes", "Fibroblasts", "Fibrogenic", "ILCs", "Interactive",
-                "Mast", "Monocytes", "MP_Progenitor", "MSC", "Muscle_cells", "Neuronal",
-                "Neutrophils", "NK_cells", "Osteoblasts", "Pericytes", "Progenitor",
-                "Proliferative", "Smooth_muscle", "Stressed", "T_cells", "TAMs"),
-
-    Stemness = c("Alv_Macrophages", "B_cells", "Basal", "Basal_Progenitor", "CAFs",
-                "Chondrocytes", "COMA", "DC", "Endothelial_cells", "Epithelial_cells",
-                "Erythrocytes", "Fibroblasts", "Fibrogenic", "ILCs", "Interactive",
-                "Mast", "Monocytes", "MP_Progenitor", "MSC", "Muscle_cells", "Neuronal",
-                "Neutrophils", "NK_cells", "Osteoblasts", "Pericytes", "Progenitor",
-                "Proliferative", "Smooth_muscle", "Stressed", "T_cells", "TAMs"),
-    
-    Neuronal = c("Alv_Macrophages", "B_cells", "Basal", "Basal_Progenitor", "CAFs",
-                "Chondrocytes", "COMA", "DC", "Endothelial_cells", "Epithelial_cells",
-                "Erythrocytes", "Fibroblasts", "Fibrogenic", "ILCs", "Interactive",
-                "Mast", "Monocytes", "MP_Progenitor", "MSC", "Muscle_cells", "Neuronal",
-                "Neutrophils", "NK_cells", "Osteoblasts", "Pericytes", "Progenitor",
-                "Proliferative", "Smooth_muscle", "Stressed", "T_cells", "TAMs"),
-
-    Metabolic = c("Alv_Macrophages", "B_cells", "Basal", "Basal_Progenitor", "CAFs",
-                "Chondrocytes", "COMA", "DC", "Endothelial_cells", "Epithelial_cells",
-                "Erythrocytes", "Fibroblasts", "Fibrogenic", "ILCs", "Interactive",
-                "Mast", "Monocytes", "MP_Progenitor", "MSC", "Muscle_cells", "Neuronal",
-                "Neutrophils", "NK_cells", "Osteoblasts", "Pericytes", "Progenitor",
-                "Proliferative", "Smooth_muscle", "Stressed", "T_cells", "TAMs"),
-    
-    ImmuneModulation = c("Alv_Macrophages","TAMs","Monocytes","Neutrophils",
-                    "Mast","DC","T_cells","B_cells","NK_cells","ILCs",
-                    "Interactive")
-)
 
 
 corr_list <- list()
