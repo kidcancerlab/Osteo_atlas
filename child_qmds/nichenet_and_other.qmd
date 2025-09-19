@@ -1765,8 +1765,18 @@ for (site in c("Primary", "Metastatic")) {
 ## Dig Deepeer into the pathways that are interesting
 ```{r dig_deeper_pathways}
 
-interesting_pathways <- c("TGFb", "FN1", "LAMININ", "VEGF")
+interesting_pathways <- c(
+                    "TGFb", "FN1", "LAMININ", "VEGF", "CXCL",
+                    "IL1",
+                    "CCL",
+                    "THBS",
+                    "CADM",
+                    "APP",
+                    "SLIT",
+                    "NCAM"
+                    )
 average_pathways <- list()
+interaction_names <- list()
 # load the objects
 for (group in c(
                 "patient_prim",
@@ -1848,7 +1858,8 @@ for (group in c(
             height = length(unique(pathway_df_plot$source)) * 0.3 + 2,
             bg = "white"
         )
-
+        
+        interaction_names[[str_c(group, "_", pathway)]] <- unique(pathway_df$interaction_name)
         # plot for each interaction
         for (interaction in unique(pathway_df$interaction_name)) {
             interaction_df <-
@@ -1864,13 +1875,20 @@ for (group in c(
             plot_lr <-
                 ggplot(interaction_df, aes(x = target, y = source, size = count, color = prob)) +
                     geom_point(alpha = 0.7) +
-                    scale_size_continuous(range = range(interaction_df$count, na.rm = TRUE), name = "Count") + 
+                    # scale_size_continuous(range = range(interaction_df$count, na.rm = TRUE), name = "Count") + 
                     scale_color_gradientn(colours = c("#fdeaeaff", "#f8bfbfff",
                                                     "#fe9090ff","#ff3737ff", "#ff0d00ff"),
                                             name = "Strength") +  
                     theme_minimal(base_size = 14) +
-                    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-                    labs(title = str_c("Interaction LR: ", interaction, " (Pathway:", pathway, " - ", group, ")"),x = "Receiver Cell Type", y = "Sender Cell Type") 
+                    labs(
+                        title = str_c("LR: ", interaction, " (Pathway:", pathway, " - ", group, ")"),
+                        x = "Receiver Cell Type",
+                        y = "Sender Cell Type") +
+                    theme(plot.title = element_text(size = 10),
+                        axis.title.x = element_text(size = 10),
+                        axis.title.y = element_text(size = 10),
+                        axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
+                        axis.text.y = element_text(size = 9))
 
             if (!dir.exists(str_c("output/figures/cellchat/", group))) {
                 dir.create(str_c("output/figures/cellchat/", group), recursive = TRUE)
@@ -1906,17 +1924,69 @@ for (group in c(
 
 ligand_target_matrix <-
     readRDS("input/nichenet_analysis/ligand_target_matrix_nsga2r_final.rds")
+
 # mouse 
 ligand_target_matrix_mouse <-
     readRDS("input/nichenet_analysis/ligand_target_matrix_nsga2r_final_mouse.rds")
 
+#pathways by celltype interested list
+pathways_by_celltype <-
+    list(
+        TGFB1 = c("Endothelial_cells",  "TAMs", "Epithelial_cells"),
+        TGFB2 = c("Endothelial_cells", "TAMs", "Epithelial_cells"),
+        TGFB3 = c("Endothelial_cells", "TAMs"),
+        FN1 = c("Epithelial_cells"
+            #, "TAMs", "Endothelial_cells", "Monocytes"
+            ),
+        COL1A1 = c("Epithelial_cells"),
+        LAMA4 = c("COMA", "Proliferative", "MP_Progenitor", "Basal_Progenitor",
+                  "Fibrogenic", "Interactive", "Epithelial_cells", "Endothelial_cells"),
+        LAMB1 = c("COMA", "Proliferative", "MP_Progenitor", "Basal_Progenitor",
+                  "Fibrogenic", "Interactive","TAMs", "Epithelial_cells", "Endothelial_cells"),
+        CXCL12 = c("CAFs", "TAMs", "B_cells", "Alv_Macrophages", "Neutrophils",
+                    "DC", "NK_cells", "Monocytes"),
+        VEGFA = c("Endothelial_cells"),
+        VEGFB = c("Endothelial_cells"),
+        VEGFC = c("Endothelial_cells"),
+        CADM1 = c("COMA", "Proliferative", "MP_Progenitor", "Basal_Progenitor",
+                  "Fibrogenic", "Interactive", "Epithelial_cells"),
+        NCAM1 = c("COMA", "Proliferative", "MP_Progenitor", "Basal_Progenitor",
+                  "Fibrogenic", "Interactive", "Epithelial_cells")
+    )
 
+# find the unique ligand_receptor names from all
+unique_LR_names <- 
+    unique(unlist(interaction_names)) %>%
+    as.character()
+
+# ligand_by_receptor
+ligand_receptor_list <- list(
+    FN1 = c("CD44", "ITGA3", "ITGB1","ITGA2B", "ITGB3", "SDC1", "SDC4"),
+    # LAMA4 = c("CD44", "ITGA1", "ITGB1", "ITGA2", "ITGA3", "ITGA7", "SV2A", "SV2C", "DAG1"),
+    # LAMB1 = c("CD44", "ITGA1", "ITGB1", "ITGA2", "ITGA3", "ITGA7", "SV2A", "SV2C", "DAG1"),
+    #LAMC1 = c("CD44", "ITGA1", "ITGB1", "ITGA2", "ITGA3", "ITGA7", "SV2A", "SV2C", "DAG1"),
+    TGFB1 = c("TGFBR1", "TGFBR2", "ACVR1"),
+    TGFB2 = c("TGFBR1", "TGFBR2", "ACVR1"),
+    TGFB3 = c("TGFBR1", "TGFBR2", "ACVR1"),
+    VEGFA = c("VEGFR1", "VEGFR2"),
+    VEGFB = c("VEGFR1"),
+    VEGFC = c("VEGFR2"),
+    CXCL12 = c("CXCR4", "ACKR3"),
+    CADM1 = c("CADM1"),
+    NCAM1 = c("NCAM1"),
+    COL1A1 = c("CD44", "ITGA1", "ITGB1", "ITGA3")
+)
+
+# make downstream plots for each ligand in each group
 for (group in c(
-                "patient_prim", "patient_mets",
-                "xeno_prim_cancer_normal", "xeno_mets_cancer_normal",
-                "dogs_primhuman_ortho", "dogs_metshuman_ortho",
-                "mm_primhuman_ortho", "mm_metshuman_ortho",
-                "mm_prim", "mm_mets"
+                # "patient_prim",
+                "patient_mets",
+                # "xeno_prim_cancer_normal",
+                "xeno_mets_cancer_normal",
+                # "dogs_primhuman_ortho",
+                "dogs_metshuman_ortho",
+                # "mm_primhuman_ortho",
+                "mm_metshuman_ortho"
             )) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
@@ -1929,7 +1999,12 @@ for (group in c(
     }
     # Use parallel::mclapply to process ligands in parallel
     ligand_results <- parallel::mclapply(
-        c("TGFB1","TGFB2", "FN1", "LAMA1", "LAMB1", "LAMC1", "VEGFA", "VEGFB", "VEGFC"),
+        c(
+            #"TGFB1","TGFB2", "TGFB3", "FN1",
+        "COL1A1"
+        # "LAMA4", "LAMB1", "VEGFA", "VEGFB",
+        #   "VEGFC", "CXCL12", "CADM1", "NCAM1"
+          ),
         function(ligands) {
             # check if the ligand is expressed in the object
             if (ligands %in% rownames(object)) {
@@ -1947,7 +2022,7 @@ for (group in c(
                         rownames_to_column("target") %>%
                         rename(score = 2) %>%
                         arrange(desc(score)) %>%
-                        filter(score > 0.02) %>%
+                        filter(score > 0.01) %>%
                         mutate(ligand = lig)
                     #make a expression name with ligands_ligand
                     ligand_display_name <- str_c(ligands, "_ligand")
@@ -1958,8 +2033,8 @@ for (group in c(
                         filter(target %in% rownames(object)) %>%
                         # filter(target != lig) %>%
                         pull(target)
-                    if (length(downstream_genes) > 50) {
-                        downstream_genes <- downstream_genes[1:50]
+                    if (length(downstream_genes) > 100) {
+                        downstream_genes <- downstream_genes[1:100]
                     }
                     # run Aucell with the downstream genes
                     entire_matrix <- object@assays$RNA$counts
@@ -1969,102 +2044,514 @@ for (group in c(
                                            geneSets = genelist)
                     object[[str_c(ligands,"_dwnstrm")]] <- AUCell::getAUC(cell_ranks)[1,]
 
+                    Idents(object) <- "Ann_Level2"
                     dotplot_everything <-
                         DotPlot(object,
                             #cols = "RdBu",
-                            features =  c(ligand_display_name, str_c(ligands,"_dwnstrm"), downstream_genes),
+                            features =  c(ligand_display_name,
+                                         ligand_receptor_list[[ligands]],
+                                         str_c(ligands,"_dwnstrm"),
+                                         downstream_genes),
                             group.by = "Ann_Level2",
-                            scale = T) +
+                            idents = pathways_by_celltype[[ligands]],
+                            scale = F) +
                             theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
                             ggtitle(str_c("Ligand: ", ligands, " and Downstream Targets (", group, ")"))
+                    
                 
                     ggsave(str_c("output/figures/cellchat/", group, "/", ligands, "_ligand_and_downstream_targets.png"),
                             dotplot_everything,
                             width = length(downstream_genes) * 0.3 + 5,
                             height = length(unique(object$Ann_Level2)) * 0.3 + 3,
                             bg = "white")
-                    return(TRUE)
+                    # return(TRUE)
                 } else {
                     message(str_c("Ligand ", ligands, " not found in ligand-target matrix for ", group))
-                    return(FALSE)
+                    # return(FALSE)
                 }
             }
-            return(FALSE)
+            # return(FALSE)
         },
-        mc.cores = 5 # adjust the number of cores as needed
+        mc.cores = 3,
+        mc.preschedule = F # adjust the number of cores as needed
     )
 }
 
+# TGFB plts
+tgfb<- list()
+for (group in c(
+                # "patient_prim",
+                "patient_mets",
+                # "xeno_prim_cancer_normal",
+                "xeno_mets_cancer_normal",
+                # "dogs_primhuman_ortho",
+                "dogs_metshuman_ortho",
+                # "mm_primhuman_ortho",
+                "mm_metshuman_ortho"
+            )) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs")) %>%
+        subset(Ann_Level2 %in% c("Epithelial_cells"))
+    dotplot_tgfb <-
+        DotPlot(object,
+                features =  c("TGFB1"),
+                group.by = "Ann_Level2",
+                scale = F) +
+            theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+            ggtitle(str_c("TGFB in Epithelial Cells (", group, ")"))
+    tgfb[[group]] <- dotplot_tgfb
+}
 
+panel <-
+    wrap_plots(tgfb, ncol = 2) +
+    plot_annotation(title = "TGFB Expression in Epithelial Cells Across Samples",
+                    theme = theme(plot.title = element_text(size = 16, hjust = 0.5)))
 
+#compare the expression in normal lung vs tumor associated macrophages
+normal_lung <-
+    qs::qread("input/downloads/ds_human_lung_atlas.qs")
 
+dimplot_better(normal_lung, group_by = "ann_level_3")
+cell_types <- c(
+    "Macrophages",
+    "AT2",
+    "EC venous",
+    "EC arterial",
+    "AT1",
+    "Monocytes",
+    "EC capillary",
+    "Lymphatic EC mature",
+    "Lymphatic EC differentiating",
+    "Lymphatic EC proliferating"
+)
+normal_lung_sub <-
+    normal_lung %>%
+    subset(ann_level_3 %in% cell_types)
+normal_lung_sub$unique <- "normal"
+dimplot_better(normal_lung_sub, group_by = "ann_level_3")
+FeaturePlot(normal_lung_sub, features = c("TGFB1"))
+normal_lung_sub$compare_label <-
+    str_replace_all(normal_lung_sub$ann_level_3, c("^EC venous$" = "Endothelial_cells",
+                                                "^EC arterial$" = "Endothelial_cells",
+                                                "^EC capillary$" = "Endothelial_cells",
+                                                "^Lymphatic EC mature$" = "Endothelial_cells",
+                                                "^Lymphatic EC differentiating$" = "Endothelial_cells",
+                                                "^Lymphatic EC proliferating$" = "Endothelial_cells",
+                                                "^AT2$" = "Epithelial_cells",
+                                                "^AT1$" = "Epithelial_cells"))
 
-
-lig <- "Tgfb1"
-rownames(ligand_target_matrix_mouse)[str_detect(rownames(ligand_target_matrix_mouse), "Tgfb")]
-
-targets <-
-    ligand_target_matrix_mouse[lig, ] %>%
-    as.data.frame() %>%
-    rownames_to_column("target") %>%
-    rename(score = 2) %>%
-    arrange(desc(score)) %>%
-    filter(score > cutoff) %>%
-    mutate(ligand = lig)
-
-
-downstream_genes <- targets$target
-
-prim <-
-    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim.qs") %>%
-    subset(Ann_Level2 == "TAMs")
-
-# run AUCell score using the downstream genes
-
-entire_matrix <- prim@assays$RNA$counts
-
-genelist <- downstream_genes
-
-cell_ranks <-
-    AUCell::AUCell_run(exprMat = entire_matrix,
-                    geneSets = genelist)
-prim$LAMB1 <- AUCell::getAUC(cell_ranks)[1,]
-
-FeaturePlot(prim,
-            features = "LAMB1",
-            cols = c("#EEEEEE", "#ae0600"),
-            min.cutoff = 0.15,
-            pt.size = 1,
-            order = TRUE) +
-    coord_fixed()
-
-
-mets <-
-    qs::qread("output/seurat_objects/final_tumor_vs_stroma/mm_mets.qs")
-
-DotPlot(mets,
-        features = downstream_genes[1:20],
-        group.by = "Ann_Level2") +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-VlnPlot(mets,
-        group.by = "Ann_Level2",
-        features = downstream_genes[1:10],
-        pt.size = 0.1,
-        ncol = 5)
-
-
-combine <-
-    merge(prim, mets) %>%
+tumor_lung <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs")
+tumor_lung_sub <-
+    tumor_lung %>%
+    subset(Ann_Level2 %in% c("TAMs", "Monocytes", "Endothelial_cells", "Epithelial_cells"))
+tumor_lung_sub$unique <- "tumor"
+tumor_lung_sub$compare_label <-
+    str_replace_all(tumor_lung_sub$Ann_Level2, c("^Alv_Macrophages$" = "Macrophages",
+                                                "^TAMs$" = "Macrophages"))
+# combine the two datasets
+combine_tumor_normal <-
+    merge(tumor_lung_sub, normal_lung_sub) %>%
     JoinLayers() %>%
     process_seurat()
-dimplot_better(combine, group_by = "unique")
-VlnPlot(combine,
-        group.by = "unique",
-        #split.by = "Ann_Level3",
-        ncol = 7,
-        features = downstream_genes,
-        pt.size = 0.1)
 
+qs::qsave(combine_tumor_normal,
+        "output/seurat_objects/combined_normal_tumor_lung.qs")
+
+# calculate average expression of TGFB1, HMGB1, CMTM8, GLG1, VEGFA, VEGFB, VEGFC in normal vs tumor
+genes_of_interest <- c(
+    "TGFB1", "IL18", "IL15", "TGFB2", "HMGB1", "CMTM8", "GAS6", "GLG1", "IL32", 
+    "IGFBP7", "MIF", "NAMPT", "ALCAM", "CCN1", "VEGFA", "TNF", "TNFSF10", "IL1B"
+)
+
+combine_tumor_normal <-
+    qs::qread("output/seurat_objects/combined_normal_tumor_lung.qs")
+
+# Calculate average expression for each gene and cell type in tumor and normal
+avg_expr_list <- list()
+for (gene in genes_of_interest) {
+    for (celltype in unique(combine_tumor_normal$compare_label)) {
+        avg_normal <- mean(GetAssayData(combine_tumor_normal, slot = "data")[gene, 
+            combine_tumor_normal$unique == "normal" & combine_tumor_normal$compare_label == celltype], na.rm = TRUE)
+        avg_tumor <- mean(GetAssayData(combine_tumor_normal, slot = "data")[gene, 
+            combine_tumor_normal$unique == "tumor" & combine_tumor_normal$compare_label == celltype], na.rm = TRUE)
+        log2FC <- log2((avg_tumor + 0.001) / (avg_normal + 0.001))
+        avg_expr_list[[paste(gene, celltype, sep = "_")]] <- data.frame(
+            Gene = gene,
+            CellType = celltype,
+            Tumor = avg_tumor,
+            Normal = avg_normal,
+            log2FC = log2FC
+        )
+    }
+}
+
+Anerage_exp <-
+    do.call(rbind, avg_expr_list) %>%
+    arrange(log2FC) %>%
+    filter(str_detect(CellType, "Epithelial_cells"))
+pheatmap::pheatmap(
+    Anerage_exp %>% 
+        select(Tumor, Normal, log2FC) %>% 
+        as.matrix(),
+    cluster_rows = TRUE,
+    cluster_cols = TRUE,
+    color = colorRampPalette(c("#ceddf3ff", "#facbcbff", "#D43F3AFF"))(100),
+    main = "Average Expression Heatmap (Tumor/Normal/log2FC)",
+    fontsize_row = 10,
+    fontsize_col = 10,
+    display_numbers = T
+)
+
+# dotplot for epithelail
+DotPlot(combine_tumor_normal %>% subset(compare_label == "Epithelial_cells"),
+        features = c("TGFB1", "TGFB2"),
+        group.by = "unique",
+        scale = F) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    ggtitle("Expression in Epithelial Cells (Normal vs Tumor)")
+
+
+
+# what different about normal epithelial vs tumor associated epithelial DEGS
+
+
+
+
+
+
+# whats different about this TGFB1 and TGFB2 activated vs not activated epithelial cells in tumor
+Epithelial_cells_tumor <-
+    combine_tumor_normal %>%
+    subset(compare_label == "Epithelial_cells" & unique == "tumor") %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = c("sample_name", "method", "data_source"),
+             theta = c(12, 12, 12)) %>%
+    process_seurat(reduction = "harmony")
+Epithelial_cells_tumor <-
+    FindClusters(Epithelial_cells_tumor, resolution = 0.2)
+
+degs <-
+    run_degs(sobject = Epithelial_cells_tumor,
+            comparison_col = "seurat_clusters",
+            aggregate_by = c("sample_name", "seurat_clusters"),
+            organism_col = "organism",
+            subset = FALSE,
+            batch_var = "data_source")
+
+
+# Separate degs$2 from the degs list
+degs_cluster <-
+    for (i in 1:length(degs)) {
+        degs[[i]]$cluster <- names(degs)[i]
+    }
+
+degs_all <-
+    do.call(rbind, degs) %>%
+    as_tibble() %>%
+    as.data.frame()
+
+cluster_2_degs <-
+    degs_all %>%
+    filter(cluster == "2" & padj < 0.05 & log2FoldChange > 0.25) %>%
+    arrange(desc(log2FoldChange)) %>%
+    head(50) %>%
+    pull(gene)
+
+
+
+DotPlot(Epithelial_cells_tumor,
+        features = c(AT1_markers, AT2_markers, TAEC_markers),
+        group.by = "seurat_clusters",
+        scale = F) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    ggtitle("DATP Markers in Human Tumor Associated Epithelial Cells")
+
+
+
+dimplot_better(Epithelial_cells_tumor, group_by = c("seurat_clusters")) + NoLegend()
+FeaturePlot(Epithelial_cells_tumor, features = c("TGFB1", "GLG1", "SDC1", "SDC4", "ITGA3", "ITGB1"), order=T, pt.size = 1)
+VlnPlot(Epithelial_cells_tumor,
+        features = c("TGFB1", "GLG1", "SDC1", "SDC4", "ITGA3", "ITGB1"),
+        group.by = "seurat_clusters")
+DotPlot(Epithelial_cells_tumor,
+        features = c("TGFB1", "GLG1", "SDC1", "SDC4", "ITGA3", "ITGB1"),
+        group.by = "seurat_clusters",
+        scale = F) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    ggtitle("Integrin and Syndecan Expression in Human Tumor Associated Epithelial Cells")
+
+# what are the top 30 target genes of FN1 that activate TGFB1
+up_of_fn1_that_acitivate_tgfb <-
+    ligand_target_matrix[, "TGFB1"] %>%
+    sort(decreasing = TRUE) %>%
+    head(30) %>%
+    names() %>%
+    as.vector()
+
+
+cell_chat_objs <-
+    list.files(str_c("output/cellchat_objects_sharedgenes/", "patient_mets"),
+            pattern = "*.qs",
+            full.names = TRUE)
+cellchat_list <- list()
+pathways_LR <- list()
+
+for (file_path in cell_chat_objs) {
+    sample_name <- str_replace(basename(file_path), ".qs", "")
+    cellchat <- qs::qread(file_path)
+    cellchat_list[[sample_name]] <- cellchat
+    
+    pathways_and_lr_prob <-
+        subsetCommunication(cellchat,
+                            slot.name = "net") %>%
+        arrange(desc(prob)) %>%
+        filter(target %in% c("Epithelial_cells")) %>%
+        filter(ligand %in% up_of_fn1_that_acitivate_tgfb) %>%
+        filter(source %in% c("Basal_Progenitor", "Proliferative", "Fibrogenic",
+                        "COMA", "Interactive", "MP_Progenitor")) %>%
+        arrange(desc(prob)) %>%
+
+
+
+}
+
+```
+
+
+## Run RCTD for spatial mapping of TAECs
+see if the TAECs are spatially located near the tumor edge compared to normal epithelial cells
+```{r rctd_input_files_for_epithelial}
+# whats different about this TGFB1 and TGFB2 activated vs not activated epithelial cells in tumor
+combine_tumor_normal <-
+    qs::qread("output/seurat_objects/combined_normal_tumor_lung.qs")
+
+Epithelial_cells_tumor <-
+    combine_tumor_normal %>%
+    subset(compare_label == "Epithelial_cells" & unique == "tumor") %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = c("sample_name", "method", "data_source"),
+             theta = c(12, 12, 12)) %>%
+    process_seurat(reduction = "harmony")
+
+Epithelial_cells_tumor <-
+    FindClusters(Epithelial_cells_tumor, resolution = 0.3) 
+
+TAEC_markers <- c(
+  "ZEB1",      # EMT transcription factor
+  "VIM",       # Vimentin, mesenchymal marker
+  "SERPINE1",  # ECM remodeling, TGF-β signaling
+  "POSTN"     # Periostin, matrix remodeling
+)
+AT1_markers <- c(
+    "AGER",   # advanced glycosylation end-product specific receptor
+    "PDPN",   # podoplanin
+    "CAV1",   # caveolin-1
+    "HOPX"    # homeodomain-only protein
+)
+AT2_markers <- c(
+    "SFTPC",  # surfactant protein C
+    "SFTPB",  # surfactant protein B
+    "SFTPA1", # surfactant protein A1
+    "ABCA3"   # ATP-binding cassette subfamily A member 3
+)
+DotPlot(combine_tumor_normal, features = c("SDC4"), group.by = "unique", scale = F)
+
+DotPlot(Epithelial_cells_tumor,
+        features = c("TGFB1", "SDC1", "SDC4"),
+        group.by = "Annotation_detailed",
+        scale = F)
+VlnPlot(Epithelial_cells_tumor,
+        features = c("TGFB1", "SDC1", "SDC4"),
+        group.by = "seurat_clusters")
+
+# rename the TGFb1 high clusters to TAECs
+Epithelial_cells_tumor$Annotation_detailed <-
+    ifelse(Epithelial_cells_tumor$seurat_clusters %in% c(2, 3), "TAECs", "General_AT1_AT2")
+dimplot_better(Epithelial_cells_tumor, group_by = "seurat_clusters") + NoLegend()
+
+
+
+# run degs between the TAECs and other epithelial cells
+degs_Iwant <-
+    run_degs(sobject = Epithelial_cells_tumor,
+            comparison_col = "Annotation_detailed",
+            aggregate_by = c("sample_name", "seurat_clusters"),
+            organism_col = "organism",
+            subset = FALSE,
+            batch_var = "data_source")
+
+TAECs_degs <-
+    degs_Iwant$TAECs %>%
+    filter(padj < 0.05 & log2FoldChange > 0.2) %>%
+    arrange(desc(log2FoldChange)) %>%
+    head(50) %>%
+    pull(gene)
+
+Epithelial_cells_tumor$organism <- "human"
+# make gsea plots
+make_panel_plot(sobj = Epithelial_cells_tumor,
+                comparison_col = "Annotation_detailed",
+                label = "Annotation_detailed",
+                group = "TAECs_vs_Other",
+                aggregate_by = c("sample_name", "Annotation_detailed"),
+                organism_col = "organism",
+                subset = FALSE,
+                batch_var = "data_source")
+
+# whole object reference for rctd
+patient_mets <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs")
+
+Metadata_TECS <-
+    Epithelial_cells_tumor@meta.data %>%
+    rownames_to_column("cell_id") %>%
+    select(cell_id, Annotation_detailed)
+
+whole_metadata <-
+    patient_mets@meta.data %>%
+    rownames_to_column("cell_id") %>%
+    select(cell_id, Ann_Level2) %>%
+    left_join(Metadata_TECS, by = "cell_id") %>%
+    mutate(rctd_ann_col = ifelse(is.na(Annotation_detailed), Ann_Level2, Annotation_detailed)) %>%
+    select(cell_id, rctd_ann_col)
+
+patient_mets_ref <-
+    AddMetaData(patient_mets,
+                whole_metadata %>% column_to_rownames("cell_id"))
+dimplot_better(patient_mets_ref, group_by = "rctd_ann_col") + NoLegend()
+
+# make the reference object for rctd
+reference <- 
+    spacexr::Reference(GetAssayData(patient_mets_ref, layer = "counts"),
+                        as.factor(patient_mets_ref$rctd_ann_col),
+                        n_max_cells = 2000)
+
+spatial_list <-
+    qs::qread("/gpfs0/home2/gdrobertslab/lab/Analysis/Matt/24_Osteo_atlas/output/spatial_objects/spatial_list_level3_annotations.qs")
+
+# functions
+run_rctd <- function(sp_ob, ref) {
+    coords <- GetTissueCoordinates(sp_ob, image = "slice1") %>%
+        dplyr::rename(x = imagerow, y = imagecol)
+    #convert our object to an rctd object
+    my_data <- spacexr::SpatialRNA(coords,
+                                   GetAssayData(sp_ob, layer = "counts"))
+    rctd_obj <- spacexr::create.RCTD(
+        my_data,
+        ref,
+        max_cores = 4,
+        UMI_min = 3,
+        counts_MIN = 0,
+        UMI_max = 900000000,
+        CELL_MIN_INSTANCE = 0
+    )
+    rctd_out <- spacexr::run.RCTD(
+        rctd_obj,
+        doublet_mode = "doublet"
+    )
+    return(rctd_out)
+}
+
+# read in object list and select correct reference
+for (ob_name in names(spatial_list)) {
+    sp_object <- spatial_list[[ob_name]]
+    rctd_annots <- run_rctd(sp_ob = sp_object,
+                             ref = reference)
+    norm_weights <-
+            spacexr::normalize_weights(rctd_annots@results$weights) %>%
+            as.data.frame()
+
+    spatial_list[[ob_name]] <-
+        AddMetaData(spatial_list[[ob_name]], norm_weights)
+
+}
+
+qs::qsave(
+    spatial_list,
+    "output/spatial_objects/spatial_list_with_TAECs.qs"
+)
+
+# plot the rctd results
+spatial_list[[ob_name]]
+
+SpatialFeaturePlot(spatial_list[[ob_name]],
+                    features = c("TAECs", "General_AT1_AT2", "MP_Progenitor", "Basal_Progenitor"),
+                    ncol = 2)
+
+SpatialDimPlot(spatial_list[[ob_name]],
+                alpha = 0) + NoLegend()
+```
+
+
+## for Mouse
+```{r see_if_TAECs_in_mouse}
+# load the mouse mets object
+mm_mets <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/mm_mets.qs")
+
+tumor_asso_epi <-
+    mm_mets %>%
+    subset(Ann_Level3 %in% c("AT1", "AT2")) %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = c("sample_name", "method")) %>%
+    process_seurat(reduction = "harmony",
+                   resolution = 0.4)
+# assign the celltypes based on the markers
+tumor_asso_epi$TEACs_and_others <-
+    ifelse(tumor_asso_epi$seurat_clusters %in% c(1, 5), "TAECs", "General_AT1_AT2")
+
+dimplot_better(tumor_asso_epi, group_by = "TEACs_and_others") + NoLegend()
+FeaturePlot(tumor_asso_epi, features = c("Tgfb1"), order=T, pt.size = 1)
+VlnPlot(tumor_asso_epi,
+        features = c("Tgfb1", "Sdc1", "Sdc4"),
+        group.by = "TEACs_and_others")
+DotPlot(tumor_asso_epi,
+        features = c("Tgfb1", "Sdc1", "Sdc4"),
+        group.by = "TEACs_and_others",
+        scale= T)
+
+# healthy mouse lung epithelial cells
+mouse_lung <-
+    qs::qread("input/downloads/mouse_lung.qs")
+
+normal_epi <-
+    mouse_lung %>%
+    subset(CellType %in% c("AT")) %>%
+    process_seurat()
+normal_epi$TEACs_and_others <-
+    str_replace_all(normal_epi$seurat_clusters, c("^0$" = "AT2",
+                                                "^1$" = "AT2",
+                                                "^2$" = "AT1",
+                                                "^3$" = "AT1",
+                                                "^4$" = "AT2"))
+normal_epi$unique <- "normal"
+normal_epi$organism <- "mouse"
+normal_epi$sample_name <- normal_epi$orig.ident
+normal_epi$data_source <- "online"
+
+dimplot_better(normal_epi, group_by = "TEACs_and_others") + NoLegend()
+FeaturePlot(normal_epi, features = c("Tgfb1"), order=T, pt.size = 1)
+VlnPlot(normal_epi,
+        features = c("Tgfb1"),
+        group.by = "TEACs_and_others")
+DotPlot(normal_epi,
+        features = c("Tgfb1"),
+        group.by = "TEACs_and_others",
+        scale = F)
+# combine the two datasets
+combine_mouse_tumor_normal <-
+    merge(tumor_asso_epi, normal_epi) %>%
+    JoinLayers() %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = c("sample_name", "data_source"),
+             theta = c(12, 12)) %>%
+    process_seurat(reduction = "harmony",
+                   resolution = 0.4)
+
+dimplot_better(combine_mouse_tumor_normal, group_by = c("TEACs_and_others", "unique")) + NoLegend()
 
 
 
@@ -3950,116 +4437,6 @@ for (site in c("prim", "mets")) {
 
 
 
-
-
-
-
-
-
-corr_list <- list()
-# we can loop over specific modules
-for (module_name in names(cellchat_modules)) {
-    pathways_in_module <- cellchat_modules[[module_name]]
-    celltypes_in_module <- celltype_modules[[module_name]]
-    message("Processing module: ", module_name)
-    # filter the All_pathways_LR_combined to only include pathways in the module
-    module_specific_df <-
-        All_pathways_LR_combined %>%
-        filter(pathway_name %in% pathways_in_module) %>%
-        mutate(target = str_extract(Target_LR, "(?<=-to-)[^-]+")) %>%
-        filter(target %in% celltypes_in_module) %>%
-        select(group, Target_LR, mean_prob, pathway_name)
-
-    # loop for primary and mets
-    for (site in c("prim", "mets")) {
-        mean_filter <-
-            module_specific_df %>%
-            filter(str_detect(group, site)) %>%
-            as.data.frame() %>%
-            select(mean_prob) %>%
-            summarise(mean = mean(mean_prob)) %>%
-            pull(mean)
-        site_specific_module <-
-            module_specific_df %>%
-            filter(str_detect(group, site)) %>%
-            as.data.frame() %>%
-            select(group, Target_LR, mean_prob) %>%
-            pivot_wider(names_from = group,
-                        values_from = mean_prob,
-                        values_fill = 0,
-                        id_cols = Target_LR) %>%
-            column_to_rownames("Target_LR") %>%
-            filter(rowSums(. > 0) >= 3)  # keep rows with >0 in  all columns  
-        
-        cor_matrix <-
-            cor(site_specific_module, use = "everything", method = "spearman")
-        corr_vals <- 
-            cor_matrix %>%
-            as.tibble(rownames = "group") %>%
-            as.data.frame() %>%
-            filter(group == str_c("patient_", site)) %>%
-            pivot_longer(-group, names_to = "comparison_group", values_to = "correlation") %>%
-            filter(comparison_group != group) %>%
-            mutate(module = module_name, site = site)
-        corr_list[[str_c(module_name, "_", site)]] <- corr_vals
-
-        heatmap <-
-            pheatmap::pheatmap(
-                cor_matrix,
-                cluster_rows = TRUE,
-                cluster_cols = TRUE,
-                silent = TRUE,
-                color = colorRampPalette(c("#f8ceceff", "#fc5b5bff", "#ff0c0cff"))(100),
-                main = str_c("Correlation Heatmap of ", module_name, " - ", site, " Site"),
-                fontsize_row = 8,
-                fontsize_col = 10,
-                display_numbers = round(cor_matrix, 2),
-                number_color = "black")
-        if (!dir.exists(str_c("output/figures/cellchat/sharedgenes_modules/", module_name))) {
-            dir.create(str_c("output/figures/cellchat/sharedgenes_modules/", module_name),
-            recursive = TRUE)
-        }
-        ggsave(str_c("output/figures/cellchat/sharedgenes_modules/", module_name, "/correlation_heatmap_", module_name, "_", site, ".png"),
-            heatmap,
-            width = 8,
-            height = 6,
-            bg = "white")
-    }
-}
-
-# make the plot of the corrlations from corr_list
-corr_list_all <-
-    do.call(rbind, corr_list) %>%
-    as.tibble() %>%
-    as.data.frame()
-
-# for primary site
-for (names in unique(corr_list_all$site)) {
-    site_corr <-
-        corr_list_all %>%
-        filter(site == names) %>%
-        arrange(desc(correlation)) %>%
-        mutate(module = factor(module, levels = rev(unique(module))))
-
-    corr_sum <-
-        ggplot(site_corr, aes(x = comparison_group, y = module, fill = correlation)) +
-        geom_tile(color = "white") +
-        geom_text(aes(label = round(correlation, 2)), size = 4, color = "black") +
-        scale_fill_gradient2(low = "#4575b4", high = "#d73027", midpoint = 0, 
-                            name = "Spearman\nCorrelation") +
-        theme_minimal(base_size = 14) +
-        xlab("Comparison Group") +
-        ylab("Pathway Module") +
-        ggtitle(str_c("Correlation of Pathway Modules - ", names)) +
-        theme(axis.text.x = element_text(angle = 45, hjust = 1),
-            legend.position = "right")
-
-    ggsave(str_c("output/figures/cellchat/sharedgenes_modules/correlation_summary_", names, ".png"),
-        corr_sum,
-        width = 10,
-        height = 10,
-        bg = "white")
-}
 ```
 
 
@@ -4137,7 +4514,6 @@ for (group in c(
         }
     }
 }
-
 
 
 for (group in c(
