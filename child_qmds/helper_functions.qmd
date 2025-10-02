@@ -823,7 +823,7 @@ run_gsea <- function(degs_result,
 #| cache.vars: [gsea_dotplot, gsea_barplot]
 gsea_dotplot <- function(data, x_col = "z_score") {
     lab4plot <-
-        tibble(y = c(-2.5, 2.5),
+        tibble(y = c(-1, 1),
                x = c(0.2, 0.2),
                label = c("Downregulated", "Upregulated"))
 
@@ -849,7 +849,7 @@ gsea_dotplot <- function(data, x_col = "z_score") {
                       y = y,
                       label = label),
                   fontface = "bold",
-                  size = 2.5) +
+                  size = 3) +
         scale_fill_manual(values = plot_cols,
                           name = paste0(x_col, " > 0")) +
         theme(strip.background = element_rect(color = "white",
@@ -871,7 +871,7 @@ gsea_dotplot <- function(data, x_col = "z_score") {
              y = "NES",
              x = "") +
         theme(plot.title = element_text(hjust = 0.5)) +
-        ylim(-6, 6) +
+        ylim(-3, 3) +
         scale_color_gradient(low = plot_cols[2],
                              high =plot_cols[1])
 
@@ -881,7 +881,7 @@ gsea_dotplot <- function(data, x_col = "z_score") {
 
 gsea_barplot <- function(data, x_col = "z_score") {
     lab4plot <-
-        tibble(y = c(-3, 3),
+        tibble(y = c(-1, 1),
                x = c(0.2, 0.2),
                label = c("Downregulated", "Upregulated"))
 
@@ -930,7 +930,7 @@ gsea_barplot <- function(data, x_col = "z_score") {
              y = "NES",
              x = "") +
         theme(plot.title = element_text(hjust = 0.5)) +
-        ylim(-6, 6)
+        ylim(-3, 3)
 
     return(plot_name)
 }
@@ -1037,7 +1037,8 @@ cat_tib <- dplyr::tribble(
     # "C3",       "TFT:GTRD",    "Transcription_factor_targets",
     # "C6",       "NA",          "Oncogenic_signature",
     "C5",       "GO:BP",       "Biological_processes",
-    "C2",       "CP:REACTOME", "Reactome")
+    "C2",       "CP:REACTOME", "Reactome"
+    )
 
 make_panel_plot <- function(sobj,
                             comparison_col = "seurat_clusters",
@@ -1857,7 +1858,7 @@ optimize_harmony <- function(s_obj,
             FindNeighbors(reduction = "harmony") %>%
             FindClusters(resolution = 0.4)
         dimplot <- 
-            DimPlot(object,
+            DimPlot(s_obj,
                     group.by = dimplot_col,
                     label.size = 4,
                     label = T,
