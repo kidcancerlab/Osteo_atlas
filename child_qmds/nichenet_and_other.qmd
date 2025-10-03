@@ -2449,6 +2449,9 @@ if(!dir.exists("output/seurat_objects/epithelial_cells_all")){
 # qs::qsave(Epithelial_cells_all,
 #         "output/seurat_objects/epithelial_cells_all/final_epi_analysis.qs")
 
+# load the object
+Epithelial_cells_all <-
+    qs::qread("output/seurat_objects/epithelial_cells_all/final_epi_analysis.qs")
 
 # check if there is enrichment of epithelial clusters in tumor vs normal
 enrichment_cluster <-
@@ -2472,7 +2475,7 @@ if(!dir.exists("output/figures/epithelial_analysis")){
     dir.create("output/figures/epithelial_analysis", recursive = TRUE)
 }
 
-ggsave("output/figures/epithelial_analysis/enrichment_of_epithelial_clusters_in_tumor_vs_normal.pdf",
+ggsave("output/figures/epithelial_analysis/enrichment_of_epithelial_clusters_in_tumor_vs_normal.png",
     enrichment_cluster,
     width = 5,
     height = 5,
@@ -2495,7 +2498,7 @@ dimplot1 <-
     theme(aspect.ratio=1)+
     theme(plot.title = element_text(hjust = 0.5, size = 14))
 
-ggsave("output/figures/epithelial_analysis/dimplot_epithelial_clusters.pdf",
+ggsave("output/figures/epithelial_analysis/dimplot_epithelial_clusters.png",
     dimplot1,
     width = 5,
     height = 5,
@@ -2517,7 +2520,7 @@ dimplot2 <-
     theme(aspect.ratio=1)+
     theme(plot.title = element_text(hjust = 0.5, size = 14))
 
-ggsave("output/figures/epithelial_analysis/dimplot_epithelial_tumor_vs_normal.pdf",
+ggsave("output/figures/epithelial_analysis/dimplot_epithelial_tumor_vs_normal.png",
     dimplot2,
     width = 5,
     height = 5,
@@ -2565,12 +2568,13 @@ fn1_downstream_mainfig <-
             cols = "RdBu",
             dot.scale = 8,
             scale = T) +
-        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+        theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+         coord_flip()
 
 ggsave("output/figures/epithelial_analysis/FN1_downstream_targets_in_tumor_epithelial_cells.pdf",
     fn1_downstream_mainfig,
-    width = 7,
-    height = 4,
+    width = 5,
+    height = 5,
     bg = "white"
 )
 # make supp figure
@@ -2622,7 +2626,7 @@ dimplot3 <-
     theme(aspect.ratio=1)+
     theme(plot.title = element_text(hjust = 0.5, size = 14))
 
-ggsave("output/figures/epithelial_analysis/dimplot_epithelial_annotation_detailed.pdf",
+ggsave("output/figures/epithelial_analysis/dimplot_epithelial_annotation_detailed.png",
     dimplot3,
     width = 5,
     height = 5,
@@ -2631,7 +2635,7 @@ ggsave("output/figures/epithelial_analysis/dimplot_epithelial_annotation_detaile
 
 
 enrichment_mesenchymal <-
-    table(Epithelial_cells_all$Annotation_detailed, Epithelial_cells_all$unique) %>%
+    table(Epithelial_cells_all$seurat_clusters, Epithelial_cells_all$unique) %>%
         as.data.frame() %>%
         group_by(Var2) %>%
         mutate(Proportion = Freq / sum(Freq)) %>%
@@ -2648,7 +2652,7 @@ enrichment_mesenchymal <-
         geom_text(aes(label = scales::percent(Proportion, accuracy = 0.1)), 
                   position = position_dodge(width = 0.9), vjust = -0.5, size = 3)
 
-ggsave("output/figures/epithelial_analysis/enrichment_of_mesenchymal_in_tumor_vs_normal_barplot.pdf",
+ggsave("output/figures/epithelial_analysis/enrichment_of_mesenc_sc_in_tumor_vs_normal_barplot.pdf",
     enrichment_mesenchymal,
     width = 5,
     height = 5,
@@ -2765,7 +2769,7 @@ All_pathways_for_plot <-
 gsea_plot <- 
     gsea_dotplot(data = All_pathways_for_plot, x_col = "NES")
 
-ggsave("output/figures/epithelial_analysis/gsea_mesenchymal_vs_AT1AT2.pdf",
+ggsave("output/figures/epithelial_analysis/gsea_mesenchymal_vs_AT1AT2.png",
     gsea_plot,
     width = 5,
     height = 4,
@@ -2820,10 +2824,154 @@ final_dotplot <-
 
 ggsave("output/figures/epithelial_analysis/final_dotplot_epithelial_markers_tumor_vs_normal.pdf",
     final_dotplot,
-    width = 10,
+    width = 8,
     height = 4,
     bg = "white"
 )
+
+
+patient_mets_ref <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs")
+patient_mets_ref$tissue_type <- "TME"
+ds_pmets <-
+    patient_mets_ref %>%
+    subset(cells = sample(colnames(patient_mets_ref), 41086))
+dimplot_better(ds_pmets, group_by = "Ann_Level3") + NoLegend()
+VlnPlot(ds_pmets,
+        features = c("FN1"),
+        group.by = "Ann_Level2")
+ds_pmets$Compare <-
+    str_replace_all(ds_pmets$Ann_Level2,
+        c(
+            "^TAMs$" = "Macrophages",
+            "^Alv_Macrophages$" = "Macrophages",
+            "^Pericytes$" = "SMC_Pericytes",
+            "^Endothelial_cells$" = "Endothelial_cells",
+            "^Epithelial_cells$" = "Epithelial_cells",
+            "^CAFs$" = "Fibroblasts"
+        )
+    )
+healthy_lung <-
+    qs::qread("input/downloads/ds_human_lung_atlas.qs")
+
+healthy_lung$Compare <-
+    str_replace_all(healthy_lung$ann_level_3,
+        c(
+            "^T cell lineage$" = "T_cells",
+            "^EC arterial$" = "Endothelial_cells",
+            "^SM activated stress response$" = "",
+            "^Monocytes$" = "Monocytes",
+            "^Innate lymphoid cell NK$" = "NK_cells",
+            "^AT2$" = "Epithelial_cells",
+            "^Lymphatic EC mature$" = "Endothelial_cells",
+            "^Smooth muscle$" = "SMC_Pericytes",
+            "^Multiciliated lineage$" = "",
+            #"^Rare$" = "",
+            "^Lymphatic EC differentiating$" = "Endothelial_cells",
+            "^Dendritic cells$" = "DC",
+            "^Secretory$" = "Epithelial_cells",
+            "^Myofibroblasts$" = "Fibroblasts",
+            "^B cell lineage$" = "B_cells",
+            "^Submucosal Secretory$" = "Epithelial_cells",
+            "^Mast cells$" = "Mast",
+            #"^Basal$" = "",
+            "^EC capillary$" = "Endothelial_cells",
+            "^EC venous$" = "Endothelial_cells",
+            "^AT1$" = "Epithelial_cells",
+            "^Macrophages$" = "Macrophages",
+            #"^Mesothelium$" = "",
+            "^Smooth muscle FAM83D\\+$" = "SMC_Pericytes",
+            "^Fibroblasts$" = "Fibroblasts",
+            #"^Hematopoietic stem cells$" = "",
+            "^Lymphatic EC proliferating$" = "Endothelial_cells"
+        )
+    )
+
+healthy_lung <- 
+    healthy_lung %>%
+    subset(Compare %in% unique(ds_pmets$Compare))
+
+healthy_lung$tissue_type <- "Healthy"
+healthy_lung$sample_name <- healthy_lung$study
+
+VlnPlot(healthy_lung,
+        features = c("FN1"),
+        group.by = "ann_level_3")
+
+ds_pmets <-
+    ds_pmets %>%
+    subset(Compare != "Neuronal")
+combine <-
+    merge(ds_pmets, healthy_lung) %>%
+    JoinLayers() %>%
+    process_seurat()
+combine$Ann_Level0 <-
+    ifelse(combine$tissue_type == "Healthy", "Healthy", combine$Ann_Level0)
+
+avg_expr <- 
+    AverageExpression(combine,
+                        features = c("FN1"),
+                        group.by = c("Compare", "sample_name", "tissue_type"))$RNA %>%
+    as.data.frame()
+
+# make a boxplot of FN1 expression in healthy vs TME and perform t test
+avg_expr_long <-
+    avg_expr %>%
+    rownames_to_column("gene") %>%
+    pivot_longer(-gene, names_to = "tissue_sample", values_to = "expression") %>%
+    separate(tissue_sample, into = c("Compare", "sample_name", "tissue_type"), sep = "_", extra = "merge")
+
+arrange_names <- c(
+    "B-cells", "T-cells", "Macrophages", "Mast", "Monocytes", "NK-cells",
+    "DC", "Endothelial-cells", "Epithelial-cells", "SMC-Pericytes", "Fibroblasts",
+    "Fibrogenic", "Interactive", "MP-Progenitor", "Proliferative", "Basal-Progenitor", "COMA"
+)
+
+avg_expr_long$Compare <-
+    factor(avg_expr_long$Compare, levels = arrange_names)
+
+average_FN1_plot <-
+    ggplot(avg_expr_long %>% filter(gene == "FN1"),
+        aes(x = Compare, y = expression, fill = tissue_type)) +
+        geom_boxplot(outlier.shape = NA, alpha = 0.7, position = position_dodge(width = 0.8), width = 0.6) +
+        geom_jitter(aes(color = tissue_type),
+                    size = 1, alpha = 0.7, show.legend = FALSE,
+                    position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75)) +
+        scale_fill_manual(values = c(Healthy = "#f0ac4eff", TME = "#eb5752ff")) +
+        scale_color_manual(values = c(Healthy = "#ff9500ff", TME = "#f70b03ff")) +
+        theme_minimal() +
+        labs(title = "Average FN1 Expression by Cell Type and Tissue Type",
+            x = "Cell Type",
+            y = "Average FN1 Expression",
+            fill = "Tissue Type") +
+        theme(plot.title = element_text(hjust = 0.5),
+            panel.grid = element_blank(),
+            axis.text.x = element_text(angle = 45, hjust = 1),
+            axis.text = element_text(size = 12),
+            axis.title = element_text(size = 14)
+        ) +
+        ggpubr::stat_compare_means(
+            aes(group = tissue_type),
+            method = "t.test",
+            label = "p.signif",
+            comparisons = NULL,
+            label.y = max(avg_expr_long$expression, na.rm = TRUE) + 0.2
+        )
+
+ggsave("output/figures/epithelial_analysis/FN1_expression_healthy_vs_TME.pdf",
+        average_FN1_plot,
+        width = 10,
+        height = 10,
+        bg = "white")
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2923,73 +3071,6 @@ SpatialDimPlot(spatial_list$OS7_Seurat,
                 alpha = 0) + NoLegend()
 
 
-patient_mets_ref <-
-    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs")
-patient_mets_ref$tissue_type <- "TME"
-ds_pmets <-
-    patient_mets_ref %>%
-    subset(cells = sample(colnames(patient_mets_ref), 41086))
-dimplot_better(ds_pmets, group_by = "Ann_Level3") + NoLegend()
-VlnPlot(ds_pmets,
-        features = c("FN1"),
-        group.by = "Ann_Level2")
-healthy_lung <-
-    qs::qread("input/downloads/ds_human_lung_atlas.qs")
-healthy_lung$tissue_type <- "Healthy"
-healthy_lung$sample_name <- healthy_lung$study
-
-VlnPlot(healthy_lung,
-        features = c("FN1"),
-        group.by = "ann_level_3")
-
-combine <-
-    merge(ds_pmets, healthy_lung) %>%
-    JoinLayers() %>%
-    process_seurat()
-combine$Ann_Level0 <-
-    ifelse(combine$tissue_type == "Healthy", "Healthy", combine$Ann_Level0)
-
-avg_expr <- 
-    AverageExpression(combine,
-                        features = c("FN1"),
-                        group.by = c("Ann_Level0", "sample_name"))$RNA %>%
-    as.data.frame()
-
-# make a boxplot of FN1 expression in healthy vs TME and perform t test
-avg_expr_long <-
-    avg_expr %>%
-    rownames_to_column("gene") %>%
-    pivot_longer(-gene, names_to = "tissue_sample", values_to = "expression") %>%
-    separate(tissue_sample, into = c("Ann_Level0", "sample_name"), sep = "_", extra = "merge")
-
-average_FN1_plot <-
-    ggplot(avg_expr_long %>% filter(gene == "FN1"),
-            aes(x = Ann_Level0, y = expression, fill = Ann_Level0)) +
-        geom_boxplot() +
-        scale_fill_manual(values = c("Healthy" = "#357EBDFF",
-                                     "Host" = "#EEA236FF",
-                                     "Tumor" = "#D43F3AFF")) +
-        geom_jitter(width = 0.2) +
-        theme_minimal() +
-        ggpubr::stat_compare_means(comparisons = list(c("Healthy", "Host"),
-                               c("Healthy", "Tumor"),
-                               c("Host", "Tumor")),
-            method = "t.test", label = "p.format", p.adjust.method = "bonferroni"
-        ) +
-        ggtitle("Average FN1 Expression in Healthy vs TME") +
-        xlab("Tissue Type") +
-        ylab("Average Expression") +
-        theme(legend.position = "none",
-            plot.title = element_text(hjust = 0.5, size = 16),
-            axis.title = element_text(size = 14),
-            axis.text = element_text(size = 12),
-            panel.grid = element_blank())
-
-ggsave("output/figures/cellchat/FN1_expression_healthy_vs_TME.pdf",
-        average_FN1_plot,
-        width = 4,
-        height = 5,
-        bg = "white")
 ```
 
 
@@ -3368,68 +3449,30 @@ for (i in 1:nrow(groups_by)) {
 
     # finally plot the chosen pathways
     if (nrow(chosen_pathways) != 0) {
-            # save the chosen pathways
+       # save the chosen pathways
         sig_pathways[[str_c(group_prim, "_vs_", group_mets)]] <-
             chosen_pathways$pathway_name
         
-        # Split pathways into two halves for plotting
-        half_n <- ceiling(length(chosen_pathways$pathway_name) / 2)
-        pathways1 <- chosen_pathways$pathway_name[1:half_n]
-        pathways2 <- chosen_pathways$pathway_name[(half_n + 1):length(chosen_pathways$pathway_name)]
-
-        plot1 <-
+        plot_pathways <-
             pathways_prob_df_filtered %>%
-            filter(pathway_name %in% pathways1) %>%
-            mutate(group = factor(group, levels = c("Primary", "Metastatic")),
-                   pathway_name = factor(pathway_name, levels = pathways1)) %>%
-            ggplot(aes(x = pathway_name, y = log10(norm_prob+0.0001), fill = group)) +
+            filter(pathway_name %in% chosen_pathways$pathway_name) %>%
+            mutate(group = factor(group, levels = c("Primary", "Metastatic"))) %>%
+            ggplot(aes(x = reorder(pathway_name, -norm_prob, FUN = median), y = log10(norm_prob+0.0001), fill = group)) +
             geom_boxplot(outlier.shape = NA, position = position_dodge(width = 0.75)) +
             geom_jitter(aes(color = group), position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75), size = 1, alpha = 0.7) +
             scale_fill_manual(values = c("Primary" = "#87c9ffff", "Metastatic" = "#f87478ff")) +
             scale_color_manual(values = c("Primary" = "#0088f7ff", "Metastatic" = "#f70004ff")) +
-            labs(title = str_c("Top Pathways (1st half) in ", group_prim, " vs ", group_mets),
-                 x = "Pathway Arranged by Fold Change",
-                 y = "Normalized Log10 Probability (by mean)") +
+            labs(title = str_c("Top Pathways in ", group_prim, " vs ", group_mets),
+                x = "Pathway",
+                y = "Normalized Probability (by mean)") +
             theme_minimal() +
-            theme(
-                axis.text.x = element_text(angle = 45, hjust = 1),
-                panel.grid = element_blank(),
-                axis.line.x = element_line(),
-                axis.line.y = element_line())
+                        theme(
+                            axis.text.x = element_text(angle = 45, hjust = 1),
+                            panel.grid = element_blank(),
+                            axis.line.x = element_line(),
+                            axis.line.y = element_line())
 
-        plot2 <-
-            pathways_prob_df_filtered %>%
-            filter(pathway_name %in% pathways2) %>%
-            mutate(group = factor(group, levels = c("Primary", "Metastatic")),
-                   pathway_name = factor(pathway_name, levels = pathways2)) %>%
-            ggplot(aes(x = pathway_name, y = log10(norm_prob+0.0001), fill = group)) +
-            geom_boxplot(outlier.shape = NA, position = position_dodge(width = 0.75)) +
-            geom_jitter(aes(color = group), position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75), size = 1, alpha = 0.7) +
-            scale_fill_manual(values = c("Primary" = "#87c9ffff", "Metastatic" = "#f87478ff")) +
-            scale_color_manual(values = c("Primary" = "#0088f7ff", "Metastatic" = "#f70004ff")) +
-            labs(title = str_c("Top Pathways (2nd half) in ", group_prim, " vs ", group_mets),
-                 x = "Pathway Arranged by Fold Change",
-                 y = "Normalized Log10 Probability (by mean)") +
-            theme_minimal() +
-            theme(
-                axis.text.x = element_text(angle = 45, hjust = 1),
-                panel.grid = element_blank(),
-                axis.line.x = element_line(),
-                axis.line.y = element_line())
-
-        # Save both plots
-        ggsave(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets, "/prim_vs_mets_sig_pathways_boxplot_1.pdf"),
-               plot1,
-               width = max(length(pathways1) * 0.6 + 1, 6),
-               height = 6,
-               limitsize = FALSE,
-               bg = "white")
-        ggsave(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets, "/prim_vs_mets_sig_pathways_boxplot_2.pdf"),
-               plot2,
-               width = max(length(pathways2) * 0.6 + 1, 6),
-               height = 6,
-               limitsize = FALSE,
-               bg = "white")  ggsave(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets, "/prim_vs_mets_sig_pathways_boxplot.pdf"),
+        ggsave(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets, "/prim_vs_mets_sig_pathways_boxplot.pdf"),
         plot_pathways,
         width = length(chosen_pathways$pathway_name) * 0.6 + 1,
         height = 6,
@@ -3438,10 +3481,7 @@ for (i in 1:nrow(groups_by)) {
     }
 }
 
-mm_mets <-
-    qs::qread("output/seurat_objects/final_tumor_vs_stroma/mm_mets.qs")
 
-dimplot_better(mm_mets, group_by = "Ann_Level3") + NoLegend()
 
 ```
 
