@@ -3749,7 +3749,6 @@ groups_by <-
 
 pathway_of_interest <- c("VEGF", "FN1", "TGFb")
 
-
 ## analysis for interactions and probabilities level
 for (i in 1:nrow(groups_by)) {
     group_prim <- groups_by$primary[i]
