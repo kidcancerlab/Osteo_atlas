@@ -3381,6 +3381,7 @@ for (i in 1:nrow(groups_by)) {
         filter(group == "Metastatic") %>%
         group_by(pathway_name) %>%
         arrange(desc(prob)) %>%
+        #summarise(mean_prob = mean(prob)) %>%
         summarise(mean_prob = sum(prob)/total_number_mets) %>%  
         arrange(desc(mean_prob))
     mean_per_pathway_in_primary <-
@@ -3445,7 +3446,8 @@ for (i in 1:nrow(groups_by)) {
         filter(padj < 0.1) %>%
         arrange(desc(prob)) %>%
         select(pathway_name, fold_change) %>%
-        distinct()
+        distinct() %>%
+        arrange(desc(fold_change))
 
     # finally plot the chosen pathways
     if (nrow(chosen_pathways) != 0) {
@@ -3455,22 +3457,24 @@ for (i in 1:nrow(groups_by)) {
         
         plot_pathways <-
             pathways_prob_df_filtered %>%
-            filter(pathway_name %in% chosen_pathways$pathway_name) %>%
+            filter(pathway_name %in% chosen_pathways$pathway_name) %>% 
             mutate(group = factor(group, levels = c("Primary", "Metastatic"))) %>%
-            ggplot(aes(x = reorder(pathway_name, -norm_prob, FUN = median), y = log10(norm_prob+0.0001), fill = group)) +
+            mutate(pathway_name = factor(pathway_name, levels = chosen_pathways$pathway_name)) %>%
+            ggplot(aes(x = pathway_name, y = log10(norm_prob +0.001), fill = group)) +
             geom_boxplot(outlier.shape = NA, position = position_dodge(width = 0.75)) +
             geom_jitter(aes(color = group), position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75), size = 1, alpha = 0.7) +
+            # ggbeeswarm::geom_beeswarm(aes(color = group)) +
             scale_fill_manual(values = c("Primary" = "#87c9ffff", "Metastatic" = "#f87478ff")) +
             scale_color_manual(values = c("Primary" = "#0088f7ff", "Metastatic" = "#f70004ff")) +
             labs(title = str_c("Top Pathways in ", group_prim, " vs ", group_mets),
                 x = "Pathway",
                 y = "Normalized Probability (by mean)") +
             theme_minimal() +
-                        theme(
-                            axis.text.x = element_text(angle = 45, hjust = 1),
-                            panel.grid = element_blank(),
-                            axis.line.x = element_line(),
-                            axis.line.y = element_line())
+            theme(
+                axis.text.x = element_text(angle = 45, hjust = 1),
+                panel.grid = element_blank(),
+                axis.line.x = element_line(),
+                axis.line.y = element_line())
 
         ggsave(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets, "/prim_vs_mets_sig_pathways_boxplot.pdf"),
         plot_pathways,
