@@ -1148,15 +1148,16 @@ for (group in c(
             subsetCommunication(cellchat,
                             slot.name = "net") %>%
             arrange(desc(prob)) 
+        
         # filter to LR and pathways and prob
         pathways_LR[[sample_name]] <-
             pathways_and_lr_prob %>%
-            select(source,target, interaction_name, prob) #%>%
+            select(source, target, interaction_name, pathway_name, prob) %>%
             # group_by(pathway_name) %>%
             # summarise(prob = sum(prob)) %>%
             # ungroup() %>%
-            # mutate(sample = sample_name, group = group) %>%
-            # arrange(desc(prob))
+            mutate(sample = sample_name, group = group) %>%
+            arrange(desc(prob))
     }
 
     pathways_LR_df <-
