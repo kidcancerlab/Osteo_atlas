@@ -5,218 +5,81 @@ This analysis will go along with the cellchat analysis. I'll weigh the interacti
 This will also serve as practice for me to get more familiar with analyzing single-spot spatial transcriptomics.
 
 ```{r load-spatial}
-size.factors <- list("OS1_Seurat" = 1500,
-                     "OS2_Seurat" = 1400,
-                     "OS3_Seurat" = 2700,
-                     "OS4_Seurat" = 1700,
-                     "OS5_Seurat" = 650,
-                     "OS6_Seurat" = 3000,
-                     "OS7_Seurat" = 2500,
-                     "OS8_Seurat" = 1300)
+#| cache.vars: [sobj_names, size_factors]
+size_factors <- list(
+    "OS1_Seurat" = 1500,
+    "OS2_Seurat" = 1400,
+    "OS3_Seurat" = 2700,
+    "OS4_Seurat" = 1700,
+    "OS5_Seurat" = 650,
+    "OS6_Seurat" = 3000,
+    "OS7_Seurat" = 2500,
+    "OS8_Seurat" = 1300
+)
 
-spatial_path <- "/home/gdrobertslab/lab/ExternalData/McEachron_lab/spatial_data/rdata/"
+spatial_path <-
+    "/home/gdrobertslab/lab/ExternalData/McEachron_lab/spatial_data/rdata/"
+
 spatial_list <-
     sapply(paste0(spatial_path, list.files(spatial_path)), readr::read_rds)
-names(spatial_list) <- str_remove(string = list.files(spatial_path), pattern = ".rds")
+names(spatial_list) <-
+    str_remove(
+        string = list.files(spatial_path),
+        pattern = ".rds"
+    )
 
-system("mkdir output/spatial_pathway_analysis")
-
-#Remove pathway columns in metadata
+# Remove pathway columns in metadata
 for (ob_name in names(spatial_list)) {
     x <- spatial_list[[ob_name]]
-    #first extract pathway scores from metadata
-    pathway_metadata <- x@meta.data[, str_detect(colnames(x@meta.data),
-                                    "^GOBP|^REACTOME|^HALLMARK")]
 
-    x@meta.data <- x@meta.data[, !str_detect(colnames(x@meta.data),
-                                             "^GOBP|^REACTOME|^HALLMARK")]
+    x@meta.data <- x@meta.data[, !str_detect(
+        colnames(x@meta.data),
+        "^GOBP|^REACTOME|^HALLMARK"
+    )]
     x$sample_name <- ob_name
     spatial_list[[ob_name]] <- x
 }
 
-qs::qsave(spatial_list, "output/spatial_objects/spatial_list_unannotated.qs")
+sobj_names <- names(spatial_list)
+
+qs::qsave(spatial_list, "output/spatial_objects/unannotated_spatial_list.qs")
 ```
 
 ## Label Cell Types Using Spacexr
 
-We'll be using RCTD on full mode to perform cell-type annotation 
+We'll be using RCTD on full mode to perform cell-type annotation
 
 ### Read in Atlas Object Object
 
 I need to create a reference object. This object is created using the RCTD constructor function, which requires a counts matrix, cell types, and nUMI
 
 ```{r}
-yogi_path <- "/home/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/output/seurat_objects/"
+#| cache.vars: cell_groups
+patient_mets <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs")
 
-patient_mets <- qs::qread(paste0(yogi_path, "final_tumor_vs_stroma/patient_mets.qs"))
+cell_groups <-
+    sapply(
+        unique(patient_mets$Ann_Level1),
+        function(x) {
+            patient_mets@meta.data %>%
+                filter(Ann_Level1 == x) %>%
+                pull(Ann_Level3) %>%
+                unique()
+        }
+    )
 
-dimplot_better(patient_mets, group = c(paste0("Ann_Level", 1:3)), raster = FALSE)
+qs::qsave(cell_groups, "output/spacexr/granular_references/cell_groups.qs")
+
+dimplot_better(
+    patient_mets,
+    group = c(paste0("Ann_Level", 1:3)),
+    raster = FALSE
+)
 ```
 
 ### Run RCTD on Spatial Data
 
-#### Level 2
-
-```{r}
-level2_ref <- spacexr::Reference(
-        GetAssayData(patient_mets, layer = "counts"),
-        as.factor(patient_mets$Ann_Level2),
-        n_max_cells = 2000
-)
-
-spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
-#first I'm going to just use spacexr to add scores to each spot for the cell types in our reference
-for (ob_name in names(spatial_list)) {
-    sp_ob <- spatial_list[[ob_name]]
-    rctd_out <- run_rctd(sp_ob, ref = level2_ref)
-    qs::qsave(rctd_out, paste0("output/spacexr/Ann_Level2/", ob_name, ".qs"))
-    rctd_multi <- run_rctd(sp_ob, ref = level2_ref, doublet_mode = "multi")
-    qs::qsave(rctd_out, paste0("output/spacexr/Ann_Level2/rctd_level2_", ob_name, "_multi.qs"))
-    norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
-    spatial_list[[ob_name]] <- AddMetaData(sp_ob, norm_weights)
-}
-qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level2_annotations.qs")
-
-# make figures
-# read in rctd results first
-for (ob_name in names(spatial_list)) {
-    tmp_rctd <- qs::qread(paste0("output/spacexr/Ann_Level2/rctd_level2_", ob_name, ".qs"))
-    save_deconv_plots(
-        ob = spatial_list[[ob_name]],
-        ob_name = ob_name,
-        rctd_res = tmp_rctd,
-        fig_dir = "output/figures/spatial/spacexr/Ann_Level2"
-    )
-}
-
-rm("spatial_list")
-```
-
-#### Level 3
-
-```{r}
-level3_ref <-
-    spacexr::Reference(
-        GetAssayData(patient_mets, layer = "counts"),
-        as.factor(patient_mets$Ann_Level3),
-        n_max_cells = 2000
-    )
-
-spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
-# going to do it at level 3, specifying multi mode, though
-spacexr_res <- parallel::mclapply(names(spatial_list), function(ob_name) {
-    sp_ob <- spatial_list[[ob_name]]
-    rctd_out <- run_rctd(sp_ob, ref = level3_ref)
-    qs::qsave(rctd_out, paste0("output/spacexr/Ann_Level3/rctd_level3_", ob_name, ".qs"))
-    rctd_multi <- run_rctd(sp_ob, ref = level3_ref, doublet_mode = "multi")
-    qs::qsave(rctd_out, paste0("output/spacexr/Ann_Level3/rctd_level3_", ob_name, "_multi.qs"))
-    norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
-    return(AddMetaData(sp_ob, norm_weights))
-    },
-    mc.cores = parallelly::availableCores(),
-    mc.preschedule = FALSE
-    )
-qs::qsave(spatial_list, "output/spatial_objects/spatial_list_level3_annotations.qs")
-
-for (ob_name in names(spatial_list)) {
-    tmp_rctd <- qs::qread(paste0("output/spacexr/Ann_Level3/rctd_level3_", ob_name, ".qs"))
-    save_deconv_plots(
-        ob = spatial_list[[ob_name]],
-        ob_name = ob_name,
-        rctd_res = tmp_rctd,
-        fig_dir = "output/figures/spatial/spacexr/Ann_Level3"
-    )
-}
-
-# run doublet mode = "multi" for level3
-parallel::mclapply(names(spatial_list), function(ob_name) {
-    sp_ob <- spatial_list[[ob_name]]
-    rctd_out <- run_rctd(sp_ob, ref = level3_ref, doublet_mode = "multi")
-    qs::qsave(paste0("output/spacexr/Ann_Level3/rctd_multi_", ob_name, ".qs"))
-    },
-    mc.cores = parallelly::availableCores(),
-    mc.preschedule = FALSE
-)
-
-rm("spatial_list")
-```
-
-#### Myeloid and Tumor Focus
-
-This may be cheating... but I'm wondering if we can perform deconvolution with a reference that only has level 3 granularity for the myeloid and tumor populations.
-
-```{r}
-table(patient_mets$Ann_Level1)
-# we'll make a new column in our object called myeloid_tumor
-patient_mets@meta.data <- patient_mets@meta.data %>%
-    mutate(myeloid_tumor = recode(
-        Ann_Level1,
-        "Alv_Macrophages" = "Alv_Macrophages",
-        "Epithelial_Endothelial" = "Epithelial_Endothelial",
-        "Immune_Lymphoid" = "Immune_Lymphoid",
-        "Mesenchymal" = "Mesenchymal",
-        "Immune_Myeloid" = Ann_Level3,
-        "Tumor" = Ann_Level3
-    ))
-
-myeloid_tumor_ref <- spacexr::Reference(
-    GetAssayData(patient_mets, layer = "counts"),
-    as.factor(patient_mets$myeloid_tumor),
-    n_max_cells = 2000
-)
-
-spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
-
-spatial_list <- parallel::mclapply(names(spatial_list), function(ob_name) {
-    sp_ob <- spatial_list[[ob_name]]
-    rctd_out <- run_rctd(sp_ob, ref = myeloid_tumor_ref)
-    qs::qsave(
-        rctd_out,
-        paste0("output/spacexr/myeloid_tumor/", ob_name, ".qs")
-    )
-    norm_weights <- spacexr::normalize_weights(rctd_out@results$weights)
-    return(AddMetaData(sp_ob, norm_weights))
-    },
-    mc.cores = parallelly::availableCores(),
-    mc.preschedule = FALSE
-    )
-qs::qsave(spatial_list, "output/spatial_objects/spatial_list_myeloid_tumor.qs")
-
-ann_list <- list()
-for (ob_name in names(spatial_list)) {
-    tmp_rctd <- qs::qread(paste0("output/spacexr/myeloid_tumor/rctd_myeloid_tumor_", ob_name, ".qs"))
-    save_deconv_plots(
-        ob = spatial_list[[ob_name]],
-        ob_name = ob_name,
-        rctd_res = tmp_rctd,
-        fig_dir = "output/figures/spatial/spacexr/myeloid_tumor"
-    )
-    ann_list[[ob_name]] <-
-        as.data.frame(
-            spacexr::normalize_weights(tmp_rctd@results$weights)
-        )
-}
-
-full_ann_mat <- bind_rows(ann_list)
-
-pdf(
-    "output/figures/spatial/spacexr/myeloid_tumor/all_sample_heatmap.pdf",
-    width = 18,
-    height = 16
-)
-pheatmap::pheatmap(
-    cor(full_ann_mat, method = "spearman"),
-    low = "blue",
-    mid = "white",
-    high = "red",
-    midpoint = 0,
-    angle_col = 45,
-    fontsize = 16
-)
-dev.off()
-
-rm("spatial_list")
-```
 
 #### Different Granularities
 
@@ -227,32 +90,45 @@ I'm going to save off a table to use as input for an array job submission.
 This table will have the name of the reference we are using (from the names of `output/spacexr/granular_references/ref_list.qs`)
 
 ```{r}
-spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
+data.frame(
+    obs = rep(sobj_names, 5),
+    ref = rep(names(cell_groups), 8)
+) %>%
+    write.table(
+        "misc/rctd_input.txt",
+        quote = FALSE,
+        row.names = FALSE,
+        col.names = FALSE
+    )
 
-data.frame(obs = rep(names(spatial_list), 5), ref = rep(names(ref_list), 8)) %>%
-    write.table("misc/rctd_input.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
 # next I'm going to make the folders in which I'll keep the output
-for (ct in names(ref_list)) {
-    dir.create(paste0("output/figures/spatial/spacexr/granular_", ct))
-    dir.create(paste0("output/spacexr/granular_references/", ct))
+for (celltype in names(cell_groups)) {
+    dir.create(
+        paste0("output/figures/spatial/spacexr/granular_", celltype),
+        showWarnings = FALSE
+    )
+    dir.create(
+        paste0("output/spacexr/granular_references/", celltype),
+        showWarnings = FALSE
+    )
 }
 
 # make spacex reference objects
 ref_list <- list()
-for (ct in unique(patient_mets$Ann_Level1)) {
+for (celltype in unique(patient_mets$Ann_Level1)) {
     tmp <- patient_mets
     tmp$new_anns <- ifelse(
-        patient_mets$Ann_Level1 == ct,
+        patient_mets$Ann_Level1 == celltype,
         patient_mets$Ann_Level3,
         patient_mets$Ann_Level2
     )
-    ref_list[[ct]] <- spacexr::Reference(
+    ref_list[[celltype]] <- spacexr::Reference(
         GetAssayData(tmp, layer = "counts"),
         as.factor(tmp$new_anns),
         n_max_cells = 2000
     )
 }
-dir.create("output/spacexr/granular_references/")
+
 qs::qsave(ref_list, "output/spacexr/granular_references/ref_list.qs")
 ```
 
@@ -260,8 +136,52 @@ Now I call the shell scripts to run RCTD on these objects.
 
 ```{bash}
 sbatch rctd_scripts/rctd_array.sh
-sbatch rctd_scripts/rctd_array_multi.sh
 ```
+
+## Add the RCTD results back into the seurat objects and save them
+Since we ran spacexr with different references for each cell compartment, we need to put the results in by compartment. We keep only the cell types within that compartment and toss the lvl2 annotations as these will be shared across multiple references and would overwrite each other.
+
+One thing to keep in mind moving forward with these results, it's ok to do things like plotting or correlation between cell types, but since they were done using different references we cannot directly compare the values across cell types. Just because one cell type has a higher value than another does not mean that there are more of that cell type in that spot (unless you compare within a compartment).
+```{r spatial_load_add_deconv}
+spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
+
+for (ob_name in sobj_names) {
+    for (compartment in names(cell_groups)) {
+        tmp_rctd <- qs::qread(
+            paste0(
+                "output/spacexr/granular_references/",
+                compartment,
+                "/",
+                ob_name,
+                ".qs"
+            )
+        )
+
+        norm_weights <-
+            spacexr::normalize_weights(tmp_rctd@results$weights) %>%
+            as.data.frame() %>%
+            select(all_of(cell_groups[[compartment]]))
+
+        spatial_list[[ob_name]] <-
+            AddMetaData(spatial_list[[ob_name]], norm_weights)
+    }
+
+    # Add in total for tumor
+    spatial_list[[ob_name]]$Tumor_Cumulative <-
+        spatial_list[[ob_name]]$Basal_Progenitor +
+        spatial_list[[ob_name]]$Fibrogenic +
+        spatial_list[[ob_name]]$Interactive +
+        spatial_list[[ob_name]]$MP_Progenitor +
+        spatial_list[[ob_name]]$Proliferative +
+        spatial_list[[ob_name]]$COMA
+}
+
+qs::qsave(
+    spatial_list,
+    "output/spatial_objects/spatial_list_level3_annotations.qs"
+)
+```
+
 
 Now I create figures for these objects
 
@@ -282,68 +202,13 @@ for (compartment in names(ref_list)) {
             ob_name = ob_name,
             rctd_res = tmp_rctd,
             fig_dir = paste0(
-                "output/figures/spatial/spacexr/granular_", compartment)
+                "output/figures/spatial/spacexr/granular_", compartment
+            )
         )
     }
 }
 rm(spatial_list)
 ```
-
-
-#### TAM Level3, Else Level2
-
-```{r}
-tam_types <- unique(grep("TAM", patient_mets$Ann_Level3, value = TRUE))
-patient_mets$tam_specific <- ifelse(
-    patient_mets$Ann_Level3 %in% tam_types,
-    patient_mets$Ann_Level3,
-    patient_mets$Ann_Level2
-)
-tam_rctd_ref <- spacexr::Reference(
-    GetAssayData(patient_mets, layer = "counts"),
-    as.factor(patient_mets$tam_specific),
-    n_max_cells = 2000
-)
-
-qs::qsave(tam_rctd_ref, "output/spacexr/tam_specific/rctd_ref.qs")
-
-tam_rctd <- mclapply(
-    spatial_list,
-    run_rctd,
-    ref = tam_rctd_ref,
-    mc.cores = 8,
-    mc.preschedule = FALSE)
-qs::qsave(tam_rctd, "output/spacexr/tam_specific/rctd_res.qs")
-
-# spatial_list <- qs::qread("output/spatial_objects/unannotated_spatial_list.qs")
-
-for (ob_name in names(spatial_list)) {
-    save_deconv_plots(spatial_list[[ob_name]], ob_name, tam_rctd[[ob_name]], "output/figures/spatial/spacexr/tam_specific")
-}
-
-ann_list <- lapply(tam_rctd, function(x) {
-    spacexr::normalize_weights(x@results$weights) %>%
-        as.data.frame()
-})
-full_ann_mat <- bind_rows(ann_list)
-
-pdf(
-    "output/figures/spatial/spacexr/tam_specific/all_sample_heatmap.pdf",
-    width = 18,
-    height = 16
-)
-pheatmap::pheatmap(
-    cor(full_ann_mat, method = "spearman"),
-    low = "blue",
-    mid = "white",
-    high = "red",
-    midpoint = 0,
-    angle_col = 45,
-    fontsize = 16
-)
-dev.off()
-```
-
 
 ## Make Panel Plots
 
@@ -352,27 +217,30 @@ dev.off()
 I want to make a figure where each column is a tumor type, and each row is a sample.
 
 ```{r}
-spatial_list <- qs::qread("output/spatial_objects/spatial_list_level3_annotations.qs")
+spatial_list <-
+    qs::qread("output/spatial_objects/spatial_list_level3_annotations.qs")
+
 tumor_types <- c(
     "Basal_Progenitor",
     "Fibrogenic",
     "Interactive",
     "MP_Progenitor",
     "Proliferative",
-    "COMA")
+    "COMA"
+)
 
 pdf("output/figures/spatial/spacexr/tumor_level_3.pdf", width = 35)
 for (ob in names(spatial_list)) {
     hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
         NoLegend()
     plts <- list("h_and_e" = hne)
-    for (ct in tumor_types) {
-        max_score = max(spatial_list[[ob]]@meta.data[, ct])
-        plts[[ct]] <-
+    for (celltype in tumor_types) {
+        # max_score <- max(spatial_list[[ob]]@meta.data[, ct])
+        plts[[celltype]] <-
             SpatialFeaturePlot(
                 spatial_list[[ob]],
-                features = ct,
-                pt.size.factor = size.factors[[ob]],
+                features = celltype,
+                pt.size.factor = size_factors[[ob]],
                 image.alpha = 0
             )
     }
@@ -380,19 +248,19 @@ for (ob in names(spatial_list)) {
 }
 dev.off()
 
-
+# !!!!!!!!!!!!!!!!!!!!!!!! This is never created in the current version of the code !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 spatial_list <- qs::qread("output/spatial_objects/spatial_list_level2_annotations.qs")
 pdf("output/figures/spatial/spacexr/tumor_level2.pdf", width = 35)
 for (ob in names(spatial_list)) {
     hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
         NoLegend()
     plts <- list("h_and_e" = hne)
-    for (ct in tumor_types) {
-        plts[[ct]] <-
+    for (celltype in tumor_types) {
+        plts[[celltype]] <-
             SpatialFeaturePlot(
                 spatial_list[[ob]],
-                features = ct,
-                pt.size.factor = size.factors[[ob]],
+                features = celltype,
+                pt.size.factor = size_factors[[ob]],
                 image.alpha = 0
             )
     }
@@ -400,7 +268,7 @@ for (ob in names(spatial_list)) {
 }
 dev.off()
 
-
+# !!!!!!!!!!!!!!!!!!!!!!!! This is never created in the current version of the code !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 spatial_list <- qs::qread("output/spatial_objects/spatial_list_myeloid_tumor.qs")
 pdf("output/figures/spatial/spacexr/myeloid_tumor/tumor_panel.pdf", width = 35)
 for (ob in names(spatial_list)) {
@@ -408,12 +276,12 @@ for (ob in names(spatial_list)) {
     hne <- SpatialDimPlot(spatial_list[[ob]], pt.size.factor = 0) +
         NoLegend()
     plts <- list("h_and_e" = hne)
-    for (ct in tumor_types) {
-        plts[[ct]] <-
+    for (celltype in tumor_types) {
+        plts[[celltype]] <-
             SpatialFeaturePlot(
                 spatial_list[[ob]],
-                features = ct,
-                pt.size.factor = size.factors[[ob]],
+                features = celltype,
+                pt.size.factor = size_factors[[ob]],
                 image.alpha = 0
             )
     }
@@ -440,7 +308,7 @@ for (ob in names(spatial_list)) {
             SpatialFeaturePlot(
                 spatial_list[[ob]],
                 features = tam,
-                pt.size.factor = size.factors[[ob]],
+                pt.size.factor = size_factors[[ob]],
                 image.alpha = 0
             )
     }
@@ -468,7 +336,7 @@ for (ob in names(spatial_list)) {
             SpatialFeaturePlot(
                 tmp,
                 features = tam,
-                pt.size.factor = size.factors[[ob]],
+                pt.size.factor = size_factors[[ob]],
                 image.alpha = 0
             )
     }
@@ -493,7 +361,7 @@ for (ob in names(spatial_list)) {
             SpatialFeaturePlot(
                 tmp_ob,
                 features = tam,
-                pt.size.factor = size.factors[[ob]],
+                pt.size.factor = size_factors[[ob]],
                 image.alpha = 0
             )
     }
