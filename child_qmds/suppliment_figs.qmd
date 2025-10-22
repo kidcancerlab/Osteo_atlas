@@ -854,7 +854,7 @@ for (item in seq_len(nrow(object_list))) {
             cols[["TAMs"]] <- "#CDCDCDFF"
             cols[["Fibrogenic TAMs"]] <- "#FF0060"
         }
-
+                        
         path <- 
             str_c("output/seurat_objects/stromal_subtypes/",
                       group, "/",

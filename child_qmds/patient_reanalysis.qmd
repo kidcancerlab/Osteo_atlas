@@ -6,10 +6,10 @@ sample.
 
 object_list <-
     tribble(~group,                         ~res_value,
-            # "patient_prim_cancer_cells",    0.3,
-            # "patient_mets_cancer_cells",    0.35,
-            # "mm_prim_cancer_cells",         0.9,
-            # "mm_mets_cancer_cells",         0.7,
+            "patient_prim_cancer_cells",    0.3,
+            "patient_mets_cancer_cells",    0.35,
+            "mm_prim_cancer_cells",         0.9,
+            "mm_mets_cancer_cells",         0.7,
             "xeno_prim_human_cancer_cells",              0.3,
             "xeno_mets_human_cancer_cells",              0.4,
             "dogs_prim_cancer_cells",       0.2,
@@ -20,8 +20,7 @@ for (i in seq_len(nrow(object_list))) {
     all_sample <- 
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         object_list$group[i],
-                        ".qs")) %>%
-        FindClusters(resolution = object_list$res_value[i])
+                        ".qs"))
 
     all_sample <- all_sample %>%
         FindVariableFeatures(nfeatures = 5000) %>%
@@ -32,9 +31,10 @@ for (i in seq_len(nrow(object_list))) {
                       group_by = c("seurat_clusters")) +
             ggtitle("whole_dimplot") 
 
-    aver_exp2 <- AverageExpression(all_sample,
-                        layer = "scale.data",
-                        group.by = "seurat_clusters")$RNA %>%
+    aver_exp2 <-
+        AverageExpression(all_sample,
+                          layer = "scale.data",
+                          group.by = "seurat_clusters")$RNA %>%
         as.data.frame() %>%
         tibble::rownames_to_column(var = "gene")
 
@@ -148,20 +148,17 @@ for (i in seq_len(nrow(object_list))) {
             mutate(
                 cluster = str_remove(small_cluster, ".+_"),
                 sample_name = str_remove(small_cluster, "_clust.+"),
-                big_cluster_label = str_c(big_cluster, "\n", "r=", round(corr_val, 2))
-            ) %>%
+                big_cluster_label = str_c(big_cluster, "\n", "r=", round(corr_val, 2))) %>%
             ggplot(aes(x = cluster, y = sample_name, fill = corr_val)) +
             geom_tile(color = "grey80", linewidth = 0.5) +
-            geom_text(aes(label = big_cluster_label), size = 4, fontface = "bold") +
+            geom_text(aes(label = big_cluster_label), size = 5, fontface = "bold") +
             scale_fill_gradient2(
                 low = "blue", mid = "white", high = "red") +
             labs(x = "Cluster (Subset)",
                 y = "Sample Name",
-                title = "Cluster Correlation Heatmap"
-            ) +
+                title = "Cluster Correlation Heatmap") +
             theme_minimal(base_size = 16) +
-            theme(
-                axis.text.x = element_text(angle = 45, hjust = 1, size = 14, face = "bold"),
+            theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14, face = "bold"),
                 axis.text.y = element_text(size = 14, face = "bold"),
                 plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
                 legend.position = "right",
@@ -306,3 +303,292 @@ ggsave(filename = "output/figures/validation/correlation_scatter_plots.png",
 
 ```
 
+## tumor subpopulation citeria plot
+find the proportion of cells in each cluster for each sample in the combined object
+if the proportion is greater than 5% then highlight that cluster in red else grey
+Above five percent and unique pathways will be considered as subpopulations
+```{r, tumor_subpopulation_citeria_plot}
+
+combine_tumor_per_species_new <-
+    tribble(~combined,             ~res_value,   ~prim,        ~mets,
+            "patient_xeno_prim_mets_cancer_cells", 0.3,       "patient_prim", "patient_mets",
+            "mouse_prim_mets_cancer_cells",       0.35,     "mm_prim",       "mm_mets",
+            "dog_prim_mets_cancer_cells",    0.3,     "dogs_prim_cancer_cells", "dogs_mets_cancer_cells"
+            )
+for (item in seq_len(nrow(combine_tumor_per_species_new))) {
+    group <- combine_tumor_per_species_new$combined[item]
+    res_value <- combine_tumor_per_species_new$res_value[item]
+    
+    combined_object <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        group,
+                        ".qs"))
+    
+    table_seurat_clusters <-
+            table(combined_object$seurat_clusters) %>%
+            as.data.frame() %>%
+            arrange(desc(Freq)) %>%
+            mutate(prop = round(Freq / sum(Freq) * 100, 1)) %>%
+            mutate(fill_color = ifelse(prop >= 5, "red", "grey"))
+
+    clust_cell_prop_plot <-
+        ggplot(table_seurat_clusters, aes(x = Var1, y = prop, fill = fill_color)) +
+            geom_bar(stat = "identity") +
+            scale_fill_identity() +
+            geom_text(aes(label = paste0(prop, "%")), vjust = -0.5, size = 5) +
+            labs(title = paste("Proportion of Clusters in", group),
+                    x = "Seurat Clusters",
+                    y = "Proportion (%)") +
+            theme_minimal(base_size = 16) +
+            theme(plot.title = element_text(size = 15, hjust = 0.5),
+                    axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+                    axis.text.y = element_text(size = 14),
+                    panel.grid = element_blank())
+    if (!dir.exists(str_c("output/figures/tumor_vs_stroma/", "tumor_sc_prop"))) {
+        dir.create(str_c("output/figures/tumor_vs_stroma/", "tumor_sc_prop"), recursive = TRUE)
+    }
+    ggsave(str_c("output/figures/tumor_vs_stroma/tumor_sc_prop/",
+                group, "_tumor_cluster_proportion.pdf"),
+        plot = clust_cell_prop_plot,
+        width = 15,
+        height = 7,
+        bg = "white")
+
+}
+
+```
+
+## Chase the paired samples from dogs
+```{r, chase_paired_samples_dogs}
+#describe colors
+cols <- list(
+    `MP Progenitor` = "#D43F3AFF",
+    Fibrogenic = "#EEA236FF",
+    `Basal Progenitor` = "#357EBDFF",
+    Proliferative = "#5CB85CFF",
+    Interactive = "#B8B8B8FF",
+    COMA = "#9632B8FF"
+) 
+
+#load the object
+dogs_prim_mets <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/dog_prim_mets_cancer_cells.qs")
+
+# primary table
+paired_samples <- 
+    tribble(~prim,           ~mets,
+            "T_OS_0046_P1",     "T_OS_0046_M1",
+            "T_OS_0061_P1",     c("T_OS_0061_M1_1","T_OS_0061_M1_2"))
+
+for (i in seq_len(nrow(paired_samples))) {
+    prim_sample <- paired_samples$prim[i]
+    mets_sample <- paired_samples$mets[i]
+
+    prim_subset <-
+        subset(dogs_prim_mets, sample_name %in% prim_sample)
+    table1 <- 
+        table(prim_subset$Ann_Level2, prim_subset$sample_name) %>%
+        mutate(prop = Freq / sum(Freq) * 100)
+
+    mets_subset <-
+        subset(dogs_prim_mets, sample_name %in% unlist(mets_sample))
+    table2 <-
+        table(mets_subset$Ann_Level2, mets_subset$sample_name)
+    
+    combined_subset <- 
+        merge(prim_subset, mets_subset) %>%
+        JoinLayers() %>%
+        process_seurat() %>%
+        RunHarmony(group.by.vars = "sample_name",
+                    theta = 12,
+                    lambda = 0.1) %>%
+        process_seurat(reduction = "harmony")
+    
+
+    table(combined_subset$Ann_Level2, combined_subset$sample_name) %>%
+        as.data.frame() %>%
+        dplyr::rename(CellType = Var1, Sample = Var2, Count = Freq) %>%
+        group_by(Sample) %>%
+        mutate(Count = Count / sum(Count) * 100) %>%
+        ungroup() %>%
+        mutate(CellType = str_replace_all(CellType, "_", " ")) %>%
+        mutate(Sample = factor(Sample, levels = c("T_OS_0046_P1", "T_OS_0061_P1", "T_OS_0046_M1",
+                                                  "T_OS_0061_M1_1", "T_OS_0061_M1_2"))) %>%
+        arrange(Sample)
+
+    # Create a bar plot
+    plot1 <-
+        ggplot(cell_count_per_sample, aes(x = Sample, y = Count, fill = CellType)) +
+                    geom_bar(stat = "identity", position = "stack") +
+                    theme_minimal() +
+                    scale_fill_manual(values = as.vector(cols)) +
+                    labs(y = NULL, x = "Sample", fill = "Cell Type") +
+                    theme(x = NULL,
+                            y = NULL,
+                            plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+                        axis.text.x = element_text(angle = 45, hjust = 1),
+                        axis.title.x = element_text(face = "bold"),
+                        axis.title.y = element_text(face = "bold"),
+                        axis.text.y = element_blank(),
+                        legend.position = "right",
+                        legend.direction = "vertical",
+                        panel.grid.major = element_blank(),
+                        panel.grid.minor = element_blank(),
+                        legend.key.size = unit(0.4, 'cm'),
+                        legend.title = element_text(face = "bold", hjust = 0.5),
+                        plot.margin = margin(t = 0, r = 0.5, b = 0, l = 1.5, unit = "cm"))
+
+    if (!dir.exists(str_c("output/figures/tumor_vs_stroma/", "paired_samples_dogs"))) {
+        dir.create(str_c("output/figures/tumor_vs_stroma/", "paired_samples_dogs"), recursive = TRUE)
+    }
+    ggsave(str_c("output/figures/tumor_vs_stroma/paired_samples_dogs/",
+                prim_sample, "_vs_", str_c(mets_sample, collapse = "_"), ".pdf"),
+        plot = dimplot_prim_mets,
+        width = 15,
+        height = 7,
+        bg = "white")
+}
+
+
+
+# pca analysis by cell type composition or subpopulation composition
+sample_by_celltype_list <- list()
+# we can make gsea panel plots
+for (group in c("patient_xeno_prim_mets", "mouse_prim_mets", "dog_prim_mets")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                    group,
+                    "_cancer_cells.qs"))
+    # object <-
+    #     subset(object,
+    #             method == "single_cell")
+
+    # Run PCA for each sample (column) on the cell type counts
+    celltype_sample_pca <- table(object$sample_name, object$Ann_Level3)
+    celltype_sample_pca <- prop.table(celltype_sample_pca, 1) * 100
+    celltype_sample_pca <- round(celltype_sample_pca, 1)
+    
+    sample_by_celltype_list[[group]] <- celltype_sample_pca
+
+    pca_result <- prcomp(celltype_sample_pca, scale. = FALSE, center= TRUE)
+    pca_data <- as.data.frame(pca_result$x)
+    pca_data$Sample <- rownames(pca_data)
+
+    # PCA plot of cell type composition per sample
+    # Add method information to pca_data
+    pca_data$Method <- object$method[match(pca_data$Sample, object$sample_name)]
+    pca_data$DataSource <- object$data_source[match(pca_data$Sample, object$sample_name)]
+    pca_data$unique <- object$unique[match(pca_data$Sample, object$sample_name)]
+    pca_data$method <- object$method[match(pca_data$Sample, object$sample_name)]
+    # Calculate the subpopulation (Ann_Level3) with the highest proportion for each sample
+    celltype_counts <- as.data.frame.matrix(table(object$sample_name, object$Ann_Level3))
+    celltype_props <- sweep(celltype_counts, 1, rowSums(celltype_counts), FUN = "/")
+    max_prop_celltype <- apply(celltype_props, 1, function(x) names(x)[which.max(x)])
+    pca_data$dominant_cell_type <- max_prop_celltype[match(pca_data$Sample, names(max_prop_celltype))]
+    # Define a color palette for dominant cell types
+    dom_cell_types <- unique(pca_data$dominant_cell_type)
+    dom_cell_type_colors <- setNames(RColorBrewer::brewer.pal(min(length(dom_cell_types), 8), "Set2")[seq_along(dom_cell_types)], dom_cell_types)
+
+    pca_plot <-
+        ggplot(pca_data, aes(x = PC1, y = PC2, label = Sample, color = dominant_cell_type)) +
+        geom_point(size = 3) +
+        ggrepel::geom_text_repel(size = 3, max.overlaps = 100) +
+        scale_color_manual(values = dom_cell_type_colors) +
+        theme_minimal() +
+        labs(title = "PCA by Dominant Cell Type Composition per Sample",
+             x = "PC1",
+             y = "PC2",
+             color = "dominant_cell_type")
+    
+    # define color for unique
+    unique_types <- unique(pca_data$unique)
+    unique_cell_type_colors <- setNames(RColorBrewer::brewer.pal(min(length(unique_types), 8), "Set1")[seq_along(unique_types)], unique_types)
+    pca_plot_unique <-
+        ggplot(pca_data, aes(x = PC1, y = PC2, label = Sample, color = unique)) +
+        geom_point(size = 3) +
+        ggrepel::geom_text_repel(size = 3, max.overlaps = 100) +
+        scale_color_manual(values = unique_cell_type_colors) +
+        theme_minimal() +
+        labs(title = "PCA of site Composition per Sample",
+             x = "PC1",
+             y = "PC2",
+             color = "dominant_cell_type")
+    
+    # deine color for method
+    method_types <- unique(pca_data$method)
+    method_cell_type_colors <- setNames(RColorBrewer::brewer.pal(min(length(method_types), 8), "Set1")[seq_along(method_types)], method_types)
+    pca_plot_method <-
+        ggplot(pca_data, aes(x = PC1, y = PC2, label = Sample, color = method)) +
+        geom_point(size = 3) +
+        ggrepel::geom_text_repel(size = 3, max.overlaps = 100) +
+        scale_color_manual(values = method_cell_type_colors) +
+        theme_minimal() +
+        labs(title = "PCA of Method Composition per Sample",
+             x = "PC1",
+             y = "PC2",
+             color = "dominant_cell_type")
+
+    # Automatically determine optimal number of clusters using the elbow method
+    max_k <- min(6, nrow(pca_data) - 1)
+    wss <- sapply(1:max_k, function(k) {
+        kmeans(pca_data[, c("PC1", "PC2")], centers = k, nstart = 10)$tot.withinss
+    })
+    # Calculate the second derivative to find the "elbow"
+    if (length(wss) > 2) {
+        d1 <- diff(wss)
+        d2 <- diff(d1)
+        elbow <- which.min(d2) + 1
+        optimal_k <- elbow
+    } else {
+        optimal_k <- max_k
+    }
+    # Perform clustering in PCA space with optimal number of clusters
+    pca_clusters <- kmeans(pca_data[, c("PC1", "PC2")], centers = optimal_k, nstart = 25)
+    pca_data$Cluster <- as.factor(pca_clusters$cluster) # Convert to factor for coloring
+    pca_cluster_plot <- 
+        ggplot(pca_data, aes(x = PC1, y = PC2, label = Sample, color = Cluster)) +
+        geom_point(size = 3) +
+        ggrepel::geom_text_repel(size = 3, max.overlaps = 100) +
+        scale_color_manual(values = plot_cols) +
+        theme_minimal() +
+        labs(title = "PCA Clustering of Cell Type Composition per Sample",
+             x = "PC1",
+             y = "PC2",
+             color = "Cluster") +
+        theme(plot.title = element_text(hjust = 0.5, size = 12, face = "bold"))
+
+    combined_pca_plot <- 
+        cowplot::plot_grid(pca_plot, pca_plot_unique,
+                         pca_plot_method, pca_cluster_plot, ncol = 2)
+
+    ggsave(str_c("output/figures/tumor_vs_stroma/", group, "_celltype_composition_pca.png"),
+        plot = combined_pca_plot,
+        width = 20,
+        height = 20,
+        bg = "white")
+
+
+    # find what is driving the clustering in the pca
+    pca_loadings <- as.data.frame(pca_result$rotation)
+    pca_loadings$CellType <- rownames(pca_loadings)
+    pca_loadings_melted <- 
+        pca_loadings %>%
+        pivot_longer(cols = starts_with("PC"), names_to = "PC", values_to = "Loading")
+    pca_loadings_plot <-
+        ggplot(pca_loadings_melted, aes(x = CellType, y = Loading, fill = Loading)) +
+        geom_bar(stat = "identity") +
+        facet_wrap(~ PC, scales = "free") +
+        scale_fill_gradient2(low = "blue", mid = "white", high = "red") +
+        theme_minimal() +
+        labs(title = "PCA Loadings for Cell Type Composition",
+             x = "Cell Type",
+             y = "Loading") +
+        theme(plot.title = element_text(hjust = 0.5, size = 12, face = "bold"),
+              axis.text.x = element_text(angle = 45, hjust = 1))
+
+}
+
+# Merge the three tables into a single data frame with a new column indicating the group
+merged_celltype_composition
+
+```

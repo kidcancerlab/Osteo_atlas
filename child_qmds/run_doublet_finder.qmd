@@ -204,7 +204,7 @@ for (ob_name in ob_names) {
     for (sid in unique(tmp_ob$sample_name)) {
         print(paste("loading demuxafy results for", sid))
         demuxafy_res[[sid]] <-
-            read.table(paste0("DoubletFinder/output/",
+            read.table(paste0("/home/gdrobertslab/lab/Analysis/MattGust/projects/Roberts_Lab/Osteo_atlas/DoubletFinder/output/",
                               sid,
                               "/combined/combined_doublets_w_combined_assignments.tsv"),
                         header = TRUE) %>%
@@ -452,7 +452,9 @@ group_by(merged_demux, object, passed_qc) %>%
 One way I can check whether or not the doublet calling algorithms are doing their job is by looking at cells with similar levels of mouse and human reads in the PDX data. If these algorithms are working well, we should expect most, if not all, of these cells to be labelled as doublets, since a doublet is the only way there would be similar amounts of human and murine reads.
 
 ```{r pdx-sanity-check}
-pdx_details <- read.table("misc/allsample_details.txt", header = TRUE) %>%
+all_demux <- qs::qread("DoubletFinder/all_demuxafy_results.qs")
+pdx_details <- 
+    read.table("misc/allsample_details.txt", header = TRUE) %>%
     subset(CL_or_PDX == "xenograft_PDX") %>%
     select(sample_name, data_source) %>%
     unique()
@@ -505,6 +507,47 @@ for (i in seq_len(nrow(pdx_details))) {
     mixed_bcs[[sid]]$num_reads <- as.numeric(mixed_bcs[[sid]]$num_reads)
 }
 head(mixed_bcs[[1]])
+#combine all mixed bcs into one dataframe
+mixed_bcs_all <-
+    bind_rows(mixed_bcs, .id = "sample") %>%
+    rownames_to_column("cell_id")
+
+# #add demuxafy results to mixed_bcs
+mixed_bcs_all$demuxafy_calls <-
+    pdx_df$MajoritySinglet_DropletType[match(mixed_bcs_all$true_doublets, pdx_df$bc)]
+
+mixed_bcs_all <-
+    mixed_bcs_all %>%
+    filter(!is.na(demuxafy_calls))
+
+#save the mixed_bcs_all object
+if (!dir.exists("output/metadata/doubletfinder")) {
+    dir.create("output/metadata/doubletfinder", recursive = TRUE)
+}
+
+# write out the mixed_bcs_all object
+# write_tsv(mixed_bcs_all, "output/metadata/doubletfinder/truth_vs_doubletfinderCalls.tsv")
+
+# Visualize how many mixed barcodes were called doublets vs singlets
+all_combined <-
+    mixed_bcs_all %>%
+    count(demuxafy_calls) %>%
+    ggplot(aes(x = demuxafy_calls, y = n, fill = demuxafy_calls)) +
+    geom_bar(stat = "identity", color = "black") +
+    scale_fill_manual(values = c("singlet" = "#EEA236FF", "doublet" = "#D43F3AFF", "N/A" = "grey")) +
+    labs(title = "Demuxafy Calls for Mixed Barcodes",
+         x = "Demuxafy Call",
+         y = "Number of Cells") +
+    theme_minimal() +
+    theme(panel.grid = element_blank())
+
+ggsave("output/figures/Final_Annotations/results2/pdx_known_vs_calc_doublet_all_samples.pdf",
+       all_combined,
+       width = 3,
+       height = 6,
+       bg = "white")
+
+
 
 #for each bc, determine whether or not it was called a doublet
 mixed_read_results <- lapply(names(mixed_bcs), function(sid) {
@@ -518,9 +561,56 @@ mixed_read_results <- lapply(names(mixed_bcs), function(sid) {
              "num_cells" = as.integer(nrow(x)),
              "proportion_doublets" = round(mean(tmp == "doublet"), 3)))
 })
-bind_rows(mixed_read_results) %>%
-    ggplot(aes(x = sample, y = proportion_doublets)) +
-    geom_tile()
+
+
+# Convert mixed_read_results to a dataframe
+mixed_read_df <-
+    bind_rows(mixed_read_results) %>%
+    mutate(proportion_doublets = as.numeric(proportion_doublets)) %>%
+    filter(!is.na(proportion_doublets)) %>%
+    filter(!is.nan(proportion_doublets)) %>%
+    mutate(prop_normal = 1 - proportion_doublets) %>%
+    select(-num_cells) %>%
+    pivot_longer(cols = c("proportion_doublets", "prop_normal"),
+                 names_to = "type",
+                 values_to = "proportion")
+
+# plot the mixed_read_df into bar/tileplot)
+doublet_per_sample <- 
+    ggplot(mixed_read_df, aes(x = sample, y = proportion, fill = type)) +
+        geom_bar(stat = "identity", position = "dodge", color = "black") +
+        scale_fill_manual(values = c("proportion_doublets" = "#D43F3AFF", "prop_normal" = "#EEA236FF"),
+                        labels = c("Normal", "Doublets")) +
+        labs(title = "Proportion of Mixed Barcodes Called Doublets/Normal by Demuxafy",
+            x = "Sample ID",
+            y = "Proportion") +
+        theme_minimal() +
+        theme(axis.text.x = element_text(angle = -45),
+            panel.grid = element_blank())
+
+ggsave("output/figures/Final_Annotations/results2/pdx_known_vs_calc_doublet_per_sample.pdf",
+       doublet_per_sample,
+       width = 10,
+       height = 6,
+       bg = "white")
+
+mixed_read_df <-
+    bind_rows(mixed_read_results) %>%
+    mutate(proportion_doublets = as.numeric(proportion_doublets)) %>%
+    filter(!is.na(proportion_doublets)) %>%
+    filter(!is.nan(proportion_doublets)) %>%
+    mutate(number_of_doublets = num_cells)
+
+# Plot proportion of mixed barcodes called doublets
+ggplot(mixed_read_df, aes(x = sample, y = proportion_doublets)) +
+    geom_tile() +
+    geom_label(aes(label = proportion_doublets), fill = "white") +
+    theme(axis.text.x = element_text(angle = -45)) +
+    labs(title = "Proportion of Mixed Barcodes Called Doublets by Demuxafy",
+         x = "Sample ID",
+         y = "Proportion of Mixed Barcodes Called Doublets")
+
+
 ```
 
 ### Merge PDX Tumor Cells with Patient Stromal Cells

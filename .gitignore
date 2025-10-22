@@ -1,6 +1,8 @@
 # History files
 .Rhistory
 .Rapp.history
+.err
+.out
 
 # Session Data files
 .RData
@@ -119,3 +121,4 @@ demuxafy_figs
 *.bin
 *.weights
 *.tree
+*.h5ad
