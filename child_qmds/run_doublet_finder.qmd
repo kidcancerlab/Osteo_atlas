@@ -526,10 +526,11 @@ if (!dir.exists("output/metadata/doubletfinder")) {
 }
 
 # write out the mixed_bcs_all object
-write_tsv(mixed_bcs_all, "output/metadata/doubletfinder/truth_vs_doubletfinderCalls.tsv")
+# write_tsv(mixed_bcs_all, "output/metadata/doubletfinder/truth_vs_doubletfinderCalls.tsv")
 
 # Visualize how many mixed barcodes were called doublets vs singlets
-mixed_bcs_all %>%
+all_combined <-
+    mixed_bcs_all %>%
     count(demuxafy_calls) %>%
     ggplot(aes(x = demuxafy_calls, y = n, fill = demuxafy_calls)) +
     geom_bar(stat = "identity", color = "black") +
@@ -539,7 +540,12 @@ mixed_bcs_all %>%
          y = "Number of Cells") +
     theme_minimal() +
     theme(panel.grid = element_blank())
-    theme_minimal(plot.grid = "none")
+
+ggsave("output/figures/Final_Annotations/results2/pdx_known_vs_calc_doublet_all_samples.pdf",
+       all_combined,
+       width = 3,
+       height = 6,
+       bg = "white")
 
 
 
@@ -555,9 +561,56 @@ mixed_read_results <- lapply(names(mixed_bcs), function(sid) {
              "num_cells" = as.integer(nrow(x)),
              "proportion_doublets" = round(mean(tmp == "doublet"), 3)))
 })
-bind_rows(mixed_read_results) %>%
-    ggplot(aes(x = sample, y = proportion_doublets)) +
-    geom_tile()
+
+
+# Convert mixed_read_results to a dataframe
+mixed_read_df <-
+    bind_rows(mixed_read_results) %>%
+    mutate(proportion_doublets = as.numeric(proportion_doublets)) %>%
+    filter(!is.na(proportion_doublets)) %>%
+    filter(!is.nan(proportion_doublets)) %>%
+    mutate(prop_normal = 1 - proportion_doublets) %>%
+    select(-num_cells) %>%
+    pivot_longer(cols = c("proportion_doublets", "prop_normal"),
+                 names_to = "type",
+                 values_to = "proportion")
+
+# plot the mixed_read_df into bar/tileplot)
+doublet_per_sample <- 
+    ggplot(mixed_read_df, aes(x = sample, y = proportion, fill = type)) +
+        geom_bar(stat = "identity", position = "dodge", color = "black") +
+        scale_fill_manual(values = c("proportion_doublets" = "#D43F3AFF", "prop_normal" = "#EEA236FF"),
+                        labels = c("Normal", "Doublets")) +
+        labs(title = "Proportion of Mixed Barcodes Called Doublets/Normal by Demuxafy",
+            x = "Sample ID",
+            y = "Proportion") +
+        theme_minimal() +
+        theme(axis.text.x = element_text(angle = -45),
+            panel.grid = element_blank())
+
+ggsave("output/figures/Final_Annotations/results2/pdx_known_vs_calc_doublet_per_sample.pdf",
+       doublet_per_sample,
+       width = 10,
+       height = 6,
+       bg = "white")
+
+mixed_read_df <-
+    bind_rows(mixed_read_results) %>%
+    mutate(proportion_doublets = as.numeric(proportion_doublets)) %>%
+    filter(!is.na(proportion_doublets)) %>%
+    filter(!is.nan(proportion_doublets)) %>%
+    mutate(number_of_doublets = num_cells)
+
+# Plot proportion of mixed barcodes called doublets
+ggplot(mixed_read_df, aes(x = sample, y = proportion_doublets)) +
+    geom_tile() +
+    geom_label(aes(label = proportion_doublets), fill = "white") +
+    theme(axis.text.x = element_text(angle = -45)) +
+    labs(title = "Proportion of Mixed Barcodes Called Doublets by Demuxafy",
+         x = "Sample ID",
+         y = "Proportion of Mixed Barcodes Called Doublets")
+
+
 ```
 
 ### Merge PDX Tumor Cells with Patient Stromal Cells

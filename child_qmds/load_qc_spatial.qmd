@@ -501,3 +501,73 @@ for (ob in names(spatial_list)) {
 }
 dev.off()
 ```
+
+
+# supplimental figures for spatial
+```{r}
+# plot the rctd results
+spatial_list <-
+    qs::qread("output/spatial_objects/spatial_list_with_TAECs.qs")
+
+for (ob_name in names(spatial_list)) {
+    spatial_list[[ob_name]]$tumor_cumulative <-
+        spatial_list[[ob_name]]$Basal_Progenitor +
+        spatial_list[[ob_name]]$Fibrogenic +
+        spatial_list[[ob_name]]$Interactive +
+        spatial_list[[ob_name]]$MP_Progenitor +
+        spatial_list[[ob_name]]$Proliferative +
+        spatial_list[[ob_name]]$COMA
+}
+
+cell_types <- c(
+    "CAFs", "Pericytes", "Fibroblasts", "Neuronal", "T_cells", "NK_cells",
+    "B_cells", "TAMs", "Mast", "DC", "Monocytes", "Alv_Macrophages",
+    "Endothelial_cells", "Epithelial_cells", "tumor_cumulative")
+
+size.factors <- list("OS1_Seurat" = 1.5,
+                     "OS2_Seurat" = 1.4,
+                     "OS3_Seurat" = 2.7,
+                     "OS4_Seurat" = 1.7,
+                     "OS5_Seurat" = 2.5,
+                     "OS6_Seurat" = 2.5,
+                     "OS7_Seurat" = 2.5,
+                     "OS8_Seurat" = 1.3)
+
+
+for (ob in names(spatial_list)) {
+    hne <- 
+        SpatialDimPlot(spatial_list[[ob]],
+                       pt.size.factor = 0) +
+        NoLegend()
+    plts <- list("h_and_e" = hne)
+    for (ct in cell_types) {
+        plts[[ct]] <-
+            SpatialFeaturePlot(spatial_list[[ob]],
+                                features = ct,
+                                pt.size.factor = size.factors [[ob]],
+                                image.alpha = 0) +
+            theme(legend.title.position = "top",
+                    legend.title.size = 2,
+                  legend.key.height = unit(0.3, "cm"),
+                  legend.key.width = unit(0.9, "cm"))
+
+    }
+    combine_plot <-
+        wrap_plots(grobs = plts,
+                    nrow = 4) + plot_annotation(title = ob)
+
+    if (!dir.exists("output/figures/spatial")) {
+        dir.create("output/figures/spatial")
+    }
+
+    ggsave(
+        filename = paste0("output/figures/spatial/", ob, "_all_cell_types.png"),
+        plot = combine_plot,
+        width = 8.5,
+        height = 11
+    )
+}
+
+
+
+```

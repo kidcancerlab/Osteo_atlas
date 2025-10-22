@@ -1309,7 +1309,7 @@ pathway_groups <- list(
     Angiogenesis = c("VEGF","PDGF","ANGPT","ANGPTL","FGF","EDN","VWF",
                     "PECAM1","HGF","KIT"),
     ImmuneEvasion = c("MHC-II","CXCL","CCL","TNF","IL1","IL2","IL6",
-                    "IL16","OSM","CSF","CD45","CD39",   "CD80","CD86",
+                    "IL16","OSM","CSF","CD45","CD39", "CD80","CD86",
                     "ICOS","APRIL","BAFF","CD30","TWEAK","RANKL","CX3C","CysLTs"),
     CellAdhesion = c("CADM","NCAM","PTPRM","CDH","CDH1","CDH5","ICAM",
                     "JAM","SELL","NECTIN","OCLN","CLDN","SEMA3","SEMA5",
@@ -1321,6 +1321,33 @@ pathway_groups <- list(
     Other = c("APP","ADGRL","ADGRG","ADGRB","NEGR","FLRT","MPZ",
                 "SEMA3","SEMA5","SEMA6","CysLTs")
 )
+pathway_groups <- list(
+  ECM_Remodelling = c("COLLAGEN","LAMININ","FN1","THBS","TENASCIN","AGRN",
+                      "VWF","ANNEXIN","GAP","PCDH","PTN","TGFb"),
+  
+  Cell_Adhesion = c("APP","CADM","PTPRM","NCAM","ADGRL","ADGRG","CDH",
+                    "CDH1","CDH5","ICAM","JAM","SELL","NECTIN","OCLN",
+                    "CLDN","Netrin","UNC5","EPHB","EPHA"),
+  
+  Angiogenesis = c("VEGF","PDGF","ANGPT","ANGPTL","FGF","EDN",
+                   "PECAM1","HGF","KIT","PTN","MK"),
+  
+  Immune_Signalling = c("MHC-II","CXCL","CCL","TNF","IL1","IL2","IL6",
+                        "IL16","OSM","CSF","CD45","CD39","CD80","CD86",
+                        "ICOS","APRIL","BAFF","CD30","TWEAK","RANKL",
+                        "CX3C","CysLTs"),
+  
+  Stemness = c("BMP","RA","NRG","NOTCH","WNT","ncWNT","GDF","IGF"),
+  
+  Neuronal = c("SLIT","FLRT","MPZ","EPHA","NRXN","NEGR","SEMA3",
+               "SEMA5","SEMA6","UNC5","PLXNA","PLXNB","PLXNC","PLXND"),
+  
+  Metabolic = c("Cholesterol","Desmosterol","DHEA","Estradiol",
+                "Prostaglandin","ENHO","RBP4","CALCR")
+)
+
+
+
 
 
 # plots
@@ -1737,8 +1764,8 @@ for (site in c("Primary", "Metastatic")) {
 ```{r dig_deeper_pathways}
 
 interesting_pathways <- c(
-                    #"TGFb", 
-                    "FN1"
+                    "TGFb"
+                    #"FN1"
                     # "LAMININ", "VEGF", "CXCL",
                     # "IL1",
                     # "CCL",
@@ -2171,35 +2198,46 @@ for (group in c(
 # TGFB plts
 tgfb<- list()
 for (group in c(
-                # "patient_prim",
+                "patient_prim",
                 "patient_mets",
-                # "xeno_prim_cancer_normal",
+                "xeno_prim_cancer_normal",
                 "xeno_mets_cancer_normal",
-                # "dogs_primhuman_ortho",
+                "dogs_primhuman_ortho",
                 "dogs_metshuman_ortho",
-                # "mm_primhuman_ortho",
+                "mm_primhuman_ortho",
                 "mm_metshuman_ortho"
             )) {
     object <-
         qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
                         group,
-                        ".qs")) %>%
-        subset(Ann_Level2 %in% c("Epithelial_cells"))
+                        ".qs"))
     dotplot_tgfb <-
         DotPlot(object,
-                features =  c("TGFB1"),
+                features =  c("TGFB1", "TGFB2", "ACVR1", "TGFBR1", "TGFBR2"),
                 group.by = "Ann_Level2",
                 scale = F) +
             theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-            ggtitle(str_c("TGFB in Epithelial Cells (", group, ")"))
+            ggtitle(group)
     tgfb[[group]] <- dotplot_tgfb
 }
 
-panel <-
-    wrap_plots(tgfb, ncol = 2) +
-    plot_annotation(title = "TGFB Expression in Epithelial Cells Across Samples",
+panel_prim <-
+    wrap_plots(tgfb$patient_prim,
+                tgfb$dogs_primhuman_ortho,
+                tgfb$mm_primhuman_ortho,
+                tgfb$xeno_prim_cancer_normal,
+                ncol = 4) +
+    plot_annotation(title = "TGFB Expression in Primary",
                     theme = theme(plot.title = element_text(size = 16, hjust = 0.5)))
 
+panel_mets <-
+    wrap_plots(tgfb$patient_mets,
+                tgfb$dogs_metshuman_ortho,
+                tgfb$mm_metshuman_ortho,
+                tgfb$xeno_mets_cancer_normal,
+                ncol = 4) +
+    plot_annotation(title = "TGFB Expression in Mets",
+                    theme = theme(plot.title = element_text(size = 16, hjust = 0.5)))
 #compare the expression in normal lung vs tumor associated macrophages
 normal_lung <-
     qs::qread("input/downloads/ds_human_lung_atlas.qs")
@@ -2976,6 +3014,10 @@ ggsave("output/figures/epithelial_analysis/FN1_expression_healthy_vs_TME.pdf",
 
 
 # whole object reference for rctd
+Epithelial_cells_tumor <-
+    qs::qread("output/seurat_objects/epithelial_cells_all/final_epi_analysis.qs") %>%
+    subset(unique == "tumor")
+
 patient_mets <-
     qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs")
 Metadata_TECS <-
@@ -3039,13 +3081,15 @@ for (ob_name in names(spatial_list)) {
 
     spatial_list[[ob_name]] <-
         AddMetaData(spatial_list[[ob_name]], norm_weights)
-
+    # qs::qsave(spatial_list[[ob_name]],
+    #     str_c("output/spatial_objects/", ob_name, "_rctd.qs")
+    # )
 }
 
-qs::qsave(
-    spatial_list,
-    "output/spatial_objects/spatial_list_with_TAECs.qs"
-)
+# qs::qsave(
+#     spatial_list,
+#     "output/spatial_objects/spatial_list_with_TAECs.qs"
+# )
 
 # plot the rctd results
 spatial_list <-
@@ -3061,15 +3105,50 @@ for (ob_name in names(spatial_list)) {
         spatial_list[[ob_name]]$COMA
 }
 
-SpatialFeaturePlot(spatial_list$OS7_Seurat,
-                    features = c("TAECs", "General_AT1_AT2", "tumor_cumulative"),
+SpatialFeaturePlot(spatial_list$OS8_Seurat,
+                    features = c("Mesenchymal_like", "AT2", "AT1", "tumor_cumulative"),
                     ncol = 2,
                     pt.size.factor = 2
                     #image.alpha = 0
                     ) +
-SpatialDimPlot(spatial_list$OS7_Seurat,
+SpatialDimPlot(spatial_list$OS8_Seurat,
                 alpha = 0) + NoLegend()
 
+
+# Check if FN1 exists in your dataset
+visium_obj <- spatial_list$OS1_Seurat
+"FN1" %in% rownames(visium_obj)
+# If FALSE, check for lowercase or alternate gene symbol
+grep("FN1", rownames(visium_obj), value = TRUE, ignore.case = TRUE)
+
+
+
+spatial_list <-
+    qs::qread("output/spatial_objects/spatial_list_with_TAECs.qs")
+
+# Plot FN1 spatial expression
+SpatialFeaturePlot(spatial_list$OS4_Seurat,
+                    features = "FN1",
+                    min.cutoff = 2,
+                    pt.size.factor = 1.5) +
+# SpatialDimPlot(spatial_list$OS8_Seurat,
+#                 alpha = 0) + NoLegend() +
+SpatialFeaturePlot(spatial_list$OS4_Seurat,
+                    features = "AGER",
+                    pt.size.factor = 1.5,
+                    min.cutoff = 0.01
+                    )  +
+SpatialFeaturePlot(spatial_list$OS4_Seurat,
+                    features = "SFTPC",
+                    pt.size.factor = 1.5,
+                    min.cutoff = 0.01
+                    ) 
+
+SpatialFeaturePlot(spatial_list$OS8_Seurat,
+                    features = "Mesenchymal_like",
+                    pt.size.factor = 1.5,
+                    min.cutoff = 0.02
+                    ) 
 
 ```
 
@@ -3476,7 +3555,7 @@ for (i in 1:nrow(groups_by)) {
                 axis.line.x = element_line(),
                 axis.line.y = element_line())
 
-        ggsave(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets, "/prim_vs_mets_sig_pathways_boxplot.pdf"),
+        ggsave(str_c("output/figures/cellchat/", group_prim, "_vs_", group_mets, "/prim_vs_mets_sig_pathways_boxplot.png"),
         plot_pathways,
         width = length(chosen_pathways$pathway_name) * 0.6 + 1,
         height = 6,
@@ -4491,6 +4570,27 @@ for (i in 1:nrow(groups_by)) {
 
 
 
+## Calculate Lee's statistic
+```{r spatialee_calc_lee}
+cell_types <-
+    qs::qread("output/spacexr/granular_references/cell_groups.qs") %>%
+    unlist() %>%
+    as.vector()
+
+# We'll add the output to this table
+cell_combos <-
+    combn(cell_types, 2, simplify = TRUE) %>%
+    t() %>%
+    as.data.frame()
+
+nrow(cell_combos)
+
+system(paste0(
+    "sbatch --array=1-",
+    nrow(cell_combos),
+    " scripts/run_lee_perms.sh"
+))
+```
 
 
 
@@ -4498,12 +4598,33 @@ for (i in 1:nrow(groups_by)) {
 
 ```{r spatial_nichenet_analysis}
 
-average_spatial_leestat <- 
-    read_tsv("/gpfs0/home2/gdrobertslab/lab/Analysis/Matt/24_Osteo_atlas/output/spacexr/granular_references/lee_perms/average_lee_stats.tsv") 
+## sample by sample lees perm
+lee_stats <-
+    read_tsv(
+        list.files(
+            "output/spacexr/granular_references/lee_perms",
+            full.names = TRUE,
+            pattern = "lee_perms_.*\\.tsv"
+        ),
+        show_col_types = FALSE
+    ) %>%
+    mutate(
+        perm_p = if_else(
+            perm_p == "p < 1e-05",
+            "0.00001",
+            perm_p
+        ) %>%
+            as.numeric(),
+        fdr = p.adjust(perm_p, method = "fdr")
+    )
 
-not_correlated <-
-    average_spatial_leestat %>%
-    filter(group != "Correlated")
+
+correlated <-
+    lee_stats %>%
+    #filter(group == "Correlated") %>%
+    filter(cell_type_1 %in% c("AT1", "AT2") &
+            cell_type_2 %in% c("Interactive", "Fibrogenic", "MP_Progenitor", "Basal_Progenitor", "Proliferative", "COMA"))
+
 
 ggplot(data.frame(value = correlated$lee_stat), aes(x = value)) +
     geom_histogram(bins = 30, fill = "skyblue", color = "black") +
@@ -4831,7 +4952,7 @@ prim_modules <- list(
     Neuronal          = c("SLIT", "FLRT", "MPZ", "EPHA", "NRXN", "NEGR", "SEMA3", "UNC5"),
     Metabolic         = c("Cholesterol", "Glutamate")
 )
-
+length(unlist(prim_modules))
 # Metastatic
 mets_modules <- list(
     ECM_Remodelling   = c("COLLAGEN", "LAMININ", "FN1", "THBS", "TENASCIN", "TGFb"),
@@ -4842,7 +4963,7 @@ mets_modules <- list(
     Neuronal          = c("SLIT", "FLRT", "MPZ", "EPHA", "NRXN", "NEGR", "SEMA3", "UNC5"),
     Metabolic         = c("Cholesterol", "Glutamate", "DHEA")
 )
-
+length(unlist(mets_modules))
 Immune_Modulation_cells <- 
     c("Alv_Macrophages","TAMs","Monocytes","Neutrophils",
         "Mast","DC","T_cells","B_cells","NK_cells","ILCs",
@@ -4905,11 +5026,28 @@ All_pathways_LR_combined <-
     as.data.frame()
 
 # look at specific pathways
-IL6_pathways <-
+TGFb_pathways <-
     All_pathways_LR_combined %>%
-    filter(pathway_name == "CXCL") %>%
-    filter(group %in% c("xeno_prim_cancer_normal", "xeno_mets_cancer_normal")) %>%
+    filter(pathway_name == "TGFb") %>%
+    filter(str_detect(group, "prim")) %>%
+    arrange(desc(mean_prob)) %>%
+    #filter(patient_prim > 0) %>%
+    select(Target_LR, group, mean_prob)
+
+TGFb_long <- 
+    TGFb_pathways %>%
+    pivot_longer(cols = -Target_LR, names_to = "group", values_to = "mean_prob") %>%
     arrange(desc(mean_prob))
+
+ggplot(TGFb_pathways, aes(x = fct_reorder(Target_LR, mean_prob, .fun = max), y = mean_prob, fill = group)) +
+    geom_col(position = "dodge") +
+    coord_flip() +
+    labs(title = "TGFb interactions (mean_prob) — primary samples",
+                x = "Interaction (Target_LR)", y = "Mean probability") +
+    theme_minimal() +
+    theme(axis.text.y = element_text(size = 8))
+
+
 
 #color for pathays in modules
 module_colors <- c(
@@ -5063,6 +5201,52 @@ for (site in c("prim", "mets")) {
             width = 7,
             height = 12,
             bg = "white")
+    ggsave(str_c("output/figures/cellchat/sharedgenes_modules/correlation_heatmap_pathways_",
+                site, ".pdf"),
+            heatmap_LR,
+            width = 7,
+            height = 12,
+            bg = "white")
+
+    # make a barplot of the mean correlations per group
+    # ensure consistent ordering of comparison groups
+    plot_cooraltion_df_df$Var2 <- factor(plot_cooraltion_df_df$Var2, levels = c("Dogs", "PDX", "Mouse"))
+    # plot_cooraltion_df_df <-
+    #     plot_cooraltion_df_df %>%
+    #     mutate(Freq = round(Freq, 1))
+
+    barplot_correlation <-
+        ggplot(plot_cooraltion_df_df, aes(x = Var1, y = Freq, fill = Var2)) +
+            geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
+            # geom_text(aes(label = sprintf("%.2f", Freq)),
+            #                     position = position_dodge(width = 0.8),
+            #                     vjust = -0.4, size = 3) +
+            scale_fill_manual(values = c("Dogs" = "#EEA236FF", "PDX" = "#D43F3AFF", "Mouse" = "#5CB85CFF")) +
+            labs(title = str_c("Correlation of Pathways - ", site, " Site"),
+                    x = "Pathway",
+                    y = "Spearman Correlation",
+                    fill = "Comparison") +
+            theme_minimal(base_size = 12) +
+            theme(axis.text.x = element_text(size = 9, angle = 45, hjust = 1),
+                        axis.text.y = element_text(size = 11),
+                        axis.title = element_text(size = 12),
+                        plot.title = element_text(size = 14, hjust = 0.5),
+                        panel.grid = element_blank(),
+                        panel.border = element_rect(color = "black", fill = NA, linewidth = 1))
+
+    ggsave(str_c("output/figures/cellchat/sharedgenes_modules/correlation_barplot_pathways_",
+                site, ".png"),
+            barplot_correlation,
+            width = 15,
+            height = 7,
+            bg = "white")
+    ggsave(str_c("output/figures/cellchat/sharedgenes_modules/correlation_barplot_pathways_",
+                site, ".pdf"),
+            barplot_correlation,
+            width = 15,
+            height = 7,
+            bg = "white")
+
 }
 
 

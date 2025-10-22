@@ -523,13 +523,6 @@ for (ob_name in ob_names) {
             plot.title = element_text(hjust = 0.5, face = "bold"),
             panel.grid = element_blank())
 
-    if (!dir.exists("output/id_tumor/metadata/doubletfinder/")) {
-        dir.create("output/id_tumor/metadata/doubletfinder", recursive = TRUE)
-    }
-    write_tsv(matadata_mimic,
-              str_c("output/id_tumor/metadata/doubletfinder/",
-                    ob_name, "_calling.tsv"))
-                
     # make a tile plot to show the tumor calling by methods
     matadata_mimic <-
         metadata %>%
@@ -538,6 +531,14 @@ for (ob_name in ob_names) {
         pivot_longer(cols = -c(cell_id, cell_id_number),
                     names_to = "method",
                     values_to = "call")
+    
+    if (!dir.exists("output/id_tumor/metadata/doubletfinder/")) {
+        dir.create("output/id_tumor/metadata/doubletfinder", recursive = TRUE)
+    }
+    write_tsv(matadata_mimic,
+              str_c("output/id_tumor/metadata/doubletfinder/",
+                    ob_name, "_calling.tsv"))
+                
     tile_plot <-
         ggplot(matadata_mimic %>%
             mutate(method = factor(method,
@@ -564,6 +565,13 @@ for (ob_name in ob_names) {
     }
     ggsave(str_c("output/figures/Final_Annotations/results2/doubletfinder/",
                 ob_name, "_tile_plot.pdf"),
+            plot = tile_and_bar,
+            width = 10,
+            height = 5,
+            bg = "white")
+
+    ggsave(str_c("output/figures/Final_Annotations/results2/doubletfinder/",
+                ob_name, "_tile_plot.png"),
             plot = tile_and_bar,
             width = 10,
             height = 5,
