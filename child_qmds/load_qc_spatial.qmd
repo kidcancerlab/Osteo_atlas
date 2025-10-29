@@ -412,6 +412,7 @@ for (ob in names(spatial_list)) {
         plts[[ct]] <-
             SpatialFeaturePlot(spatial_list[[ob]],
                                 features = ct,
+                                stroke = 0,
                                 pt.size.factor = size.factors [[ob]],
                                 image.alpha = 0) +
             theme(legend.title.position = "top",

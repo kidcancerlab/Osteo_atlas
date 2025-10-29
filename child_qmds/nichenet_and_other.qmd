@@ -3105,13 +3105,13 @@ for (ob_name in names(spatial_list)) {
         spatial_list[[ob_name]]$COMA
 }
 
-SpatialFeaturePlot(spatial_list$OS8_Seurat,
+SpatialFeaturePlot(spatial_list$OS4_Seurat,
                     features = c("Mesenchymal_like", "AT2", "AT1", "tumor_cumulative"),
                     ncol = 2,
                     pt.size.factor = 2
                     #image.alpha = 0
                     ) +
-SpatialDimPlot(spatial_list$OS8_Seurat,
+SpatialDimPlot(spatial_list$OS4_Seurat,
                 alpha = 0) + NoLegend()
 
 
@@ -3122,34 +3122,164 @@ visium_obj <- spatial_list$OS1_Seurat
 grep("FN1", rownames(visium_obj), value = TRUE, ignore.case = TRUE)
 
 
-
 spatial_list <-
     qs::qread("output/spatial_objects/spatial_list_with_TAECs.qs")
+for (ob_name in names(spatial_list)) {
+    spatial_list[[ob_name]]$tumor_cumulative <-
+        spatial_list[[ob_name]]$Basal_Progenitor +
+        spatial_list[[ob_name]]$Fibrogenic +
+        spatial_list[[ob_name]]$Interactive +
+        spatial_list[[ob_name]]$MP_Progenitor +
+        spatial_list[[ob_name]]$Proliferative +
+        spatial_list[[ob_name]]$COMA
+}
+
+pt_size_factors <- c(
+    OS1_Seurat = 1.5,
+    OS2_Seurat = 1.4,
+    OS3_Seurat = 1.8,
+    OS4_Seurat = 1.4,
+    OS5_Seurat = 2.5,
+    OS6_Seurat = 2.5,
+    OS7_Seurat = 1.7,
+    OS8_Seurat = 1.2
+)
+
+SpatialFeaturePlot(spatial_list$OS2_Seurat,
+                                features = "Fibrogenic_TAMs",
+                                image.alpha = 0,
+                                stroke = NA,
+                                pt.size.factor = pt_size_factors[[ob_name]])
 
 # Plot FN1 spatial expression
-SpatialFeaturePlot(spatial_list$OS4_Seurat,
-                    features = "FN1",
-                    min.cutoff = 2,
-                    pt.size.factor = 1.5) +
+all_plots <- list()
+for (ob_name in names(spatial_list)) {
+    plot_list <- list()
+    for (gene in c("tumor_cumulative", "FN1", "SFTPC", "ITGA3", "SDC1", "SDC4")) {
+        feature_pl <- 
+            SpatialFeaturePlot(spatial_list[[ob_name]],
+                                features = gene,
+                                image.alpha = 0,
+                                stroke = NA,
+                                pt.size.factor = pt_size_factors[[ob_name]]) +
+            theme(legend.title.position = "top",
+                  legend.title.size = 2,
+                  legend.key.height = unit(0.3, "cm"),
+                  legend.key.width = unit(0.7, "cm"))
+        plot_list[[gene]] <- feature_pl
+    }
+    combined_plot <- cowplot::plot_grid(plotlist = plot_list, nrow = 1)
+    all_plots[[ob_name]] <- combined_plot
+    ggsave(str_c("output/figures/epithelial_analysis/spatial_expression_combined_", ob_name, ".pdf"),
+        combined_plot,
+        width = 12,
+        height = 3,
+        bg = "white")
+    ggsave(str_c("output/figures/epithelial_analysis/spatial_expression_combined_", ob_name, ".png"),
+        combined_plot,
+        width = 12,
+        height = 3,
+        bg = "white")
+}
+combine_all_plots <- cowplot::plot_grid(plotlist = all_plots, ncol = 1)
+ggsave("output/figures/epithelial_analysis/spatial_expression_combined_all_samples.pdf",
+    combine_all_plots,
+    width = 12,
+    height = 21,
+    bg = "white")
+ggsave("output/figures/epithelial_analysis/spatial_expression_combined_all_samples.png",
+    combine_all_plots,
+    width = 12,
+    height = 21,
+    bg = "white")
+
 # SpatialDimPlot(spatial_list$OS8_Seurat,
 #                 alpha = 0) + NoLegend() +
-SpatialFeaturePlot(spatial_list$OS4_Seurat,
-                    features = "AGER",
-                    pt.size.factor = 1.5,
-                    min.cutoff = 0.01
-                    )  +
-SpatialFeaturePlot(spatial_list$OS4_Seurat,
-                    features = "SFTPC",
-                    pt.size.factor = 1.5,
-                    min.cutoff = 0.01
-                    ) 
 
-SpatialFeaturePlot(spatial_list$OS8_Seurat,
-                    features = "Mesenchymal_like",
-                    pt.size.factor = 1.5,
-                    min.cutoff = 0.02
-                    ) 
 
+
+p <-
+    FetchData(spatial_list$OS7_Seurat, vars = c("FN1", "IFNG")) %>%
+    as.data.frame() %>%
+    # dplyr::filter(FN1 > 0) %>%
+    # dplyr::filter(SDC1 > 0) %>%
+    ggplot(aes(x = FN1, y = IFNG)) +
+    geom_point(alpha = 0.1) +
+    #geom_smooth(method = "lm", se = FALSE, color = "blue") +
+    theme_minimal() +
+    labs(
+        title = "Correlation between FN1 and SFTPC Expression (FN1 > 0)",
+        x = "FN1 Expression",
+        y = "IFNG Expression"
+    )
+
+ggExtra::ggMarginal(p, type='histogram', margins = 'both')
+
+
+# list gene names in the spatial object that start with "IFN" (case-sensitive, fallback to case-insensitive)
+genes_all <- rownames(spatial_list$OS8_Seurat)
+genes_ifn <- sort(unique(grep("^IFN", genes_all, value = TRUE)))
+if (length(genes_ifn) == 0) {
+    genes_ifn <- sort(unique(grep("^IFN", genes_all, value = TRUE, ignore.case = TRUE)))
+}
+print(genes_ifn)
+# optionally save to file
+writeLines(genes_ifn, "output/ifn_genes_in_OS1.txt")
+
+Spatial_qc_fun <-
+    function(spatial_obj) {
+        spatial_obj[["percent.mt"]] <-
+            PercentageFeatureSet(spatial_obj, pattern = "^MT-")
+        spatial_obj <- SCTransform(spatial_obj, assay = "Spatial", verbose = FALSE)
+        spatial_obj <- RunPCA(spatial_obj, verbose = FALSE)
+        spatial_obj <- FindNeighbors(spatial_obj, dims = 1:30)
+        spatial_obj <- FindClusters(spatial_obj, resolution = 0.5)
+        spatial_obj <- RunUMAP(spatial_obj, dims = 1:30)
+        return(spatial_obj)
+    }
+
+spatial_obj <-
+    Spatial_qc_fun(spatial_list$OS2_Seurat)
+
+DimPlot(spatial_obj, reduction = "umap", label = TRUE) + ggtitle("UMAP - Visium Clusters")
+FeaturePlot(spatial_obj, features = c("TAMs"), order=T, pt.size = 1)
+
+
+SpatialDimPlot(spatial_list$OS7_Seurat, group.by = "SCT_snn_res.0.4", label = TRUE, label.size = 3)
+# determine cluster column available in the spatial object
+expr_data <- FetchData(spatial_list$OS6_Seurat,
+                        vars = c("FN1", "SDC4", "SDC1", "ITGA3", "SCT_snn_res.0.4"))
+
+expr_data <- expr_data %>%
+    tibble::as_tibble(rownames = "cell") %>%
+    dplyr::rename(cluster = `SCT_snn_res.0.4`) %>%
+    tidyr::pivot_longer(cols = c("FN1", "SDC4", "SDC1", "ITGA3"), names_to = "gene", values_to = "expression")
+
+genes <- unique(expr_data$gene)
+
+ggplot(expr_data, aes(x = cluster, y = expression, fill = cluster)) +
+    geom_violin(scale = "width", trim = TRUE) +
+    facet_wrap(~ gene, ncol = 1, scales = "free_y") +
+    theme_classic() +
+    labs(title = "Expression of genes across clusters", x = "Cluster", y = "Expression") +
+    theme(
+        legend.position = "none",
+        strip.text = element_text(size = 10),
+        axis.text.x = element_text(angle = 45, hjust = 1)
+    ) +
+SpatialDimPlot(spatial_list$OS6_Seurat,
+                group.by = "SCT_snn_res.0.4", label = TRUE, label.size = 3)
+
+
+
+# retain spatial plot separately
+SpatialDimPlot(spatial_list$OS1_Seurat, group.by = "SCT_snn_res.0.4", label = TRUE, label.size = 3)
+
+SCT_snn_res.0.4
+SCT_snn_res.0.45
+SCT_snn_res.0.5
+SCT_snn_res.0.6
+SCT_snn_res.0.8
 ```
 
 
@@ -4572,10 +4702,25 @@ for (i in 1:nrow(groups_by)) {
 
 ## Calculate Lee's statistic
 ```{r spatialee_calc_lee}
+# plot the rctd results
+spatial_list <-
+    qs::qread("output/spatial_objects/spatial_list_with_TAECs.qs")
+
+for (ob_name in names(spatial_list)) {
+    spatial_list[[ob_name]]$tumor_cumulative <-
+        spatial_list[[ob_name]]$Basal_Progenitor +
+        spatial_list[[ob_name]]$Fibrogenic +
+        spatial_list[[ob_name]]$Interactive +
+        spatial_list[[ob_name]]$MP_Progenitor +
+        spatial_list[[ob_name]]$Proliferative +
+        spatial_list[[ob_name]]$COMA
+}
+
 cell_types <-
     qs::qread("output/spacexr/granular_references/cell_groups.qs") %>%
     unlist() %>%
     as.vector()
+
 
 # We'll add the output to this table
 cell_combos <-
@@ -5025,30 +5170,6 @@ All_pathways_LR_combined <-
     as_tibble() %>%
     as.data.frame()
 
-# look at specific pathways
-TGFb_pathways <-
-    All_pathways_LR_combined %>%
-    filter(pathway_name == "TGFb") %>%
-    filter(str_detect(group, "prim")) %>%
-    arrange(desc(mean_prob)) %>%
-    #filter(patient_prim > 0) %>%
-    select(Target_LR, group, mean_prob)
-
-TGFb_long <- 
-    TGFb_pathways %>%
-    pivot_longer(cols = -Target_LR, names_to = "group", values_to = "mean_prob") %>%
-    arrange(desc(mean_prob))
-
-ggplot(TGFb_pathways, aes(x = fct_reorder(Target_LR, mean_prob, .fun = max), y = mean_prob, fill = group)) +
-    geom_col(position = "dodge") +
-    coord_flip() +
-    labs(title = "TGFb interactions (mean_prob) — primary samples",
-                x = "Interaction (Target_LR)", y = "Mean probability") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(size = 8))
-
-
-
 #color for pathays in modules
 module_colors <- c(
     ECM_Remodelling = "#D43F3AFF",
@@ -5059,6 +5180,7 @@ module_colors <- c(
     Neuronal = "#9632B8FF",
     Metabolic = "#46B8DAFF"
 )
+
 
 # loop for primary and mets
 for (site in c("prim", "mets")) {
@@ -5125,7 +5247,7 @@ for (site in c("prim", "mets")) {
 
     # plot the heatmap 
     # describe the color for the values
-    my_colors <- c("#4d9fe7ff", "#ffffff", "#eb433dff")
+    my_colors <- c("#46a2f1ff", "#ffffff", "#a80601ff")
     my_breaks <- c(-1, -0.3, 0.3, 1)
     my_values <- scales::rescale(my_breaks, from = c(-1, 1))
     # Map pathway_name to module and color
@@ -5176,24 +5298,25 @@ for (site in c("prim", "mets")) {
                 legend.text = element_text(size = 15),
                 panel.grid = element_blank(),
                 panel.border = element_rect(color = "black", fill = NA, linewidth = 1)) +
-            guides(fill = guide_colorbar(barwidth = 1, barheight = 15)) +
-            scale_y_discrete(labels = y_labels_colored) +
-            geom_point(data = module_color_df %>% distinct(module, color),
-                aes(x = 1, y = -Inf, color = module),
-                size = 5, shape = 15, inherit.aes = FALSE, show.legend = TRUE) +
-            scale_color_manual(name = "Pathway Module",
-                values = setNames(module_colors, names(module_colors)),
-                guide = guide_legend(override.aes = list(size = 5, shape = 15),
-                                    order = 1,
-                                    title.position = "top",
-                                    title.hjust = 0.5,
-                                    label.position = "right",
-                                    label.hjust = 0),
-                breaks = names(module_colors),
-                labels = names(module_colors)) +
-            theme(legend.position = "right",
-                 legend.box = "vertical",
-                 legend.box.just = "left")
+            guides(fill = guide_colorbar(barwidth = 1, barheight = 15)) 
+            # +
+            # scale_y_discrete(labels = y_labels_colored) +
+            # geom_point(data = module_color_df %>% distinct(module, color),
+            #     aes(x = 1, y = -Inf, color = module),
+            #     size = 5, shape = 15, inherit.aes = FALSE, show.legend = TRUE) +
+            # scale_color_manual(name = "Pathway Module",
+            #     values = setNames(module_colors, names(module_colors)),
+            #     guide = guide_legend(override.aes = list(size = 5, shape = 15),
+            #                         order = 1,
+            #                         title.position = "top",
+            #                         title.hjust = 0.5,
+            #                         label.position = "right",
+            #                         label.hjust = 0),
+            #     breaks = names(module_colors),
+            #     labels = names(module_colors)) +
+            # theme(legend.position = "right",
+            #      legend.box = "vertical",
+            #      legend.box.just = "left")
 
     ggsave(str_c("output/figures/cellchat/sharedgenes_modules/correlation_heatmap_pathways_",
                 site, ".png"),
@@ -5208,49 +5331,60 @@ for (site in c("prim", "mets")) {
             height = 12,
             bg = "white")
 
-    # make a barplot of the mean correlations per group
-    # ensure consistent ordering of comparison groups
-    plot_cooraltion_df_df$Var2 <- factor(plot_cooraltion_df_df$Var2, levels = c("Dogs", "PDX", "Mouse"))
-    # plot_cooraltion_df_df <-
-    #     plot_cooraltion_df_df %>%
-    #     mutate(Freq = round(Freq, 1))
+    # compute one average point per module x comparison_group
+    plot_cooraltion_df_long <-
+        plot_cooraltion_df_df %>%
+        rename(pathway_name = Var1,
+                comparison_group = Var2,
+                correlation = Freq)
 
-    barplot_correlation <-
-        ggplot(plot_cooraltion_df_df, aes(x = Var1, y = Freq, fill = Var2)) +
-            geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
-            # geom_text(aes(label = sprintf("%.2f", Freq)),
-            #                     position = position_dodge(width = 0.8),
-            #                     vjust = -0.4, size = 3) +
-            scale_fill_manual(values = c("Dogs" = "#EEA236FF", "PDX" = "#D43F3AFF", "Mouse" = "#5CB85CFF")) +
-            labs(title = str_c("Correlation of Pathways - ", site, " Site"),
-                    x = "Pathway",
-                    y = "Spearman Correlation",
-                    fill = "Comparison") +
-            theme_minimal(base_size = 12) +
-            theme(axis.text.x = element_text(size = 9, angle = 45, hjust = 1),
-                        axis.text.y = element_text(size = 11),
-                        axis.title = element_text(size = 12),
-                        plot.title = element_text(size = 14, hjust = 0.5),
-                        panel.grid = element_blank(),
-                        panel.border = element_rect(color = "black", fill = NA, linewidth = 1))
-
-    ggsave(str_c("output/figures/cellchat/sharedgenes_modules/correlation_barplot_pathways_",
+    # ensure a 'module' column exists by mapping pathway_name to module_color_df (use match to avoid join failures)
+    plot_cooraltion_df_long$module <-
+        module_color_df$module[match(plot_cooraltion_df_long$pathway_name, module_color_df$pathway_name)]
+    
+    module_avg_df <-
+        plot_cooraltion_df_long %>%
+        group_by(module, comparison_group) %>%
+        summarize(mean_corr = mean(correlation, na.rm = TRUE), .groups = "drop")
+ 
+     # violin + one dot per module (module dots colored by module)
+    violin_plot_correlation <-
+        ggplot(plot_cooraltion_df_long, aes(x = comparison_group, y = correlation, fill = comparison_group)) +
+        geom_violin(trim = FALSE, alpha = 0.6, width = 0.9) +
+        geom_boxplot(width = 0.15, outlier.shape = NA, alpha = 0.9, colour = "black",
+                    position = position_dodge(width = 0.9)) +
+        # overlay module-average points (dodge so points for different modules don't perfectly overlap)
+        geom_point(data = module_avg_df,
+                aes(x = comparison_group, y = mean_corr, color = module),
+                position = position_dodge(width = 0.4),
+                size = 5) +
+        labs(title = str_c("Distribution of Pathway Correlations - ", site, " Site"),
+            x = "Comparison Group",
+            y = "Spearman Correlation",
+            fill = "Comparison",
+            color = "Module Average") +
+        theme_minimal(base_size = 14) +
+        theme(axis.text.x = element_text(size = 12),
+            axis.text.y = element_text(size = 12),
+            axis.title = element_text(size = 13),
+            plot.title = element_text(size = 15, hjust = 0.5),
+            legend.position = "right") +
+        scale_fill_manual(values = c(Dogs = "#ffd497ff", PDX = "#fd7e79ff", Mouse = "#a0ffa0ff")) +
+        scale_color_manual(values = c(module_colors, Other = "#666666"))
+    ggsave(str_c("output/figures/cellchat/sharedgenes_modules/violin_plot_correlation_pathways_",
                 site, ".png"),
-            barplot_correlation,
-            width = 15,
-            height = 7,
+            violin_plot_correlation,
+            width = 10,
+            height = 6,
             bg = "white")
-    ggsave(str_c("output/figures/cellchat/sharedgenes_modules/correlation_barplot_pathways_",
+    ggsave(str_c("output/figures/cellchat/sharedgenes_modules/violin_plot_correlation_pathways_",
                 site, ".pdf"),
-            barplot_correlation,
-            width = 15,
-            height = 7,
+            violin_plot_correlation,
+            width = 10,
+            height = 6,
             bg = "white")
 
 }
-
-
-
 
 
 ```
