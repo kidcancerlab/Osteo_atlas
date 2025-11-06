@@ -1,7 +1,7 @@
 
 
 ## Run Nichenet and other analyses
-
+This section is to convert the genes into human orthologs and run cell-cell communication analysis using CellChat package.
 ```{r cell_cell_communication}
 object_list <-
     tribble(~group1,                         ~group2,                       ~group3,
@@ -310,20 +310,6 @@ for (group in c(
 
 
 
-
-```
-
-### Run cellchat in slurm job
-```{bash cellchat_slurm_job}
-
-sbatch --array=1-25 child_qmds/cellchat_run_shellscript.sh patient_prim 
-sbatch --array=1-36 child_qmds/cellchat_run_shellscript.sh patient_mets
-sbatch --array=1-14 child_qmds/cellchat_run_shellscript.sh  xeno_prim_cancer_normal
-sbatch --array=1-12 child_qmds/cellchat_run_shellscript.sh xeno_mets_cancer_normal
-sbatch --array=1-17 child_qmds/cellchat_run_shellscript.sh dogs_primhuman_ortho
-sbatch --array=1-16 child_qmds/cellchat_run_shellscript.sh dogs_metshuman_ortho
-sbatch --array=1-3 child_qmds/cellchat_run_shellscript.sh mm_primhuman_ortho
-sbatch --array=1-8 child_qmds/cellchat_run_shellscript.sh mm_metshuman_ortho
 
 ```
 
@@ -1110,10 +1096,7 @@ ggsave("output/figures/cellchat/aallgenes_average_pathway_heatmap_across_all.png
 ```
 
 
-
-
-
-
+### multi sample by sample per group - shared genes only
 ```{r multi_sample_cellchat_analysis_sharedgenes_analysis}
 
 average_pathways <- list()
@@ -1347,9 +1330,6 @@ pathway_groups <- list(
 )
 
 
-
-
-
 # plots
 site_specific_paths <- list()
 for (site in c("prim", "mets")) {
@@ -1375,7 +1355,7 @@ for (site in c("prim", "mets")) {
         mean()
     pathway_scores <-
         site_specific %>%
-        # filter(rowSums(across(everything())) > mean_filter) %>%
+        filter(rowSums(across(everything())) > mean_filter) %>%
         as.data.frame() %>%
         rownames_to_column("Pathway") %>%
         rename_with(~ ifelse(str_detect(.x, "dog"), "Dog",
@@ -1754,12 +1734,6 @@ for (site in c("Primary", "Metastatic")) {
 ```
 
 
-
-
-
-
-
-
 ## Dig Deepeer into the pathways that are interesting
 ```{r dig_deeper_pathways}
 
@@ -2019,8 +1993,6 @@ for (sobj in c("patient_mets", "dogs_mets",
 }
 
 
-
-
 # from the plots in TGFb, the alv macroiphages and TAMs seems interesting
 
 # what are the downstream activation of each pathways? could grab the 
@@ -2238,6 +2210,7 @@ panel_mets <-
                 ncol = 4) +
     plot_annotation(title = "TGFB Expression in Mets",
                     theme = theme(plot.title = element_text(size = 16, hjust = 0.5)))
+
 #compare the expression in normal lung vs tumor associated macrophages
 normal_lung <-
     qs::qread("input/downloads/ds_human_lung_atlas.qs")
@@ -2334,23 +2307,6 @@ pheatmap::pheatmap(
     display_numbers = T
 )
 
-# dotplot for epithelail
-DotPlot(combine_tumor_normal %>% subset(compare_label == "Epithelial_cells"),
-        features = c("TGFB1", "TGFB2"),
-        group.by = "unique",
-        scale = F) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    ggtitle("Expression in Epithelial Cells (Normal vs Tumor)")
-
-
-
-# what different about normal epithelial vs tumor associated epithelial DEGS
-
-
-
-
-
-
 # whats different about this TGFB1 and TGFB2 activated vs not activated epithelial cells in tumor
 Epithelial_cells_tumor <-
     combine_tumor_normal %>%
@@ -2361,27 +2317,6 @@ Epithelial_cells_tumor <-
     process_seurat(reduction = "harmony")
 Epithelial_cells_tumor <-
     FindClusters(Epithelial_cells_tumor, resolution = 0.2)
-
-DotPlot(Epithelial_cells_tumor,
-        features = c("TGFB1", "SDC1", "SDC4"),
-        group.by = "seurat_clusters",
-        scale = F) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    ggtitle("DATP Markers in Human Tumor Associated Epithelial Cells")
-
-
-
-dimplot_better(Epithelial_cells_tumor, group_by = c("seurat_clusters")) + NoLegend()
-FeaturePlot(Epithelial_cells_tumor, features = c("TGFB1", "GLG1", "SDC1", "SDC4", "ITGA3", "ITGB1"), order=T, pt.size = 1)
-VlnPlot(Epithelial_cells_tumor,
-        features = c("TGFB1", "GLG1", "SDC1", "SDC4", "ITGA3", "ITGB1"),
-        group.by = "seurat_clusters")
-DotPlot(Epithelial_cells_tumor,
-        features = c("TGFB1", "GLG1", "SDC1", "SDC4", "ITGA3", "ITGB1"),
-        group.by = "seurat_clusters",
-        scale = F) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    ggtitle("Integrin and Syndecan Expression in Human Tumor Associated Epithelial Cells")
 
 # what are the top 30 target genes of FN1 that activate TGFB1
 up_of_fn1_that_acitivate_tgfb <-
@@ -2413,23 +2348,10 @@ for (file_path in cell_chat_objs) {
         filter(source %in% c("Basal_Progenitor", "Proliferative", "Fibrogenic",
                         "COMA", "Interactive", "MP_Progenitor")) %>%
         arrange(desc(prob)) %>%
-
-
-
 }
 
 
 ```
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -2591,9 +2513,10 @@ targets <-
     rownames_to_column("target") %>%
     rename(score = 2) %>%
     arrange(desc(score)) %>%
-    filter(score > cutoff) %>%
+    #filter(score > cutoff) %>%
     mutate(ligand = lig) %>%
-    select(target)
+    select(target) %>%
+    slice_head(n = 80)
 targets_clean <-
     c("TGFB1", "INHBA", "CSF1", "VEGFC", "DLL4",
       "HGF", "PLAU", "FGF7", "ELFN1", "RARRES1")
@@ -2815,7 +2738,6 @@ ggsave("output/figures/epithelial_analysis/gsea_mesenchymal_vs_AT1AT2.png",
 )
 
 # select the emt and ECM pathways leading edge from All_pathways
-
 EMT <-
     All_pathways %>%
     filter(str_detect(pathway, "HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION")) %>%
@@ -2874,10 +2796,7 @@ patient_mets_ref$tissue_type <- "TME"
 ds_pmets <-
     patient_mets_ref %>%
     subset(cells = sample(colnames(patient_mets_ref), 41086))
-dimplot_better(ds_pmets, group_by = "Ann_Level3") + NoLegend()
-VlnPlot(ds_pmets,
-        features = c("FN1"),
-        group.by = "Ann_Level2")
+
 ds_pmets$Compare <-
     str_replace_all(ds_pmets$Ann_Level2,
         c(
@@ -2931,10 +2850,6 @@ healthy_lung <-
 
 healthy_lung$tissue_type <- "Healthy"
 healthy_lung$sample_name <- healthy_lung$study
-
-VlnPlot(healthy_lung,
-        features = c("FN1"),
-        group.by = "ann_level_3")
 
 ds_pmets <-
     ds_pmets %>%
@@ -3001,15 +2916,6 @@ ggsave("output/figures/epithelial_analysis/FN1_expression_healthy_vs_TME.pdf",
         width = 10,
         height = 10,
         bg = "white")
-
-
-
-
-
-
-
-
-
 
 
 
@@ -3094,36 +3000,6 @@ for (ob_name in names(spatial_list)) {
 # plot the rctd results
 spatial_list <-
     qs::qread("output/spatial_objects/spatial_list_with_TAECs.qs")
-
-for (ob_name in names(spatial_list)) {
-    spatial_list[[ob_name]]$tumor_cumulative <-
-        spatial_list[[ob_name]]$Basal_Progenitor +
-        spatial_list[[ob_name]]$Fibrogenic +
-        spatial_list[[ob_name]]$Interactive +
-        spatial_list[[ob_name]]$MP_Progenitor +
-        spatial_list[[ob_name]]$Proliferative +
-        spatial_list[[ob_name]]$COMA
-}
-
-SpatialFeaturePlot(spatial_list$OS4_Seurat,
-                    features = c("Mesenchymal_like", "AT2", "AT1", "tumor_cumulative"),
-                    ncol = 2,
-                    pt.size.factor = 2
-                    #image.alpha = 0
-                    ) +
-SpatialDimPlot(spatial_list$OS4_Seurat,
-                alpha = 0) + NoLegend()
-
-
-# Check if FN1 exists in your dataset
-visium_obj <- spatial_list$OS1_Seurat
-"FN1" %in% rownames(visium_obj)
-# If FALSE, check for lowercase or alternate gene symbol
-grep("FN1", rownames(visium_obj), value = TRUE, ignore.case = TRUE)
-
-
-spatial_list <-
-    qs::qread("output/spatial_objects/spatial_list_with_TAECs.qs")
 for (ob_name in names(spatial_list)) {
     spatial_list[[ob_name]]$tumor_cumulative <-
         spatial_list[[ob_name]]$Basal_Progenitor +
@@ -3193,11 +3069,7 @@ ggsave("output/figures/epithelial_analysis/spatial_expression_combined_all_sampl
     height = 21,
     bg = "white")
 
-# SpatialDimPlot(spatial_list$OS8_Seurat,
-#                 alpha = 0) + NoLegend() +
-
-
-
+# could do a correlation plots of two features for example
 p <-
     FetchData(spatial_list$OS7_Seurat, vars = c("FN1", "IFNG")) %>%
     as.data.frame() %>%
@@ -3214,7 +3086,6 @@ p <-
     )
 
 ggExtra::ggMarginal(p, type='histogram', margins = 'both')
-
 
 # list gene names in the spatial object that start with "IFN" (case-sensitive, fallback to case-insensitive)
 genes_all <- rownames(spatial_list$OS8_Seurat)
@@ -3241,11 +3112,6 @@ Spatial_qc_fun <-
 spatial_obj <-
     Spatial_qc_fun(spatial_list$OS2_Seurat)
 
-DimPlot(spatial_obj, reduction = "umap", label = TRUE) + ggtitle("UMAP - Visium Clusters")
-FeaturePlot(spatial_obj, features = c("TAMs"), order=T, pt.size = 1)
-
-
-SpatialDimPlot(spatial_list$OS7_Seurat, group.by = "SCT_snn_res.0.4", label = TRUE, label.size = 3)
 # determine cluster column available in the spatial object
 expr_data <- FetchData(spatial_list$OS6_Seurat,
                         vars = c("FN1", "SDC4", "SDC1", "ITGA3", "SCT_snn_res.0.4"))
@@ -3270,115 +3136,7 @@ ggplot(expr_data, aes(x = cluster, y = expression, fill = cluster)) +
 SpatialDimPlot(spatial_list$OS6_Seurat,
                 group.by = "SCT_snn_res.0.4", label = TRUE, label.size = 3)
 
-
-
-# retain spatial plot separately
-SpatialDimPlot(spatial_list$OS1_Seurat, group.by = "SCT_snn_res.0.4", label = TRUE, label.size = 3)
-
-SCT_snn_res.0.4
-SCT_snn_res.0.45
-SCT_snn_res.0.5
-SCT_snn_res.0.6
-SCT_snn_res.0.8
 ```
-
-
-## for Mouse
-```{r see_if_TAECs_in_mouse}
-# load the mouse mets object
-mm_mets <-
-    qs::qread("output/seurat_objects/final_tumor_vs_stroma/mm_mets.qs")
-
-tumor_asso_tams <-
-    mm_mets %>%
-    subset(Ann_Level2 %in% c("TAMs", "Alv_Macrophages", "Monocytes", "cMonocytes", "ncMonocytes"))
-DotPlot(tumor_asso_tams,
-        features = c("Inhba"),
-        group.by = "Ann_Level3",
-        scale = F) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    ggtitle("Expression in Tumor Associated Macrophages")
-
-tumor_asso_epi <-
-    mm_mets %>%
-    subset(Ann_Level3 %in% c("AT1", "AT2")) %>%
-    process_seurat() %>%
-    RunHarmony(group.by.vars = c("sample_name", "method")) %>%
-    process_seurat(reduction = "harmony",
-                   resolution = 0.4)
-# assign the celltypes based on the markers
-tumor_asso_epi$TEACs_and_others <-
-    ifelse(tumor_asso_epi$seurat_clusters %in% c(1, 5, 6), "TAECs", "General_AT1_AT2")
-
-dimplot_better(tumor_asso_epi, group_by = "TEACs_and_others") + NoLegend()
-FeaturePlot(tumor_asso_epi,features = c("Tgfb1"), order=T, pt.size = 1)
-VlnPlot(tumor_asso_epi,
-        features = c("Tgfb1", "Sdc1", "Sdc4"),
-        group.by = "TEACs_and_others")
-DotPlot(tumor_asso_epi,
-        features = c(TAEC_markers, AT1_markers, AT2_markers, "SDC1", "SDC4", "KRT8") %>%
-            nichenetr::convert_human_to_mouse_symbols() %>%
-            as.character(),
-        group.by = "TEACs_and_others",
-        scale= F) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-# healthy mouse lung epithelial cells
-mouse_lung <-
-    qs::qread("input/downloads/mouse_lung.qs")
-
-normal_epi <-
-    mouse_lung %>%
-    subset(CellType %in% c("AT")) %>%
-    process_seurat()
-normal_epi$TEACs_and_others <-
-    str_replace_all(normal_epi$seurat_clusters, c("^0$" = "AT2",
-                                                "^1$" = "AT2",
-                                                "^2$" = "AT1",
-                                                "^3$" = "AT1",
-                                                "^4$" = "AT2"))
-normal_epi$unique <- "normal"
-normal_epi$organism <- "mouse"
-normal_epi$sample_name <- normal_epi$orig.ident
-normal_epi$data_source <- "online"
-
-dimplot_better(normal_epi, group_by = "TEACs_and_others") + NoLegend()
-FeaturePlot(normal_epi, features = c("Tgfb1"), order=T, pt.size = 1)
-VlnPlot(normal_epi,
-        features = c("Tgfb1"),
-        group.by = "TEACs_and_others")
-DotPlot(normal_epi,
-        features = c("Tgfb1"),
-        group.by = "TEACs_and_others",
-        scale = F)
-# combine the two datasets
-combine_mouse_tumor_normal <-
-    merge(tumor_asso_epi, normal_epi) %>%
-    JoinLayers() %>%
-    process_seurat() %>%
-    RunHarmony(group.by.vars = c("sample_name", "data_source"),
-             theta = c(12, 12)) %>%
-    process_seurat(reduction = "harmony",
-                   resolution = 0.4)
-
-dimplot_better(combine_mouse_tumor_normal, group_by = c("TEACs_and_others", "unique")) + NoLegend()
-
-
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -3694,18 +3452,7 @@ for (i in 1:nrow(groups_by)) {
     }
 }
 
-
-
 ```
-
-
-
-
-
-
-
-
-
 
 
 ## Compare prim vs mets pathways tumor as sender and specific celltype as receiver
@@ -3939,13 +3686,7 @@ for (i in 1:nrow(groups_by)) {
 }
 
 
-
-
-
 ```
-
-
-
 
 
 ### I want tumor to be the sender and stroma to be the receiver
@@ -4173,16 +3914,8 @@ for (i in 1:nrow(groups_by)) {
 ```
 
 
-
-
-
-
-
-
-
-
 ### I want tumor to be the sender and stroma to be the receiver but only for significant pathways
-## for each celltypes shown by analysis above where I look at tumor as sender and specific celltype as receiver
+for each celltypes shown by analysis above where I look at tumor as sender and specific celltype as receiver
 
 ```{r tumor_to_stroma_cellchat_nichenet}
 
@@ -4427,36 +4160,6 @@ for (i in 1:nrow(groups_by)) {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Leverage Nichenet to identify dowstream
 ```{r nichenet_downstream_analysis}
 
@@ -4507,18 +4210,6 @@ fn1_downstream_genes <- c(
   "TGFB1", "SERPINE1", "FN1"
 )
 
-DotPlot(Epithelial_cells_all,
-        features = fn1_downstream_genes %>% unique(),
-        group.by = "Annotation_detailed",
-        split.by = "unique",
-        #cols = "RdBu",
-        dot.scale = 8,
-        scale = F) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    ggtitle("Expression in Epithelial Cells (Normal vs Tumor)")
-
-
-
 prim <-
     qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_prim.qs") %>%
     subset(Ann_Level2 == "TAMs")
@@ -4533,15 +4224,6 @@ cell_ranks <-
     AUCell::AUCell_run(exprMat = entire_matrix,
                     geneSets = genelist)
 prim$LAMB1 <- AUCell::getAUC(cell_ranks)[1,]
-
-FeaturePlot(prim,
-            features = "LAMB1",
-            cols = c("#EEEEEE", "#ae0600"),
-            min.cutoff = 0.15,
-            pt.size = 1,
-            order = TRUE) +
-    coord_fixed()
-
 
 mets <-
     qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs") %>%
@@ -4673,74 +4355,10 @@ for (i in 1:nrow(groups_by)) {
 
 
 
-
-
-
-
-
-
-
-
-
-
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Calculate Lee's statistic
-```{r spatialee_calc_lee}
-# plot the rctd results
-spatial_list <-
-    qs::qread("output/spatial_objects/spatial_list_with_TAECs.qs")
-
-for (ob_name in names(spatial_list)) {
-    spatial_list[[ob_name]]$tumor_cumulative <-
-        spatial_list[[ob_name]]$Basal_Progenitor +
-        spatial_list[[ob_name]]$Fibrogenic +
-        spatial_list[[ob_name]]$Interactive +
-        spatial_list[[ob_name]]$MP_Progenitor +
-        spatial_list[[ob_name]]$Proliferative +
-        spatial_list[[ob_name]]$COMA
-}
-
-cell_types <-
-    qs::qread("output/spacexr/granular_references/cell_groups.qs") %>%
-    unlist() %>%
-    as.vector()
-
-
-# We'll add the output to this table
-cell_combos <-
-    combn(cell_types, 2, simplify = TRUE) %>%
-    t() %>%
-    as.data.frame()
-
-nrow(cell_combos)
-
-system(paste0(
-    "sbatch --array=1-",
-    nrow(cell_combos),
-    " scripts/run_lee_perms.sh"
-))
-```
-
 
 
 ## spatial nichenet
-
 ```{r spatial_nichenet_analysis}
 
 ## sample by sample lees perm
@@ -4802,12 +4420,6 @@ high_cells_fixed <-
     group_by(Cell) %>%
     summarise(Count = n()) %>%
     arrange(desc(Count))
-
-
-
-
-
-
 
 
 # Example grouping (you can expand/modify)
@@ -5008,11 +4620,6 @@ for (site in c("prim", "mets")) {
 
 
 ```
-
-
-
-
-
 
 
 
@@ -5390,12 +4997,6 @@ for (site in c("prim", "mets")) {
 ```
 
 
-
-
-
-
-
-
 ## matts permutation
 ```{r matt_permutation_cellchat_analysis}
 run_cellchat <- function(sobject,
@@ -5519,5 +5120,251 @@ all_probs <-
     patchwork::wrap_plots(hist_list, ncol=7) +
     plot_annotation(title ="PMets CellChat Interaction Probabilities",
                     theme = theme(plot.title = element_text(size = 20, hjust = 0.5)))
+
+```
+
+## Cellchat Validation with potential co-culture
+```{r cell_chat_to_wetlab}
+
+samples_info <-
+    tribble(
+        ~sample_name,           ~details,                   ~method,
+        # "S0001",             "HBEC_and_OS17_MOX",       "SC_10X",
+        # "S0064A",             "HBEC_OS17_COX1",             "SC_10X",
+        # "S0064B",             "HBEC_OS17_COX2",             "SC_10X",
+        "S0144",             "Day0",                            "SC_10X",
+        "S0145",             "Day1",                            "SC_10X",
+        "S0146",             "Day5",                        "SC_10X")
+
+HBEC_OS17_COX_mix_day5
+sample_list <- list()
+for (i in 1:nrow(samples_info)) {
+    sample <- samples_info$sample_name[i]
+    details <- samples_info$details[i]
+    object <-
+        qs::qread(str_c("/gpfs0/home2/gdrobertslab/lab/SeuratObj_2/",
+                        sample,"_human.qs"))
+    object$sample_name <- sample
+    object$details <- details
+    sample_list[[sample]] <- object
+}
+
+combined_obj <-
+    merge(sample_list[[1]],
+          y = sample_list[-1],
+          add.cell.ids = names(sample_list),
+          project = "CoCulture_HBEC_OS17_COX3") %>%
+    JoinLayers() %>%
+    process_seurat() %>%
+    RunHarmony(group.by.vars = "sample_name") %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.1)
+combined_obj$cox_mono <-
+    str_replace_all(combined_obj$details,
+                    c("Day0"="Mono",
+                      "Day1"="COX",
+                      "Day5"="COX"))
+
+combined_obj$Ann_l3 <-
+    str_replace_all(combined_obj$seurat_clusters,
+                    c("0"="Tumor",
+                      "1"="Epithelial",
+                      "2"="Tumor",
+                      "3"="Epithelial"))
+qs::qsave(combined_obj,
+            "output/seurat_objects/HBEC_OS17_COX_combined_obj.qs")
+
+# load the object
+combined_obj <-
+    qs::qread("output/seurat_objects/HBEC_OS17_COX_combined_obj.qs")
+tumor <-
+    subset(combined_obj, Ann_l3 == "Tumor")
+
+# Violin plot with overlaid boxplot using raw data for reliable layering
+df_plot_FN1 <- FetchData(tumor, vars = c("FN1", "details")) %>% 
+    as.data.frame()
+Fn1_tumor_vln_boxplot <-
+    ggplot(df_plot_FN1, aes(x = details, y = FN1, fill = details)) +
+        geom_violin(trim = FALSE, scale = "width", alpha = 0.8) +
+        geom_boxplot(width = 0.12, outlier.shape = NA, color = "black", alpha = 0.9) +
+        theme_minimal() +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                    legend.position = "none") +
+        scale_fill_manual(values = c("Day0" = "#5CB85CFF", "Day1" = "#fc8d62", "Day5" = "#D43F3AFF")) +
+        labs(x = NULL, y = "FN1 expression", title = "FN1 expression in Tumor Cells")
+ggsave("output/figures/epithelial_analysis/for_wetlab/FN1_tumor_vln_boxplot.png",
+        Fn1_tumor_vln_boxplot,
+        width = 5,
+        height = 7,
+        bg = "white")
+
+epithelial <-
+    subset(combined_obj, Ann_l3 == "Epithelial")
+
+genes <- c("SDC4","ITGA3","ITGB1","ITGAV","CD44", "SDC1")
+
+df_plot <- FetchData(epithelial, vars = c(genes, "details")) %>%
+    tibble::rownames_to_column("cell") %>%
+    tidyr::pivot_longer(cols = all_of(genes), names_to = "gene", values_to = "expression")
+
+violin_boxplot_fn1_receptors_in_epi <-
+    ggplot(df_plot, aes(x = details, y = expression, fill = details)) +
+        geom_violin(trim = FALSE, scale = "width", alpha = 0.7) +
+        geom_boxplot(width = 0.12, outlier.shape = NA, color = "black", alpha = 0.9,
+                                position = position_dodge(width = 0.9)) +
+        facet_wrap(~ gene, scales = "free_y", ncol = 3) +
+        theme_minimal(base_size = 12) +
+        scale_fill_manual(values = c("Day0" = "#5CB85CFF", "Day1" = "#fc8d62", "Day5" = "#D43F3AFF")) +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                    legend.position = "none") +
+        labs(x = NULL, y = "Expression", title = "Expression of FN1 receptors in Epithelial Cells")
+
+if(!dir.exists("output/figures/epithelial_analysis/for_wetlab")) {
+    dir.create("output/figures/epithelial_analysis/for_wetlab", recursive = TRUE)
+}
+ggsave("output/figures/epithelial_analysis/for_wetlab/violin_boxplot_fn1_receptors_in_epi.png",
+        violin_boxplot_fn1_receptors_in_epi,
+        width = 7,
+        height = 7,
+        bg = "white")
+
+
+# find downstream targets of FN1
+ligand_target_matrix <-
+    readRDS("input/nichenet_analysis/ligand_target_matrix_nsga2r_final.rds")
+    # Convert the ligand_target_matrix to a long data frame for ggplot
+
+ligand_target_long <- 
+    as.data.frame(as.matrix(ligand_target_matrix)) %>%
+    rownames_to_column("ligand") %>%
+    pivot_longer(-ligand, names_to = "target", values_to = "value")
+
+lig <- "FN1"
+targets <-
+    ligand_target_matrix[lig, ] %>%
+    as.data.frame() %>%
+    rownames_to_column("target") %>%
+    rename(score = 2) %>%
+    arrange(desc(score)) %>%
+    #filter(score > cutoff) %>%
+    mutate(ligand = lig) %>%
+    select(target) %>%
+    slice_head(n = 100)
+
+# check the targets at each time point
+each_timepoint_df <-
+    AverageExpression(epithelial,
+                    group.by = "details",
+                    assays = "RNA",
+                    features = targets$target,
+                    slot = "data")$RNA %>%
+    as.data.frame() %>%
+    rownames_to_column("gene") %>%
+    column_to_rownames("gene") %>%
+    as.matrix()
+
+# plot heatmap of targets across time points
+heatmap_targets_timepoints <-
+    pheatmap::pheatmap(each_timepoint_df,
+                    cluster_rows = TRUE,
+                    cluster_cols = FALSE,
+                    scale = "row",
+                    color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(100),
+                    fontsize_row = 6,
+                    fontsize_col = 10,
+                    main = "Heatmap of Top 100 FN1 Downstream Targets in Epithelial Cells Across Timepoints")
+if(!dir.exists("output/figures/epithelial_analysis/for_wetlab")) {
+    dir.create("output/figures/epithelial_analysis/for_wetlab", recursive = TRUE)
+}
+ggsave("output/figures/epithelial_analysis/for_wetlab/heatmap_FN1_downstream_targets_timepoints.png",
+        heatmap_targets_timepoints,
+        width = 4,
+        height = 10,
+        bg = "white")
+
+# Want to quantifyt and plot what genes form Targets$target goes up vs down over time
+time_points <- c("day0"=0, "day1"=1, "day5"=5)
+# compute average expression per gene in COX vs Mono and plot which genes go up in COX or in Mono
+# define the group column names produced by AverageExpression
+cox_name <- "COX"
+mono_name <- "Mono"
+
+# compute average expression per gene in COX vs Mono and store as df_changes
+df_changes <-
+    AverageExpression(epithelial,
+                    group.by = "cox_mono",
+                    assays = "RNA",
+                    features = targets$target,
+                    slot = "data")$RNA %>%
+    as.data.frame() %>%
+    rownames_to_column("gene") %>%
+    mutate(change = .data[[cox_name]] - .data[[mono_name]],
+            direction = ifelse(change > 0, "Up_in_COX", "Up_in_Mono")) %>%
+    arrange(change) %>%
+    mutate(gene = factor(gene, levels = gene))  # preserve order for plotting
+
+n_up <- sum(df_changes$change > 0, na.rm = TRUE)
+n_down <- sum(df_changes$change < 0, na.rm = TRUE)
+
+# waterfall / barplot showing directional change
+plot_exp_change <-
+    ggplot(df_changes, aes(x = gene, y = change, fill = direction)) +
+        geom_col() +
+        geom_hline(yintercept = 0, color = "gray40") +
+        coord_flip() +
+        scale_fill_manual(values = c(Up_in_COX = "#D43F3AFF", Up_in_Mono = "#5CB85CFF")) +
+        labs(title = "Change in Average Expression of Genes DS of FN1 (COX - Mono) in Epithelial Cells",
+            subtitle = paste0("Genes up in COX: ", n_up, " | Genes up in Mono: ", n_down),
+            x = NULL, y = "COX - Mono (change in expression)") +
+        theme_minimal(base_size = 12) +
+        theme(axis.text.y = element_text(size = 9), plot.title = element_text(face = "bold"))
+
+if(!dir.exists("output/figures/epithelial_analysis/for_wetlab")) {
+    dir.create("output/figures/epithelial_analysis/for_wetlab", recursive = TRUE)
+}
+ggsave("output/figures/epithelial_analysis/for_wetlab/waterfall_exprsn_change_COX_vs_Mono_ds_of_FN1.png",
+        plot_exp_change,
+        width = 10,
+        height = 10,
+        bg = "white")
+
+# find the top 20 genes that go up in COX downstream of FN1
+df_changes_up <-
+    df_changes %>%
+    filter(change > 0) %>%
+    arrange(desc(change)) %>%
+    select(gene, change) %>%
+    slice_head(n = 15)
+
+# make the vector of those top 20 genes
+top20_genes_up_in_COX_ds_FN1 <- c(
+    "SLPI", "IGFBP3", "PLAU", "PTGS2", "INHBA", "IL32", "IGFBP7", "CLDN1",
+    "PRNP", "GLG1", "VEGFC", "IL18", "GAS6", "IL1B", "IL15", "CCN2",
+    "PRRG4", "TGFB1", "BMP2", "IL23A"
+)
+
+# Prepare long dataframe for plotting
+df_plot <- FetchData(epithelial, vars = c(top20_genes_up_in_COX_ds_FN1, "details")) %>%
+    tibble::rownames_to_column("cell") %>%
+    pivot_longer(cols = all_of(top20_genes_up_in_COX_ds_FN1),
+                             names_to = "gene",
+                             values_to = "expression")
+
+# Violin + boxplot (one panel per gene)
+violin_boxplot <-
+    ggplot(df_plot, aes(x = details, y = expression, fill = details)) +
+        geom_violin(trim = FALSE, scale = "width", alpha = 0.7) +
+        geom_boxplot(width = 0.12, outlier.shape = NA, colour = "black", alpha = 0.9) +
+        #geom_jitter(width = 0.15, size = 0.5, alpha = 0.4) +
+        facet_wrap(~ gene, ncol = 5, scales = "free_y") +
+        theme_minimal(base_size = 12) +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1),
+              legend.position = "none") +
+        scale_fill_manual(values = c("Day0" = "#5CB85CFF", "Day1" = "#fc8d62", "Day5" = "#D43F3AFF")) +
+        labs(x = NULL, y = "Expression", title = "Top FN1 downstream genes: Violin + boxplot by timepoint")
+# Optionally save
+ggsave("output/figures/epithelial_analysis/for_wetlab/top20_FN1_downstream_violin_boxplot.png",
+             violin_boxplot, width = 10, height = 10, bg = "white")
+
 
 ```

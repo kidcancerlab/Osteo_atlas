@@ -2247,3 +2247,68 @@ for (obj in c("COMA", "Fibrogenic",
 
 
 ```
+
+
+# Busra proteomics markers comparison 
+```{r busra_proteomics_comparison}
+
+for (names in c("patient_prim_cancer_cells",
+                "patient_mets_cancer_cells",
+                "patient_prim_normal_cells",
+                "patient_mets_normal_cells")) {
+    plots_list <- list()
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/",
+                        names,
+                        ".qs"))
+    dimplot <-
+        dimplot_better(object, group_by = "Ann_Level3") + NoLegend()
+    
+    dotplot <-
+        DotPlot(object,
+                features = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3"),
+                scale = F,
+                group.by = "Ann_Level3")
+    for (features in c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3")) {
+        featureplot <- 
+            FeaturePlot(object,
+                        features = features,
+                        raster = F,
+                        order=T) +
+            ggtitle(features) +
+            theme(plot.title = element_text(hjust = 0.5))
+        plots_list[[features]] <- featureplot
+    }
+    
+    plots_combined <-
+        patchwork::wrap_plots(
+            dimplot +
+            ggtitle("UMAP of tumor cells") +
+            theme(plot.title = element_text(hjust = 0.5)),
+            dotplot +
+            ggtitle("Dotplot of proteomics markers") +
+            theme(plot.title = element_text(hjust = 0.5)),
+            plots_list$FGFR3,
+            plots_list$FGFR1,
+            plots_list$UNC5B,
+            plots_list$CD109,
+            plots_list$EPHA3,
+            ncol = 2
+        ) +
+        plot_annotation(title = str_c("Proteomics markers in ",
+                                    gsub("_", " ", names)),
+                        theme = theme(plot.title = element_text(hjust = 0.5, size = 16)))
+
+    ggsave(str_c("output/figures/tumor_only/",
+                names,
+                "_busra_proteomics_comparison.png"),
+            plot = plots_combined,
+            width = 16,
+            height = 30,
+            bg = "white")
+ 
+}
+
+
+
+```
