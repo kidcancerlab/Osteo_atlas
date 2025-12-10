@@ -1,9 +1,7 @@
-# OsteoCAR: A Single-Cell Atlas for Osteosarcoma 
-
-![dim plots-1](https://github.com/user-attachments/assets/cf696138-0881-4c30-b8d3-29335a43035b)
+# OstEoCAR: A Single-Cell Atlas for Osteosarcoma 
 
 
-**OsteoCAR** is a comprehensive **single-cell RNA sequencing (scRNA-seq) atlas** designed to facilitate **cell type annotation and transcriptomic exploration** of **osteosarcoma** across multiple models, including **human, xenograft mice, syngeneic mice, and canine samples**.  
+**OstEoCAR** is a comprehensive **single-cell RNA sequencing (scRNA-seq) atlas** designed to facilitate **cell type annotation and transcriptomic exploration** of **osteosarcoma** across multiple models, including **human, xenograft mice, syngeneic mice, and canine samples**.  
 
 ## 🔬 **About OsteoCAR**  
 - **Purpose:** Provides a harmonized reference for **annotating cell types** in osteosarcoma datasets.  
