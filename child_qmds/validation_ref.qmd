@@ -707,26 +707,25 @@ ggsave("output/figures/validation/reference_validation/collins_panel_ann0.png",
 
 
 ## Merge the selected samples
-
 ```{r}
 
 collins_sobj_list <- 
-    list.files("output/seurat_objects/validation/before_harmony/Collins/Annotated",
+    list.files("output/seurat_objects/validation/before_harmony/Collins",
             full.names = FALSE,
             recursive = FALSE)
 
 collins_primary_tumor_names <-
-    c("anno_SCPCS000246.qs",
-      "anno_SCPCS000247.qs",
-      "anno_SCPCS000414.qs",
-      "anno_SCPCS000415.qs",
-      "anno_SCPCS000416.qs")
+    c("SCPCS000246.qs",
+      "SCPCS000247.qs",
+      "SCPCS000414.qs",
+      "SCPCS000415.qs",
+      "SCPCS000416.qs")
 
 collins_primary_sobj_list <- list()
 
 for (sobj_name in collins_primary_tumor_names) {
     sobj <- 
-        qs::qread(str_c("output/seurat_objects/validation/before_harmony/Collins/Annotated/",
+        qs::qread(str_c("output/seurat_objects/validation/before_harmony/Collins/",
                         sobj_name))
     
     collins_primary_sobj_list[[sobj_name]] <- sobj
@@ -738,32 +737,35 @@ collins_primary_merged <-
         add.cell.id = names(collins_primary_sobj_list)) %>%
     JoinLayers() %>%
     process_seurat()
+qs::qsave(collins_primary_merged,
+          "output/seurat_objects/validation/before_harmony/collins_primary_merged_before_harmony.qs")
 
 harmony_collins_primary <- 
     RunHarmony(collins_primary_merged,
             group.by.vars = c("submitter_id", "participant_id"),
             theta = c(7, 7)) %>%
     process_seurat(reduction = "harmony")
+qs::qsave(harmony_collins_primary,
+          "output/seurat_objects/validation/before_harmony/collins_primary_merged_after_harmony.qs")
 
 dimplot_better(harmony_collins_primary,
-               group_by = c("Ann_Level2", "Ann_Level3"),
-               ncol=2) +
+               group_by = c("submitter_id"))
+FeaturePlot(harmony_collins_primary,
+            features = c("COL1A1", "RUNX2", "KRT18", "KRT19")) +
     NoLegend()
-
-
 
 # metastatic samples collins
 collins_mets_tumor_names <-
-    c("anno_SCPCS000610.qs",
-      "anno_SCPCS000605.qs",
-      "anno_SCPCS000604.qs",
-      "anno_SCPCS000602.qs",
-      "anno_SCPCS000600.qs")
+    c("SCPCS000610.qs",
+      "SCPCS000605.qs",
+      "SCPCS000604.qs",
+      "SCPCS000602.qs",
+      "SCPCS000600.qs")
 collins_mets_sobj_list <- list()
 
 for (sobj_name in collins_mets_tumor_names) {
     sobj <- 
-        qs::qread(str_c("output/seurat_objects/validation/before_harmony/Collins/Annotated/",
+        qs::qread(str_c("output/seurat_objects/validation/before_harmony/Collins/",
                         sobj_name))
     
     collins_mets_sobj_list[[sobj_name]] <- sobj
@@ -775,154 +777,99 @@ collins_mets_merged <-
         add.cell.id = names(collins_mets_sobj_list)) %>%
     JoinLayers() %>%
     process_seurat()
+qs::qsave(collins_mets_merged,
+          "output/seurat_objects/validation/before_harmony/collins_mets_merged_before_harmony.qs")
 
 harmony_collins_mets <- 
     RunHarmony(collins_mets_merged,
             group.by.vars = c("submitter_id", "participant_id"),
             theta = c(7, 7)) %>%
     process_seurat(reduction = "harmony")
+qs::qsave(harmony_collins_mets,
+          "output/seurat_objects/validation/before_harmony/collins_mets_merged_after_harmony.qs")
 
 dimplot_better(harmony_collins_mets,
-               group_by = c("Ann_Level2", "Ann_Level3"), ncol = 2) +
-    NoLegend()
+               group_by = c("submitter_id"))
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-qs::qsave(Mets_sobj,
-          "output/seurat_objects/validation/before_harmony/soragni_patient_mets.qs")
-
-harmony_sobj <- 
-    RunHarmony(Mets_sobj,
-            group.by.vars = c("sample_name", "participant_id"),
-            theta = c(7, 7)) %>%
-    process_seurat(reduction = "harmony")
-
-
-subset_sobj <-
-    subset(Mets_sobj,
-            sample_name %in% c("SCPCS000525", "SCPCS000526")) %>%
-    process_seurat()
-dimplot_better(subset_sobj, group_by = "participant_id") +
-    NoLegend()
-
-harm_subset <-
-    subset_sobj %>%
-    RunHarmony(group.by.vars = c("sample_name"),
-               theta = 7) %>%
-    process_seurat(reduction = "harmony")
-dimplot_better(harm_subset, group_by = "sample_name") +
-    NoLegend()
-
-ref_obj <- 
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs"))
-
-dimplot_better(ref_obj, group_by = "Ann_Level3") +
-    NoLegend()
-
-ref_lung <- 
-    SingleR::SingleR(test = as.SingleCellExperiment(harm_subset),
-                    ref = SeuratObject::GetAssayData(ref_obj),
-                    labels = ref_obj$Ann_Level3,
-                    aggr.ref = TRUE)
-
-harm_subset$Ann_Level3 <- ref_lung$labels
-
-dimplot_better(harm_subset, group_by = "Ann_Level3") +
-    NoLegend()
-
-FeaturePlot(harmony_sobj, features = c("RUNX2", "COL1A1", "SATB2", "COL1A2")) +
-    NoLegend()
-subset <-
-    subset(harmony_sobj,
-            seurat_clusters == "0") %>%
-    process_seurat()
-
-dimplot_better(subset, group_by = "annotations")
 
 ```
 
 
 
-## Soragni lab validation
+## Soragni lab samples merge
 
 ```{r}
+#merge primary tumors first
+prim_list <- list()
+soragni_prim_tumor_names <-
+    c("SCPCS000527.qs",
+      "SCPCS000528.qs",
+      "SCPCS000531.qs",
+      "SCPCS000532.qs")
+for (sobj_name in soragni_prim_tumor_names) {
+    sobj <- 
+        qs::qread(str_c("output/seurat_objects/validation/before_harmony/Soragni/",
+                        sobj_name))
+    prim_list[[sobj_name]] <- sobj
+}
+Prim_sobj <- 
+    merge(x = prim_list[[1]],
+        y = prim_list[2:length(prim_list)],
+        add.cell.id = names(prim_list)) %>%
+    JoinLayers() %>%
+    process_seurat()
+qs::qsave(Prim_sobj,
+          "output/seurat_objects/validation/before_harmony/soragni_patient_prim_before_harmony.qs")
+harmony_sobj <- 
+    RunHarmony(Prim_sobj,
+            group.by.vars = c("sample_name", "participant_id"),
+            theta = c(7, 7)) %>%
+    process_seurat(reduction = "harmony")
+qs::qsave(harmony_sobj,
+          "output/seurat_objects/validation/before_harmony/soragni_patient_prim_after_harmony.qs")
+dimplot_better(harmony_sobj, group_by = "sample_name") +
+    NoLegend()
 
+#do the same for mets
+Mets_list <- list()
 
-Mets_sobj <- 
+soragni_mets_tumor_names <-
+    c("SCPCS000522.qs",
+      "SCPCS000523.qs",
+      "SCPCS000524.qs",
+      "SCPCS000525.qs",
+      "SCPCS000526.qs",
+      "SCPCS000530.qs")
+for (sobj_name in soragni_mets_tumor_names) {
+    sobj <- 
+        qs::qread(str_c("output/seurat_objects/validation/before_harmony/Soragni/",
+                        sobj_name))
+    Mets_list[[sobj_name]] <- sobj
+}
+mets_sobj <-
     merge(x = Mets_list[[1]],
         y = Mets_list[2:length(Mets_list)],
         add.cell.id = names(Mets_list)) %>%
     JoinLayers() %>%
     process_seurat()
-
-qs::qsave(Mets_sobj,
-          "output/seurat_objects/validation/soragni_patient_mets.qs")
+qs::qsave(mets_sobj,
+          "output/seurat_objects/validation/before_harmony/soragni_patient_mets_before_harmony.qs")
 
 harmony_sobj <- 
-    RunHarmony(Mets_sobj,
-            group.by.vars = c("sample_name" "participant_id"),
+    RunHarmony(mets_sobj,
+            group.by.vars = c("sample_name", "participant_id"),
             theta = c(7, 7)) %>%
     process_seurat(reduction = "harmony")
+qs::qsave(harmony_sobj,
+          "output/seurat_objects/validation/before_harmony/soragni_patient_mets_after_harmony.qs")
 
-
-
-dimplot_better(harmony_sobj, group_by = "sample_name") +
-    NoLegend()
-
-ref_obj <- 
-    qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/patient_mets.qs"))
-
-dimplot_better(ref_obj, group_by = "Ann_Level3") +
-    NoLegend()
-
-ref_lung <- 
-    SingleR::SingleR(test = as.SingleCellExperiment(harmony_sobj),
-                    ref = SeuratObject::GetAssayData(ref_obj),
-                    labels = ref_obj$Ann_Level2,
-                    aggr.ref = TRUE)
-
-harmony_sobj$Ann_Level2 <- ref_lung$labels
-
-dimplot_better(harmony_sobj, group_by = "Ann_Level3") +
-    NoLegend()
-
-FeaturePlot(harmony_sobj, features = c("RUNX2", "COL1A1", "SATB2", "COL1A2")) +
-    NoLegend()
-subset <-
-    subset(harmony_sobj,
-            seurat_clusters == "0") %>%
-    process_seurat()
-
-dimplot_better(subset, group_by = "annotations")
 
 ```
 
 
 
 ```{r}
-
-obj <-
-    qs::qread(str_c("output_1_10/seurat_objects/validation/before_harmony/Soragni/SCPCS000525.qs"))
-
-dimplot_better(obj, group_by = "seurat_clusters") +
-    NoLegend()
 
 
 recursive_clustering <- function(obj,
@@ -1149,6 +1096,7 @@ split_tumor_vs_stroma <- function(obj,
         dplyr::group_by(recursive_clusters) %>%
         dplyr::summarise(median = median(!!sym(modulescore_label), na.rm = TRUE)) %>%
         dplyr::arrange(desc(median))
+    # x <- hist(bulk_score_per_cluster$median, breaks = 20)
 
     tumor_clusters <-
         bulk_score_per_cluster %>%
@@ -1171,8 +1119,14 @@ split_tumor_vs_stroma <- function(obj,
     for (tumor_clusters in unique(tumor$seurat_clusters)) {
         sub_tumor <- 
             subset(tumor,
-                   seurat_clusters == tumor_clusters) %>%
-            process_seurat(resolution = resolution)
+                   seurat_clusters == tumor_clusters)
+        if (ncol(sub_tumor) > 50) {
+            sub_tumor <-
+                sub_tumor %>%
+                process_seurat(resolution = resolution)
+        } else {
+            sub_tumor <- sub_tumor
+        }
 
         ann_obj <-
             annotate_tumor(sobject = sub_tumor,
@@ -1440,32 +1394,294 @@ Annotate_celltypes <- function(obj,
 }
 
 
-obj <-
-    qs::qread(str_c("output_1_10/seurat_objects/validation/before_harmony/Soragni/SCPCS000528.qs"))
-
-
-dimplot_better(obj, group_by = "seurat_clusters") +
-    NoLegend()
-
 
 markers <- c("COL1A1", "COL1A2", "SATB2", "RUNX2")
+sobj_list <- list()
+for (names in c(
+                "soragni_patient_mets_after_harmony",
+                "soragni_patient_prim_after_harmony",
+                "collins_primary_merged_after_harmony",
+                "collins_mets_merged_after_harmony")) {
+    obj <- 
+        qs::qread(str_c("output/seurat_objects/validation/before_harmony/",
+                        names,
+                        ".qs"))
+    
+    object <-
+        Annotate_celltypes(obj = obj,
+                            markers = markers,
+                            resolution = 0.2,
+                            modulescore_label = "modulescore",
+                            modulescore_cutoff = 0.3,
+                            recursive_cluster = TRUE,
+                            species = "human",
+                            aggr_ref = TRUE,
+                            with_tumor = TRUE,
+                            tissue_location = ifelse(str_detect(names, "prim"), "bone", "lung"))
+    qs::qsave(object,
+              str_c("output/seurat_objects/validation/before_harmony/",
+                    names,
+                    "_annotated.qs"))
 
+}
+cols <- list(
+    "Tumor" = "#D43F3AFF",
+    "Normal" = "#EEA236FF",
+    "Unknown" = "#357EBDFF",
+    "Host" = "#EEA236FF",
+    "CAFs" = "#5CB85CFF",
+    "Osteoblasts" = "#B8B8B8FF",
+    "Pericytes" = "#9632B8FF",
+    "Neuronal" = "#46B8DAFF",
+    "Chondrocytes" = "#90302DFF",
+    "T cells" = "#A66D04FF",
+    "B cells" = "#2D577FFF",
+    "NK cells" = "#3E7E3EFF",
+    "TAMs" = "#7D7D7DFF",
+    "DC" = "#6D1D87FF",
+    "Mast" = "#097F9AFF",
+    "Monocytes" = "#FF6E6AFF",
+    "Endothelial cells" = "#FFBB70FF",
+    "MP Progenitor" = "#68A4E3FF",
+    "Fibrogenic" = "#79D379FF",
+    "Basal Progenitor" = "#CDCDCDFF",
+    "Proliferative" = "#BF6BE2FF",
+    "Interactive" = "#69D1F3FF",
+    "COMA" = "#DB00FF",
+    "Fibroblasts" = "#00B3FF",
+    "Alv Macrophages" = "#00FFD1",
+    "Epithelial cells" = "#0029FF",
+    "Neutrophils" = "#FF00D6",
+    "Smooth muscle" = "#00FF47",
+    "Erythrocytes" = "#00FFE0",
+    "MSC" = "#FFE500",
+    "Muscle cells" = "#00D1FF",
+    "ILCs" = "#FF7A00",
+    "Basal" = "#FFB300",
+    "Progenitor" = "#0099FF",
+    "Epithelial_Endothelial" = "#EEA236FF",
+    "Immune_Lymphoid" = "#357EBDFF",
+    "Immune_Myeloid" = "#5CB85CFF",
+    "Mesenchymal" = "#B8B8B8FF") 
+for (names in c(
+                "soragni_patient_mets_after_harmony",
+                "soragni_patient_prim_after_harmony",
+                "collins_primary_merged_after_harmony",
+                "collins_mets_merged_after_harmony")) {
+    obj <- 
+        qs::qread(str_c("output/seurat_objects/validation/before_harmony/",
+                    names,
+                    "_annotated.qs"))
+    obj$Ann_Level2 <- 
+        str_replace_all(obj$Ann_Level3,
+                        c(
+                          # TAMs and Macrophages
+                          "^Angio_TAMs$" = "TAMs",
+                          "^IFN_TAMs$" = "TAMs",
+                          "^Inflam_TAMs$" = "TAMs",
+                          "^Osteoclast_TAMs$" = "TAMs",
+                          "^Prolif_TAMs$" = "TAMs",
+                          "^Reg_TAMs$" = "TAMs",
+                          "^Scar_TAMs$" = "TAMs",
+                          "^Fibrogenic_TAMs$" = "TAMs",
+                          "^TAMs$" = "TAMs",
+                          "^Alv_TAMs$" = "Alv_Macrophages",
+                          "^Alv_Macrophages$" = "Alv_Macrophages",
+                          "^Int_Macrophages$" = "Int_Macrophages",
+                          "^Adv_TAMs$" = "TAMs",
+                          "^Adv_Macrophages$" = "TAMs",
+                          "^cMonocytes$" = "Monocytes",
+                          "^ncMonocytes$" = "Monocytes",
+                          # T cells
+                          "^CD4_T$" = "T_cells",
+                          "^CD8_T$" = "T_cells",
+                          "^Naive_T$" = "T_cells",
+                          "^T_Reg$" = "T_cells",
+                          "^Prolif_T$" = "T_cells",
+                          "^IFN_T$" = "T_cells",
+                          "^NK_T$" = "T_cells",
+                          "^Effector_T$" = "T_cells",
+                          "^Lymphocytes$" = "T_cells",
+                          "^Memory_T$" = "T_cells",
+                          # B cells
+                          "^Memory_B$" = "B_cells",
+                          "^Mature_B$" = "B_cells",
+                          "^Naive_B$" = "B_cells",
+                          "^Plasma_B$" = "B_cells",
+                          # DCs
+                          "^Plasmocytoid_DC$" = "DC",
+                          "^pDC$" = "DC",
+                          "^DC1$" = "DC",
+                          "^DC2$" = "DC",
+                          "^Migratory_DC$" = "DC",
+                          "^PreDC$" = "DC",
+                          "^preDC$" = "DC",
+                          # Endothelial
+                          "^EC_Blood$" = "Endothelial_cells",
+                          "^EC_Lymphatic$" = "Endothelial_cells",
+                          "^EC_Artery$" = "Endothelial_cells",
+                          "^EC_Capillary$" = "Endothelial_cells",
+                          "^EC_Vein$" = "Endothelial_cells",
+                          "^Endothelial_Artery$" = "Endothelial_cells",
+                          "^Endothelial_Capillary$" = "Endothelial_cells",
+                          "^Endothelial_Vein$" = "Endothelial_cells",
+                          "^Endothelial_Lymphatic$" = "Endothelial_cells",
+                          "^Endothelial_Prolif$" = "Endothelial_cells",
+                          "^Capillary_Aerocyte$" = "Endothelial_cells",
+                          "^Endothelial_General$" = "Endothelial_cells",
+                          "^Endothelial_Activated$" = "Endothelial_cells",
+                          # Epithelial
+                          "^Alv_EpithelialT1$" = "Epithelial_cells",
+                          "^Alv_EpithelialT2$" = "Epithelial_cells",
+                          "^Transitional_AT$" = "Epithelial_cells",
+                          "^Prolifarating_AT$" = "Epithelial_cells",
+                          "^AT1$" = "Epithelial_cells",
+                          "^AT2$" = "Epithelial_cells",
+                          "^Club_cells$" = "Epithelial_cells",
+                          "^Ciliated_cells$" = "Epithelial_cells",
+                          "^Tuft_cells$" = "Epithelial_cells",
+                          "^Erythroblast$" = "Erythrocytes",
+                          # CAFs and Fibroblasts
+                          "^Myofibroblasts$" = "Fibroblasts",
+                          "^Normal_fibroblasts$" = "Fibroblasts",
+                          "^Adv_CAFs$" = "CAFs",
+                          "^Alv_CAFs$" = "CAFs",
+                          "^apCAFs$" = "CAFs",
+                          "^adiCAFs$" = "CAFs",
+                          "^iCAFs$" = "CAFs",
+                          "^mCAFs$" = "CAFs",
+                          "^myCAFs$" = "CAFs",
+                          "^pCAFs$" = "CAFs",
+                          "^Peribronchial_CAFs$" = "CAFs",
+                          "^Subpleural_CAFs$" = "CAFs",
+                          "^subpleural_CAFs$" = "CAFs",
+                          "^peribronchial_CAFs$" = "CAFs",
+                          "^adCAFs$" = "CAFs",
+                          "^Adv_Fibroblasts$" = "Fibroblasts",
+                          "^Alv_Fibroblasts$" = "Fibroblasts",
+                          # Other mesenchymal
+                          "^MSC$" = "MSC",
+                          "^Pericytes$" = "Pericytes",
+                          "^Smooth_muscle$" = "Smooth_muscle",
+                          "^Chondrocytes$" = "Chondrocytes",
+                          "^Osteoblast$" = "Osteoblasts",
+                          "^Osteoblasts$" = "Osteoblasts",
+                          "^Osteoblast_Stressed$" = "Osteoblasts",
+                          # Misc
+                          "^Mast_cells$" = "Mast",
+                          "^Mast1$" = "Mast",
+                          "^Mast2$" = "Mast",
+                          "^Neutrophils$" = "Neutrophils",
+                          "^Erythrocytes$" = "Erythrocytes",
+                          "^Monocytes$" = "Monocytes",
+                          "^Tumor_Metabolic$" = "Tumor"
+                        ))
 
-object <-
-    Annotate_celltypes(obj = obj,
-                        markers = markers,
-                        resolution = 0.2,
-                        modulescore_label = "modulescore",
-                        modulescore_cutoff = 0.5,
-                        recursive_cluster = TRUE,
-                        species = "human",
-                        aggr_ref = TRUE,
-                        with_tumor = TRUE,
-                        tissue_location = "lung")
+    obj$Ann_Level1 <- 
+        str_replace_all(obj$Ann_Level2,
+                        c(
+                          "^B_cells$" = "Immune_Lymphoid",
+                          "^T_cells$" = "Immune_Lymphoid",
+                          "^NK_cells$" = "Immune_Lymphoid",
+                          "^Alv_Macrophages$" = "Immune_Myeloid",
+                          "^CAFs$" = "Mesenchymal",
+                          "^MSC$" = "Mesenchymal",
+                          "^Pericytes$" = "Mesenchymal",
+                          "^Smooth_muscle$" = "Mesenchymal",
+                          "^Chondrocytes$" = "Mesenchymal",
+                          "^Osteoblasts$" = "Mesenchymal",
+                          "^Fibroblasts$" = "Mesenchymal",
+                          "^Epithelial_cells$" = "Epithelial_Endothelial",
+                          "^Endothelial_cells$" = "Epithelial_Endothelial",
+                          "^DC$" = "Immune_Myeloid",
+                          "^TAMs$" = "Immune_Myeloid",
+                          "^Macrophages$" = "Immune_Myeloid",
+                          "^Monocytes$" = "Immune_Myeloid",
+                          "^Neutrophils$" = "Immune_Myeloid",
+                          "^Mast$" = "Immune_Myeloid",
+                          "^Erythrocytes$" = "Immune_Myeloid",
+                          "^Tumor$" = "Tumor",
+                          "^Muscle_cells$" = "Mesenchymal",
+                          "^ILCs$" = "Immune_Lymphoid",
+                          "^Neuronal$" = "Mesenchymal",
+                          "^Basal$" = "Mesenchymal",
+                          "^Progenitor$" = "Mesenchymal"
+                        ))
 
-dimplot_better(object, group_by = "Ann_Level1") +
-    NoLegend()
+    obj$Ann_Level0 <- 
+        str_replace_all(obj$Ann_Level1,
+                        c("^Immune_Myeloid$" = "Host",
+                          "^Epithelial_Endothelial$" = "Host",
+                          "^Immune_Lymphoid$" = "Host",
+                          "^Mesenchymal$" = "Host"))
 
-FeaturePlot(object, features = c("RUNX2", "COL1A1", "SATB2", "COL1A2")) +
+    all_dimplot <- list()
+    for (sample in unique(obj$sample_name)) {
+        obj_sam <-
+            subset(obj,
+                sample_name == sample) %>%
+            process_seurat()
+        entire_matrix <- obj_sam@assays$RNA$counts
+
+        cell_ranks <-
+            AUCell::AUCell_run(exprMat = entire_matrix,
+                               geneSets = c("COL1A1", "COL1A2", "SATB2", "RUNX2"))
+        
+        obj_sam[["OS_markers"]] <- AUCell::getAUC(cell_ranks)[1,]
+
+        obj_sam$plot_labels <-
+            obj_sam$Ann_Level2 %>%
+            as.character() %>%
+            gsub("_", " ", .)
+
+        all_dimplot[[sample]] <-
+            (DimPlot(obj_sam,
+                    group.by = "plot_labels",
+                    label.box = T,
+                    pt.size = 0.5,
+                    label = T,
+                    repel = T,
+                    cols = unlist(cols),
+                    raster = F,
+                    label.size = 5) +
+        coord_fixed() +
+        theme_void() +
+        NoLegend() +
+        theme(aspect.ratio=1) +
+        ggtitle(sample)) +
+        (FeaturePlot(obj_sam,
+                    features = "OS_markers") +
+        theme_void() +
+        coord_fixed())
+        ggsave(str_c("output/figures/validation/reference_validation/",
+                    names,
+                    "_",
+                    sample,
+                    "_annotated_dimplot.png"),
+            all_dimplot[[sample]],
+            width = 16,
+            height = 8,
+            limitsize = FALSE)
+    }
+    panel_plot <-
+        patchwork::wrap_plots(all_dimplot,
+                            height = length(all_dimplot) * 8,
+                            width = 16,
+                            ncol = 1)
+    if (!dir.exists("output/figures/validation/reference_validation/")) {
+        dir.create("output/figures/validation/reference_validation/",
+                    recursive = TRUE)
+    }
+    ggsave(str_c("output/figures/validation/reference_validation/",
+                names,
+                "_annotated_panel_plot.png"),
+        panel_plot,
+        width = 16,
+        height = length(all_dimplot) * 8,
+        limitsize = FALSE)
+}
+    
+dimplot_better(object,
+               group_by = c("sample_name")) +
     NoLegend()
 ```

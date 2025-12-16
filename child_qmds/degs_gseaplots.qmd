@@ -2266,10 +2266,10 @@ for (names in c("patient_prim_cancer_cells",
     
     dotplot <-
         DotPlot(object,
-                features = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3"),
+                features = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8"),
                 scale = F,
                 group.by = "Ann_Level3")
-    for (features in c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3")) {
+    for (features in c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8")) {
         featureplot <- 
             FeaturePlot(object,
                         features = features,
@@ -2309,6 +2309,271 @@ for (names in c("patient_prim_cancer_cells",
  
 }
 
+# put primary and metastatic samples side by side
+patient_xeno_prim_mets <- 
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs")
+
+#
+VlnPlot(object = patient_xeno_prim_mets,
+            features = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8"),
+            group.by = "Ann_Level3",
+            split.by = "unique",
+            pt.size = 0) +
+    scale_y_continuous(labels = scales::comma) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+    ggtitle("Violin plot of proteomics markers in patient and xenograft tumor cells") +
+    theme(plot.title = element_text(hjust = 0.5))
+
+# busra make violin boxplot but also calculate the average expression
+vioin_boxplot_data <- 
+    FetchData(object = patient_xeno_prim_mets,
+                vars = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8",
+                        "Ann_Level3", "unique")) %>%
+    pivot_longer(cols = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8"),
+                names_to = "gene",
+                values_to = "expression")
+vioin_boxplot_data_summary <-
+    vioin_boxplot_data %>%
+    group_by(Ann_Level3, unique, gene) %>%
+    summarise(mean_expression = mean(expression),
+                median_expression = median(expression),
+                sd_expression = sd(expression),
+                n = n(),
+                se_expression = sd_expression / sqrt(n))
+desired_order <- c("patient_prim", "patient_mets", "xeno_prim_human", "xeno_mets_human")
+vioin_boxplot_data <- vioin_boxplot_data %>%
+    mutate(unique = factor(unique,
+                            levels = c(desired_order, setdiff(unique(unique), desired_order))))
+
+violin_plot <-
+    ggplot(vioin_boxplot_data,
+            aes(x = gene,
+                y = expression,
+                fill = unique)) +
+        geom_violin(position = position_dodge(width = 0.9),
+                    scale = "width",
+                    trim = TRUE) +
+        geom_boxplot(position = position_dodge(width = 0.9),
+                    width = 0.1,
+                    outlier.shape = NA) +
+        facet_wrap(~Ann_Level3, ncol = 1) +
+        theme_bw() +
+        scale_y_continuous(labels = scales::comma) +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+        ggtitle("Violin and boxplot of proteomics markers in patient and xenograft tumor cells") +
+        theme(plot.title = element_text(hjust = 0.5))
+ggsave(str_c("output/figures/tumor_only/",
+            "patient_xeno_prim_mets_busra_proteomics_violin_boxplot.png"),
+        width = 15,
+        height = 15,
+        bg = "white")
+
+# do just by unique and not by Ann_Level3
+vioin_boxplot_data2 <- 
+    FetchData(object = patient_xeno_prim_mets,
+                vars = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8",
+                        "unique")) %>%
+    pivot_longer(cols = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8"),
+                names_to = "gene",
+                values_to = "expression")
+vioin_boxplot_data2_summary <-
+    vioin_boxplot_data2 %>%
+    group_by(unique, gene) %>%
+    summarise(mean_expression = mean(expression),
+                median_expression = median(expression),
+                sd_expression = sd(expression),
+                n = n(),
+                se_expression = sd_expression / sqrt(n))
+desired_order <- c("patient_prim", "patient_mets", "xeno_prim_human", "xeno_mets_human")
+vioin_boxplot_data2 <- vioin_boxplot_data2 %>%
+    mutate(unique = factor(unique,
+                            levels = c(desired_order, setdiff(unique(unique), desired_order))))
+violin_plot2 <-
+    ggplot(vioin_boxplot_data2,
+           aes(x = unique,
+               y = expression,
+               fill = unique)) +
+    geom_violin(position = position_dodge(width = 0.9),
+                scale = "width",
+                trim = TRUE) +
+    geom_boxplot(position = position_dodge(width = 0.9),
+                 width = 0.1,
+                 outlier.shape = NA) +
+    facet_wrap(~ gene, ncol = 1, scales = "free_y") +
+    theme_bw() +
+    scale_y_continuous(labels = scales::comma) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          strip.text = element_text(face = "bold")) +
+    labs(x = "Sample group", y = "Expression",
+         title = "Violin and boxplot of proteomics markers by gene") +
+    theme(plot.title = element_text(hjust = 0.5))
+ggsave(str_c("output/figures/tumor_only/",
+            "patient_xeno_prim_mets_busra_proteomics_violin_boxplot_not_by_AnnLevel3.png"),
+        plot = violin_plot2,
+        width = 10,
+        height = 20,
+        bg = "white")
+DotPlot(object = patient_xeno_prim_mets,
+            features = "FGFR1",
+            group.by = "unique") +
+    #scale_y_continuous(labels = scales::comma) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+    ggtitle("Violin plot of proteomics markers in patient and xenograft tumor cells") +
+    theme(plot.title = element_text(hjust = 0.5))
 
 
+# patient_prim EOD, LOD genes dotplot
+patient_xeno_prim_mets <- 
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs") %>%
+    subset(unique %in% c("patient_prim", "patient_mets"))
+DotPlot(object = patient_xeno_prim_mets,
+            cols = "RdBu",
+            features = c("FOS", "FOSB", "JUN", "JUNB", "EGR1", "RUNX2") %>% unique(),
+            group.by = "unique",
+            split.by = "Ann_Level3",
+            scale = F) +
+    scale_y_discrete(labels = function(x) gsub("_", " ", x)) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+    coord_fixed() +
+    ggtitle(str_c("Patient primary and metastatic tumor cells - Diana's wanted genes")) +
+    theme(plot.title = element_text(hjust = 0.5))
+
+# do just by unique and not by Ann_Level3
+vioin_boxplot_data2 <- 
+    FetchData(object = patient_xeno_prim_mets,
+                vars = c("FOS", "FOSB", "JUN", "JUNB", "EGR1",
+                        "unique")) %>%
+    pivot_longer(cols = c("FOS", "FOSB", "JUN", "JUNB", "EGR1"),
+                names_to = "gene",
+                values_to = "expression")
+vioin_boxplot_data2_summary <-
+    vioin_boxplot_data2 %>%
+    group_by(unique, gene) %>%
+    summarise(mean_expression = mean(expression),
+                median_expression = median(expression),
+                sd_expression = sd(expression),
+                n = n(),
+                se_expression = sd_expression / sqrt(n))
+
+desired_order <- c("patient_prim", "patient_mets")
+vioin_boxplot_data2 <- vioin_boxplot_data2 %>%
+    mutate(unique = factor(unique,
+                            levels = c(desired_order, setdiff(unique(unique), desired_order))))
+violin_plot2 <-
+    ggplot(vioin_boxplot_data2,
+           aes(x = unique,
+               y = expression,
+               fill = unique)) +
+    geom_violin(position = position_dodge(width = 0.9),
+                scale = "width",
+                trim = TRUE) +
+    geom_boxplot(position = position_dodge(width = 0.9),
+                 width = 0.1,
+                 outlier.shape = NA) +
+    facet_wrap(~ gene, ncol = 1, scales = "free_y") +
+    theme_bw() +
+    scale_y_continuous(labels = scales::comma) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          strip.text = element_text(face = "bold")) +
+    labs(x = "Sample group", y = "Expression",
+         title = "Violin and boxplot of Diana's wanted genes") +
+    theme(plot.title = element_text(hjust = 0.5))
+
+ggsave(str_c("output/figures/tumor_only/",
+            "Diana_wants_violin_boxplot.png"),
+        plot = violin_plot2,
+        width = 10,
+        height = 15,
+        bg = "white")
+
+Diana_wants <- c("FOS", "FOSB", "JUN", "JUNB", "EGR1")
+EOD <- c("RUNX2", "SP7", "MEF2C", "SATB2", "ZNF148")
+LOD <- c("FOSL1", "FOSL2", "JUN", "ATF4", "NFATC2")
+
+plot1 <- 
+    (DotPlot(object = patient_prim,
+                    cols = "RdBu",
+                    features = c(Diana_wants, EOD, LOD) %>% unique(),
+                    group.by = "Ann_Level3",
+                    scale = F) +
+                scale_y_discrete(labels = function(x) gsub("_", " ", x)) +
+                theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+                coord_fixed() +
+                ggtitle(str_c("Primary")) +
+                theme(plot.title = element_text(hjust = 0.5)))/
+    (DotPlot(object = patient_mets,
+            cols = "RdBu",
+            features = c(Diana_wants, EOD, LOD) %>% unique(),
+            group.by = "Ann_Level3",
+            scale = F) +
+        scale_y_discrete(labels = function(x) gsub("_", " ", x)) +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+        coord_fixed() +
+        ggtitle(str_c("metastatic")) +
+        theme(plot.title = element_text(hjust = 0.5)))
+ggsave(str_c("output/figures/tumor_only/not_scaled_patient_prim_mets_EOD_LOD_dotplot.png"),
+        plot = plot1,
+        width = 8,
+        height = 8,
+        bg = "white")
+
+
+EOD_LOD_genes <-
+    readxl::read_xlsx("input/downloads/EOD_LOD_Genesets.xlsx",
+                sheet = 1) %>%
+    as.data.frame() %>%
+    select(gene, Cluster)
+
+for (cluster in unique(EOD_LOD_genes$Cluster)) {
+    EOD_genes <- 
+        EOD_LOD_genes %>%
+        filter(Cluster == cluster) %>%
+        pull(gene)
+
+    LOD_genes <- 
+        EOD_LOD_genes %>%
+        filter(Cluster == cluster) %>%
+        pull(gene)
+
+        (DotPlot(object = X00006,
+                cols = "RdBu",
+                features = EOD_LOD_genes %>%
+                            filter(Cluster == "EOD") %>%
+                            pull(gene),
+                group.by = "Ann_Level3",
+                scale = T) +
+            scale_y_discrete(labels = function(x) gsub("_", " ", x)) +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+            coord_fixed() +
+            ggtitle(str_c("EOD/LOD genes - ", cluster)) +
+            theme(plot.title = element_text(hjust = 0.5)))/
+        (DotPlot(object = X00006,
+                cols = "RdBu",
+                features = EOD_LOD_genes %>%
+                            filter(Cluster == "LOD") %>%
+                            pull(gene),
+                group.by = "Ann_Level3",
+                scale = T) +
+            scale_y_discrete(labels = function(x) gsub("_", " ", x)) +
+            theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+            coord_fixed() +
+            ggtitle(str_c("EOD/LOD genes - ", cluster)) +
+            theme(plot.title = element_text(hjust = 0.5)))
+        
+    ggsave(str_c("output/figures/tumor_only/patient_prim_",
+                cluster,
+                "_EOD_LOD_dotplot.png"),
+            width = 8,
+            height = 6,
+            bg = "white")
+}
+
+VlnPlot(object = patient_mets,
+            features = c(EOD, LOD),
+            group.by = "Ann_Level3",
+            pt.size = 0) +
+    scale_y_continuous(labels = scales::comma) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+    ggtitle("Violin plot of proteomics markers in patient primary tumor cells") +
+    theme(plot.title = element_text(hjust = 0.5))
 ```

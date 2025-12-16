@@ -2413,6 +2413,7 @@ if(!dir.exists("output/seurat_objects/epithelial_cells_all")){
 Epithelial_cells_all <-
     qs::qread("output/seurat_objects/epithelial_cells_all/final_epi_analysis.qs")
 
+
 # check if there is enrichment of epithelial clusters in tumor vs normal
 enrichment_cluster <-
     table(Epithelial_cells_all$seurat_clusters, Epithelial_cells_all$unique) %>%
@@ -2457,6 +2458,7 @@ dimplot1 <-
     NoLegend() +
     theme(aspect.ratio=1)+
     theme(plot.title = element_text(hjust = 0.5, size = 14))
+
 
 ggsave("output/figures/epithelial_analysis/dimplot_epithelial_clusters.png",
     dimplot1,
@@ -2562,8 +2564,47 @@ Epithelial_cells_all$Annotation_detailed <-
     str_replace_all(Epithelial_cells_all$seurat_clusters,
                     c("^0$" = "AT1",
                     "^1$" = "AT2",
-                    "^2" = "Mesenchymal_like"),
+                    "^2" = "Basaloids"),
     Epithelial_cells_all$Ann_Level3)
+
+ryans_dimplots <-
+    (DimPlot(Epithelial_cells_all %>% subset(unique == "tumor"),
+                group.by = "Annotation_detailed",
+                label.box = T,
+                pt.size = 0.5,
+                label = T,
+                repel = T,
+                cols = plot_cols[1:5],
+                raster = F,
+                label.size = 5) +
+        coord_fixed() +
+        theme_void() +
+        NoLegend() +
+        theme(aspect.ratio=1)+
+        ggtitle("Tumor Associated AT")+
+        theme(plot.title = element_text(hjust = 0.5, size = 14)))+
+    (DimPlot(Epithelial_cells_all %>% subset(unique == "normal"),
+                group.by = "Annotation_detailed",
+                label.box = T,
+                pt.size = 0.5,
+                label = T,
+                repel = T,
+                cols = plot_cols[1:5],
+                raster = F,
+                label.size = 5) +
+        coord_fixed() +
+        theme_void() +
+        NoLegend() +
+        theme(aspect.ratio=1)+
+        ggtitle("Healthy AT")+
+        theme(plot.title = element_text(hjust = 0.5, size = 14)))
+
+ggsave("output/figures/epithelial_analysis/dimplot_epithelial_annotation_detailed_tumor_vs_normal.png",
+    ryans_dimplots,
+    width = 10,
+    height = 5,
+    bg = "white"
+)
 
 plot_color <-
     c(Mesenchymal_like = "#357EBDFF",
@@ -5201,7 +5242,39 @@ ggsave("output/figures/epithelial_analysis/for_wetlab/FN1_tumor_vln_boxplot.png"
 epithelial <-
     subset(combined_obj, Ann_l3 == "Epithelial")
 
-genes <- c("SDC4","ITGA3","ITGB1","ITGAV","CD44", "SDC1")
+dimplot_better(epithelial,
+                    group_by = "details")
+
+
+genes <- c("SDC4","ITGA3","ITGB1","ITGAV","CD44", "SDC1", "FN1", "VIM",
+            "SERPINE1", "FAP", "TNC", "TAGLN", "PLOD2")
+more_genes <- c(
+    "ITGA1","ITGA2","ITGA3","ITGA4","ITGA5","ITGA6","ITGA7","ITGA8","ITGA9",
+    "ITGA10","ITGA11","ITGAD","ITGAE","ITGAL","ITGAM","ITGAV","ITGAX",
+    "ITGB1","ITGB2","ITGB3","ITGB4","ITGB5","ITGB6","ITGB7","ITGB8"
+)
+DotPlot(epithelial,
+        features = "ZEB1",
+        group.by = "details",
+        scale = F,
+        cols = "RdBu")
+dotplot_intgrins <-
+    DotPlot(epithelial,
+            features = c(genes, more_genes) %>% unique(),
+            group.by = "details",
+            scale = T,
+            cols = "RdBu") +
+    theme_minimal(base_size = 12) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                legend.position = "right") +
+    coord_flip() +
+    ggtitle("Expression of Integrins in Epithelial Cells")
+
+ggsave("output/figures/epithelial_analysis/for_wetlab/dotplot_integrins_fn1_receptors_epi.png",
+        dotplot_intgrins,
+        width = 6,
+        height = 10,
+        bg = "white")
 
 df_plot <- FetchData(epithelial, vars = c(genes, "details")) %>%
     tibble::rownames_to_column("cell") %>%
@@ -5225,7 +5298,7 @@ if(!dir.exists("output/figures/epithelial_analysis/for_wetlab")) {
 ggsave("output/figures/epithelial_analysis/for_wetlab/violin_boxplot_fn1_receptors_in_epi.png",
         violin_boxplot_fn1_receptors_in_epi,
         width = 7,
-        height = 7,
+        height = 10,
         bg = "white")
 
 
@@ -5365,6 +5438,199 @@ violin_boxplot <-
 # Optionally save
 ggsave("output/figures/epithelial_analysis/for_wetlab/top20_FN1_downstream_violin_boxplot.png",
              violin_boxplot, width = 10, height = 10, bg = "white")
+
+
+```
+
+## DEGS and GSEA
+```{r tumor_epit_degs_gsea}
+
+# load the object
+combined_obj <-
+    qs::qread("output/seurat_objects/HBEC_OS17_COX_combined_obj.qs") %>%
+    subset(nCount_RNA < 50000) %>%
+    process_seurat(reduction = "harmony",
+                    resolution = 0.1)
+
+dimplot_better(combined_obj,
+                group_by = "details")
+FeaturePlot(combined_obj,
+            features = c(Diana_wants, EOD, LOD) %>% unique(),
+            ncol = 5) +
+    plot_annotation(title = "Combined Object: FN1, KRT8, VIM Expression")
+
+tumor <-
+    subset(combined_obj, Ann_l3 == "Tumor") %>%
+    RunHarmony(group.by.vars = c("sample_name", "") %>%
+    # subset(details == "Day5") %>%
+    process_seurat(resolution = 0.3) 
+dimplot_better(tumor,
+                group_by = "seurat_clusters")
+tumor$deta <- paste0(tumor$details, "_", tumor$seurat_clusters)
+
+DimPlot(tumor,
+            group.by = "details",
+            label = TRUE,
+            reduction = "pca",
+            dims = c(2,3),
+            label.size = 5) +
+    plot_annotation(title = "Tumor Cells Colored by Timepoint and Cluster")
+Idents(tumor) <- "details"
+VlnPlot(tumor,
+            features = c("FN1", "KRT8", "KRT18", "VIM", "ZEB1"),
+            group.by = "deta",
+            ncol = 1)
+(dimplot_better(tumor,
+                group_by = "details")/
+FeaturePlot(tumor,
+            features = "KRT8") +
+    plot_annotation(title = "Tumor Cells Colored by Timepoint and Cluster"))
+
+Diana_wants <- c("FOS", "FOSB", "JUN", "JUNB", "EGR1")
+EOD <- c("RUNX2", "SP7", "MEF2C", "SATB2", "ZNF148")
+LOD <- c("FOSL1", "FOSL2", "JUN", "ATF4", "NFATC2")
+DotPlot(tumor,
+        features = c(Diana_wants, EOD, LOD) %>% unique(),
+        group.by = "seurat_clusters",
+        scale = F,
+        cols = "RdBu") +
+    theme_minimal(base_size = 12) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                legend.position = "right") +
+    coord_flip() +
+    ggtitle("Expression of Transcription Factors in Tumor Cells")
+
+Epithelial <-
+    subset(combined_obj, Ann_l3 == "Epithelial")
+
+For (celltypes in unique(combined_obj$Ann_l3)) {
+    sub_object <-
+        subset(combined_obj, Ann_l3 == celltypes)
+    Idents(sub_object) <- "details"
+    degs_day5_vs_day0 <-
+        FindMarkers(object = sub_object,
+                    ident.1 = "Day5",
+                    ident.2 = "Day0")
+    degs_i_want <-
+        degs_day5_vs_day0 %>%
+        rownames_to_column("gene") %>%
+        filter(p_val_adj < 0.05 & avg_log2FC > 0.25) %>%
+        mutate(pct_diff = pct.1 - pct.2) %>%
+        arrange(desc(pct_diff)) %>%
+        filter(pct_diff > 0.10) %>%
+        arrange(desc(avg_log2FC))
+    
+    # perform gsea on the degs
+    gene_list <- degs_i_want$avg_log2FC
+    names(gene_list) <- degs_i_want$gene
+    gene_list <- sort(gene_list, decreasing = TRUE)
+
+    #GSEA Miltilevel
+    cat_tib <- dplyr::tribble(
+        ~category, ~subcategory,   ~cat_expl,
+        "H",        "NA",          "Hallmark_paths",
+        "C2",       "CP:REACTOME", "Reactome"
+        )
+
+    all_gsea_results <- list()
+    for (i in 1:nrow(cat_tib)) {
+        cat <- cat_tib$category[i]
+        subcat <- cat_tib$subcategory[i]
+        expl <- cat_tib$cat_expl[i]
+
+        if (subcat == "NA") {
+            gsea_ref <- 
+                msigdbr::msigdbr(species = "Homo sapiens",
+                                category = cat,
+                                subcategory = NA) %>%
+                split(x = .$gene_symbol, f = .$gs_name)
+            } else {
+            gsea_ref <- 
+                msigdbr::msigdbr(species = "Homo sapiens",
+                                category = cat,
+                                subcategory = subcat) %>%
+                split(x = .$gene_symbol, f = .$gs_name)
+            }
+        output <-
+            fgsea::fgseaMultilevel(gsea_ref,
+                                    gene_list,
+                                    minSize = 10,
+                                    maxSize = 500,
+                                    nPermSimple = 10000)
+        gsea_output <-
+            output %>%
+            dplyr::arrange(desc(NES)) %>%
+            filter(padj < 0.05) %>%
+            group_by(pathway) %>%
+            mutate(leadingEdge = unlist(leadingEdge) %>%
+                        str_c(collapse = ", ")) %>%
+            ungroup() %>%
+            na.omit() %>%
+            filter(NES > 0)
+        # save to the list
+        all_gsea_results[[cat]] <- gsea_output
+    }
+
+    All_pathways <-
+        bind_rows(all_gsea_results, .id = "category") %>%
+        as.data.frame()
+
+    # make a dotplot of the top 5 up and down regulated pathways in each comparison
+    All_pathways$sample <- "mesenchymal_vs_AT1AT2"
+    All_pathways_for_plot <-
+        All_pathways %>%
+        dplyr::select(pathway,
+                    NES,
+                    size,
+                    padj) %>%
+        arrange(desc(NES)) %>%
+        mutate(pathway = as.factor(pathway) %>%
+                    str_replace_all("_", " ") %>%
+                    str_wrap(80) %>%
+                    fct_reorder(NES),
+                sample = "Mesenchymal vs AT1/AT2",
+                order = seq_len(n()),
+                justify_y = dplyr::if_else(NES > 0, 1, 0),
+                y_pos = dplyr::if_else(NES > 0, -0.1, 0.1))
+
+    # make a plot
+    gsea_plot <- 
+        gsea_dotplot(data = All_pathways_for_plot, x_col = "NES")
+    
+    ggsave(str_c("output/figures/epithelial_analysis/for_wetlab/gsea_",
+                celltypes,
+                "_day5_vs_day0.png"),
+            gsea_plot,
+            width = 8,
+            height = 6,
+            bg = "white")
+    
+}
+
+
+#leading edge of top pathways
+leading_edge_list <- list()
+for (pathway in unique(All_pathways$pathway)) {
+    leading_edge_genes <-
+        All_pathways %>%
+        filter(pathway == !!pathway) %>%
+        pull(leadingEdge) %>%
+        str_split(", ") %>%
+        unlist()
+    leading_edge_list[[pathway]] <- leading_edge_genes
+    
+}
+
+DotPlot(epithelial,
+        features = leading_edge_list$HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION,
+        group.by = "details",
+        scale = T,
+        cols = "RdBu") +
+    theme_minimal(base_size = 12) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                legend.position = "right") +
+    coord_flip() +
+    ggtitle("Expression of Leading Edge Genes from GSEA in Epithelial Cells")
 
 
 ```
