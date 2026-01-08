@@ -642,6 +642,11 @@ run_degs <- function(sobject,
         batch_df <-
             data.frame(sample_name = colnames(pseudobulk))
 
+        organism_details <-
+            sobject@meta.data %>%
+            select(all_of(c("sample_name", "organism", "unique"))) %>%
+            distinct()
+        
         batch_df_new <-
             tibble(col_label = colnames(pseudobulk),
                    sample_name = colnames(pseudobulk) %>%
@@ -649,8 +654,16 @@ run_degs <- function(sobject,
                    cluster_no = str_remove(colnames(pseudobulk), ".+_")) %>%
             left_join(batch_df) %>%
             mutate(sample_name = str_replace_all(sample_name, "-", "_")) %>%
-            mutate(organism = sobject@meta.data[[organism_col]][[1]]) %>%
+            # mutate(organism = sobject@meta.data[[organism_col]][[1]]) %>%
             mutate(cluster_no = str_replace_all(cluster_no, "-", "_"))
+        
+        # add the organism column from the organism_details
+        batch_df_new <- 
+            batch_df_new %>%
+            left_join(organism_details, by = "sample_name") %>%
+            select(col_label, cluster_no, sample_name, organism)
+
+
         #add the datasource and method as batch in batch_df_new from all_samples_csv for each sample_name
         new_all_samples_csv <-
             all_samples_csv %>%
@@ -794,7 +807,7 @@ run_gsea <- function(degs_result,
 #| cache.vars: [gsea_dotplot, gsea_barplot]
 gsea_dotplot <- function(data, x_col = "z_score") {
     lab4plot <-
-        tibble(y = c(-2.5, 2.5),
+        tibble(y = c(-1, 1),
                x = c(0.2, 0.2),
                label = c("Downregulated", "Upregulated"))
 
@@ -820,7 +833,7 @@ gsea_dotplot <- function(data, x_col = "z_score") {
                       y = y,
                       label = label),
                   fontface = "bold",
-                  size = 2.5) +
+                  size = 3) +
         scale_fill_manual(values = plot_cols,
                           name = paste0(x_col, " > 0")) +
         theme(strip.background = element_rect(color = "white",
@@ -842,7 +855,7 @@ gsea_dotplot <- function(data, x_col = "z_score") {
              y = "NES",
              x = "") +
         theme(plot.title = element_text(hjust = 0.5)) +
-        ylim(-6, 6) +
+        ylim(-3, 3) +
         scale_color_gradient(low = plot_cols[2],
                              high =plot_cols[1])
 
@@ -852,7 +865,7 @@ gsea_dotplot <- function(data, x_col = "z_score") {
 
 gsea_barplot <- function(data, x_col = "z_score") {
     lab4plot <-
-        tibble(y = c(-3, 3),
+        tibble(y = c(-1, 1),
                x = c(0.2, 0.2),
                label = c("Downregulated", "Upregulated"))
 
@@ -901,7 +914,7 @@ gsea_barplot <- function(data, x_col = "z_score") {
              y = "NES",
              x = "") +
         theme(plot.title = element_text(hjust = 0.5)) +
-        ylim(-6, 6)
+        ylim(-3, 3)
 
     return(plot_name)
 }
@@ -1007,7 +1020,8 @@ cat_tib <- dplyr::tribble(
     # "C3",       "TFT:GTRD",    "Transcription_factor_targets",
     # "C6",       "NA",          "Oncogenic_signature",
     "C5",       "GO:BP",       "Biological_processes",
-    "C2",       "CP:REACTOME", "Reactome")
+    "C2",       "CP:REACTOME", "Reactome"
+    )
 
 make_panel_plot <- function(sobj,
                             comparison_col = "seurat_clusters",
@@ -1815,7 +1829,7 @@ optimize_harmony <- function(s_obj,
             FindNeighbors(reduction = "harmony") %>%
             FindClusters(resolution = 0.4)
         dimplot <- 
-            DimPlot(object,
+            DimPlot(s_obj,
                     group.by = dimplot_col,
                     label.size = 4,
                     label = T,

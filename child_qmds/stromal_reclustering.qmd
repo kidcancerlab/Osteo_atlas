@@ -1,4 +1,4 @@
-Recluster the normal cell types and annotate the types.
+RRecluster the normal cell types and annotate the types.
 
 ## Normal cells reclustering
 
@@ -2185,13 +2185,31 @@ for (group in c(
 
 }
 
+if (!dir.exists("output/seurat_objects/figshare_objects/")) {
+    dir.create("output/seurat_objects/figshare_objects/", recursive = TRUE)
+}
 
 
+keep_metadata <-
+    c("orig.ident", "location", "sp_pattern", "Ann_Level3", "Ann_Level2", "Ann_Level1",
+      "Ann_Level0", "sample_name", "organism", "nFeature_RNA", "model", "data_type",
+      "percent.mt", "method", "seurat_clusters", "data_source", "tumor_type",
+      "unique", "species", "nCount_RNA")
+# strip all the metadata that is not needed
+list_of_names <-
+    list.files("output/seurat_objects/figshare_objects/")
 
 
-
-
-
+for (item in list_of_names) {
+    object <-
+        qs::qread(str_c("output/seurat_objects/figshare_objects/", item))
+    # keep the metadata column from keep_metadata and remove rest
+    object@meta.data <-
+        object@meta.data[, colnames(object@meta.data) %in% keep_metadata]
+    
+    qs::qsave(x = object,
+              file = str_c("output/seurat_objects/figshare_objects/", item))
+}
 
 
 

@@ -2576,4 +2576,54 @@ VlnPlot(object = patient_mets,
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
     ggtitle("Violin plot of proteomics markers in patient primary tumor cells") +
     theme(plot.title = element_text(hjust = 0.5))
+
+# pseudobulkked gene expression for each subpopilation
+list_TF <-
+    c("RUNX2", "SATB2", "TRPS1", "NCOR1", "MEF2C",
+      "RORA", "FOS", "FOSB", "JUN", "JUNB", "EGR1",
+      "FOSL1", "FOSL2", "ATF4", "MEF2A", "ZEB1", "ZEB2",
+      "PBX1", "TCF12", "EBF1", "RERE", "ZFHX4", "SOX6") %>%
+      unique()
+for (names in unique(patient_xeno_prim_mets$unique)) {
+    object_subset <- 
+        subset(patient_xeno_prim_mets,
+                unique == names)
+    Idents(object_subset) <- "Ann_Level3"
+    markers_subset <-
+        AverageExpression(object_subset,
+                          assays = "RNA",
+                          slot = "data")$RNA %>%
+        as.data.frame() %>%
+        rownames_to_column(var = "gene")
+    
+    markers_subset <-
+        markers_subset %>%
+        filter(gene %in% list_TF)
+    
+    # make a heatmap
+    plot <-
+        markers_subset %>%
+        column_to_rownames(var = "gene") %>%
+        as.matrix() %>%
+        pheatmap::pheatmap(cluster_rows = FALSE,
+                           cluster_cols = TRUE,
+                           scale = "none",
+                           display_numbers = T,
+                           silent = T,
+                           #color = RColorBrewer::brewer.pal(n = 9, name = "RdBu"),
+                           main = str_c("Pseudobulkked TF expression - ", names))
+    ggsave(str_c("output/figures/tumor_only/pseudobulkked_",
+                names,
+                "_TF_expression_heatmap.png"),
+        plot = plot,
+        width = 8,
+        height = 6,
+        bg = "white")
+    
+    write_csv(markers_subset,
+                str_c("output/id_tumor/pseudobulkked_",
+                      names,
+                      "_patient_markers_by_AnnLevel3.csv"))
+}
+
 ```
