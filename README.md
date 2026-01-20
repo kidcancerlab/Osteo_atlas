@@ -1,5 +1,6 @@
 # OstEoCAR: A Single-Cell Atlas for Osteosarcoma 
 
+Preprint doi: https://doi.org/10.64898/2026.01.13.698472
 
 **OstEoCAR** is a comprehensive **single-cell RNA sequencing (scRNA-seq) atlas** designed to facilitate **cell type annotation and transcriptomic exploration** of **osteosarcoma** across multiple models, including **human, xenograft mice, syngeneic mice, and canine samples**.  
 
