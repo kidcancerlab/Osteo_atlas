@@ -210,7 +210,6 @@ lee_stats %>%
 ```
 
 ## Make plots with just a subset of types
-
 ```{r spatialee_plot_subset}
 y_celltypes <-
     c(
@@ -259,6 +258,136 @@ lee_stats %>%
         na_col = "darkgrey"
     )
 ```
+
+
+## Make subplot of only the cell types within the tumor
+```{r spatialee_plot_subset}
+keep_celltypes <-
+    c(
+        "myCAFs",
+        "COMA",
+        "MP_Progenitor",
+        "Prolif_TAMs",
+        "Inflam_TAMs",
+        "Basal_Progenitor",
+        "Fibrogenic",
+        "Endothelial_Capillary",
+        "Interactive",
+        "Fibrogenic_TAMs",
+        "Osteoclast_TAMs",
+        "Prolif_T",
+        "Proliferative"
+    )
+
+celltype_order_x <-
+    c(
+        "myCAFs",
+        "MP_Progenitor",
+        "COMA",
+        "Prolif_TAMs",
+        "Inflam_TAMs",
+        "Basal_Progenitor",
+        "Fibrogenic",
+        "Endothelial_Capillary",
+        "Interactive",
+        "Fibrogenic_TAMs",
+        "Osteoclast_TAMs",
+        "Prolif_T",
+        "Proliferative"
+    )
+
+# I want zero to be white, but it's not centered, so I need to jump through some hoops
+lee_vals <-
+    lee_stats %>%
+    group_by(cell_type_1, cell_type_2) %>%
+    filter(
+        sample != "OS8_Seurat" &
+            cell_type_1 %in% keep_celltypes &
+            cell_type_2 %in% keep_celltypes
+    ) %>%
+    summarize(
+        lee_stat = mean(lee_stat),
+        fdr = min(fdr),
+        .groups = "drop"
+    ) %>%
+    pull(lee_stat)
+
+red_colors_use <-
+    colorRampPalette(
+        rev(RColorBrewer::brewer.pal(n = 7, name = "Reds"))
+    )(100)#(round(mean(lee_vals > 0) * 100))
+
+blue_colors_use <-
+    colorRampPalette(
+        rev(RColorBrewer::brewer.pal(n = 7, name = "Blues"))
+    )(100)#(round(mean(lee_vals < 0) * 100))
+
+colors_use <- c(
+    tail(blue_colors_use, n = round(mean(lee_vals < 0) * 100)),
+    "#FFFFFF",
+    head(rev(red_colors_use), n = round(mean(lee_vals > 0) * 100))
+)
+
+# stuff <- tibble(color_use = color_use,
+#                 y = 1:length(color_use),
+#                 x = 1:length(color_use))
+
+# ggplot(stuff,
+#        aes(y = x, x = 1, fill = color_use)) +
+#        geom_tile() +
+#        scale_fill_manual(values = color_use) +
+#        theme(legend.position = "none") +
+#        geom_text(aes(label = color_use))
+
+breaks_use <-
+    seq(min(lee_vals), max(lee_vals), length.out = length(colors_use) + 1)
+
+zero_index <- which.min(abs(breaks_use))
+breaks_use[zero_index] <- 0
+
+lee_stats %>%
+    group_by(cell_type_1, cell_type_2) %>%
+    filter(
+        sample != "OS8_Seurat" &
+            cell_type_1 %in% keep_celltypes &
+            cell_type_2 %in% keep_celltypes
+    ) %>%
+    summarize(
+        lee_stat = mean(lee_stat),
+        fdr = min(fdr),
+        .groups = "drop"
+    ) %>%
+    dplyr::select(dplyr::all_of(c(
+        "cell_type_1",
+        "cell_type_2",
+        "lee_stat"
+    ))) |>
+    make_lower_triangle() %>%
+    tidyr::pivot_wider(
+        names_from = "cell_type_2",
+        values_from = "lee_stat",
+        values_fill = NA
+    ) %>%
+    mutate(cell_type_1 = factor(cell_type_1, levels = keep_celltypes)) %>%
+    arrange(cell_type_1) %>%
+    column_to_rownames("cell_type_1") %>%
+    select(all_of(celltype_order_x)) %>%
+    pheatmap::pheatmap(
+        file = "output/figures/spatial/lees/subset_tumor_average.pdf",
+        width = 15,
+        height = 10,
+        cluster_rows = FALSE,
+        cluster_cols = FALSE,
+        color = colors_use,
+        breaks = breaks_use,
+        cellwidth = 20,
+        cellheight = 20,
+        na_col = "darkgrey"
+    )
+```
+
+
+
 
 ```{r spatiallee_prep_cell_cats}
 qs::qread(
