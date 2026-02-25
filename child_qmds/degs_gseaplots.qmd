@@ -333,7 +333,7 @@ for (i in seq_len(nrow(object_list))) {
                         group,
                         ".qs"))
 
-    object <- 
+    object <-
         FindClusters(object,
                     resolution = res_value)
     #dimplot_better(object, group_by = "seurat_clusters") + NoLegend()
@@ -1473,87 +1473,9 @@ for (item in seq_len(nrow(combine_tumor_per_species_new))) {
                     aggregate_by = c("sample_name", "Ann_Level3"),
                     organism_col = "organism",
                     subset = FALSE,
-                    batch_var = "data_source")}
+                    batch_var = "data_source")
+    }
 
-    # for (names in unique(object$unique)) {
-    #     object_subset <- subset(object, unique == names)
-    #     # reduce data
-    #     Idents(object_subset) <- "Ann_Level3"
-    #     #dimplot_better(object_subset, group_by = "Ann_Level3")
-
-    #     markers <- 
-    #         FindAllMarkers(object = object_subset,
-    #                     min.pct = 0.3,
-    #                     logfc.threshold = 0.25,
-    #                     only.pos = T)
-    #     top_markers <- 
-    #         markers %>%
-    #         as.data.frame() %>%
-    #         group_by(cluster) %>% 
-    #         filter(p_val_adj < 0.05) %>%
-    #         mutate(pct_diff = pct.1 - pct.2) %>%
-    #         slice_max(order_by = pct_diff, 
-    #                 n = 20,
-    #                 with_ties = F) %>%
-    #         dplyr::select(gene, cluster) %>%
-    #         #filter(!cluster == "Stressed") %>%
-    #         mutate(cluster = factor(cluster, 
-    #                             levels = c("Fibrogenic", "Interactive", "MP_Progenitor",
-    #                                        "Proliferative", "Stressed", "Basal_Progenitor"))) %>%
-    #         arrange(cluster)
-
-    #     # get list of top marker genes; including each gene only once
-    #     genes <- 
-    #         top_markers$gene %>%
-    #         unique()
-    #     # change to RNA assay
-    #     DefaultAssay(object_subset) <- "RNA"
-    #     # scale data for visualization
-    #     data <-
-    #         ScaleData(object = object_subset,
-    #                     assay = "RNA")
-    #     data <-
-    #         subset(x = data,
-    #             downsample = min(500, ncol(object_subset)))
-    #     heatmap_degs <-
-    #         DoHeatmap(object = data,
-    #                 features = genes,
-    #                 group.by = "Ann_Level3")
-    #     # make dot plot
-    #     dotplot_degs <-
-    #         DotPlot(object = object_subset,
-    #             features = genes,
-    #             group.by = "Ann_Level3") +
-    #             scale_y_discrete(limits = c("Fibrogenic", "Interactive", "MP_Progenitor",
-    #                                        "Proliferative", "Stressed", "Basal_Progenitor")) +
-    #             RotatedAxis()
-    #     # save the dotplot
-    #     width <- length(unique(object_subset$Ann_Level3)) * 2
-    #     height <- length(unique(object_subset$Ann_Level3)) *2
-
-    #     combine <-
-    #         cowplot::plot_grid(heatmap_degs,
-    #                         dotplot_degs,
-    #                         ncol = 1)
-
-    #     directory <-
-    #         str_c("output/figures/final_tumor_vs_stroma/", names)
-    #     if (!dir.exists(directory)) {
-    #         dir.create(directory, recursive = TRUE)
-    #     }
-
-    #     ggsave(str_c(directory, "/", "degs_per_cluster.png"),
-    #             plot = combine,
-    #             width = width,
-    #             height = height,
-    #             bg = "white")
-
-    #     qs::qsave(object_subset,
-    #             str_c("output/seurat_objects/final_tumor_vs_stroma/",
-    #                     names,
-    #                     "_cancer_cells.qs"))
-    # }
-}
 
 
 # derive the markers for each group by intersecting the markers
