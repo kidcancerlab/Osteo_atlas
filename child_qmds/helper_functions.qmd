@@ -1283,20 +1283,20 @@ make_panel_plot <- function(sobj,
                 pheatmap::pheatmap(
                     color = colors_use,
                     breaks = breaks_use,
-                    display_numbers = TRUE,
+                    display_numbers = FALSE,
                     silent = TRUE,
                     main = paste0(cat_expl),
-                    fontsize_row = 8,
-                    fontsize_number = 8,
+                    fontsize_row = 10,
+                    fontsize_col = 10,
+                    fontsize_number = 6,
                     cluster_cols = FALSE,
-                    cluster_rows = TRUE
+                    cluster_rows = TRUE,
+                    cellwidth = 20,
+                    cellheight = 20,
+                    file = paste0("output/figures/gsea/", group, "/", label, "_",
+                                  cat_expl, "_heatmap.pdf"),
+                    width = 15
                 )
-
-            qs::qsave(
-                heatmap_plots[[cat_expl]],
-                file = paste0("output/figures/gsea/", group, "_", label, "_",
-                              cat_expl, "_heatmap.qs")
-            )
         }
     }
 

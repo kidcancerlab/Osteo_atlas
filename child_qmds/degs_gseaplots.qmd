@@ -1248,7 +1248,7 @@ for (item in seq_len(nrow(combine_tumor_per_species_new))) {
         qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
                         comb_group,
                         ".qs")) %>%
-        FindClusters(resolution = res_value)
+        FindClusters(resolution = res_value, verbose = FALSE)
 
     make_panel_plot(sobj = object,
                     comparison_col = "seurat_clusters",
@@ -1450,7 +1450,7 @@ for (item in seq_len(nrow(combine_tumor_per_species_new))) {
         qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
                         comb_group,
                         ".qs")) %>%
-        FindClusters(resolution = res_value)
+        FindClusters(resolution = res_value, verbose = FALSE)
 
 
     object$Ann_Level3 <-
