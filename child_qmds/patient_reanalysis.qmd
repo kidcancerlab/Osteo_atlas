@@ -48,8 +48,10 @@ for (i in seq_len(nrow(object_list))) {
 
     combined_corr <- tibble::tibble()
 
+    min_n_cells <- 100
+
     for (this_sample in unique(all_sample$sample_name)) {
-        if (ncol(subset(all_sample, sample_name == this_sample)) < 1000) {
+        if (ncol(subset(all_sample, sample_name == this_sample)) < min_n_cells) {
             next
         }
         # Get one sample to compare to the whole dataset
@@ -69,91 +71,106 @@ for (i in seq_len(nrow(object_list))) {
                                 test_res = seq(0.05, 0.9, by = 0.05),
                                 summary_plot = FALSE,
                                 reduction = "harmony") %>%
-            filter(!is.na(sil_vals)) %>%
-            filter(sil_vals == max(sil_vals)) %>%
-            slice_head(n = 1) %>%
-            dplyr::pull(res_vals)
+            filter(!is.na(sil_vals))
 
-        one_sample <- FindClusters(one_sample,
-                                   resolution = sil_val,
-                                   verbose = FALSE)
+        if (nrow(sil_val) != 0) {
+            sil_val <-
+                sil_val %>%
+                filter(sil_vals == max(sil_vals)) %>%
+                slice_head(n = 1) %>%
+                dplyr::pull(res_vals)
+            
+            one_sample <- FindClusters(one_sample,
+                                       resolution = sil_val,
+                                       verbose = FALSE)
 
-        dimplot_subset <-
-            dimplot_better(one_sample,
-                           group_by = c("seurat_clusters")) +
-                ggtitle(this_sample)
+            dimplot_subset <-
+                dimplot_better(one_sample,
+                               group_by = c("seurat_clusters")) +
+                    ggtitle(this_sample)
 
-        aver_exp1 <-
-            AverageExpression(one_sample,
-                              layer = "scale.data",
-                              group.by = "seurat_clusters")$RNA %>%
-            as.data.frame() %>%
-            rename_with(~str_replace(., "g", "clust")) %>%
-            tibble::rownames_to_column(var = "gene")
+            aver_exp1 <-
+                AverageExpression(one_sample,
+                                  layer = "scale.data",
+                                  group.by = "seurat_clusters")$RNA %>%
+                as.data.frame() %>%
+                rename_with(~str_replace(., "g", "clust")) %>%
+                tibble::rownames_to_column(var = "gene")
 
-        combine_exp <-
-            left_join(aver_exp1, aver_exp2, by = "gene") %>%
-            column_to_rownames(var = "gene")
+            n_cells_key <-
+                table(one_sample$seurat_clusters, one_sample$sample_name) %>%
+                as.data.frame() %>%
+                dplyr::rename(cluster = "Var1",
+                              sample_name = "Var2",
+                              n_cells = "Freq") %>%
+                mutate(cluster = paste0("clust", cluster)) %>%
+                pull(n_cells, name = cluster)
 
-        correlation <- tibble::tibble()
-        for (clusters in colnames(aver_exp1)[-1]) {
-            for (cluster_names in colnames(aver_exp2)[-1]) {
-                correlation_calc <-
-                    cor(combine_exp[[clusters]],
-                        combine_exp[[cluster_names]],
-                        method = "spearman")
-                #append the correlations
-                correlation <-
-                    tibble::tibble(corr_val = correlation_calc) %>%
-                    mutate(small_cluster = str_c(this_sample, "_", clusters),
-                           big_cluster = cluster_names) %>%
-                    rbind(correlation)
+            combine_exp <-
+                left_join(aver_exp1, aver_exp2, by = "gene") %>%
+                column_to_rownames(var = "gene")
+
+            correlation <- tibble::tibble()
+            for (clusters in colnames(aver_exp1)[-1]) {
+                for (cluster_names in colnames(aver_exp2)[-1]) {
+                    correlation_calc <-
+                        cor(combine_exp[[clusters]],
+                            combine_exp[[cluster_names]],
+                            method = "spearman")
+                    #append the correlations
+                    correlation <-
+                        tibble::tibble(corr_val = correlation_calc) %>%
+                        mutate(small_cluster = str_c(this_sample, "_", clusters),
+                               big_cluster = cluster_names,
+                               n_cells = n_cells_key[clusters]
+                        ) %>%
+                        rbind(correlation)
+                }
             }
-        }
-        # Save the data from this sample to make a combined heatmap
-        combined_corr <- correlation %>%
-            group_by(small_cluster) %>%
-            slice_max(corr_val) %>%
-            rbind(combined_corr)
+            # Save the data from this sample to make a combined heatmap
+            combined_corr <- correlation %>%
+                group_by(small_cluster) %>%
+                slice_max(corr_val) %>%
+                rbind(combined_corr)
 
-        #make individual heatmaps
-        correlation_plot <-
-            correlation %>%
-            pivot_wider(names_from = big_cluster,
-                        values_from = corr_val) %>%
-            column_to_rownames(var = "small_cluster") %>%
-            pheatmap::pheatmap(display_numbers = TRUE,
-                               cluster_cols = FALSE,
-                               cluster_rows = FALSE,
-                               fontsize = 10,
-                               fontsize_number = 8,
-                               fontsize_row = 8,
-                               fontsize_col = 8,
-                               #breaks = c(-1, -0.5, -0.1, 0.1, 0.5, 1),
-                               silent = TRUE,
-                               color = rev(RColorBrewer::brewer.pal(5, name = "RdBu")))
+            #make individual heatmaps
+            correlation_plot <-
+                correlation %>%
+                pivot_wider(names_from = big_cluster,
+                            values_from = corr_val) %>%
+                column_to_rownames(var = "small_cluster") %>%
+                pheatmap::pheatmap(display_numbers = TRUE,
+                                   cluster_cols = FALSE,
+                                   cluster_rows = FALSE,
+                                   fontsize = 10,
+                                   fontsize_number = 8,
+                                   fontsize_row = 8,
+                                   fontsize_col = 8,
+                                   silent = TRUE,
+                                   color = rev(RColorBrewer::brewer.pal(5, name = "RdBu")))
 
-        combine_plot <-
-            cowplot::plot_grid(dimplot_main,
-                               dimplot_subset,
-                               ggplotify::as.ggplot(correlation_plot),
-                               ncol = 1)
-        if (!dir.exists(str_c("output/figures/validation/integration_validation/",
-                    object_list$group[i]))) {
-            dir.create(str_c("output/figures/validation/integration_validation/",
-                            object_list$group[i]), recursive = TRUE)
+            combine_plot <-
+                cowplot::plot_grid(dimplot_main,
+                                   dimplot_subset,
+                                   ggplotify::as.ggplot(correlation_plot),
+                                   ncol = 1)
+            if (!dir.exists(str_c("output/figures/validation/integration_validation/",
+                                  object_list$group[i]))) {
+                dir.create(str_c("output/figures/validation/integration_validation/",
+                                 object_list$group[i]), recursive = TRUE)
+            }
+            ggsave(str_c("output/figures/validation/integration_validation/",
+                         object_list$group[i],
+                         "/",
+                         this_sample,
+                         "_",
+                         object_list$group[i],
+                         ".png"),
+                  plot = combine_plot,
+                  width = 10,
+                  height = 30,
+                  bg = "white")
         }
-        ggsave(str_c("output/figures/validation/integration_validation/",
-                     object_list$group[i],
-                     "/",
-                     this_sample,
-                     "_",
-                     object_list$group[i],
-                     ".png"),
-            plot = combine_plot,
-            width = 10,
-            height = 30,
-            bg = "white")
     }
 
     combined_corr_plot <-
@@ -163,16 +180,16 @@ for (i in seq_len(nrow(object_list))) {
                 str_replace("clust", "Cluster "),
             sample_name = str_remove(small_cluster, "_clust.+"),
             big_cluster_label = str_c(big_cluster,
-                                      "\n",
-                                      "r=",
-                                      round(corr_val, 2))) %>%
+                                      "\nr=",
+                                      round(corr_val, 2),
+                                      "\nCells: ",
+                                      n_cells)) %>%
         ggplot(aes(x = cluster, y = sample_name, fill = corr_val)) +
         geom_tile(color = "grey80", linewidth = 0.5) +
         geom_text(aes(label = big_cluster_label),
-                  size = 4,
+                  size = 3,
                   fontface = "bold") +
-        scale_fill_gradient2(
-            low = "blue", mid = "white", high = "red") +
+        scale_fill_gradient2(low = "blue", mid = "white", high = "red") +
         labs(x = "Clusters in Individual Samples (if present)",
              y = "Individual Samples",
              title = paste0("Correlation of Harmonized Tumor Populations ",
@@ -194,11 +211,19 @@ for (i in seq_len(nrow(object_list))) {
               legend.position = "right",
               panel.grid = element_blank())
 
+    qs::qsave(
+        combined_corr_plot,
+        str_c("output/figures/validation/integration_validation/",
+              object_list$group[i],
+              "/",
+              "All_combined_heatmap.qs")
+    )
+
     height <- length(unique(all_sample$sample_name)) * 1 + 2
     width <- unique(combined_corr$small_cluster) %>%
         str_remove_all("^.+_") %>%
         unique() %>%
-        length() * 3 + 2
+        length() * 2 + 2
 
     ggsave(str_c("output/figures/validation/integration_validation/",
                  object_list$group[i],
