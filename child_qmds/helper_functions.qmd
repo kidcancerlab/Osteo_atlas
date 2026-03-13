@@ -1248,49 +1248,55 @@ make_panel_plot <- function(sobj,
                 aes(x = as.factor(1), y = as.factor(1)) +
                 geom_text(aes(label = "No significant pathways"))
         } else {
-        max_abs_nes <-
-            gsea_result %>%
-            bind_rows() %>%
-            pull(NES) %>%
-            max() %>%
-            ceiling()
+            max_abs_nes <-
+                gsea_result %>%
+                bind_rows() %>%
+                pull(NES) %>%
+                max() %>%
+                ceiling()
 
-        breaks_use <-
-            seq(-max_abs_nes, max_abs_nes, length.out = 101)
+            breaks_use <-
+                seq(-max_abs_nes, max_abs_nes, length.out = 101)
 
-        heatmap_plots[[cat_expl]] <-
-            gsea_result %>%
-            bind_rows() %>%
-            filter(pathway %in% use_pathways) %>%
-            select(
-                -padj,
-                -log2err,
-                -ES,
-                -size,
-                -leadingEdge,
-                -pval,
-                -pathway_group) %>%
-            arrange(cluster) %>%
-            mutate(cluster_no = as.numeric(str_remove(cluster, "Cluster "))) %>%
-            arrange(cluster_no) %>%
-            select(-cluster_no) %>%
-            pivot_wider(
-                names_from = cluster,
-                values_from = NES,
-                values_fill = 0
-            ) %>%
-            column_to_rownames("pathway") %>%
-            pheatmap::pheatmap(
-                color = colors_use,
-                breaks = breaks_use,
-                display_numbers = TRUE,
-                silent = TRUE,
-                main = paste0(cat_expl),
-                fontsize_row = 8,
-                fontsize_number = 8,
-                cluster_cols = FALSE,
-                cluster_rows = TRUE
-            )
+            heatmap_plots[[cat_expl]] <-
+                gsea_result %>%
+                bind_rows() %>%
+                filter(pathway %in% use_pathways) %>%
+                select(
+                    -padj,
+                    -log2err,
+                    -ES,
+                    -size,
+                    -leadingEdge,
+                    -pval,
+                    -pathway_group) %>%
+                arrange(cluster) %>%
+                mutate(cluster_no = as.numeric(str_remove(cluster, "Cluster "))) %>%
+                arrange(cluster_no) %>%
+                select(-cluster_no) %>%
+                pivot_wider(
+                    names_from = cluster,
+                    values_from = NES,
+                    values_fill = 0
+                ) %>%
+                column_to_rownames("pathway") %>%
+                pheatmap::pheatmap(
+                    color = colors_use,
+                    breaks = breaks_use,
+                    display_numbers = FALSE,
+                    silent = TRUE,
+                    main = paste0(cat_expl),
+                    fontsize_row = 10,
+                    fontsize_col = 10,
+                    fontsize_number = 6,
+                    cluster_cols = FALSE,
+                    cluster_rows = TRUE,
+                    cellwidth = 20,
+                    cellheight = 20,
+                    file = paste0("output/figures/gsea/", group, "/", label, "_",
+                                  cat_expl, "_heatmap.pdf"),
+                    width = 15
+                )
         }
     }
 
