@@ -1366,7 +1366,7 @@ get_plot_list <- function(ob_name) {
 #| cache.vars: Run_GRA
 Run_GRA <- function(sobject,
                     idents,
-                    group = group,
+                    group = NULL,
                     org,      #organism "mgi" for mouse, "hgnc" for human
                     subset = "no",          #yes or no
                     subset_cell_number = NA) {

@@ -158,7 +158,7 @@ Run the differential expression and GSEA
 
 {{< include child_qmds/degs_gseaplots.qmd >}}
 
-<!-- # Investigate the expression correlation between subgroups of the data
+# Investigate the expression correlation between subgroups of the data
 
 {{< include child_qmds/helper_functions_correlation.qmd >}}
 
@@ -181,7 +181,7 @@ Reanalyze the patient samples for validation such as harmony integration validat
 
 # render to make figures html
 
-{{< include child_qmds/render_figs.qmd >}} --> -->
+{{< include child_qmds/render_figs.qmd >}} -->
 
 
 

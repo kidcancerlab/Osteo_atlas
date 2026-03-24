@@ -925,3 +925,519 @@ for (i in seq_len(nrow(object_list))) {
                             main = str_c(group3, " Regulon activity (not shared)"))
 }
 
+```
+
+
+## Ryans Cancer discovery
+```{r ryans_cancer_discovery, eval = FALSE}
+
+combine_all <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs") %>%
+    subset(unique == "patient_prim" | unique == "patient_mets")
+
+#load the motif annotations
+data(list="motifAnnotations_hgnc", package="RcisTarget")
+motifAnnotations_hgnc <- motifAnnotations
+
+
+for (subpop in unique(combine_all$Ann_Level3)) {
+    org <- "human"
+
+    Idents(combine_all) <- combine_all$Ann_Level3
+    object <- 
+        subset(combine_all,
+               Ann_Level3 == subpop)
+    object <-
+        object %>%
+        subset(cells = sample(Cells(object),
+                        min(2000, length(Cells(object)))))
+    Idents(object) <- object$unique
+    # dimplot <- dimplot_better(object, group_by = "Ann_Level3")
+    set.seed(199820)
+    GRA_output <-
+        Run_GRA(sobject = object,
+                idents = "unique",
+                group = subpop,
+                org = "hgnc",
+                subset = "no")
+
+    exprMat_log <- GRA_output$exprMat_log
+    colVars <- GRA_output$colVars
+    cellInfo <- GRA_output$cellInfo
+    scenicOptions <- GRA_output$scenicOptions
+
+    perplexity <- c(5, 15, 50)
+    num_pcs <- 30
+
+    regulon_auc <- loadInt(scenicOptions, "aucell_regulonAUC")
+    regulon_auc <- regulon_auc[onlyNonDuplicatedExtended(rownames(regulon_auc)),]
+    regulon_activity_scaled <-
+        sapply(split(rownames(cellInfo), cellInfo$CellType),
+                function(cells) {
+                    rowMeans(AUCell::getAUC(regulon_auc)[ , cells, drop = FALSE])
+                }) %>%
+        t() %>%
+        scale(center = FALSE, scale = TRUE) %>%
+        t() %>%
+        as.data.frame() %>%
+        rownames_to_column("Regulon")
+
+    #save the regulon activity
+    if (!dir.exists(str_c("output/figures/regulon_analysis/human_only/", subpop))) {
+        dir.create(str_c("output/figures/regulon_analysis/human_only/", subpop),
+            recursive = TRUE)
+    }
+    saveRDS(scenicOptions,
+            file= str_c("output/figures/regulon_analysis/human_only/", subpop, "/scenicOptions.rds"))
+    qs::qsave(scenicOptions,
+              str_c("output/figures/regulon_analysis/human_only/", subpop, "/try_scenicOptions.qs"))
+    #save the regulon activity
+    qs::qsave(regulon_activity_scaled,
+              str_c("output/figures/regulon_analysis/human_only/",
+                    subpop,
+                    "/regulon_activity_scaled.qs"))
+    #save the regulon activity
+    write_tsv(as.data.frame(regulon_activity_scaled),
+               str_c("output/figures/regulon_analysis/human_only/",
+                     subpop,
+                     "/regulon_activity_scaled.tsv"))
+}
+#     #save the heatmap
+#     if (!dir.exists(str_c("output/figures/regulon_analysis/human_only/", subpop))) {
+#         dir.create(str_c("output/figures/regulon_analysis/human_only/", subpop),
+#             recursive = TRUE)
+#     }
+#     #make heatmap to show average regulon activity per cell type or cluster
+#     regulon_activity_scaled <-
+#         regulon_activity_scaled %>%
+#         column_to_rownames("Regulon")
+#     average_reg_heatmap <- 
+#         pheatmap::pheatmap(regulon_activity_scaled,
+#                         name = "Regulon activity",
+#                         scale = "none",
+#                         cluster_cols = TRUE,
+#                         show_row_dend = FALSE,
+#                         silent = TRUE)
+#     plot_height <- 
+#         ceiling(nrow(regulon_activity_scaled)/4)
+
+#     plot_width <- 
+#         ceiling(ncol(regulon_activity_scaled)/1.3)
+
+#     ggsave(str_c(filename = "output/figures/regulon_analysis/human_only/",
+#                             subpop,
+#                             "/average_reg_heatmap.png"),
+#             plot = average_reg_heatmap,
+#             width = plot_width,
+#             height = plot_height)
+#     #save qs object
+#     ggsave(str_c(filename = "output/figures/regulon_analysis/human_only/",
+#                             subpop,
+#                             "/average_reg_heatmap.pdf"),
+#             plot = average_reg_heatmap,
+#             width = plot_width,
+#             height = plot_height)
+# }
+
+
+# this is for all the subpou
+# dimplot <- dimplot_better(object, group_by = "Ann_Level3")
+GRA_output <-
+    Run_GRA(sobject = combine_all,
+            idents = "Ann_Level3",
+            group = "prim_mets_combined",
+            org = "hgnc",
+            subset = "yes",
+            subset_cell_number = min(2000, ncol(combine_all)))
+
+exprMat_log <- GRA_output$exprMat_log
+colVars <- GRA_output$colVars
+cellInfo <- GRA_output$cellInfo
+scenicOptions <- GRA_output$scenicOptions
+
+perplexity <- c(5, 15, 50)
+num_pcs <- 30
+
+regulon_auc <- loadInt(scenicOptions, "aucell_regulonAUC")
+regulon_auc <- regulon_auc[onlyNonDuplicatedExtended(rownames(regulon_auc)),]
+regulon_activity_scaled <-
+    sapply(split(rownames(cellInfo), cellInfo$CellType),
+            function(cells) {
+                rowMeans(AUCell::getAUC(regulon_auc)[ , cells, drop = FALSE])
+            }) %>%
+    t() %>%
+    scale(center = FALSE, scale = TRUE) %>%
+    t() %>%
+    as.data.frame() %>%
+    rownames_to_column("Regulon")
+
+#save the regulon activity
+if (!dir.exists(str_c("output/figures/regulon_analysis/human_only/", "prim_mets_combined"))) {
+    dir.create(str_c("output/figures/regulon_analysis/human_only/", "prim_mets_combined"),
+        recursive = TRUE)
+}
+#save the regulon activity
+qs::qsave(regulon_activity_scaled,
+            str_c("output/figures/regulon_analysis/human_only/",
+                "prim_mets_combined",
+                "/regulon_activity_scaled.qs"))
+#save the regulon activity
+write_tsv(as.data.frame(regulon_activity_scaled),
+            str_c("output/figures/regulon_analysis/human_only/",
+                    "prim_mets_combined",
+                    "/regulon_activity_scaled.tsv"))
+
+qs::qsave(scenicOptions,
+            str_c("output/figures/regulon_analysis/human_only/", "prim_mets_combined", "/scenicOptions.qs"))
+
+saveRDS(scenicOptions,
+        file= str_c("output/figures/regulon_analysis/human_only/", "prim_mets_combined", "/scenicOptions.rds"))
+
+#save the heatmap
+if (!dir.exists(str_c("output/figures/regulon_analysis/human_only/", "prim_mets_combined"))) {
+    dir.create(str_c("output/figures/regulon_analysis/human_only/", "prim_mets_combined"),
+        recursive = TRUE)
+}
+#make heatmap to show average regulon activity per cell type or cluster
+
+
+
+
+```
+
+## Stats and figures for the new analysis
+
+```{r sample_by_sample_regulon}
+
+combine_all <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs") %>%
+    subset(unique == "patient_prim" | unique == "patient_mets")
+
+for (subpop in unique(combine_all$Ann_Level3)) {
+    org <- "human"
+
+    Idents(combine_all) <- combine_all$Ann_Level3
+    set.seed(199820)
+    object <- 
+        subset(combine_all,
+               Ann_Level3 == subpop)
+    Idents(object) <- object$unique
+
+    scenicOptions <-
+        qs::qread(str_c("output/figures/regulon_analysis/human_only/",
+                        subpop,
+                        "/scenicOptions.qs"))
+
+    auc <- 
+        loadInt(scenicOptions, "aucell_regulonAUC") 
+    auc_matrix <-
+        AUCell::getAUC(auc) %>%
+        t() %>%
+        as.data.frame() %>%
+        rownames_to_column("cellID")
+
+    # check the filtering step, its not making sense, its not 200 cell anymore
+    metadata_cellID <-
+        object@meta.data %>%
+        rownames_to_column("cellID") %>%
+        dplyr::select(cellID, sample_name, unique)
+
+    table(metadata_cellID$cellID %in% auc_matrix$cellID)  # the filtering step is not making sense, its not 200 cell anymore
+
+    # cell that are not in
+    non_matching_cells <- 
+        auc_matrix %>%
+        filter(!cellID %in% metadata_cellID$cellID) %>%
+        pull(cellID)
+    Ann_level3_cells_not_matching <- 
+        combine_all@meta.data %>%
+        rownames_to_column("cellID") %>%
+        select(cellID, Ann_Level3) %>%
+        filter(cellID %in% non_matching_cells)
+
+    joined_meta <-
+        metadata_cellID %>%
+        left_join(auc_matrix, by = "cellID") %>%
+        # remove all things after the first space in the regulon name
+        rename_with(~ str_replace(., " .*", "")) %>%
+        group_by(unique, sample_name) %>%
+        summarise(across(-c(cellID), mean), .groups = "drop", number_of_cells = n())
+
+    long_df <- 
+        joined_meta %>%
+        pivot_longer(
+            cols = -c(unique, sample_name, number_of_cells),
+            names_to = "feature",
+            values_to = "value"
+        )
+
+    # perform wilcox test for each feature between the two groups
+    wilcox_results <- 
+        long_df %>%
+        group_by(feature) %>%
+        summarise(
+            p.value = wilcox.test(value ~ unique)$p.value,
+            statistic = wilcox.test(value ~ unique)$statistic,
+            .groups = "drop"
+        )
+
+    # adjust the p-values using Benjamini-Hochberg method
+    wilcox_results <- 
+        wilcox_results %>%
+        mutate(p_adj = p.adjust(p.value, method = "BH"))
+
+    # filter by padjusted p-value < 0.01
+    sig_features <- 
+        wilcox_results %>%
+        filter(p_adj < 0.05)
+    
+    # find the direction which side is higher vs lower
+    direction <- 
+        long_df %>%
+        group_by(feature, unique) %>%
+        summarise(median_value = median(value), .groups = "drop") %>%
+        tidyr::pivot_wider(names_from = unique, values_from = median_value) %>%
+        mutate(direction = case_when(
+            patient_prim > patient_mets ~ "higher_in_prim",
+            patient_mets > patient_prim ~ "higher_in_mets",
+            TRUE ~ "no_change")) %>%
+        filter(feature %in% sig_features$feature) %>%
+        select(feature, direction)
+
+    # subset for only significant features and add the direction
+    sig_features_table <- 
+        sig_features %>%
+        left_join(direction, by = "feature")
+
+    # preapre the data for plotting
+    plot_df <- 
+        long_df %>%
+        filter(feature %in% sig_features_table$feature) %>%
+        mutate(group = factor(recode(unique, patient_prim = "Primary", patient_mets = "Metastatic")))
+    
+    box_plot <-
+        ggplot(plot_df, aes(x = reorder(feature, value, FUN = median, decreasing = TRUE),
+                            y = value, 
+                            fill = factor(group, levels = c("Primary", "Metastatic")))) +
+        geom_boxplot(outlier.shape = NA) +
+        geom_jitter(aes(color = factor(group, levels = c("Primary", "Metastatic"))), 
+                position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75),
+                size = 1,
+                alpha = 0.7) +
+        scale_fill_manual(values = c("Primary" = "#87c9ffff", "Metastatic" = "#f87478ff")) +
+        scale_color_manual(values = c("Primary" = "#0088f7ff", "Metastatic" = "#f70004ff")) +
+        labs(
+            title = str_c("Significant Features in ", subpop, " Primary vs Metastasis"),
+            x = "Regulon",
+            y = "Regulon activity / feature value",
+            fill = "Group",
+            color = "Group"
+        ) +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(angle = 45, hjust = 1),
+            panel.grid = element_blank(),
+            axis.line.x = element_blank(),
+            axis.line.y = element_blank()
+        )
+        
+    
+    ggsave(str_c("output/figures/regulon_analysis/human_only/", subpop, "/box_plot.png"),
+        plot = box_plot,
+        width = 12,
+        height = 6,
+        bg = "white")
+
+    # make the tile plot
+    data_tile_plot <-
+        plot_df %>%
+        group_by(feature, group) %>%
+        summarise(median_value = median(value), .groups = "drop") %>%
+        pivot_wider(names_from = group, values_from = median_value) %>%
+        left_join(sig_features_table, by = "feature") %>%
+        select(feature,  p_adj, Primary, Metastatic) %>%
+        column_to_rownames("feature") 
+
+    #make tile plot
+    mat <- 
+        as.matrix(data_tile_plot[, c("Primary", "Metastatic")])
+    # mat_scaled <- 
+    #     t(scale(t(mat)))
+
+    heatmap <- 
+        pheatmap::pheatmap(mat,
+                color = colorRampPalette(c("navy", "white", "firebrick3"))(100),
+                cluster_rows = TRUE,
+                cluster_cols = FALSE,
+                silent = TRUE,
+                display_numbers = TRUE)
+
+    ggsave(str_c("output/figures/regulon_analysis/human_only/", subpop, "/heatmap.png"),
+        plot = heatmap,
+        width = 4,
+        height = 8)
+
+    
+    df_long <- 
+        data_tile_plot %>%
+        as.data.frame() %>%
+        rownames_to_column("Regulon") %>%
+        pivot_longer(cols = c(Primary, Metastatic),
+                    names_to = "Group",
+                    values_to = "Activity")
+
+    # tile plot
+    tile_plot <-
+        ggplot(df_long, aes(Group, Regulon, fill = Activity)) +
+        geom_tile() +
+        scale_fill_viridis_c() +
+        theme_classic() +
+        geom_point(aes(size = -log10(p_adj)))
+
+    ggsave(str_c("output/figures/regulon_analysis/human_only/", subpop, "/tile_plot.png"),
+        plot = tile_plot,
+        width = 4,
+        height = 8)
+
+    # log2 fold change volcano plat
+    data_tile_plot <-
+        as.data.frame(data_tile_plot)
+    data_tile_plot$logFC <- 
+        log2(data_tile_plot$Metastatic / data_tile_plot$Primary)
+
+    volcano_plot <-
+        ggplot(data_tile_plot,
+            aes(logFC, -log10(p_adj), label = rownames(data_tile_plot))) +
+        geom_point() +
+        geom_text_repel() 
+
+    ggsave(str_c("output/figures/regulon_analysis/human_only/", subpop, "/volcano_plot.png"),
+        plot = volcano_plot,
+        width = 6,
+        height = 6,
+        bg = "white")
+
+}
+
+
+```
+
+## figs for new analysis 
+```{r figs_for_new_analysis}
+
+
+
+
+
+
+
+
+
+
+
+
+# List the files in the directory
+files <- 
+    list.files(path = "output/figures/regulon_analysis/human_only",
+                recursive = TRUE,
+                # full.names = TRUE,
+                pattern = "scaled.tsv")
+
+compiled_regulon_activity <- list()
+
+for (file in files) {
+    group_name <- 
+        str_remove(file, "/regulon_activity_scaled.tsv")
+
+    # Read the TSV file into a data frame
+    regulon_activity_scaled <- 
+        read_tsv(str_c("output/figures/regulon_analysis/human_only/", file))
+    
+    # add to the list
+    compiled_regulon_activity[[group_name]] <- regulon_activity_scaled 
+
+    # plot the heatmap
+    regulon_activity_scaled <-
+        regulon_activity_scaled %>%
+        column_to_rownames("Regulon")
+    average_reg_heatmap <- 
+        pheatmap::pheatmap(regulon_activity_scaled,
+                        name = "Regulon activity",
+                        scale = "none",
+                        cluster_cols = TRUE,
+                        show_row_dend = FALSE,
+                        silent = TRUE)
+}
+
+
+# make a heatmap for the combined data
+prim_mets_combined <-
+    compiled_regulon_activity[["prim_mets_combined"]] %>%
+    as.data.frame() %>%
+    # rownames_to_column("Regulon") %>%
+    mutate(Regulon = str_replace(Regulon, " .*", "")) %>%
+    mutate(Regulon = str_replace(Regulon, "_.*", "")) %>%
+    mutate(Regulon = str_replace(Regulon, "\\(.*\\)", "")) %>%
+    column_to_rownames("Regulon") %>%
+    as.matrix()
+# heatmap to show average regulon activity per cell type or cluster
+average_reg_heatmap <-
+    pheatmap::pheatmap(prim_mets_combined,
+                    name = "Regulon activity",
+                    scale = "none",
+                    cluster_cols = TRUE,
+                    cluster_rows = TRUE,
+                    show_row_dend = FALSE,
+                    silent = TRUE)
+
+
+# subpopulation prim vs mets
+subpopulations <- 
+    c("Basal_Progenitor", "Proliferative", "MP_Progenitor", "Fibrogenic", "Interactive", "COMA")
+
+# remove the data that is not subpopulation
+regulon_output <-
+    compiled_regulon_activity[names(compiled_regulon_activity) %in% subpopulations]
+
+plot(plot_data$patient_prim, plot_data$patient_mets)
+abline(a=0, b=1, col="red")
+
+
+
+for (name in names(regulon_output)) {
+    plot_data <-
+        regulon_output[[name]] %>%
+        as.data.frame() %>%
+        mutate(Regulon = str_replace(Regulon, " .*", "")) %>%
+        mutate(Regulon = str_replace(Regulon, "_.*", "")) %>%
+        mutate(Regulon = str_replace(Regulon, "\\(.*\\)", "")) %>%
+        column_to_rownames("Regulon")
+
+    heatplot <- 
+        pheatmap::pheatmap(plot_data,
+                            name = "Regulon activity",
+                            scale = "none",
+                            cluster_cols = TRUE,
+                            cluster_rows = TRUE,
+                            show_row_dend = FALSE,
+                            silent = TRUE)
+    
+    ggsave(str_c("output/figures/regulon_analysis/human_only/",
+                name, "/regulon_subpop.png"),
+        plot = heatplot,
+        width = 4,
+        height = 10)
+}
+
+
+regulon_output <-
+    regulon_output %>%
+    bind_rows(.id = "Subpopulation") %>%
+    mutate(Regulon = str_replace(Regulon, " .*", "")) %>%
+    mutate(Regulon = str_replace(Regulon, "_.*", "")) %>%
+    mutate(Regulon = str_replace(Regulon, "\\(.*\\)", "")) %>%
+    pivot_wider(names_from = Subpopulation, values_from = -Regulon) %>%
+    column_to_rownames("Regulon") 
+    
+
+```

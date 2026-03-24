@@ -1821,7 +1821,6 @@ for (item in seq_len(nrow(details))) {
 
 
 # combine all the groups into one object
-
 ```{r combine_all_the_groups_into_one_object}
 
 object_list <-
@@ -2206,6 +2205,13 @@ for (item in list_of_names) {
     # keep the metadata column from keep_metadata and remove rest
     object@meta.data <-
         object@meta.data[, colnames(object@meta.data) %in% keep_metadata]
+    
+    metadata <-
+        object@meta.data %>%
+        rownames_to_column("cell_barcodes") %>%
+        as.data.frame()
+    name <- str_remove(item, ".qs")
+    write_csv(str_c("output/", name, ".csv"))
     
     qs::qsave(x = object,
               file = str_c("output/seurat_objects/figshare_objects/", item))

@@ -4756,6 +4756,31 @@ mets_modules <- list(
     Neuronal          = c("SLIT", "FLRT", "MPZ", "EPHA", "NRXN", "NEGR", "SEMA3", "UNC5"),
     Metabolic         = c("Cholesterol", "Glutamate", "DHEA")
 )
+
+# for ryan
+prim_modules <- list(
+    ECM_Remodelling   = c("COLLAGEN", "LAMININ", "FN1", "TGFb"),
+    Cell_Adhesion     = c("CADM", "PTPRM", "NCAM"),
+    Angiogenesis      = c("VEGF", "IGF", "ANGPT"),
+    Immune_Modulation = c("CXCL"),
+    Stemness          = c("BMP", "NRG"),
+    Neuronal          = c("EPHA"),
+    Metabolic         = c("Glutamate")
+)
+length(unlist(prim_modules))
+# Metastatic
+mets_modules <- list(
+    ECM_Remodelling   = c("COLLAGEN", "LAMININ", "FN1", "TGFb"),
+    Cell_Adhesion     = c("CADM", "PTPRM", "NCAM"),
+    Angiogenesis      = c("VEGF", "IGF", "ANGPT"),
+    Immune_Modulation = c("CXCL"),
+    Stemness          = c("BMP", "NRG"),
+    Neuronal          = c("EPHA"),
+    Metabolic         = c("Glutamate")
+)
+
+
+
 length(unlist(mets_modules))
 Immune_Modulation_cells <- 
     c("Alv_Macrophages","TAMs","Monocytes","Neutrophils",
@@ -4926,6 +4951,7 @@ for (site in c("prim", "mets")) {
     heatmap_LR <- 
         ggplot(plot_cooraltion_df_df, 
             aes(x = Var2, y = factor(Var1, levels = rev(rownames(plot_cooraltion_df))), fill = Freq)) +
+            # aes(x = Var2, y = factor(Var1, levels = c("Glutamate", "EPHA", "NRG", "BMP", "CXCL", "IGF", "VEGF", "NCAM", "PTPRM", "CADM", "TGFb", "FN1", "LAMININ", "COLLAGEN")), fill = Freq)) +
             geom_tile(color = "white", linewidth = 0.5) +
             geom_text(aes(label = sprintf("%.2f", Freq)), size = 5, color = "black") +
             scale_fill_gradientn(colours = my_colors,
@@ -4946,25 +4972,28 @@ for (site in c("prim", "mets")) {
                 legend.text = element_text(size = 15),
                 panel.grid = element_blank(),
                 panel.border = element_rect(color = "black", fill = NA, linewidth = 1)) +
-            guides(fill = guide_colorbar(barwidth = 1, barheight = 15)) 
-            # +
-            # scale_y_discrete(labels = y_labels_colored) +
-            # geom_point(data = module_color_df %>% distinct(module, color),
-            #     aes(x = 1, y = -Inf, color = module),
-            #     size = 5, shape = 15, inherit.aes = FALSE, show.legend = TRUE) +
-            # scale_color_manual(name = "Pathway Module",
-            #     values = setNames(module_colors, names(module_colors)),
-            #     guide = guide_legend(override.aes = list(size = 5, shape = 15),
-            #                         order = 1,
-            #                         title.position = "top",
-            #                         title.hjust = 0.5,
-            #                         label.position = "right",
-            #                         label.hjust = 0),
-            #     breaks = names(module_colors),
-            #     labels = names(module_colors)) +
-            # theme(legend.position = "right",
-            #      legend.box = "vertical",
-            #      legend.box.just = "left")
+            guides(fill = guide_colorbar(barwidth = 1, barheight = 15)) +
+            scale_y_discrete(labels = y_labels_colored) +
+            geom_point(data = module_color_df %>% distinct(module, color),
+                aes(x = 1, y = -Inf, color = module),
+                size = 5, shape = 15, inherit.aes = FALSE, show.legend = TRUE) +
+            scale_color_manual(name = "Pathway Module",
+                values = setNames(module_colors, names(module_colors)),
+                guide = guide_legend(override.aes = list(size = 5, shape = 15),
+                                    order = 1,
+                                    title.position = "top",
+                                    title.hjust = 0.5,
+                                    label.position = "right",
+                                    label.hjust = 0),
+                breaks = names(module_colors),
+                labels = names(module_colors)) +
+            theme(legend.position = "right",
+                 legend.box = "vertical",
+                 legend.box.just = "left")
+    qs::qsave(heatmap_LR,
+            file = str_c("output/figures/cellchat/sharedgenes_modules/correlation_heatmap_pathways_",
+                site, ".qs"))
+}  
 
     ggsave(str_c("output/figures/cellchat/sharedgenes_modules/correlation_heatmap_pathways_",
                 site, ".png"),

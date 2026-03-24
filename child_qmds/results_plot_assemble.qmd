@@ -100,9 +100,31 @@ weighted_networks_lr <-
 weighted_networks_lr[1:10, ]
 
 
+# Mike Lizardo wanted
+combine_all <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs") %>%
+    subset(unique == "patient_prim" | unique == "patient_mets")
 
 
 
+ER_stress <-
+    read.table("input/collaboration/mike_lizardo/ER_Stress_signature.txt", 
+               col.names = "gene",
+               header = FALSE)
 
+ER_stress_genes <-
+    "EIF2AK3,"      "ERN1(IRE1),"   "ATF6,"         "ATF4,"        
+    "XBP1,"         "DDIT3,"        "HSPA5,"        "HSP90B1,"     
+ [9] "CALR,"         "CANX,"         "P4HB(PDI),"    "PDIA3(ERP57),"
+[13] "PDIA4,"        "PDIA6,"        "EDEM1,"        "HERPUD1,"     
+[17] "DERL1,"        "SEL1L" 
+
+
+
+VlnPlot(combine_all,
+        features = "ERN1",
+        group.by = "Ann_Level3",
+        split.by = "unique") +
+    theme(legend.position = "none")
 
 ```
