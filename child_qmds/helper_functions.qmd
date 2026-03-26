@@ -1440,8 +1440,10 @@ Run_GRA <- function(sobject,
                                        minSamples=ncol(exprMat)*.01)
     # filter the expression matrix to contain only these genes from geneskept.
     exprMat_filtered <- exprMat[genesKept, ]
+
     ### 2. Correlation: positive means TF could upregulate the target gene and viceversa
     SCENIC::runCorrelation(exprMat_filtered, scenicOptions)
+
     ### 3. Run GENIE3 to infer potential transcription factor targets
     # Optional: add log (if it is not logged/normalized already)
     exprMat_filtered <- log2(exprMat_filtered+1)
@@ -1449,6 +1451,7 @@ Run_GRA <- function(sobject,
     SCENIC::runGenie3(exprMat_filtered, scenicOptions)
     ###### IV: Build the gene regulatory network & Identify cell states:
     ### Build the gene regulatory network:
+    
     # 1. Get co-expression modules
     scenicOptions <- SCENIC::runSCENIC_1_coexNetwork2modules(scenicOptions)
     # 2. Get regulons (with RcisTarget: TF motif analysis)
