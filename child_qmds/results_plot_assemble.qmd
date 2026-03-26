@@ -105,26 +105,70 @@ combine_all <-
     qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs") %>%
     subset(unique == "patient_prim" | unique == "patient_mets")
 
-
-
 ER_stress <-
     read.table("input/collaboration/mike_lizardo/ER_Stress_signature.txt", 
                col.names = "gene",
                header = FALSE)
 
-ER_stress_genes <-
-    "EIF2AK3,"      "ERN1(IRE1),"   "ATF6,"         "ATF4,"        
-    "XBP1,"         "DDIT3,"        "HSPA5,"        "HSP90B1,"     
- [9] "CALR,"         "CANX,"         "P4HB(PDI),"    "PDIA3(ERP57),"
-[13] "PDIA4,"        "PDIA6,"        "EDEM1,"        "HERPUD1,"     
-[17] "DERL1,"        "SEL1L" 
+# had to remove some of the missing gene names
+ER_stress_genes <- c(
+    "EIF2AK3", "ERN1", "ATF6", "ATF4", "XBP1", "DDIT3", "HSPA5", "HSP90B1",
+    "CALR", "CANX", "P4HB", "PDIA3", "PDIA4", "PDIA6", "EDEM1", "HERPUD1",
+    "DERL1", "SEL1L"
+)
 
+Oxd_stress <-
+    read.table("input/collaboration/mike_lizardo/oxidative_stress_genesignature.txt", 
+               col.names = "gene",
+               header = FALSE)
 
+Oxd_stress_genes <- c(
+    "NQO1", "HMOX1", "GCLC", "GCLM", "SLC7A11", "TXNRD1", "SRXN1",
+    "FTH1", "CAT", "SOD1", "SOD2", "GPX1", "GPX4", "PRDX1", "PRDX3",
+    "PRDX5", "TXN", "TXNIP", "SRXN1", "AIFM2", "OGG1", "MUTYH", "NEIL1", "APEX1"
+)
+
+ER_violin <- 
+    VlnPlot(combine_all,
+            features = ER_stress_genes,
+            group.by = "unique",
+            pt.size = 0,
+            ncol = 6,
+            raster =FALSE) +
+            # split.by = "unique") +
+        theme(legend.position = "none") +
+        labs(title = "ER Stress Gene Expression")
 
 VlnPlot(combine_all,
-        features = "ERN1",
+        features = ER_stress_genes[1:6],
         group.by = "Ann_Level3",
+        pt.size = 0,
+        ncol = 6,
+        raster =FALSE,
         split.by = "unique") +
     theme(legend.position = "none")
 
+ggsave(filename = "input/collaboration/mike_lizardo/ER_stress_violin_plot.png",
+        plot = ER_violin,
+        width = 20,
+        height = 20,
+        limitsize = FALSE,
+        bg = "white")
+
+Oxd_stress_violin <- 
+    VlnPlot(combine_all,
+            features = Oxd_stress_genes,
+            group.by = "unique",
+            pt.size = 0,
+            ncol = 6,
+            raster =FALSE) +
+        theme(legend.position = "none") +
+        labs(title = "Oxidative Stress Gene Expression")
+
+ggsave(filename = "input/collaboration/mike_lizardo/Oxd_stress_violin_plot.png",
+        plot = Oxd_stress_violin,
+        width = 20,
+        height = 20,
+        limitsize = FALSE,
+        bg = "white")
 ```

@@ -939,167 +939,132 @@ combine_all <-
 data(list="motifAnnotations_hgnc", package="RcisTarget")
 motifAnnotations_hgnc <- motifAnnotations
 
+# we need to set a main directory first that is above all others
+working_dir <- getwd()
+# set the path for the motif data
+path_for_motif_data <-
+    "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/SCENIC"
 
-for (subpop in unique(combine_all$Ann_Level3)) {
-    org <- "human"
-
+for (group in unique(combine_all$Ann_Level3)) {
+    if (!dir.exists(str_c("output/SCENIC/", group))) {
+        dir.create(str_c("output/SCENIC/", group), recursive = TRUE)
+    }
+    setwd(str_c("output/SCENIC/", group))
     Idents(combine_all) <- combine_all$Ann_Level3
     object <- 
         subset(combine_all,
-               Ann_Level3 == subpop)
-    object <-
+               Ann_Level3 == group)
+    set.seed(199820)
+    sobject <-
         object %>%
         subset(cells = sample(Cells(object),
-                        min(2000, length(Cells(object)))))
-    Idents(object) <- object$unique
-    # dimplot <- dimplot_better(object, group_by = "Ann_Level3")
-    set.seed(199820)
-    GRA_output <-
-        Run_GRA(sobject = object,
-                idents = "unique",
-                group = subpop,
-                org = "hgnc",
-                subset = "no")
+                        min(5000, length(Cells(object)))))
+    Idents(sobject) <- sobject$unique
+    org = "hgnc"
 
-    exprMat_log <- GRA_output$exprMat_log
-    colVars <- GRA_output$colVars
-    cellInfo <- GRA_output$cellInfo
-    scenicOptions <- GRA_output$scenicOptions
+    sobject <- 
+        JoinLayers(sobject)
+    exprMat <- SeuratObject::GetAssayData(sobject, assay = 'RNA', slot= 'counts') %>%
+        as.matrix()
+
+    cellInfo <- data.frame(CellType=Idents(sobject))
+
+    if (!dir.exists("input/")) {
+        dir.create("input/", recursive = TRUE)
+    }
+    saveRDS(cellInfo, file= str_c("input/", group, "cellInfo.Rds"))
+    cols <- c(plot_cols, sample(rainbow(1000)))
+    CellType <- cols[1:length(unique(cellInfo$CellType))]
+    names(CellType) <- unique(cellInfo$CellType)
+    colVars <- list()
+    colVars$CellType <- CellType
+    saveRDS(colVars, file= str_c("input/", group, "colVars.Rds"))
+
+    #Running SCENIC begins
+    scenicOptions <- SCENIC::initializeScenic(org = org,
+                                              dbDir = path_for_motif_data,
+                                              dbs = SCENIC::defaultDbNames[[org]],
+                                              datasetTitle = "SCENIC tutorial",
+                                              nCores = parallelly::availableCores()
+                                              )
+
+    scenicOptions@inputDatasetInfo$cellInfo <- str_c("input/", group, "cellInfo.Rds")
+    scenicOptions@inputDatasetInfo$colVars <- str_c("input/", group, "colVars.Rds")
+
+    ##### III: Co-expression network
+    ### 1. Gene filter/selection
+    genesKept <- SCENIC::geneFiltering(exprMat,
+                                       scenicOptions=scenicOptions,
+                                       minCountsPerGene=3*.01*ncol(exprMat),
+                                       minSamples=ncol(exprMat)*.01)
+
+    # filter the expression matrix to contain only these genes from geneskept.
+    exprMat_filtered <- exprMat[genesKept, ]
+
+    ### 2. Correlation: positive means TF could upregulate the target gene and viceversa
+    SCENIC::runCorrelation(exprMat_filtered, scenicOptions)
+
+    ### 3. Run GENIE3 to infer potential transcription factor targets
+    # Optional: add log (if it is not logged/normalized already)
+    exprMat_filtered <- log2(exprMat_filtered+1)
+
+    # Run GENIE3 and find potential TF targets
+    SCENIC::runGenie3(exprMat_filtered, scenicOptions)
+
+    ###### IV: Build the gene regulatory network & Identify cell states:
+    ### Build the gene regulatory network:
+    # 1. Get co-expression modules
+    scenicOptions <- SCENIC::runSCENIC_1_coexNetwork2modules(scenicOptions)
+
+    # 2. Get regulons (with RcisTarget: TF motif analysis)
+    scenicOptions <- SCENIC::runSCENIC_2_createRegulons(scenicOptions,
+                                                coexMethods=c("top5perTarget"))
+
+    ### Identify cell states:
+    # 3. Score GRN (regulons) in the cells (with AUCell)
+    exprMat_log <- log2(exprMat+1)
+
+    scenicOptions <- SCENIC::runSCENIC_3_scoreCells(scenicOptions, exprMat_log)
+
+    # # 4.2 Binarize the network activity (regulon on/off)
+    scenicOptions@settings$devType = "png"
+    # scenicOptions <- SCENIC::runSCENIC_4_aucell_binarize(scenicOptions,
+    #                                                      exprMat = exprMat_log)
 
     perplexity <- c(5, 15, 50)
     num_pcs <- 30
-
-    regulon_auc <- loadInt(scenicOptions, "aucell_regulonAUC")
-    regulon_auc <- regulon_auc[onlyNonDuplicatedExtended(rownames(regulon_auc)),]
-    regulon_activity_scaled <-
-        sapply(split(rownames(cellInfo), cellInfo$CellType),
-                function(cells) {
-                    rowMeans(AUCell::getAUC(regulon_auc)[ , cells, drop = FALSE])
-                }) %>%
-        t() %>%
-        scale(center = FALSE, scale = TRUE) %>%
-        t() %>%
-        as.data.frame() %>%
-        rownames_to_column("Regulon")
-
-    #save the regulon activity
-    if (!dir.exists(str_c("output/figures/regulon_analysis/human_only/", subpop))) {
-        dir.create(str_c("output/figures/regulon_analysis/human_only/", subpop),
-            recursive = TRUE)
-    }
-    saveRDS(scenicOptions,
-            file= str_c("output/figures/regulon_analysis/human_only/", subpop, "/scenicOptions.rds"))
     qs::qsave(scenicOptions,
-              str_c("output/figures/regulon_analysis/human_only/", subpop, "/try_scenicOptions.qs"))
-    #save the regulon activity
-    qs::qsave(regulon_activity_scaled,
-              str_c("output/figures/regulon_analysis/human_only/",
-                    subpop,
-                    "/regulon_activity_scaled.qs"))
-    #save the regulon activity
-    write_tsv(as.data.frame(regulon_activity_scaled),
-               str_c("output/figures/regulon_analysis/human_only/",
-                     subpop,
-                     "/regulon_activity_scaled.tsv"))
+              str_c(group, "_scenicOptions.qs"))
+
+    setwd(working_dir)
 }
-#     #save the heatmap
-#     if (!dir.exists(str_c("output/figures/regulon_analysis/human_only/", subpop))) {
-#         dir.create(str_c("output/figures/regulon_analysis/human_only/", subpop),
-#             recursive = TRUE)
-#     }
-#     #make heatmap to show average regulon activity per cell type or cluster
-#     regulon_activity_scaled <-
-#         regulon_activity_scaled %>%
-#         column_to_rownames("Regulon")
-#     average_reg_heatmap <- 
-#         pheatmap::pheatmap(regulon_activity_scaled,
-#                         name = "Regulon activity",
-#                         scale = "none",
-#                         cluster_cols = TRUE,
-#                         show_row_dend = FALSE,
-#                         silent = TRUE)
-#     plot_height <- 
-#         ceiling(nrow(regulon_activity_scaled)/4)
 
-#     plot_width <- 
-#         ceiling(ncol(regulon_activity_scaled)/1.3)
-
-#     ggsave(str_c(filename = "output/figures/regulon_analysis/human_only/",
-#                             subpop,
-#                             "/average_reg_heatmap.png"),
-#             plot = average_reg_heatmap,
-#             width = plot_width,
-#             height = plot_height)
-#     #save qs object
-#     ggsave(str_c(filename = "output/figures/regulon_analysis/human_only/",
-#                             subpop,
-#                             "/average_reg_heatmap.pdf"),
-#             plot = average_reg_heatmap,
-#             width = plot_width,
-#             height = plot_height)
-# }
 
 
 # this is for all the subpou
 # dimplot <- dimplot_better(object, group_by = "Ann_Level3")
+combine_all <-
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs") %>%
+    subset(unique == "patient_prim" | unique == "patient_mets")
+
+#load the motif annotations
+data(list="motifAnnotations_hgnc", package="RcisTarget")
+motifAnnotations_hgnc <- motifAnnotations
+
+# we need to set a main directory first that is above all others
+working_dir <- getwd()
+
 GRA_output <-
     Run_GRA(sobject = combine_all,
             idents = "Ann_Level3",
             group = "prim_mets_combined",
             org = "hgnc",
+            dbDir = "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/SCENIC",
             subset = "yes",
-            subset_cell_number = min(2000, ncol(combine_all)))
+            subset_cell_number = 50000)
 
-exprMat_log <- GRA_output$exprMat_log
-colVars <- GRA_output$colVars
-cellInfo <- GRA_output$cellInfo
-scenicOptions <- GRA_output$scenicOptions
-
-perplexity <- c(5, 15, 50)
-num_pcs <- 30
-
-regulon_auc <- loadInt(scenicOptions, "aucell_regulonAUC")
-regulon_auc <- regulon_auc[onlyNonDuplicatedExtended(rownames(regulon_auc)),]
-regulon_activity_scaled <-
-    sapply(split(rownames(cellInfo), cellInfo$CellType),
-            function(cells) {
-                rowMeans(AUCell::getAUC(regulon_auc)[ , cells, drop = FALSE])
-            }) %>%
-    t() %>%
-    scale(center = FALSE, scale = TRUE) %>%
-    t() %>%
-    as.data.frame() %>%
-    rownames_to_column("Regulon")
-
-#save the regulon activity
-if (!dir.exists(str_c("output/figures/regulon_analysis/human_only/", "prim_mets_combined"))) {
-    dir.create(str_c("output/figures/regulon_analysis/human_only/", "prim_mets_combined"),
-        recursive = TRUE)
-}
-#save the regulon activity
-qs::qsave(regulon_activity_scaled,
-            str_c("output/figures/regulon_analysis/human_only/",
-                "prim_mets_combined",
-                "/regulon_activity_scaled.qs"))
-#save the regulon activity
-write_tsv(as.data.frame(regulon_activity_scaled),
-            str_c("output/figures/regulon_analysis/human_only/",
-                    "prim_mets_combined",
-                    "/regulon_activity_scaled.tsv"))
-
-qs::qsave(scenicOptions,
-            str_c("output/figures/regulon_analysis/human_only/", "prim_mets_combined", "/scenicOptions.qs"))
-
-saveRDS(scenicOptions,
-        file= str_c("output/figures/regulon_analysis/human_only/", "prim_mets_combined", "/scenicOptions.rds"))
-
-#save the heatmap
-if (!dir.exists(str_c("output/figures/regulon_analysis/human_only/", "prim_mets_combined"))) {
-    dir.create(str_c("output/figures/regulon_analysis/human_only/", "prim_mets_combined"),
-        recursive = TRUE)
-}
-#make heatmap to show average regulon activity per cell type or cluster
-
+# set the working directory back to the original directory after the run is complete.
+setwd(working_dir)
 
 
 
@@ -1113,20 +1078,22 @@ combine_all <-
     qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs") %>%
     subset(unique == "patient_prim" | unique == "patient_mets")
 
-for (subpop in unique(combine_all$Ann_Level3)) {
+working_dir <- getwd()
+
+for (group in unique(combine_all$Ann_Level3)) {
+
+    setwd(str_c("output/SCENIC/", group))
     org <- "human"
 
     Idents(combine_all) <- combine_all$Ann_Level3
-    set.seed(199820)
+    # set.seed(199820)
     object <- 
         subset(combine_all,
-               Ann_Level3 == subpop)
+               Ann_Level3 == group)
     Idents(object) <- object$unique
 
     scenicOptions <-
-        qs::qread(str_c("output/figures/regulon_analysis/human_only/",
-                        subpop,
-                        "/scenicOptions.qs"))
+        qs::qread(str_c(group, "_scenicOptions.qs"))
 
     auc <- 
         loadInt(scenicOptions, "aucell_regulonAUC") 
@@ -1157,6 +1124,7 @@ for (subpop in unique(combine_all$Ann_Level3)) {
 
     joined_meta <-
         metadata_cellID %>%
+        filter(cellID %in% auc_matrix$cellID) %>%
         left_join(auc_matrix, by = "cellID") %>%
         # remove all things after the first space in the regulon name
         rename_with(~ str_replace(., " .*", "")) %>%
@@ -1227,7 +1195,7 @@ for (subpop in unique(combine_all$Ann_Level3)) {
         scale_fill_manual(values = c("Primary" = "#87c9ffff", "Metastatic" = "#f87478ff")) +
         scale_color_manual(values = c("Primary" = "#0088f7ff", "Metastatic" = "#f70004ff")) +
         labs(
-            title = str_c("Significant Features in ", subpop, " Primary vs Metastasis"),
+            title = str_c("Significant Features in ", group, " Primary vs Metastasis"),
             x = "Regulon",
             y = "Regulon activity / feature value",
             fill = "Group",
@@ -1240,9 +1208,11 @@ for (subpop in unique(combine_all$Ann_Level3)) {
             axis.line.x = element_blank(),
             axis.line.y = element_blank()
         )
-        
     
-    ggsave(str_c("output/figures/regulon_analysis/human_only/", subpop, "/box_plot.png"),
+    if (!dir.exists("plots")) {
+        dir.create("plots", recursive = TRUE)
+    }
+    ggsave(str_c("plots/box_plot.png"),
         plot = box_plot,
         width = 12,
         height = 6,
@@ -1272,7 +1242,7 @@ for (subpop in unique(combine_all$Ann_Level3)) {
                 silent = TRUE,
                 display_numbers = TRUE)
 
-    ggsave(str_c("output/figures/regulon_analysis/human_only/", subpop, "/heatmap.png"),
+    ggsave(str_c("plots/heatmap.png"),
         plot = heatmap,
         width = 4,
         height = 8)
@@ -1294,7 +1264,7 @@ for (subpop in unique(combine_all$Ann_Level3)) {
         theme_classic() +
         geom_point(aes(size = -log10(p_adj)))
 
-    ggsave(str_c("output/figures/regulon_analysis/human_only/", subpop, "/tile_plot.png"),
+    ggsave(str_c("plots/tile_plot.png"),
         plot = tile_plot,
         width = 4,
         height = 8)
@@ -1311,133 +1281,15 @@ for (subpop in unique(combine_all$Ann_Level3)) {
         geom_point() +
         geom_text_repel() 
 
-    ggsave(str_c("output/figures/regulon_analysis/human_only/", subpop, "/volcano_plot.png"),
+    ggsave(str_c("plots/volcano_plot.png"),
         plot = volcano_plot,
         width = 6,
         height = 6,
         bg = "white")
+    
+    setwd(working_dir)
 
 }
 
-
-```
-
-## figs for new analysis 
-```{r figs_for_new_analysis}
-
-
-
-
-
-
-
-
-
-
-
-
-# List the files in the directory
-files <- 
-    list.files(path = "output/figures/regulon_analysis/human_only",
-                recursive = TRUE,
-                # full.names = TRUE,
-                pattern = "scaled.tsv")
-
-compiled_regulon_activity <- list()
-
-for (file in files) {
-    group_name <- 
-        str_remove(file, "/regulon_activity_scaled.tsv")
-
-    # Read the TSV file into a data frame
-    regulon_activity_scaled <- 
-        read_tsv(str_c("output/figures/regulon_analysis/human_only/", file))
-    
-    # add to the list
-    compiled_regulon_activity[[group_name]] <- regulon_activity_scaled 
-
-    # plot the heatmap
-    regulon_activity_scaled <-
-        regulon_activity_scaled %>%
-        column_to_rownames("Regulon")
-    average_reg_heatmap <- 
-        pheatmap::pheatmap(regulon_activity_scaled,
-                        name = "Regulon activity",
-                        scale = "none",
-                        cluster_cols = TRUE,
-                        show_row_dend = FALSE,
-                        silent = TRUE)
-}
-
-
-# make a heatmap for the combined data
-prim_mets_combined <-
-    compiled_regulon_activity[["prim_mets_combined"]] %>%
-    as.data.frame() %>%
-    # rownames_to_column("Regulon") %>%
-    mutate(Regulon = str_replace(Regulon, " .*", "")) %>%
-    mutate(Regulon = str_replace(Regulon, "_.*", "")) %>%
-    mutate(Regulon = str_replace(Regulon, "\\(.*\\)", "")) %>%
-    column_to_rownames("Regulon") %>%
-    as.matrix()
-# heatmap to show average regulon activity per cell type or cluster
-average_reg_heatmap <-
-    pheatmap::pheatmap(prim_mets_combined,
-                    name = "Regulon activity",
-                    scale = "none",
-                    cluster_cols = TRUE,
-                    cluster_rows = TRUE,
-                    show_row_dend = FALSE,
-                    silent = TRUE)
-
-
-# subpopulation prim vs mets
-subpopulations <- 
-    c("Basal_Progenitor", "Proliferative", "MP_Progenitor", "Fibrogenic", "Interactive", "COMA")
-
-# remove the data that is not subpopulation
-regulon_output <-
-    compiled_regulon_activity[names(compiled_regulon_activity) %in% subpopulations]
-
-plot(plot_data$patient_prim, plot_data$patient_mets)
-abline(a=0, b=1, col="red")
-
-
-
-for (name in names(regulon_output)) {
-    plot_data <-
-        regulon_output[[name]] %>%
-        as.data.frame() %>%
-        mutate(Regulon = str_replace(Regulon, " .*", "")) %>%
-        mutate(Regulon = str_replace(Regulon, "_.*", "")) %>%
-        mutate(Regulon = str_replace(Regulon, "\\(.*\\)", "")) %>%
-        column_to_rownames("Regulon")
-
-    heatplot <- 
-        pheatmap::pheatmap(plot_data,
-                            name = "Regulon activity",
-                            scale = "none",
-                            cluster_cols = TRUE,
-                            cluster_rows = TRUE,
-                            show_row_dend = FALSE,
-                            silent = TRUE)
-    
-    ggsave(str_c("output/figures/regulon_analysis/human_only/",
-                name, "/regulon_subpop.png"),
-        plot = heatplot,
-        width = 4,
-        height = 10)
-}
-
-
-regulon_output <-
-    regulon_output %>%
-    bind_rows(.id = "Subpopulation") %>%
-    mutate(Regulon = str_replace(Regulon, " .*", "")) %>%
-    mutate(Regulon = str_replace(Regulon, "_.*", "")) %>%
-    mutate(Regulon = str_replace(Regulon, "\\(.*\\)", "")) %>%
-    pivot_wider(names_from = Subpopulation, values_from = -Regulon) %>%
-    column_to_rownames("Regulon") 
-    
 
 ```
