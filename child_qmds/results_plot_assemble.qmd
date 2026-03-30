@@ -100,10 +100,19 @@ weighted_networks_lr <-
 weighted_networks_lr[1:10, ]
 
 
-# Mike Lizardo wanted
+# Mike Lizardo wanted collaboration ryan wants
 combine_all <-
-    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs") %>%
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs") 
+
+human_patient <-
+    combine_all %>%
     subset(unique == "patient_prim" | unique == "patient_mets")
+qs::qsave(human_patient, "output/seurat_objects/final_tumor_vs_stroma/patient_prim_mets_cancer_cells.qs")
+
+human_pdx <-
+    combine_all %>%
+    subset(unique == "xeno_prim_human" | unique == "xeno_mets_human")
+qs::qsave(human_pdx, "output/seurat_objects/final_tumor_vs_stroma/xeno_prim_mets_cancer_cells.qs")
 
 ER_stress <-
     read.table("input/collaboration/mike_lizardo/ER_Stress_signature.txt", 
@@ -171,4 +180,98 @@ ggsave(filename = "input/collaboration/mike_lizardo/Oxd_stress_violin_plot.png",
         height = 20,
         limitsize = FALSE,
         bg = "white")
+
+for (group in c("patient_prim_mets_cancer_cells",
+                "xeno_prim_mets_cancer_cells",
+                "dog_prim_mets_cancer_cells",
+                "mouse_prim_mets_cancer_cells")) {
+    sobj <-
+        qs::qread(str_c("output/seurat_objects/final_tumor_vs_stroma/", group, ".qs"))
+
+    # calculate aerage expression of ER stress genes for each sample group
+    features <- 
+        c(ER_stress_genes, Oxd_stress_genes)
+
+    if (group == "mouse_prim_mets_cancer_cells") {
+        features <- 
+            features %>%
+            nichenetr::convert_human_to_mouse_symbols() %>%
+            as.character()
+    }
+    sobj$sample_site <-
+        str_c(sobj$sample_name, "ABCD", sobj$unique)
+    sample_by_sample_average_expression <-
+        AverageExpression(sobj,
+                          group.by = "sample_site",
+                          features = features)
+    
+    # split the sample group into site and sample name
+    format_data <-
+        sample_by_sample_average_expression$RNA %>%
+        as.data.frame() %>%
+        rownames_to_column("genes") %>%
+        pivot_longer(-genes, names_to = "sample_group", values_to = "average_expression") %>% 
+        separate(sample_group, into = c("sample_name", "unique"), sep = "ABCD") %>%
+        mutate(prim_mets_col = ifelse(str_detect(unique, "prim"), "Primary", "Metastatic"))
+    
+
+    # perform t-test between the primary and metastatic groups for each gene
+    t_test_results <- 
+        format_data %>%
+        group_by(genes) %>%
+        summarise(
+            p_value = t.test(average_expression ~ prim_mets_col)$p.value,
+            mean_primary = mean(average_expression[prim_mets_col == "Primary"]),
+            mean_metastatic = mean(average_expression[prim_mets_col == "Metastatic"]),
+            log2FC = log2(mean_metastatic / mean_primary)
+        ) %>%
+        ungroup() %>%
+        mutate(p_adj = p.adjust(p_value, method = "BH"))
+
+    # plot in the bubble plot format
+    boxplot <-
+        format_data %>%
+        ggplot(aes(x = reorder(genes, average_expression, FUN = median, decreasing = TRUE),
+                   y = average_expression,
+                   fill = factor(prim_mets_col, levels = c("Primary", "Metastatic")))) +
+        geom_boxplot(outlier.shape = NA) +
+        geom_jitter(aes(color = factor(prim_mets_col, levels = c("Primary", "Metastatic"))),
+                    position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75),
+                    size = 1,
+                    alpha = 0.7) +
+        scale_fill_manual(values = c("Primary" = "#87c9ffff", "Metastatic" = "#f87478ff")) +
+        scale_color_manual(values = c("Primary" = "#0088f7ff", "Metastatic" = "#f70004ff")) +
+        labs(
+            title = str_c("Gene Expression: ", group),
+            x = "Gene",
+            y = "Average Expression",
+            fill = "Sample Type",
+            color = "Sample Type"
+        ) +
+        theme_minimal() +
+        theme(
+            axis.text.x = element_text(angle = 45, hjust = 1),
+            panel.grid = element_blank(),
+            axis.line.x = element_blank(),
+            axis.line.y = element_blank(),
+            legend.position = "top"
+        )
+    
+    # Add p-values as text annotations
+    max_y <- max(format_data$average_expression, na.rm = TRUE)
+    boxplot_with_pvals <-
+        boxplot +
+        geom_text(data = t_test_results,
+                  aes(x = genes, y = max_y * 0.95, label = paste0("pval = ", format(p_value, digits = 2))),
+                  vjust = 1.5, size = 3, angle = 45, inherit.aes = FALSE)
+
+    ggsave(filename = str_c("input/collaboration/mike_lizardo/", group, "_gene_expression_boxplot.png"),
+           plot = boxplot_with_pvals,
+           width = 20,
+           height = 10,
+           limitsize = FALSE,
+           bg = "white")
+
+}
+
 ```
