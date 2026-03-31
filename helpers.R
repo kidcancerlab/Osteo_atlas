@@ -642,6 +642,11 @@ run_degs <- function(sobject,
         batch_df <-
             data.frame(sample_name = colnames(pseudobulk))
 
+        organism_details <-
+            sobject@meta.data %>%
+            select(all_of(c("sample_name", "organism", "unique"))) %>%
+            distinct()
+        
         batch_df_new <-
             tibble(col_label = colnames(pseudobulk),
                    sample_name = colnames(pseudobulk) %>%
@@ -649,8 +654,16 @@ run_degs <- function(sobject,
                    cluster_no = str_remove(colnames(pseudobulk), ".+_")) %>%
             left_join(batch_df) %>%
             mutate(sample_name = str_replace_all(sample_name, "-", "_")) %>%
-            mutate(organism = sobject@meta.data[[organism_col]][[1]]) %>%
+            # mutate(organism = sobject@meta.data[[organism_col]][[1]]) %>%
             mutate(cluster_no = str_replace_all(cluster_no, "-", "_"))
+        
+        # add the organism column from the organism_details
+        batch_df_new <- 
+            batch_df_new %>%
+            left_join(organism_details, by = "sample_name") %>%
+            select(col_label, cluster_no, sample_name, organism)
+
+
         #add the datasource and method as batch in batch_df_new from all_samples_csv for each sample_name
         new_all_samples_csv <-
             all_samples_csv %>%
@@ -794,7 +807,7 @@ run_gsea <- function(degs_result,
 #| cache.vars: [gsea_dotplot, gsea_barplot]
 gsea_dotplot <- function(data, x_col = "z_score") {
     lab4plot <-
-        tibble(y = c(-2.5, 2.5),
+        tibble(y = c(-1, 1),
                x = c(0.2, 0.2),
                label = c("Downregulated", "Upregulated"))
 
@@ -820,7 +833,7 @@ gsea_dotplot <- function(data, x_col = "z_score") {
                       y = y,
                       label = label),
                   fontface = "bold",
-                  size = 2.5) +
+                  size = 3) +
         scale_fill_manual(values = plot_cols,
                           name = paste0(x_col, " > 0")) +
         theme(strip.background = element_rect(color = "white",
@@ -842,7 +855,7 @@ gsea_dotplot <- function(data, x_col = "z_score") {
              y = "NES",
              x = "") +
         theme(plot.title = element_text(hjust = 0.5)) +
-        ylim(-6, 6) +
+        ylim(-3, 3) +
         scale_color_gradient(low = plot_cols[2],
                              high =plot_cols[1])
 
@@ -852,7 +865,7 @@ gsea_dotplot <- function(data, x_col = "z_score") {
 
 gsea_barplot <- function(data, x_col = "z_score") {
     lab4plot <-
-        tibble(y = c(-3, 3),
+        tibble(y = c(-1, 1),
                x = c(0.2, 0.2),
                label = c("Downregulated", "Upregulated"))
 
@@ -901,7 +914,7 @@ gsea_barplot <- function(data, x_col = "z_score") {
              y = "NES",
              x = "") +
         theme(plot.title = element_text(hjust = 0.5)) +
-        ylim(-6, 6)
+        ylim(-3, 3)
 
     return(plot_name)
 }
@@ -1007,7 +1020,8 @@ cat_tib <- dplyr::tribble(
     # "C3",       "TFT:GTRD",    "Transcription_factor_targets",
     # "C6",       "NA",          "Oncogenic_signature",
     "C5",       "GO:BP",       "Biological_processes",
-    "C2",       "CP:REACTOME", "Reactome")
+    "C2",       "CP:REACTOME", "Reactome"
+    )
 
 make_panel_plot <- function(sobj,
                             comparison_col = "seurat_clusters",
@@ -1326,14 +1340,41 @@ get_plot_list <- function(ob_name) {
 
 
 ## ----scenic_function----------------------------------------------------------
+
+# sobject is the seurat object,
+# idents are the column in the metadata to use for subsetting
+# parent dir is top directory that we return to every time we run scenic in is.loop
+# dbDir is the directory where the scenic databases human or mouse are stored
+# group is the name of the individual item in the loop that we are running scenic for,
+# org is organism sign
+# subset to weather smaller number of cells  or note
+# subset_cell_number is the number of cells to subset if subset is yes
+
+#| cache.vars: Run_GRA
+
+#load the motif annotations
+data(list="motifAnnotations_hgnc", package="RcisTarget")
+motifAnnotations_hgnc <- motifAnnotations
+
+data(list="motifAnnotations_mgi", package="RcisTarget")
+motifAnnotations_mgi <- motifAnnotations
+
 #| cache.vars: Run_GRA
 Run_GRA <- function(sobject,
                     idents,
+                    dbDir,
                     group = group,
                     org,      #organism "mgi" for mouse, "hgnc" for human
                     subset = "no",          #yes or no
                     subset_cell_number = NA) {
-    #if you want to quickly run a small subset of cells, set subset = "yes" and provide the subset_cell_number for number of cells
+    # we will need to set the parent directory and move into the temporary directory for running scenic
+    # and then move back to the original directory after the run is complete. 
+    # This is because scenic creates a lot of files in the working directory and it can
+    # get messy and rewrite/deleting old files if we run multiple times or in parallel.
+    if (!dir.exists(str_c("output/SCENIC/", group))) {
+        dir.create(str_c("output/SCENIC/", group), recursive = TRUE)
+    }
+    setwd(str_c("output/SCENIC/", group))
     if (subset == "yes") {
         sobject <- subset(x = sobject,
                           cells = sample(Cells(sobject),
@@ -1346,40 +1387,34 @@ Run_GRA <- function(sobject,
     exprMat <- SeuratObject::GetAssayData(sobject, assay = 'RNA', slot= 'counts') %>%
         as.matrix()
     Idents(sobject) <- idents
-    if (idents == "seurat_clusters") {
-        cellInfo <- data.frame(CellType=Idents(sobject)) %>%
-            dplyr::arrange(CellType)
-    } else {
-        cellInfo <- data.frame(CellType=Idents(sobject))
+    
+    cellInfo <- data.frame(CellType=Idents(sobject))
+    
+    if (!dir.exists("input/")) {
+        dir.create("input/", recursive = TRUE)
     }
-    if (!dir.exists("input/downloads/SCENIC")) {
-        dir.create("input/downloads/SCENIC", recursive = TRUE)
-    }
-    saveRDS(cellInfo, file= str_c("input/downloads/SCENIC/", group, "cellInfo.Rds"))
+    saveRDS(cellInfo, file= str_c("input/", group, "cellInfo.Rds"))
     cols <- c(plot_cols, sample(rainbow(1000)))
     CellType <- cols[1:length(unique(cellInfo$CellType))]
     names(CellType) <- unique(cellInfo$CellType)
     colVars <- list()
     colVars$CellType <- CellType
-    saveRDS(colVars, file= str_c("input/downloads/SCENIC/", group, "colVars.Rds"))
-
+    saveRDS(colVars, file= str_c("input/", group, "colVars.Rds"))
     #Running SCENIC begins
     scenicOptions <- SCENIC::initializeScenic(org = org,
-                                              dbDir = "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/SCENIC",
+                                              dbDir = dbDir,
                                               dbs = SCENIC::defaultDbNames[[org]],
                                               datasetTitle = "SCENIC tutorial",
                                               nCores = parallelly::availableCores())
 
-    scenicOptions@inputDatasetInfo$cellInfo <- str_c("input/downloads/SCENIC/", group, "cellInfo.Rds")
-    scenicOptions@inputDatasetInfo$colVars <- str_c("input/downloads/SCENIC/", group, "colVars.Rds")
-
+    scenicOptions@inputDatasetInfo$cellInfo <- str_c("input/", group, "cellInfo.Rds")
+    scenicOptions@inputDatasetInfo$colVars <- str_c("input/", group, "colVars.Rds")
     ##### III: Co-expression network
     ### 1. Gene filter/selection
     genesKept <- SCENIC::geneFiltering(exprMat,
                                        scenicOptions=scenicOptions,
                                        minCountsPerGene=3*.01*ncol(exprMat),
                                        minSamples=ncol(exprMat)*.01)
-
     # filter the expression matrix to contain only these genes from geneskept.
     exprMat_filtered <- exprMat[genesKept, ]
 
@@ -1389,35 +1424,34 @@ Run_GRA <- function(sobject,
     ### 3. Run GENIE3 to infer potential transcription factor targets
     # Optional: add log (if it is not logged/normalized already)
     exprMat_filtered <- log2(exprMat_filtered+1)
-
     # Run GENIE3 and find potential TF targets
     SCENIC::runGenie3(exprMat_filtered, scenicOptions)
-
     ###### IV: Build the gene regulatory network & Identify cell states:
     ### Build the gene regulatory network:
+    
     # 1. Get co-expression modules
     scenicOptions <- SCENIC::runSCENIC_1_coexNetwork2modules(scenicOptions)
-
     # 2. Get regulons (with RcisTarget: TF motif analysis)
     scenicOptions <- SCENIC::runSCENIC_2_createRegulons(scenicOptions,
                                                 coexMethods=c("top5perTarget"))
-
     ### Identify cell states:
     # 3. Score GRN (regulons) in the cells (with AUCell)
     exprMat_log <- log2(exprMat+1)
-
     scenicOptions <- SCENIC::runSCENIC_3_scoreCells(scenicOptions, exprMat_log)
-
     # # 4.2 Binarize the network activity (regulon on/off)
     scenicOptions@settings$devType = "png"
     # scenicOptions <- SCENIC::runSCENIC_4_aucell_binarize(scenicOptions,
     #                                                      exprMat = exprMat_log)
 
+    qs::qsave(scenicOptions,
+              str_c(group, "_scenicOptions.qs"))
+              
     return(list(scenicOptions= scenicOptions,
                 cellInfo = cellInfo,
                 colVars = colVars,
                 exprMat_log = exprMat_log))
 }
+
 
 
 
@@ -1815,7 +1849,7 @@ optimize_harmony <- function(s_obj,
             FindNeighbors(reduction = "harmony") %>%
             FindClusters(resolution = 0.4)
         dimplot <- 
-            DimPlot(object,
+            DimPlot(s_obj,
                     group.by = dimplot_col,
                     label.size = 4,
                     label = T,

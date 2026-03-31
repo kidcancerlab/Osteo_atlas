@@ -48,7 +48,8 @@ path_suffix_key <- list(
 
 count_list <-
     parallel::mclapply(seq_len(nrow(all_samples_csv)),
-                       mc.cores = parallelly::availableCores(),
+                       mc.cores = 5,
+                       mc.preschedule = FALSE,
                        function(i) {
         sample_name <- all_samples_csv$sample_name[i]
         data_source <- all_samples_csv$data_source[i]
@@ -75,7 +76,7 @@ count_list <-
                              species_pattern = all_samples_csv$sp_pattern[i],
                              violin_plot = FALSE,
                              min_cells = 1,
-                             min_features = 1)
+                             min_features = 10)
 
             counts$n_cells_pre_filter <- ncol(sobj)
 
@@ -102,7 +103,7 @@ count_list <-
                     sobj[[colname]] <- all_samples_csv[[colname]][i]
                 }
 
-                qs::qsave(sobj, str_c(dir, "/", sobject))
+                # qs::qsave(sobj, str_c(dir, "/", sobject))
 
                 print(str_c(sobject, " made and saved"))
             } else {
@@ -124,6 +125,7 @@ if (!dir.exists(directory)) {
 }
 write_tsv(bind_rows(count_list),
           "output/counts/cell_counts.txt")
+
 
 ```
 

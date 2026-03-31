@@ -1770,11 +1770,12 @@ for (group in c(
 }
 
 
+
 # run my methods on the synthetic objects
 samples_for_validation <- 
     tribble(~names,                                           ~species,
-            # "primary_synthetic",                              "human",
-            # "metastatic_synthetic",                           "human_lung",
+            "primary_synthetic",                              "human",
+            "metastatic_synthetic",                           "human_lung",
             "S0260_61_mouse",                                "mouse_lung")
 
 for (item in seq_len(nrow(samples_for_validation))) {

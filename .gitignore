@@ -93,6 +93,19 @@ anchor
 *.RDataTmp
 *_cutoff
 *.Rhistory
+*.Rapp.history
+*.pdf
+*.html
+*.docx
+*.pptx
+*.ipynb
+*.bcf
+*.bam
+*.bai
+*.sam
+*.vcf
+*.fasta
+*.log
 
 
 
