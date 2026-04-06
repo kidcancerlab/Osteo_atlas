@@ -1303,10 +1303,10 @@ bubble_plot <-
            arrange(desc(total_log2FC)), 
            aes(x = subpopulation,
               y = fct_reorder(Regulon, total_log2FC, .desc = FALSE), 
-              fill = log2FC,
+              color = log2FC,
               size = -log10(p_adj))) +
-    geom_point(shape = 21, color = "black", stroke = 0.5) +
-    scale_fill_gradient2(low = "#0571B0", mid = "white", high = "#CA0020", 
+    geom_point() +
+    scale_color_gradient2(low = "#0571B0", mid = "white", high = "#CA0020", 
                          name = "log2 FC") +
     scale_size_continuous(name = "-log10(p_adj)", range = c(3, 7)) +
     theme_minimal() +

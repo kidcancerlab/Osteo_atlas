@@ -1306,13 +1306,13 @@ make_panel_plot <- function(sobj,
         patchwork::wrap_plots(
             # dimplot,
             # circle_plot_out,
-            ggplotify::as.ggplot(heatmap_plots$Hallmark_paths),
-            ggplotify::as.ggplot(heatmap_plots$KEGG),
+            # ggplotify::as.ggplot(heatmap_plots$Hallmark_paths),
+            # ggplotify::as.ggplot(heatmap_plots$KEGG),
             #ggplotify::as.ggplot(heatmap_plots$Oncogenic_signature),
             #ggplotify::as.ggplot(heatmap_plots$Transcription_factor_targets),
-            ggplotify::as.ggplot(heatmap_plots$Biological_processes),
+            # ggplotify::as.ggplot(heatmap_plots$Biological_processes),
             ggplotify::as.ggplot(heatmap_plots$Reactome),
-            ncol = 2) +
+            ncol = 1) +
         patchwork::plot_annotation(title = label)
 
     directory <-

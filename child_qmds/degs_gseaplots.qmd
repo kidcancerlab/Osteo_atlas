@@ -1434,12 +1434,13 @@ combine_tumor_per_species_new <-
             )
 cat_tib <- dplyr::tribble(
     ~category, ~subcategory,   ~cat_expl,
-    "H",        "NA",          "Hallmark_paths",
-    "C2",       "CP:KEGG",     "KEGG",
+    # "H",        "NA",          "Hallmark_paths",
+    # "C2",       "CP:KEGG",     "KEGG",
     # "C3",       "TFT:GTRD",    "Transcription_factor_targets",
     # "C6",       "NA",          "Oncogenic_signature",
-    "C5",       "GO:BP",       "Biological_processes",
-    "C2",       "CP:REACTOME", "Reactome")
+    # "C5",       "GO:BP",       "Biological_processes",
+    "C2",       "CP:REACTOME", "Reactome"
+    )
 
 # we can make gsea panel plots
 for (item in seq_len(nrow(combine_tumor_per_species_new))) {

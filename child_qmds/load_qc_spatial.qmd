@@ -388,9 +388,9 @@ for (ob_name in names(spatial_list)) {
 }
 
 cell_types <- c(
-    "CAFs", "Pericytes", "Fibroblasts", "Neuronal", "T_cells", "NK_cells",
-    "B_cells", "TAMs", "Mast", "DC", "Monocytes", "Alv_Macrophages",
-    "Endothelial_cells", "Epithelial_cells", "tumor_cumulative")
+    "Basal_Progenitor", "Fibrogenic", "Interactive", "MP_Progenitor", "Proliferative", "COMA",
+    "Fibrogenic_TAMs", "IFN_TAMs", "Inflam_TAMs", "Osteoclast_TAMs", "Prolif_TAMs", "Scar_TAMs",
+    "CAFs", "Pericytes", "T_cells", "NK_cells", "B_cells", "Alv_Macrophages", "Endothelial_cells")
 
 size.factors <- list("OS1_Seurat" = 1.5,
                      "OS2_Seurat" = 1.4,
@@ -402,12 +402,14 @@ size.factors <- list("OS1_Seurat" = 1.5,
                      "OS8_Seurat" = 1.3)
 
 
+
 for (ob in names(spatial_list)) {
     hne <- 
         SpatialDimPlot(spatial_list[[ob]],
                        pt.size.factor = 0) +
         NoLegend()
     plts <- list("h_and_e" = hne)
+    # plts <- list()
     for (ct in cell_types) {
         plts[[ct]] <-
             SpatialFeaturePlot(spatial_list[[ob]],
@@ -423,7 +425,7 @@ for (ob in names(spatial_list)) {
     }
     combine_plot <-
         wrap_plots(grobs = plts,
-                    nrow = 4) + plot_annotation(title = ob)
+                    nrow = 1) + plot_annotation(title = ob)
 
     if (!dir.exists("output/figures/spatial")) {
         dir.create("output/figures/spatial")
@@ -432,8 +434,9 @@ for (ob in names(spatial_list)) {
     ggsave(
         filename = paste0("output/figures/spatial/", ob, "_all_cell_types.png"),
         plot = combine_plot,
-        width = 8.5,
-        height = 11
+        width = length(cell_types) * 5,
+        height = 7,
+        limitsize = FALSE
     )
 }
 

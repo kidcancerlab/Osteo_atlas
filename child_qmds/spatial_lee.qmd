@@ -60,15 +60,31 @@ make_lower_triangle <- function(lee_stats) {
     return(full_data)
 }
 
+use_order <- c(
+    "myCAFs", "COMA", "MP_Progenitor", "Prolif_TAMs", "Inflam_TAMs", 
+    "Basal_Progenitor", "Fibrogenic", "Endothelial_Capillary", "Interactive",
+    "Fibrogenic_TAMs", "Osteoclast_TAMs", "Prolif_T", "Proliferative",
+    "AT1", "Mast", "Capillary_Aerocyte", "Endothelial_Artery", "CD8_T",
+    "Alv_Macrophages", "AT2", "Adv_Fibroblasts", "Endothelial_Vein",
+    "Ciliated_cells", "Endothelial_Lymphatic", "Plasma_B", "Endothelial_Prolif", 
+    "Endothelial_Activated", "Neuronal", "Scar_TAMs", "TAMs", "CD4_T",
+    "apCAFs", "Naive_T", "DC2", "T_Reg", "DC1", "IFN_TAMs", "Memory_B",
+    "pDC", "Pericytes", "Monocytes", "NK_cells"
+)
+
+
+
 make_lee_heatmaps <- function(lee_stats, ...) {
     sub_data <-
         lee_stats |>
         make_lower_triangle()
 
-    use_order <-
-        lee_stats$cell_type_1 |>
-        unique() |>
-        sort()
+    # use_order <-
+    #     lee_stats$cell_type_1 |>
+    #     unique() |>
+    #     sort()
+
+    use_order <- use_order
 
     pheatmap_out <-
         sub_data |>
@@ -82,10 +98,15 @@ make_lee_heatmaps <- function(lee_stats, ...) {
             values_from = "lee_stat",
             values_fill = NA
         ) |>
-        dplyr::relocate(dplyr::all_of(c("cell_type_1", use_order))) |>
-        dplyr::arrange(cell_type_1, .locale = "en") |>
+        dplyr::filter(cell_type_1 %in% use_order) |>
+        dplyr::mutate(cell_type_1 = factor(cell_type_1, levels = use_order)) |>
+        dplyr::arrange(cell_type_1) |>
+        dplyr::select(cell_type_1, all_of(use_order)) |>
         tibble::column_to_rownames("cell_type_1") |>
-        pheatmap::pheatmap(silent = TRUE, ...)
+        pheatmap::pheatmap(silent = TRUE,
+                            cluster_rows = FALSE,
+                            cluster_cols = FALSE,
+                   ...)
 
     return()
 }
@@ -98,7 +119,7 @@ lapply(
             make_lee_heatmaps(
                 sample_name = x,
                 file = paste0(
-                    "output/figures/spatial/lees/", x, ".pdf"
+                    "output/figures/spatial/lees/", x, ".png"
                 ),
                 width = 10,
                 height = 10,
@@ -142,6 +163,10 @@ spat_pca$x %>%
     ggrepel::geom_text_repel(aes(label = sample)) +
     theme_bw()
 
+if (!dir.exists("output/figures/spatial/lees/")) {
+    dir.create("output/figures/spatial/lees/",
+               recursive = TRUE)
+}
 lee_stats %>%
     filter(sample != "OS8_Seurat") %>%
     #filter(sample %in% names(clusters$cluster[clusters$cluster == 2])) %>%
@@ -153,6 +178,25 @@ lee_stats %>%
         height = 10,
         color = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 7, name = "RdBu")))(100)
     )
+
+order <-
+    lee_stats %>%
+    filter(sample != "OS8_Seurat") %>%
+    #filter(sample %in% names(clusters$cluster[clusters$cluster == 2])) %>%
+    group_by(cell_type_1, cell_type_2) %>%
+    summarize(lee_stat = mean(lee_stat), .groups = "drop") %>%
+    make_lower_triangle() %>%
+    tidyr::pivot_wider(
+            names_from = "cell_type_2",
+            values_from = "lee_stat",
+            values_fill = 1
+    ) %>%
+    column_to_rownames("cell_type_1") %>%
+    as.matrix() %>%
+    as.dist() %>%
+    hclust(method = "complete")
+
+
 
 lee_stats %>%
     make_lower_triangle() %>%

@@ -12,7 +12,7 @@ object_list <-
         ~group,                         ~res_value,  ~label,
         "patient_prim_cancer_cells",    0.3,         "Human Patient Primary Cancer Cells",
         "patient_mets_cancer_cells",    0.35,        "Human Patient Metastatic Cancer Cells",
-        "mm_prim_cancer_cells",         0.9,         "Mouse Primary Cancer Cells",
+        # "mm_prim_cancer_cells",         0.9,         "Mouse Primary Cancer Cells",
         "mm_mets_cancer_cells",         0.7,         "Mouse Metastatic Cancer Cells",
         "xeno_prim_human_cancer_cells", 0.3,         "Xenograft Primary Human Cancer Cells",
         "xeno_mets_human_cancer_cells", 0.4,         "Xenograft Metastatic Human Cancer Cells",
@@ -175,19 +175,19 @@ for (i in seq_len(nrow(object_list))) {
 
     combined_corr_plot <-
         combined_corr %>%
-        mutate(
-            cluster = str_remove(small_cluster, ".+_") %>%
-                str_replace("clust", "Cluster "),
-            sample_name = str_remove(small_cluster, "_clust.+"),
-            big_cluster_label = str_c(big_cluster,
-                                      "\nr=",
-                                      round(corr_val, 2),
-                                      "\nCells: ",
-                                      n_cells)) %>%
+            mutate(
+                cluster = str_remove(small_cluster, ".+_") %>% str_replace("clust", "Cluster "),
+                sample_name = str_remove(small_cluster, "_clust.+"),
+                big_cluster = str_replace(big_cluster, "Progenitor", "P"),
+                big_cluster_label = str_c(big_cluster,
+                              "\nr=",
+                              round(corr_val, 2),
+                              "\nCells: ",
+                              n_cells)) %>%
         ggplot(aes(x = cluster, y = sample_name, fill = corr_val)) +
         geom_tile(color = "grey80", linewidth = 0.5) +
         geom_text(aes(label = big_cluster_label),
-                  size = 3,
+                  size = 3.5,
                   fontface = "bold") +
         scale_fill_gradient2(low = "blue", mid = "white", high = "red") +
         labs(x = "Clusters in Individual Samples (if present)",
@@ -229,6 +229,14 @@ for (i in seq_len(nrow(object_list))) {
                  object_list$group[i],
                  "/",
                  "All_combined_heatmap.pdf"),
+           plot = combined_corr_plot,
+           width = width,
+           height = height,
+           bg = "white")
+    ggsave(str_c("output/figures/validation/integration_validation/",
+                 object_list$group[i],
+                 "/",
+                 "All_combined_heatmap.png"),
            plot = combined_corr_plot,
            width = width,
            height = height,
