@@ -1330,8 +1330,14 @@ ggsave("output/SCENIC/prim_vs_mets_bubble_plot.png",
 ```{r plot_groups_regulon, eval = FALSE}
 
 combine_all <-
-    qs::qread("../../../output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs") %>%
+    qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs") %>%
     subset(unique == "patient_prim" | unique == "patient_mets")
+
+Idents(combine_all) <- combine_all$Ann_Level3
+VlnPlot(combine_all,
+        features = c("UNC5B", "UNC5C", "FLRT2"),
+        group.by = "unique",
+         pt.size = 0)
 
 auc <- 
     loadInt(GRA_output$scenicOptions, "aucell_regulonAUC") 

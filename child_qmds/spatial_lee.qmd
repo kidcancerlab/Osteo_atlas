@@ -60,6 +60,7 @@ make_lower_triangle <- function(lee_stats) {
     return(full_data)
 }
 
+# the order from te averaged out result of eight samples was used to make this list
 use_order <- c(
     "myCAFs", "COMA", "MP_Progenitor", "Prolif_TAMs", "Inflam_TAMs", 
     "Basal_Progenitor", "Fibrogenic", "Endothelial_Capillary", "Interactive",
@@ -70,14 +71,16 @@ use_order <- c(
     "Endothelial_Activated", "Neuronal", "Scar_TAMs", "TAMs", "CD4_T",
     "apCAFs", "Naive_T", "DC2", "T_Reg", "DC1", "IFN_TAMs", "Memory_B",
     "pDC", "Pericytes", "Monocytes", "NK_cells"
-)
-
+) %>% 
+    str_replace_all("_", " ")
 
 
 make_lee_heatmaps <- function(lee_stats, ...) {
     sub_data <-
         lee_stats |>
-        make_lower_triangle()
+        make_lower_triangle() |>
+        mutate(cell_type_1 = stringr::str_replace_all(cell_type_1, "_", " "),
+               cell_type_2 = stringr::str_replace_all(cell_type_2, "_", " "))
 
     # use_order <-
     #     lee_stats$cell_type_1 |>
@@ -106,7 +109,7 @@ make_lee_heatmaps <- function(lee_stats, ...) {
         pheatmap::pheatmap(silent = TRUE,
                             cluster_rows = FALSE,
                             cluster_cols = FALSE,
-                   ...)
+                        ...)
 
     return()
 }
@@ -119,7 +122,7 @@ lapply(
             make_lee_heatmaps(
                 sample_name = x,
                 file = paste0(
-                    "output/figures/spatial/lees/", x, ".png"
+                    "output/figures/spatial/lees/", x, ".pdf"
                 ),
                 width = 10,
                 height = 10,
@@ -196,7 +199,14 @@ order <-
     as.dist() %>%
     hclust(method = "complete")
 
+# number of cluster and its members
+tree <- cutree(order, k = 4)
+groups <- 
+    split(names(tree), tree)
 
+names(groups) <- paste("Cluster", 1:4)
+
+# use these names to make plots of groups sums
 
 lee_stats %>%
     make_lower_triangle() %>%
@@ -650,4 +660,104 @@ ggsave(
     width = 15,
     height = 12
 )
+```
+
+
+## Sum of environments to show specific neighborhoods of interest
+```{r spatialee_sum_environments}
+
+# the order from te averaged out result of eight samples was used to make this list
+use_order <- c(
+    "myCAFs", "COMA", "MP_Progenitor", "Prolif_TAMs", "Inflam_TAMs", 
+    "Basal_Progenitor", "Fibrogenic", "Endothelial_Capillary", "Interactive",
+    "Fibrogenic_TAMs", "Osteoclast_TAMs", "Prolif_T", "Proliferative",
+    "AT1", "Mast", "Capillary_Aerocyte", "Endothelial_Artery", "CD8_T",
+    "Alv_Macrophages", "AT2", "Adv_Fibroblasts", "Endothelial_Vein",
+    "Ciliated_cells", "Endothelial_Lymphatic", "Plasma_B", "Endothelial_Prolif", 
+    "Endothelial_Activated", "Neuronal", "Scar_TAMs", "TAMs", "CD4_T",
+    "apCAFs", "Naive_T", "DC2", "T_Reg", "DC1", "IFN_TAMs", "Memory_B",
+    "pDC", "Pericytes", "Monocytes", "NK_cells"
+)
+
+Inside_tumor <-
+    c("myCAFs", "COMA", "MP_Progenitor", "Prolif_TAMs", "Inflam_TAMs", 
+    "Basal_Progenitor", "Fibrogenic", "Endothelial_Capillary", "Interactive",
+    "Fibrogenic_TAMs", "Osteoclast_TAMs", "Prolif_T", "Proliferative")
+
+Normal_alveoli <-
+    c("AT1", "Mast", "Capillary_Aerocyte", "Endothelial_Artery", "CD8_T",
+    "Alv_Macrophages", "AT2", "Adv_Fibroblasts", "Endothelial_Vein")
+
+Tumor_periphery <-
+    c("Ciliated_cells", "Endothelial_Lymphatic", "Plasma_B", "Endothelial_Prolif", 
+    "Endothelial_Activated", "Neuronal", "Scar_TAMs", "TAMs")
+
+Immune_cells <-
+    c("CD4_T", "apCAFs", "Naive_T", "DC2", "T_Reg", "DC1", "IFN_TAMs", "Memory_B",
+    "pDC", "Pericytes", "Monocytes", "NK_cells")
+
+
+# plot the rctd results
+spatial_list <-
+    qs::qread("output/spatial_objects/spatial_list_with_TAECs.qs")
+
+for (ob_name in names(spatial_list)) {
+    for (region in c("Inside_tumor", "Normal_alveoli", "Tumor_periphery", "Immune_cells")) {
+        spatial_list[[ob_name]]@meta.data[[region]] <-
+            rowSums(
+                spatial_list[[ob_name]]@meta.data %>%
+                    select(all_of(get(region)))
+            )
+    }
+}
+
+
+size.factors <- list("OS1_Seurat" = 1.5,
+                     "OS2_Seurat" = 1.4,
+                     "OS3_Seurat" = 2.7,
+                     "OS4_Seurat" = 1.7,
+                     "OS5_Seurat" = 2.5,
+                     "OS6_Seurat" = 2.5,
+                     "OS7_Seurat" = 2.5,
+                     "OS8_Seurat" = 1.3)
+
+
+for (ob in names(spatial_list)) {
+    hne <- 
+        SpatialDimPlot(spatial_list[[ob]],
+                       pt.size.factor = 0) +
+        NoLegend()
+    plts <- list("h_and_e" = hne)
+    # plts <- list()
+    for (site in c("Inside_tumor", "Normal_alveoli", "Tumor_periphery", "Immune_cells")) {
+        plts[[site]] <-
+            SpatialFeaturePlot(spatial_list[[ob]],
+                                features = site,
+                                stroke = 0,
+                                pt.size.factor = size.factors [[ob]],
+                                image.alpha = 0) +
+            theme(legend.title.position = "top",
+                    legend.title.size = 2,
+                  legend.key.height = unit(0.3, "cm"),
+                  legend.key.width = unit(0.9, "cm"))
+
+    }
+    combine_plot <-
+        wrap_plots(grobs = plts,
+                    nrow = 1) + plot_annotation(title = ob)
+
+    if (!dir.exists("output/figures/spatial")) {
+        dir.create("output/figures/spatial")
+    }
+
+    ggsave(
+        filename = paste0("output/figures/spatial/", ob, "_neighbourhood.png"),
+        plot = combine_plot,
+        width = 25,
+        height = 7,
+        limitsize = FALSE
+    )
+}
+
+
 ```

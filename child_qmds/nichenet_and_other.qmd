@@ -1738,7 +1738,7 @@ for (site in c("Primary", "Metastatic")) {
 ```{r dig_deeper_pathways}
 
 interesting_pathways <- c(
-                    "TGFb"
+                    # "TGFb"
                     #"FN1"
                     # "LAMININ", "VEGF", "CXCL",
                     # "IL1",
@@ -1748,19 +1748,20 @@ interesting_pathways <- c(
                     # "APP",
                     # "SLIT",
                     # "NCAM"
+                    "UNC5"
                     )
 average_pathways <- list()
 interaction_names <- list()
 # load the objects
 for (group in c(
-                #"patient_prim",
+                "patient_prim",
                 "patient_mets",
                 #"xeno_prim_cancer_normal",
-                "xeno_mets_cancer_normal",
-                #"dogs_primhuman_ortho",
-                "dogs_metshuman_ortho",
+                # "xeno_mets_cancer_normal",
+                "dogs_primhuman_ortho",
+                "dogs_metshuman_ortho"
                 #"mm_primhuman_ortho",
-                "mm_metshuman_ortho"
+                # "mm_metshuman_ortho"
             )) {
     cell_chat_objs <-
         list.files(str_c("output/cellchat_objects_sharedgenes/", group),

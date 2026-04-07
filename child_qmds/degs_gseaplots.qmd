@@ -2189,10 +2189,10 @@ for (names in c("patient_prim_cancer_cells",
     
     dotplot <-
         DotPlot(object,
-                features = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8"),
+                features = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8", "UNC5C", "FLRT2"),
                 scale = F,
                 group.by = "Ann_Level3")
-    for (features in c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8")) {
+    for (features in c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8", "UNC5C", "FLRT2")) {
         featureplot <- 
             FeaturePlot(object,
                         features = features,
@@ -2238,7 +2238,7 @@ patient_xeno_prim_mets <-
 
 #
 VlnPlot(object = patient_xeno_prim_mets,
-            features = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8"),
+            features = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8", "UNC5C", "FLRT2"),
             group.by = "Ann_Level3",
             split.by = "unique",
             pt.size = 0) +
@@ -2250,9 +2250,9 @@ VlnPlot(object = patient_xeno_prim_mets,
 # busra make violin boxplot but also calculate the average expression
 vioin_boxplot_data <- 
     FetchData(object = patient_xeno_prim_mets,
-                vars = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8",
+                vars = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8", "UNC5C", "FLRT2",
                         "Ann_Level3", "unique")) %>%
-    pivot_longer(cols = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8"),
+    pivot_longer(cols = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8", "UNC5C", "FLRT2"),
                 names_to = "gene",
                 values_to = "expression")
 vioin_boxplot_data_summary <-
@@ -2287,6 +2287,7 @@ violin_plot <-
         theme(plot.title = element_text(hjust = 0.5))
 ggsave(str_c("output/figures/tumor_only/",
             "patient_xeno_prim_mets_busra_proteomics_violin_boxplot.png"),
+        plot = violin_plot,
         width = 15,
         height = 15,
         bg = "white")
