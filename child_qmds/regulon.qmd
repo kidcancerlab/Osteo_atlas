@@ -1057,14 +1057,15 @@ motifAnnotations_hgnc <- motifAnnotations
 # we need to set a main directory first that is above all others
 working_dir <- getwd()
 
-GRA_output <-
-    Run_GRA(sobject = combine_all,
-            idents = "Ann_Level3",
-            group = "prim_mets_combined",
-            org = "hgnc",
-            dbDir = "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/SCENIC",
-            subset = "yes",
-            subset_cell_number = 50000)
+## i need to comment this to avoid mistake running this again, it takes a week
+# GRA_output <-
+#     Run_GRA(sobject = combine_all,
+#             idents = "Ann_Level3",
+#             group = "prim_mets_combined",
+#             org = "hgnc",
+#             dbDir = "/gpfs0/home2/gdrobertslab/lab/Analysis/Yogesh/CellTypeAnnRefs/input/downloads/SCENIC",
+#             subset = "yes",
+#             subset_cell_number = 50000)
 
 # set the working directory back to the original directory after the run is complete.
 setwd(working_dir)
@@ -1294,6 +1295,9 @@ combined_regulon_data <-
     imap_dfr(~.x %>% mutate(subpopulation = .y)) %>%
     mutate(Regulon = str_replace_all(Regulon, "_", " "))
 
+getwd()
+
+
 # Create bubble heatmap with log2FC and p_adj
 bubble_plot <- 
     ggplot(combined_regulon_data %>% 
@@ -1334,13 +1338,16 @@ combine_all <-
     subset(unique == "patient_prim" | unique == "patient_mets")
 
 Idents(combine_all) <- combine_all$Ann_Level3
-VlnPlot(combine_all,
-        features = c("UNC5B", "UNC5C", "FLRT2"),
-        group.by = "unique",
-         pt.size = 0)
 
-auc <- 
-    loadInt(GRA_output$scenicOptions, "aucell_regulonAUC") 
+working_dir <- getwd()
+
+setwd(str_c("output/SCENIC/", "prim_mets_combined"))
+
+scenicOptions <- 
+    qs::qread(str_c("prim_mets_combined", "_scenicOptions.qs"))
+
+auc <-
+    loadInt(scenicOptions, "aucell_regulonAUC")
 
 auc_matrix <-
     AUCell::getAUC(auc) %>%
@@ -1374,6 +1381,7 @@ long_df <-
     )
 
 # perform wilcox test for each feature between the two groups
+sig_features_list <- list()
 for (Annotation in unique(long_df$Ann_Level3)) {
     long_df$comparison_col <- 
         if_else(long_df$Ann_Level3 == Annotation, "group1", "group2")
@@ -1397,81 +1405,114 @@ for (Annotation in unique(long_df$Ann_Level3)) {
     sig_features <- 
         wilcox_results %>%
         filter(p_adj < 0.05)
-
+    
+    sig_features_list[[Annotation]] <- sig_features
 
 }
-# use lapply to apply the function to each group
-results_list <- lapply(unique(long_df$Ann_Level3), function(Annotation) {
-    long_df$comparison_col <- 
-        if_else(long_df$Ann_Level3 == Annotation, "group1", "group2")
 
-    # perform wilcox test for each feature between the two groups
-    wilcox_results <- 
-        long_df %>%
-        group_by(feature) %>%
-        summarise(
-            p.value = wilcox.test(value ~ comparison_col)$p.value,
-            statistic = wilcox.test(value ~ comparison_col)$statistic,
-            .groups = "drop"
-        )
-
-    # adjust the p-values using Benjamini-Hochberg method
-    wilcox_results <- 
-        wilcox_results %>%
-        mutate(p_adj = p.adjust(p.value, method = "BH"))
-
-    # filter by padjusted p-value < 0.01
-    sig_features <- 
-        wilcox_results %>%
-        filter(p_adj < 0.05)
-
-    return(list(Annotation = Annotation, sig_features = sig_features))
-})
+# prepare the data for plotting
+dataset_plot <- 
+    sig_features_list %>%
+    imap_dfr(~.x %>% mutate(subpopulation = .y)) %>%
+    mutate(p_adj = -log10(p_adj)) %>%
+    select(feature, p_adj, subpopulation)
 
 
+# plot
+ggplot(dataset_plot, aes(x = subpopulation, y = feature)) +
+  geom_point(aes(size = p_adj)) +
+  scale_color_gradient2(low = "blue", mid = "white", high = "red") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-# give me a simulated data that has 20 regulons and 6 subpopulations, 
-#with random values for the regulon activity, and their padj value,
-#and then make a heatmap of it using pheatmap, with the same color scheme as before
-# and with the same annotations for the columns as before, and with the same clustering options as before.
-dataset <-
-    expand.grid(feature = paste0("Regulon", 1:20),
-                subpopulation = c("Fibrogenic", "Proliferative", "Interactive",
-                                 "MP_Progenitor", "Basal_Progenitor", "COMA")) %>%
-    mutate(
-        value = case_when(
-            # Shared regulons (1-5): high across all subpopulations
-            as.numeric(gsub("Regulon", "", feature)) <= 5 ~ 
-                runif(n(), min = 0.6, max = 0.9),
-            # Fibrogenic-specific (6-10)
-            as.numeric(gsub("Regulon", "", feature)) %in% 6:10 & subpopulation == "Fibrogenic" ~ 
-                runif(n(), 0.7, 0.9),
-            # Proliferative-specific (11-15)
-            as.numeric(gsub("Regulon", "", feature)) %in% 11:15 & subpopulation == "Proliferative" ~ 
-                runif(n(), 0.7, 0.9),
-            # Interactive-specific (16-20)
-            as.numeric(gsub("Regulon", "", feature)) %in% 16:20 & subpopulation == "Interactive" ~ 
-                runif(n(), 0.7, 0.9),
-            TRUE ~ runif(n(), min = 0, max = 0.3)
-        ),
-        p_adj = if_else(value > 0.5, runif(n(), min = 0, max = 0.05),
-                        runif(n(), min = 0.05, max = 0.5))
-    )
 
-# plot a heatmap of the dataset using pheatmap, with the same color scheme as before, and with the same annotations for the columns as before, and with the same clustering options as before.
-heatmap_data <-
-    dataset %>%
-    select(feature, subpopulation, value) %>%
-    pivot_wider(names_from = subpopulation, values_from = value) %>%
+# extract the average AUCell for each significant regulon
+sig_regulon_auc <-
+    long_df %>%
+    group_by(feature, Ann_Level3) %>%
+    summarise(mean_auc = mean(value), .groups = "drop") %>%
+    filter(feature %in% dataset_plot$feature) %>%
+    group_by(feature) %>%
+    mutate(scaled_auc = scale(mean_auc)) %>%
+    ungroup()
+
+
+# cluster_order 
+order <- 
+    sig_regulon_auc %>%
+    select(feature, Ann_Level3, mean_auc) %>%
+    pivot_wider(names_from = Ann_Level3, values_from = mean_auc) %>%
     column_to_rownames("feature") %>%
-    as.matrix()
+    as.matrix() %>%
+    dist(method = "euclidean") %>%
+    hclust(method = "ward.D2") #%>%
+    # as.dendrogram() %>%
+    # plot()
+
+real_order <-
+    c("E2F7_extended", "E2F1", "PBX3", "YY1_extended", "YY1", "MAZ_extended", "MAZ",
+    "ETV6_extended", "MAFB_extended", "ETS1_extended", "SPI1_extended", "SPI1", "IKZF1_extended",
+   "CREB5_extended", "FOSB_extended", "FOSB", "FOS_extended",
+    "STAT3", "STAT1_extended", "ATF3_extended",
+    "CEBPB", "CEBPB_extended", "CEBPD_extended",  "MEIS1_extended",
+    "ZEB1", "PBX1_extended", "HNF4G_extended") %>%
+    str_replace_all("_", " ")
+
+plot_tile <- 
+    sig_regulon_auc %>%
+    mutate(feature = str_replace_all(feature, "_", " ")) %>%
+    mutate(feature = factor(feature, levels = real_order)) %>%
+    ggplot() +
+    geom_tile(aes(x = Ann_Level3, y = feature, fill = scaled_auc)) +
+    # geom_text(aes(x = Ann_Level3, y = feature, label = round(mean_auc, 3))) +
+    scale_fill_gradient(low = "white", high = "firebrick3") +
+    theme_minimal() +
+    geom_tile(data = dataset_plot,
+              aes(x = subpopulation, y = feature),
+              color = "black",
+              linewidth = .5, fill = NA) +
+    scale_fill_gradient2(low = "blue", mid = "white", midpoint = 0, high = "firebrick3") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
 
 
-pheatmap::pheatmap(heatmap_data,
-                color = colorRampPalette(c("white", "firebrick3"))(100),
-                cluster_cols = FALSE,
-                cluster_rows = TRUE,
-                show_row_dend = FALSE,
-                display_numbers = TRUE)
+ggplot(sig_regulon_auc, aes(x = Ann_Level3, y = feature)) +
+  geom_point(aes(size = mean_auc, color = scaled_auc)) +
+  scale_color_gradient2(low = "blue", mid = "white", high = "red") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+
+
+# Make plot using padj from the dataset_plot and mean_auc from the sig_regulon_auc
+final_plot <-
+    sig_regulon_auc %>%
+    left_join(dataset_plot, by = c("feature" = "feature", "Ann_Level3" = "subpopulation")) %>%
+    mutate(feature = str_replace_all(feature, "_", " ")) %>%
+    mutate(feature = factor(feature, levels = real_order)) %>%
+    mutate(Ann_Level3 = str_replace_all(Ann_Level3, "_", " ")) %>%
+    mutate(p_adj = if_else(is.na(p_adj), 0, p_adj),
+            sig = p_adj > 0) %>%   # define significance (adjust if needed)
+    ggplot(aes(x = Ann_Level3, y = feature)) +
+    geom_point(aes(size = p_adj,
+                    fill = scaled_auc,
+                    color = sig),   # map border conditionally
+                shape = 21,
+                stroke = 0.8) +
+    scale_fill_gradient2(low = "#0571B0", mid = "white", high = "#CA0020") +
+    scale_color_manual(values = c(`TRUE` = "black", `FALSE` = "white")) +
+    scale_size_continuous(range = c(4, 7)) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave("prim_vs_mets_final_plot.png",
+       plot = final_plot,
+       width = 5,
+       height = 10,
+       bg = "white")
+
+ggsave("prim_vs_mets_final_plot.pdf",
+       plot = final_plot,
+       width = 5,
+       height = 10,
+       bg = "white")
 ```

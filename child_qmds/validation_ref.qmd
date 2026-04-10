@@ -456,7 +456,7 @@ for (sobj_name in soragni_sobj_list) {
                           "^Tumor_Ground$" = "Tumor",
                           "^Tumor_Metabolic$" = "Tumor",
                           "^Tumor_Proliferative$" = "Tumor",
-                          "^Tumor_Osteoblastic$" = "Tumor"))
+                          "^Tumor_Osteoblastic$" = "Tumor")
     sobj$Ann_Level0 <- 
         str_replace_all(sobj$Ann_Level1,
                         c("^Immune_Myeloid$" = "Host",
