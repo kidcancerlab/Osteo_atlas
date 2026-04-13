@@ -2232,20 +2232,91 @@ for (names in c("patient_prim_cancer_cells",
  
 }
 
+features <- c("UNC5C", "UNC5B")
+vln_list <-
+    list()
+dot_list <-
+    list()
+for (names in c("patient_prim_mets",
+                "xeno_prim_mets",
+                "mouse_prim_mets",
+                "dog_prim_mets")) {
+    object <- 
+        qs::qread(str_c("output/seurat_objects/final_combined_sobjs/",
+                        names,
+                        ".qs"))
+
+    if (object$organism[1] == "mouse") {
+        plot_genes <- features %>% 
+            nichenetr::convert_human_to_mouse_symbols() %>% 
+            as.character()
+    } else {
+        plot_genes <- features
+    }
+    violin <- 
+        VlnPlot(object = object,
+                features = plot_genes,
+                group.by = "unique",
+                # split.by = "unique",
+                pt.size = 0)
+    vln_list[[names]] <- violin
+
+    dot_list[[names]] <-
+         DotPlot(object = object,
+                features = plot_genes,
+                cols = "RdBu",
+                dot.scale = 7,
+                scale = F,
+                group.by = "unique")
+
+}
+
+# violin plots for UNC5C and UNC5B across the groups
+panel_Vln <-
+    wrap_plots(vln_list$patient_prim_mets, 
+                vln_list$xeno_prim_mets,
+                vln_list$mouse_prim_mets,
+                vln_list$dog_prim_mets,
+                ncol = 1) +
+    plot_annotation(title = "Violin plots of UNC5C and UNC5B",
+                    theme = theme(plot.title = element_text(hjust = 0.5, size = 16)))
+ggsave("output/figures/tumor_only/UNC5C_UNC5B_violin_plots.png",
+        plot = panel_Vln,
+        width = 15,
+        height = 15,
+        bg = "white")
+
+panel_dot <- 
+    wrap_plots(dot_list$patient_prim_mets, 
+                dot_list$xeno_prim_mets,
+                dot_list$mouse_prim_mets,
+                dot_list$dog_prim_mets,
+                ncol = 1) +
+    plot_annotation(title = "Dotplots of UNC5C and UNC5B",
+                    theme = theme(plot.title = element_text(hjust = 0.5, size = 16)))
+
+ggsave("output/figures/tumor_only/UNC5C_UNC5B_dotplots.pdf",
+        plot = panel_dot,
+        width = 7,
+        height = 15,
+        bg = "white")
+
+
+
+
+
 # put primary and metastatic samples side by side
 patient_xeno_prim_mets <- 
     qs::qread("output/seurat_objects/final_tumor_vs_stroma/patient_xeno_prim_mets_cancer_cells.qs")
 
 #
 VlnPlot(object = patient_xeno_prim_mets,
-            features = c("FGFR3", "FGFR1", "UNC5B", "CD109", "EPHA3", "MXRA8", "UNC5C", "FLRT2"),
-            group.by = "Ann_Level3",
-            split.by = "unique",
+            features = c("EPHA3", "UNC5C", "UNC5B"),
+            group.by = "unique",
+            # split.by = "unique",
             pt.size = 0) +
     scale_y_continuous(labels = scales::comma) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
-    ggtitle("Violin plot of proteomics markers in patient and xenograft tumor cells") +
-    theme(plot.title = element_text(hjust = 0.5))
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 
 # busra make violin boxplot but also calculate the average expression
 vioin_boxplot_data <- 

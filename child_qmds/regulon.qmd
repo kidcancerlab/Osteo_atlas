@@ -1229,66 +1229,6 @@ for (group in
     setwd(working_dir)
 }
 
-
-
-# fake data creation for the tile plot with log2 fold change and p-value
-
-# Option 1: Combined volcano plot with facets (one per subpopulation)
-volcano_combined <- function(data_list, subpop_names) {
-    combined_data <- 
-        Map(function(x, name) {
-            x %>% mutate(subpopulation = name)
-        }, data_list, subpop_names) %>%
-        bind_rows()
-    
-    ggplot(combined_data, aes(log2FC, -log10(p_adj), color = log2FC)) +
-        geom_point(size = 3, alpha = 0.7) +
-        geom_vline(xintercept = c(-1, 1), linetype = "dashed", alpha = 0.5) +
-        geom_hline(yintercept = -log10(0.05), linetype = "dashed", alpha = 0.5) +
-        facet_wrap(~subpopulation, ncol = 3) +
-        scale_color_gradient2(low = "blue", mid = "white", high = "red") +
-        theme_minimal() +
-        theme(legend.position = "bottom")
-}
-
-# Option 2: Bubble heatmap (subpopulations as columns, regulons as rows)
-bubble_heatmap <- function(data_list, subpop_names) {
-    combined_data <- 
-        Map(function(x, name) {
-            x %>% mutate(subpopulation = name)
-        }, data_list, subpop_names) %>%
-        bind_rows()
-    
-    ggplot(combined_data, aes(subpopulation, Regulon, 
-                                                        fill = log2FC, size = -log10(p_adj))) +
-        geom_point(shape = 21, color = "black", stroke = 0.5) +
-        scale_fill_gradient2(low = "blue", mid = "white", high = "red", 
-                                                limits = c(-5, 5), name = "log2 FC") +
-        scale_size_continuous(name = "-log10(p_adj)", range = c(2, 8)) +
-        theme_minimal() +
-        theme(axis.text.x = element_text(angle = 45, hjust = 1))
-}
-
-# Option 3: Focused heatmap (sig regulons only, p_adj < 0.05)
-heatmap_sig_only <- function(data_list, subpop_names) {
-    combined_data <- 
-        Map(function(x, name) {
-            x %>% filter(p_adj < 0.05) %>% mutate(subpopulation = name)
-        }, data_list, subpop_names) %>%
-        bind_rows() %>%
-        pivot_wider(names_from = subpopulation, values_from = log2FC, 
-                                values_fill = 0) %>%
-        column_to_rownames("Regulon") %>%
-        as.matrix()
-    
-    pheatmap(combined_data,
-                    color = colorRampPalette(c("blue", "white", "red"))(50),
-                    breaks = seq(-5, 5, length.out = 51),
-                    cluster_rows = TRUE, cluster_cols = FALSE,
-                    display_numbers = TRUE, number_format = "%.2f")
-}
-
-
 # Create combined data for visualization
 combined_regulon_data <- 
     regulon_list %>%
@@ -1304,6 +1244,7 @@ bubble_plot <-
            group_by(Regulon) %>%
            mutate(total_log2FC = sum(log2FC)) %>%
            ungroup() %>%
+           mutate(subpopulation = str_replace_all(subpopulation, "_", " ")) %>%
            arrange(desc(total_log2FC)), 
            aes(x = subpopulation,
               y = fct_reorder(Regulon, total_log2FC, .desc = FALSE), 
@@ -1322,7 +1263,13 @@ bubble_plot <-
 
 ggsave("output/SCENIC/prim_vs_mets_bubble_plot.png",
        plot = bubble_plot,
-       width = 7,
+       width = 6,
+       height = 15,
+       bg = "white")
+
+ggsave("output/SCENIC/prim_vs_mets_bubble_plot.pdf",
+       plot = bubble_plot,
+       width = 6,
        height = 15,
        bg = "white")
 
@@ -1500,9 +1447,31 @@ final_plot <-
                 stroke = 0.8) +
     scale_fill_gradient2(low = "#0571B0", mid = "white", high = "#CA0020") +
     scale_color_manual(values = c(`TRUE` = "black", `FALSE` = "white")) +
-    scale_size_continuous(range = c(4, 7)) +
+    scale_size_continuous(range = c(4, 7), name = "-log10(p_adj)") +
     theme_minimal() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+sig_regulon_auc %>%
+    left_join(dataset_plot, by = c("feature" = "feature", "Ann_Level3" = "subpopulation")) %>%
+    mutate(feature = str_replace_all(feature, "_", " ")) %>%
+    mutate(feature = factor(feature, levels = real_order)) %>%
+    mutate(Ann_Level3 = str_replace_all(Ann_Level3, "_", " ")) %>%
+    mutate(p_adj = if_else(is.na(p_adj), 0, p_adj)) %>%
+    ggplot(aes(x = Ann_Level3, y = feature)) +
+    geom_point(aes(size = p_adj,
+                    fill = scaled_auc),
+                shape = 21,
+                stroke = 0) +
+    scale_fill_gradient2(low = "#0571B0", mid = "white", high = "#CA0020") +
+    scale_size_continuous(range = c(3, 7), name = "-log10(p_adj)") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
 
 ggsave("prim_vs_mets_final_plot.png",
        plot = final_plot,
