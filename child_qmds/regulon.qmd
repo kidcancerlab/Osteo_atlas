@@ -1453,16 +1453,36 @@ final_plot <-
 
 
 
-
 sig_regulon_auc %>%
     left_join(dataset_plot, by = c("feature" = "feature", "Ann_Level3" = "subpopulation")) %>%
     mutate(feature = str_replace_all(feature, "_", " ")) %>%
     mutate(feature = factor(feature, levels = real_order)) %>%
     mutate(Ann_Level3 = str_replace_all(Ann_Level3, "_", " ")) %>%
     mutate(p_adj = if_else(is.na(p_adj), 0, p_adj)) %>%
+    mutate(scaled_auc = if_else(p_adj == 0, NA_real_, scaled_auc)) %>%
     ggplot(aes(x = Ann_Level3, y = feature)) +
     geom_point(aes(size = p_adj,
                     fill = scaled_auc),
+                shape = 21) +
+    scale_fill_gradient2(low = "#0571B0", mid = "white", high = "#CA0020", 
+                        name = "Scaled AUC") +
+    scale_size_continuous(range = c(3, 7), name = "-log10(p_adj)") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          panel.grid.major = element_line(size = 0.2, color = "gray90"))
+
+
+
+
+sig_regulon_auc %>%
+    left_join(dataset_plot, by = c("feature" = "feature", "Ann_Level3" = "subpopulation")) %>%
+    filter(!is.na(p_adj)) %>%
+    mutate(feature = str_replace_all(feature, "_", " ")) %>%
+    mutate(feature = factor(feature, levels = real_order)) %>%
+    mutate(Ann_Level3 = str_replace_all(Ann_Level3, "_", " ")) %>%
+    ggplot(aes(x = Ann_Level3, y = feature)) +
+    geom_point(aes(size = p_adj,
+                    fill = mean_auc),
                 shape = 21,
                 stroke = 0) +
     scale_fill_gradient2(low = "#0571B0", mid = "white", high = "#CA0020") +
